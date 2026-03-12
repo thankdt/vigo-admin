@@ -124,6 +124,7 @@ export type RoutePricing = {
   startDistrictId?: number; // Optional: ID for Start District
   price: number;
   priority: number;
+  serviceType?: 'DELIVERY' | 'CARPOOL' | 'RIDE';
   route: Route;
   adminUnit: AdminUnit;
   startDistrict?: AdminUnit; // Optional: Start District Entity

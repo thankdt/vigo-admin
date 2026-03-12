@@ -1,7 +1,7 @@
 'use client';
 import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner } from '@/lib/types';
 
-const API_BASE_URL = 'https://d191uftsrq8996.cloudfront.net';
+const API_BASE_URL = 'http://vigo-alb-dev-1430663311.ap-southeast-1.elb.amazonaws.com';
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -246,10 +246,10 @@ export async function getBookingDetails(id: number): Promise<Booking> {
   return result.data;
 }
 
-export async function updateBookingStatus(id: number, status: BookingStatus): Promise<Booking> {
+export async function updateBookingStatus(id: number, status: BookingStatus, note?: string): Promise<Booking> {
   const response = await fetchWithAuth(`/bookings/admin/${id}/status`, {
     method: 'POST',
-    body: JSON.stringify({ status }),
+    body: JSON.stringify({ status, ...(note && { note }) }),
   });
   const result = await response.json();
   return result.data;
@@ -318,13 +318,16 @@ export async function deleteRoute(id: number): Promise<void> {
 }
 
 
-export async function getPricingByRoute(routeId: number): Promise<RoutePricing[]> {
-  const response = await fetchWithAuth(`/master-data/pricing/${routeId}`);
+export async function getPricingByRoute(routeId: number, serviceType?: string): Promise<RoutePricing[]> {
+  const query = new URLSearchParams();
+  if (serviceType) query.set('serviceType', serviceType);
+  const queryStr = query.toString();
+  const response = await fetchWithAuth(`/master-data/pricing/${routeId}${queryStr ? '?' + queryStr : ''}`);
   const result = await response.json();
-  return result.data; // Data is nested
+  return result.data;
 }
 
-export async function createPricing(data: { routeId: number; adminUnitId: number; startDistrictId?: number | null; price: number; priority?: number }): Promise<RoutePricing> {
+export async function createPricing(data: { routeId: number; adminUnitId: number; startDistrictId?: number | null; price: number; priority?: number; serviceType?: string }): Promise<RoutePricing> {
   const response = await fetchWithAuth('/master-data/pricing', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -332,7 +335,7 @@ export async function createPricing(data: { routeId: number; adminUnitId: number
   return response.json();
 }
 
-export async function updatePricing(id: number, data: { price: number }): Promise<RoutePricing> {
+export async function updatePricing(id: number, data: { price: number; serviceType?: string }): Promise<RoutePricing> {
   const response = await fetchWithAuth(`/master-data/pricing/${id}`, {
     method: 'POST',
     body: JSON.stringify(data),

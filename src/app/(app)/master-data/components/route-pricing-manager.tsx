@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { getRoutes, getPricingByRoute, createPricing, updatePricing, deletePricing, getAdminUnits } from '@/lib/api';
 import type { Route, RoutePricing, AdminUnit } from '@/lib/types';
 import { Loader2, PlusCircle, Trash2, Edit } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -28,6 +30,7 @@ export function RoutePricingManager() {
     const [districts, setDistricts] = React.useState<AdminUnit[]>([]);
     const [selectedRouteId, setSelectedRouteId] = React.useState<number | null>(null);
     const [pricing, setPricing] = React.useState<RoutePricing[]>([]);
+    const [serviceTypeFilter, setServiceTypeFilter] = React.useState<string>('');
     const [isLoading, setIsLoading] = React.useState(true);
     const [isPricingLoading, setIsPricingLoading] = React.useState(false);
     const [isFormOpen, setIsFormOpen] = React.useState(false);
@@ -59,7 +62,8 @@ export function RoutePricingManager() {
         if (!selectedRouteId) return;
         setIsPricingLoading(true);
         try {
-            const pricingData = await getPricingByRoute(selectedRouteId);
+            const filterValue = serviceTypeFilter && serviceTypeFilter !== 'ALL' ? serviceTypeFilter : undefined;
+            const pricingData = await getPricingByRoute(selectedRouteId, filterValue);
             setPricing(pricingData);
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Failed to fetch pricing', description: err.message });
@@ -67,7 +71,7 @@ export function RoutePricingManager() {
         } finally {
             setIsPricingLoading(false);
         }
-    }, [selectedRouteId, toast]);
+    }, [selectedRouteId, serviceTypeFilter, toast]);
 
     React.useEffect(() => {
         fetchInitialData();
@@ -114,18 +118,34 @@ export function RoutePricingManager() {
                     <CardDescription>Configure prices for districts within a specific route.</CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <div className="flex items-center space-x-4">
-                        <Label htmlFor="route-select" className="shrink-0">Select a Route:</Label>
-                        <Combobox
-                            options={routeOptions}
-                            selectedValue={selectedRouteId ? String(selectedRouteId) : ""}
-                            onSelect={(value) => setSelectedRouteId(value ? Number(value) : null)}
-                            placeholder="Select a route..."
-                            searchPlaceholder="Search routes..."
-                            noResultsText="No route found."
-                            className="w-[350px]"
-                            disabled={isLoading}
-                        />
+                    <div className="flex items-center gap-4 flex-wrap">
+                        <div className="flex items-center space-x-2">
+                            <Label htmlFor="route-select" className="shrink-0">Route:</Label>
+                            <Combobox
+                                options={routeOptions}
+                                selectedValue={selectedRouteId ? String(selectedRouteId) : ""}
+                                onSelect={(value) => setSelectedRouteId(value ? Number(value) : null)}
+                                placeholder="Select a route..."
+                                searchPlaceholder="Search routes..."
+                                noResultsText="No route found."
+                                className="w-[350px]"
+                                disabled={isLoading}
+                            />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Label className="shrink-0">Service:</Label>
+                            <Select value={serviceTypeFilter} onValueChange={setServiceTypeFilter}>
+                                <SelectTrigger className="w-[160px]">
+                                    <SelectValue placeholder="All types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="ALL">All types</SelectItem>
+                                    <SelectItem value="DELIVERY">Delivery</SelectItem>
+                                    <SelectItem value="CARPOOL">Carpool</SelectItem>
+                                    <SelectItem value="RIDE">Ride</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                     {isPricingLoading ? (
                         <div className="h-48 flex items-center justify-center">
@@ -161,6 +181,7 @@ export function RoutePricingManager() {
                                     <TableRow>
                                         <TableHead>Start District</TableHead>
                                         <TableHead>End District</TableHead>
+                                        <TableHead>Service Type</TableHead>
                                         <TableHead>Price</TableHead>
                                         <TableHead>Priority</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
@@ -169,7 +190,7 @@ export function RoutePricingManager() {
                                 <TableBody>
                                     {pricing.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="h-24 text-center">No pricing rules found for this route.</TableCell>
+                                            <TableCell colSpan={6} className="h-24 text-center">No pricing rules found for this route.</TableCell>
                                         </TableRow>
                                     ) : (
                                         pricing.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(p => (
@@ -178,6 +199,11 @@ export function RoutePricingManager() {
                                                     {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Any</span>}
                                                 </TableCell>
                                                 <TableCell className="font-medium">{p.adminUnit.name}</TableCell>
+                                                <TableCell>
+                                                    <Badge variant={p.serviceType === 'CARPOOL' ? 'secondary' : p.serviceType === 'RIDE' ? 'outline' : 'default'}>
+                                                        {p.serviceType || 'DELIVERY'}
+                                                    </Badge>
+                                                </TableCell>
                                                 <TableCell>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.price)}</TableCell>
                                                 <TableCell>{p.priority}</TableCell>
                                                 <TableCell className="text-right">
@@ -253,6 +279,7 @@ function PricingForm({
     const [adminUnitId, setAdminUnitId] = React.useState<number | undefined>(pricingItem?.adminUnitId);
     const [startDistrictId, setStartDistrictId] = React.useState<number | undefined>(pricingItem?.startDistrictId);
     const [price, setPrice] = React.useState<number | string>(pricingItem?.price || '');
+    const [serviceType, setServiceType] = React.useState<string>(pricingItem?.serviceType || 'DELIVERY');
     const [isSaving, setIsSaving] = React.useState(false);
     const { toast } = useToast();
     const isEditing = !!pricingItem;
@@ -303,10 +330,10 @@ function PricingForm({
         setIsSaving(true);
         try {
             if (isEditing) {
-                await updatePricing(pricingItem.id, { price: Number(price) });
+                await updatePricing(pricingItem.id, { price: Number(price), serviceType });
                 toast({ title: 'Success', description: 'Pricing rule updated.' });
             } else {
-                await createPricing({ routeId, adminUnitId, startDistrictId: startDistrictId || null, price: Number(price), priority: 1 });
+                await createPricing({ routeId, adminUnitId, startDistrictId: startDistrictId || null, price: Number(price), priority: 1, serviceType });
                 toast({ title: 'Success', description: 'Pricing rule created.' });
             }
             onSave();
@@ -350,6 +377,19 @@ function PricingForm({
                         noResultsText="No district found."
                         disabled={isEditing}
                     />
+                </div>
+                <div className="space-y-2">
+                    <Label>Service Type</Label>
+                    <Select value={serviceType} onValueChange={setServiceType}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select service type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="DELIVERY">Delivery</SelectItem>
+                            <SelectItem value="CARPOOL">Carpool</SelectItem>
+                            <SelectItem value="RIDE">Ride</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
                 <div className="space-y-2">
                     <Label htmlFor="price-input">Price (VND)</Label>
