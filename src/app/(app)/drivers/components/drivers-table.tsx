@@ -53,7 +53,7 @@ export function DriversTable() {
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<ApprovalStatus>('pending');
-  
+
   const [dialogState, setDialogState] = React.useState<{ open: boolean; driver: Driver | null, action: 'approve' | 'reject' }>({ open: false, driver: null, action: 'approve' });
   const [rejectionReason, setRejectionReason] = React.useState('');
 
@@ -75,10 +75,10 @@ export function DriversTable() {
       setIsLoading(false);
     }
   }, [toast]);
-  
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
-        fetchDrivers(activeTab, searchTerm);
+      fetchDrivers(activeTab, searchTerm);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
@@ -113,7 +113,7 @@ export function DriversTable() {
     }
     setSortConfig({ key, direction });
   };
-  
+
   const getStatusBadge = (status: Driver['isApproved']) => {
     switch (status) {
       case 'true':
@@ -145,8 +145,8 @@ export function DriversTable() {
         toast({ title: "Driver Approved", description: `${dialogState.driver.name} has been approved.` });
       } else {
         if (!rejectionReason) {
-            toast({ title: "Reason Required", description: "Please provide a reason for rejection.", variant: "destructive" });
-            return;
+          toast({ title: "Reason Required", description: "Please provide a reason for rejection.", variant: "destructive" });
+          return;
         }
         await rejectDriver(dialogState.driver.id, rejectionReason);
         toast({ title: "Driver Rejected", description: `${dialogState.driver.name} has been rejected.` });
@@ -154,11 +154,11 @@ export function DriversTable() {
       fetchDrivers(activeTab, searchTerm);
       closeConfirmationDialog();
     } catch (err: any) {
-        toast({
-            variant: "destructive",
-            title: `Failed to ${dialogState.action} driver`,
-            description: err.message,
-        });
+      toast({
+        variant: "destructive",
+        title: `Failed to ${dialogState.action} driver`,
+        description: err.message,
+      });
     }
   }
 
@@ -166,19 +166,19 @@ export function DriversTable() {
     <>
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex items-center pb-4">
-            <TabsList>
-                <TabsTrigger value="pending">Pending</TabsTrigger>
-                <TabsTrigger value="true">Approved</TabsTrigger>
-                <TabsTrigger value="false">Rejected</TabsTrigger>
-            </TabsList>
-            <div className='ml-auto'>
-                <Input
-                placeholder="Filter by name, phone, plate..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="max-w-sm"
-                />
-            </div>
+          <TabsList>
+            <TabsTrigger value="pending">Pending</TabsTrigger>
+            <TabsTrigger value="true">Approved</TabsTrigger>
+            <TabsTrigger value="false">Rejected</TabsTrigger>
+          </TabsList>
+          <div className='ml-auto'>
+            <Input
+              placeholder="Filter by name, phone, plate..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="max-w-sm"
+            />
+          </div>
         </div>
         <Card>
           <Table>
@@ -216,92 +216,92 @@ export function DriversTable() {
                   </TableCell>
                 </TableRow>
               ) : sortedDrivers.length === 0 ? (
-                  <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center">
-                      No drivers found for this status.
-                      </TableCell>
-                  </TableRow>
-              ) : (
-                sortedDrivers.map((driver) => (
-                <TableRow key={driver.id}>
-                  <TableCell className="font-medium">
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarImage src={driver.user?.avatarUrl} alt={driver.name} data-ai-hint="person portrait" />
-                        <AvatarFallback>{driver.name ? driver.name.charAt(0) : '?'}</AvatarFallback>
-                      </Avatar>
-                      <div className="grid">
-                        <span className="font-semibold">{driver.name}</span>
-                        <span className="text-sm text-muted-foreground">{driver.phone}</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="grid">
-                        <span className="font-semibold">{driver.vehicle.model}</span>
-                        <span className="text-sm text-muted-foreground">{driver.vehicle.plateNumber}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {getStatusBadge(driver.isApproved)}
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
-                          <span className="sr-only">Open menu</span>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        {driver.isApproved === 'pending' && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => openConfirmationDialog(driver, 'approve')}>
-                               <CheckCircle className="mr-2 h-4 w-4" /> Approve
-                            </DropdownMenuItem>
-                             <DropdownMenuItem onClick={() => openConfirmationDialog(driver, 'reject')} className="text-destructive focus:text-destructive">
-                                <XCircle className="mr-2 h-4 w-4" /> Reject
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                <TableRow>
+                  <TableCell colSpan={4} className="h-24 text-center">
+                    No drivers found for this status.
                   </TableCell>
                 </TableRow>
-              )))}
+              ) : (
+                sortedDrivers.map((driver) => (
+                  <TableRow key={driver.id}>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarImage src={driver.user?.avatarUrl} alt={driver.name} data-ai-hint="person portrait" />
+                          <AvatarFallback>{driver.name ? driver.name.charAt(0) : '?'}</AvatarFallback>
+                        </Avatar>
+                        <div className="grid">
+                          <span className="font-semibold">{driver.name}</span>
+                          <span className="text-sm text-muted-foreground">{driver.phone}</span>
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="grid">
+                        <span className="font-semibold">{driver.vehicle?.model || 'N/A'}</span>
+                        <span className="text-sm text-muted-foreground">{driver.vehicle?.plateNumber || 'No Plate'}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {getStatusBadge(driver.isApproved)}
+                    </TableCell>
+                    <TableCell>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" className="h-8 w-8 p-0">
+                            <span className="sr-only">Open menu</span>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                          <DropdownMenuItem>View Details</DropdownMenuItem>
+                          {driver.isApproved === 'pending' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => openConfirmationDialog(driver, 'approve')}>
+                                <CheckCircle className="mr-2 h-4 w-4" /> Approve
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => openConfirmationDialog(driver, 'reject')} className="text-destructive focus:text-destructive">
+                                <XCircle className="mr-2 h-4 w-4" /> Reject
+                              </DropdownMenuItem>
+                            </>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </TableCell>
+                  </TableRow>
+                )))}
             </TableBody>
           </Table>
         </Card>
       </Tabs>
-      
+
       <AlertDialog open={dialogState.open} onOpenChange={closeConfirmationDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              {dialogState.action === 'approve' 
+              {dialogState.action === 'approve'
                 ? `You are about to approve the driver ${dialogState.driver?.name}. They will be notified and can start accepting bookings.`
                 : `You are about to reject the driver ${dialogState.driver?.name}.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {dialogState.action === 'reject' && (
             <div className="grid gap-2 pt-2">
-                <Label htmlFor="rejection-reason">Reason for Rejection</Label>
-                <Textarea 
-                    id="rejection-reason"
-                    placeholder="e.g., Missing documents, blurry license photo..."
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                />
+              <Label htmlFor="rejection-reason">Reason for Rejection</Label>
+              <Textarea
+                id="rejection-reason"
+                placeholder="e.g., Missing documents, blurry license photo..."
+                value={rejectionReason}
+                onChange={(e) => setRejectionReason(e.target.value)}
+              />
             </div>
           )}
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeConfirmationDialog}>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmAction}>
-                {dialogState.action === 'approve' ? 'Approve' : 'Confirm Rejection'}
+              {dialogState.action === 'approve' ? 'Approve' : 'Confirm Rejection'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

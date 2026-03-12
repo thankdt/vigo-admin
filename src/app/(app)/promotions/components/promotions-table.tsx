@@ -28,179 +28,196 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const promotionSchema = z.object({
-    name: z.string().min(1, { message: "Name is required" }),
-    code: z.string().min(1, { message: "Code is required" }),
-    discountType: z.enum(['FIXED_AMOUNT', 'PERCENTAGE']),
-    discountValue: z.coerce.number().positive({ message: "Discount value must be positive" }),
-    minOrderValue: z.coerce.number().min(0, { message: "Minimum order value cannot be negative" }),
-    usageLimit: z.coerce.number().positive({ message: "Usage limit must be positive" }),
-    startDate: z.date({ required_error: "Start date is required" }),
-    endDate: z.date({ required_error: "End date is required" }),
-    pointCost: z.coerce.number().min(0, { message: "Point cost cannot be negative" }).default(0),
-    imageUrl: z.string().url({ message: "Please enter a valid URL" }).optional().or(z.literal('')),
+  name: z.string().min(1, { message: "Name is required" }),
+  code: z.string().min(1, { message: "Code is required" }),
+  discountType: z.enum(['FIXED_AMOUNT', 'PERCENTAGE']),
+  discountValue: z.coerce.number().positive({ message: "Discount value must be positive" }),
+  minOrderValue: z.coerce.number().min(0, { message: "Minimum order value cannot be negative" }),
+  usageLimit: z.coerce.number().positive({ message: "Usage limit must be positive" }),
+  startDate: z.date({ required_error: "Start date is required" }),
+  endDate: z.date({ required_error: "End date is required" }),
+  pointCost: z.coerce.number().min(0, { message: "Point cost cannot be negative" }).default(0),
+  imageUrl: z.string().url({ message: "Please enter a valid URL" }).optional().or(z.literal('')),
+  description: z.string().optional(),
+  maxDiscount: z.coerce.number().positive({ message: "Max discount must be positive" }).optional(),
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
 
 function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void, onCancel: () => void }) {
-    const { toast } = useToast();
-    const { register, handleSubmit, control, formState: { errors, isSubmitting }, reset } = useForm<PromotionFormValues>({
-        resolver: zodResolver(promotionSchema),
-        defaultValues: {
-            discountType: 'FIXED_AMOUNT',
-            pointCost: 0,
-        },
-    });
+  const { toast } = useToast();
+  const { register, handleSubmit, control, watch, formState: { errors, isSubmitting }, reset } = useForm<PromotionFormValues>({
+    resolver: zodResolver(promotionSchema),
+    defaultValues: {
+      discountType: 'FIXED_AMOUNT',
+      pointCost: 0,
+    },
+  });
 
-    const onSubmit = async (data: PromotionFormValues) => {
-        try {
-            await createVoucher({
-                ...data,
-                startDate: data.startDate.toISOString(),
-                endDate: data.endDate.toISOString(),
-            });
-            toast({ title: "Success", description: "Voucher created successfully." });
-            onSaveSuccess();
-            reset(); // Reset form after successful submission
-        } catch (err: any) {
-            const errorMessage = err.message || 'An unknown error occurred';
-            let finalDescription = errorMessage;
+  const discountType = watch('discountType');
 
-            // Attempt to parse if the message is a JSON string
-            try {
-                const errorObj = JSON.parse(errorMessage);
-                if (errorObj.details && Array.isArray(errorObj.details)) {
-                    finalDescription = errorObj.details.join(', ');
-                } else if (errorObj.message) {
-                    finalDescription = errorObj.message;
-                }
-            } catch (e) {
-                // Not a JSON string, use the original message
-            }
+  const onSubmit = async (data: PromotionFormValues) => {
+    try {
+      await createVoucher({
+        ...data,
+        startDate: format(data.startDate, 'yyyy-MM-dd') + 'T00:00:00Z',
+        endDate: format(data.endDate, 'yyyy-MM-dd') + 'T23:59:59Z',
+      });
+      toast({ title: "Success", description: "Voucher created successfully." });
+      onSaveSuccess();
+      reset(); // Reset form after successful submission
+    } catch (err: any) {
+      const errorMessage = err.message || 'An unknown error occurred';
+      let finalDescription = errorMessage;
 
-            toast({ variant: 'destructive', title: 'Failed to create voucher', description: finalDescription });
+      // Attempt to parse if the message is a JSON string
+      try {
+        const errorObj = JSON.parse(errorMessage);
+        if (errorObj.details && Array.isArray(errorObj.details)) {
+          finalDescription = errorObj.details.join(', ');
+        } else if (errorObj.message) {
+          finalDescription = errorObj.message;
         }
-    };
+      } catch (e) {
+        // Not a JSON string, use the original message
+      }
 
-    return (
-        <form onSubmit={handleSubmit(onSubmit)}>
-            <DialogHeader>
-                <DialogTitle>Create Voucher</DialogTitle>
-                <DialogDescription>Fill in the details to create a new promotional voucher.</DialogDescription>
-            </DialogHeader>
-            <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto p-1 sm:grid-cols-2">
-                <div className="space-y-2">
-                    <Label htmlFor="name">Name</Label>
-                    <Input id="name" {...register('name')} />
-                    {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="code">Code</Label>
-                    <Input id="code" {...register('code')} />
-                    {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
-                </div>
+      toast({ variant: 'destructive', title: 'Failed to create voucher', description: finalDescription });
+    }
+  };
 
-                <div className="space-y-2">
-                    <Label>Discount Type</Label>
-                    <Controller
-                        name="discountType"
-                        control={control}
-                        render={({ field }) => (
-                            <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <SelectTrigger><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="FIXED_AMOUNT">Fixed Amount</SelectItem>
-                                    <SelectItem value="PERCENTAGE">Percentage</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        )}
-                    />
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="discountValue">Discount Value</Label>
-                    <Input id="discountValue" type="number" {...register('discountValue')} />
-                    {errors.discountValue && <p className="text-sm text-destructive">{errors.discountValue.message}</p>}
-                </div>
-                
-                <div className="space-y-2">
-                    <Label htmlFor="minOrderValue">Min. Order Value (VND)</Label>
-                    <Input id="minOrderValue" type="number" {...register('minOrderValue')} />
-                    {errors.minOrderValue && <p className="text-sm text-destructive">{errors.minOrderValue.message}</p>}
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="usageLimit">Usage Limit</Label>
-                    <Input id="usageLimit" type="number" {...register('usageLimit')} />
-                    {errors.usageLimit && <p className="text-sm text-destructive">{errors.usageLimit.message}</p>}
-                </div>
+  return (
+    <form onSubmit={handleSubmit(onSubmit)}>
+      <DialogHeader>
+        <DialogTitle>Create Voucher</DialogTitle>
+        <DialogDescription>Fill in the details to create a new promotional voucher.</DialogDescription>
+      </DialogHeader>
+      <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto p-1 sm:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="name">Name</Label>
+          <Input id="name" {...register('name')} />
+          {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="code">Code</Label>
+          <Input id="code" {...register('code')} />
+          {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
+        </div>
 
-                <div className="space-y-2">
-                    <Label>Start Date</Label>
-                    <Controller
-                        name="startDate"
-                        control={control}
-                        render={({ field }) => (
-                            <Popover modal={true}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
-                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    />
-                     {errors.startDate && <p className="text-sm text-destructive">{errors.startDate.message}</p>}
-                </div>
-                 <div className="space-y-2">
-                    <Label>End Date</Label>
-                     <Controller
-                        name="endDate"
-                        control={control}
-                        render={({ field }) => (
-                            <Popover modal={true}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant={"outline"}
-                                        className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                                    >
-                                        <CalendarIcon className="mr-2 h-4 w-4" />
-                                        {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
-                                    <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                                </PopoverContent>
-                            </Popover>
-                        )}
-                    />
-                    {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
-                </div>
-                 <div className="space-y-2">
-                    <Label htmlFor="pointCost">Loyalty Point Cost</Label>
-                    <Input id="pointCost" type="number" {...register('pointCost')} />
-                    {errors.pointCost && <p className="text-sm text-destructive">{errors.pointCost.message}</p>}
-                </div>
-                <div className="space-y-2">
-                    <Label htmlFor="imageUrl">Image URL (Optional)</Label>
-                    <Input id="imageUrl" {...register('imageUrl')} placeholder="https://..." />
-                    {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
-                </div>
-            </div>
-            <DialogFooter className="pt-4">
-                <Button variant="outline" onClick={onCancel} type="button">Cancel</Button>
-                <Button type="submit" disabled={isSubmitting}>
-                    {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save Voucher
-                </Button>
-            </DialogFooter>
-        </form>
-    );
+        <div className="space-y-2">
+          <Label htmlFor="description">Description (Optional)</Label>
+          <Input id="description" {...register('description')} placeholder="e.g. Giảm 10% tối đa 50k" />
+        </div>
+
+        <div className="space-y-2">
+          <Label>Discount Type</Label>
+          <Controller
+            name="discountType"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="FIXED_AMOUNT">Fixed Amount</SelectItem>
+                  <SelectItem value="PERCENTAGE">Percentage</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="discountValue">Discount Value</Label>
+          <Input id="discountValue" type="number" {...register('discountValue')} />
+          {errors.discountValue && <p className="text-sm text-destructive">{errors.discountValue.message}</p>}
+        </div>
+
+        {discountType === 'PERCENTAGE' && (
+          <div className="space-y-2">
+            <Label htmlFor="maxDiscount">Max Discount Amount (VND)</Label>
+            <Input id="maxDiscount" type="number" {...register('maxDiscount')} />
+            {errors.maxDiscount && <p className="text-sm text-destructive">{errors.maxDiscount.message}</p>}
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="minOrderValue">Min. Order Value (VND)</Label>
+          <Input id="minOrderValue" type="number" {...register('minOrderValue')} />
+          {errors.minOrderValue && <p className="text-sm text-destructive">{errors.minOrderValue.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="usageLimit">Usage Limit</Label>
+          <Input id="usageLimit" type="number" {...register('usageLimit')} />
+          {errors.usageLimit && <p className="text-sm text-destructive">{errors.usageLimit.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label>Start Date</Label>
+          <Controller
+            name="startDate"
+            control={control}
+            render={({ field }) => (
+              <Popover modal={true}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
+                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                </PopoverContent>
+              </Popover>
+            )}
+          />
+          {errors.startDate && <p className="text-sm text-destructive">{errors.startDate.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label>End Date</Label>
+          <Controller
+            name="endDate"
+            control={control}
+            render={({ field }) => (
+              <Popover modal={true}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant={"outline"}
+                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
+                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
+                </PopoverContent>
+              </Popover>
+            )}
+          />
+          {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="pointCost">Loyalty Point Cost</Label>
+          <Input id="pointCost" type="number" {...register('pointCost')} />
+          {errors.pointCost && <p className="text-sm text-destructive">{errors.pointCost.message}</p>}
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="imageUrl">Image URL (Optional)</Label>
+          <Input id="imageUrl" {...register('imageUrl')} placeholder="https://..." />
+          {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
+        </div>
+      </div>
+      <DialogFooter className="pt-4">
+        <Button variant="outline" onClick={onCancel} type="button">Cancel</Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Save Voucher
+        </Button>
+      </DialogFooter>
+    </form>
+  );
 }
 
 export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boolean; setIsFormOpen: React.Dispatch<React.SetStateAction<boolean>> }) {
@@ -223,21 +240,21 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
   React.useEffect(() => {
     fetchPromotions();
   }, [fetchPromotions]);
-  
+
   const handleSaveSuccess = () => {
     setIsFormOpen(false);
     fetchPromotions();
   };
-  
+
   const getStatusBadge = (promo: Promotion) => {
     const now = new Date();
     const startDate = new Date(promo.startDate);
     const endDate = new Date(promo.endDate);
     if (now < startDate) {
-        return <Badge variant="secondary">Scheduled</Badge>;
+      return <Badge variant="secondary">Scheduled</Badge>;
     }
     if (now > endDate) {
-        return <Badge variant="outline">Expired</Badge>;
+      return <Badge variant="outline">Expired</Badge>;
     }
     return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Active</Badge>;
   };
@@ -277,22 +294,22 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                 promotions.map(promo => (
                   <TableRow key={promo.id}>
                     <TableCell>
-                        <Badge variant="destructive">{promo.code}</Badge>
+                      <Badge variant="destructive">{promo.code}</Badge>
                     </TableCell>
                     <TableCell className="font-medium">{promo.name}</TableCell>
                     <TableCell>
-                      {promo.discountType === 'PERCENTAGE' 
-                        ? `${promo.discountValue}%` 
+                      {promo.discountType === 'PERCENTAGE'
+                        ? `${promo.discountValue}%`
                         : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(promo.discountValue)}
                     </TableCell>
                     <TableCell>
-                        {format(new Date(promo.startDate), 'dd/MM/yy')} - {format(new Date(promo.endDate), 'dd/MM/yy')}
+                      {format(new Date(promo.startDate), 'dd/MM/yy')} - {format(new Date(promo.endDate), 'dd/MM/yy')}
                     </TableCell>
                     <TableCell>
-                        {promo.usageCount} / {promo.usageLimit}
+                      {promo.usageCount} / {promo.usageLimit}
                     </TableCell>
                     <TableCell>
-                        {getStatusBadge(promo)}
+                      {getStatusBadge(promo)}
                     </TableCell>
                   </TableRow>
                 ))
@@ -301,10 +318,10 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
           </Table>
         </CardContent>
       </Card>
-      
+
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-2xl">
-          <PromotionForm 
+          <PromotionForm
             onCancel={() => setIsFormOpen(false)}
             onSaveSuccess={handleSaveSuccess}
           />

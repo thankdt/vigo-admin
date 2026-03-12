@@ -23,13 +23,18 @@ import {
   Book,
   Map,
   Ticket,
+  Bell,
+  Newspaper,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Header } from '@/components/header';
-import { placeholderImages } from '@/lib/placeholder-images.json';
+import placeholderData from '@/lib/placeholder-images.json';
 import { Separator } from '@/components/ui/separator';
 import React from 'react';
+
+const { placeholderImages } = placeholderData;
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -40,6 +45,9 @@ const navItems = [
   { href: '/promotions', label: 'Promotions', icon: Ticket },
   { href: '/reports', label: 'Reports', icon: Bot },
   { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/notifications', label: 'Notifications', icon: Bell },
+  { href: '/news', label: 'News', icon: Newspaper },
+  { href: '/banners', label: 'Banners', icon: ImageIcon },
 ];
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
@@ -51,7 +59,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     // In a production app, you would want robust token validation here.
     const token = localStorage.getItem('access_token');
     if (!token) {
-       router.replace('/'); 
+      router.replace('/');
     }
   }, [router]);
 
@@ -83,15 +91,15 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-            <div className="flex items-center gap-3 duration-200 group-data-[collapsible=icon]:hidden">
-              <Avatar className="h-9 w-9">
-                <AvatarImage src={avatarUrl} alt="@vigo-admin" />
-                <AvatarFallback>AJ</AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">Alex Johnson</span>
-                <span className="text-xs text-muted-foreground">alex.j@example.com</span>
-              </div>
+          <div className="flex items-center gap-3 duration-200 group-data-[collapsible=icon]:hidden">
+            <Avatar className="h-9 w-9">
+              <AvatarImage src={avatarUrl} alt="@vigo-admin" />
+              <AvatarFallback>AJ</AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col">
+              <span className="text-sm font-medium">Alex Johnson</span>
+              <span className="text-xs text-muted-foreground">alex.j@example.com</span>
+            </div>
           </div>
         </SidebarFooter>
       </Sidebar>

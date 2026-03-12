@@ -18,19 +18,33 @@ export default function LoginPage() {
   const [phone, setPhone] = React.useState('0999999999');
   const [password, setPassword] = React.useState('admin123');
 
+  React.useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      router.replace('/dashboard');
+    }
+  }, [router]);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     try {
+      console.log('Attempting login...');
       await login(phone, password);
+      console.log('Login successful, redirecting...');
+      toast({
+        title: 'Login Successful',
+        description: 'Redirecting to dashboard...',
+      });
+      // Use client-side navigation to avoid S3 404s
       router.push('/dashboard');
     } catch (error: any) {
+      console.error('Login error:', error);
       toast({
         variant: 'destructive',
         title: 'Login Failed',
         description: error.message || 'Please check your credentials and try again.',
       });
-    } finally {
       setIsLoading(false);
     }
   };

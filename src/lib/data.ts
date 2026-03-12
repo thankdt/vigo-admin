@@ -1,5 +1,7 @@
 import type { User, Article, Role, Permission } from './types';
-import { placeholderImages } from './placeholder-images.json';
+import placeholderData from './placeholder-images.json';
+
+const { placeholderImages } = placeholderData;
 
 const getPlaceholderImageUrl = (id: string) => {
   const image = placeholderImages.find(p => p.id === id);
@@ -7,12 +9,12 @@ const getPlaceholderImageUrl = (id: string) => {
 }
 
 export const mockUsers: User[] = [
-  { id: '1', name: 'Alex Johnson', email: 'alex.j@example.com', role: 'Admin', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar1'), lastLogin: '2 hours ago' },
-  { id: '2', name: 'Maria Garcia', email: 'maria.g@example.com', role: 'Editor', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar2'), lastLogin: '5 hours ago' },
-  { id: '3', name: 'James Smith', email: 'james.s@example.com', role: 'Viewer', status: 'Inactive', avatarUrl: getPlaceholderImageUrl('avatar3'), lastLogin: '1 day ago' },
-  { id: '4', name: 'Patricia Williams', email: 'patricia.w@example.com', role: 'Editor', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar4'), lastLogin: '3 days ago' },
-  { id: '5', name: 'Robert Brown', email: 'robert.b@example.com', role: 'Viewer', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar5'), lastLogin: '1 week ago' },
-  { id: '6', name: 'Jennifer Davis', email: 'jennifer.d@example.com', role: 'Editor', status: 'Inactive', avatarUrl: getPlaceholderImageUrl('avatar6'), lastLogin: '2 weeks ago' },
+  { id: '1', name: 'Alex Johnson', email: 'alex.j@example.com', role: 'Admin', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar1'), lastLogin: '2 hours ago', isLocked: false },
+  { id: '2', name: 'Maria Garcia', email: 'maria.g@example.com', role: 'Editor', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar2'), lastLogin: '5 hours ago', isLocked: false },
+  { id: '3', name: 'James Smith', email: 'james.s@example.com', role: 'Viewer', status: 'Inactive', avatarUrl: getPlaceholderImageUrl('avatar3'), lastLogin: '1 day ago', isLocked: false },
+  { id: '4', name: 'Patricia Williams', email: 'patricia.w@example.com', role: 'Editor', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar4'), lastLogin: '3 days ago', isLocked: false },
+  { id: '5', name: 'Robert Brown', email: 'robert.b@example.com', role: 'Viewer', status: 'Active', avatarUrl: getPlaceholderImageUrl('avatar5'), lastLogin: '1 week ago', isLocked: false },
+  { id: '6', name: 'Jennifer Davis', email: 'jennifer.d@example.com', role: 'Editor', status: 'Inactive', avatarUrl: getPlaceholderImageUrl('avatar6'), lastLogin: '2 weeks ago', isLocked: false },
 ];
 
 export const mockArticles: Article[] = [

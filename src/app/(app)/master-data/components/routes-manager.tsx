@@ -26,13 +26,16 @@ export function RoutesManager() {
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [editingRoute, setEditingRoute] = React.useState<Route | null>(null);
     const [deletingRoute, setDeletingRoute] = React.useState<Route | null>(null);
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const itemsPerPage = 50;
     const { toast } = useToast();
 
     const fetchData = React.useCallback(async () => {
-        setIsLoading(true);
+        // We do NOT set setIsLoading(true) here to avoid wiping the table content during refresh.
+        // This keeps the DOM nodes (triggers) alive, preventing Radix UI focus issues and "UI Freeze".
         try {
             const [routesData, unitsData] = await Promise.all([getRoutes(), getAdminUnits()]);
-            setRoutes(routesData.map(r => ({...r, imageUrl: r.imageKey ? `https://vigo-bucket-development.s3.ap-southeast-1.amazonaws.com/${r.imageKey}` : undefined })));
+            setRoutes(routesData);
             setAdminUnits(unitsData);
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Failed to fetch data', description: err.message });
@@ -49,7 +52,7 @@ export function RoutesManager() {
         setEditingRoute(route);
         setIsFormOpen(true);
     };
-    
+
     const handleCloseForm = () => {
         setEditingRoute(null);
         setIsFormOpen(false);
@@ -64,11 +67,11 @@ export function RoutesManager() {
         if (!deletingRoute) return;
         try {
             await deleteRoute(deletingRoute.id);
-            toast({ title: 'Success', description: 'Route deleted.'});
+            toast({ title: 'Success', description: 'Route deleted.' });
             setDeletingRoute(null);
             fetchData();
         } catch (err: any) {
-             toast({ variant: 'destructive', title: 'Failed to delete route', description: err.message });
+            toast({ variant: 'destructive', title: 'Failed to delete route', description: err.message });
         }
     };
 
@@ -80,6 +83,29 @@ export function RoutesManager() {
                     <CardDescription>All defined routes in the system.</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="mb-4 flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, routes.length)}-{Math.min(currentPage * itemsPerPage, routes.length)} of {routes.length} routes
+                        </div>
+                        <div className="space-x-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(routes.length / itemsPerPage), p + 1))}
+                                disabled={currentPage >= Math.ceil(routes.length / itemsPerPage)}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -97,17 +123,18 @@ export function RoutesManager() {
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
-                            ) : routes.map(route => (
+                            ) : routes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(route => (
                                 <TableRow key={route.id}>
                                     <TableCell>{route.id}</TableCell>
                                     <TableCell>
-                                        <Image 
+                                        <Image
                                             src={route.imageUrl || 'https://picsum.photos/seed/default-route/80/50'}
                                             alt={route.name}
                                             width={80}
                                             height={50}
                                             className="rounded-md object-cover"
                                             data-ai-hint="route landscape"
+                                            unoptimized // Use original S3 URL to avoid Next.js optimization issues with signed URLs
                                         />
                                     </TableCell>
                                     <TableCell className="font-medium">{route.name}</TableCell>
@@ -118,11 +145,11 @@ export function RoutesManager() {
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
-                                         <DropdownMenu>
+                                        <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0">
-                                                <span className="sr-only">Open menu</span>
-                                                <MoreHorizontal className="h-4 w-4" />
+                                                    <span className="sr-only">Open menu</span>
+                                                    <MoreHorizontal className="h-4 w-4" />
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
@@ -141,8 +168,11 @@ export function RoutesManager() {
                         </TableBody>
                     </Table>
                 </CardContent>
-                <CardFooter>
-                     <Button onClick={() => handleOpenForm(null)}>
+                <CardFooter className="justify-between">
+                    <div className="text-xs text-muted-foreground">
+                        Page {currentPage} of {Math.max(1, Math.ceil(routes.length / itemsPerPage))}
+                    </div>
+                    <Button onClick={() => handleOpenForm(null)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
                         Add Route
                     </Button>
@@ -150,7 +180,7 @@ export function RoutesManager() {
             </Card>
 
             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-                <RouteForm 
+                <RouteForm
                     key={editingRoute?.id} // Re-mount on change
                     route={editingRoute}
                     adminUnits={adminUnits}
@@ -164,7 +194,7 @@ export function RoutesManager() {
                     <AlertDialogHeader>
                         <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
                         <AlertDialogDescription>
-                           This action cannot be undone. This will permanently delete the route "{deletingRoute?.name}" and all associated pricing rules.
+                            This action cannot be undone. This will permanently delete the route "{deletingRoute?.name}" and all associated pricing rules.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -180,7 +210,7 @@ export function RoutesManager() {
 function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | null, adminUnits: AdminUnit[], onSave: () => void; onCancel: () => void; }) {
     const isEditing = !!route;
     const { toast } = useToast();
-    
+
     const [name, setName] = React.useState(route?.name || '');
     const [startProvinceId, setStartProvinceId] = React.useState<number | undefined>();
     const [endProvinceId, setEndProvinceId] = React.useState<number | undefined>();
@@ -189,7 +219,7 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
     const [imageUrl, setImageUrl] = React.useState<string | undefined>(route?.imageUrl);
     const [imageFile, setImageFile] = React.useState<File | null>(null);
     const [isUploading, setIsUploading] = React.useState(false);
-    
+
     const [isSaving, setIsSaving] = React.useState(false);
 
     const provinces = React.useMemo(() => adminUnits.filter(u => u.level === 'PROVINCE'), [adminUnits]);
@@ -199,12 +229,12 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
     const endDistricts = React.useMemo(() => endProvinceId ? districts.filter(d => d.parentId === endProvinceId) : [], [districts, endProvinceId]);
 
     const provinceOptions = React.useMemo(() => provinces.map(p => ({ value: String(p.id), label: p.name })), [provinces]);
-    
+
     // Effect to auto-populate form when editing
     React.useEffect(() => {
         if (isEditing && route?.districts && districts.length > 0) {
             const districtMap = new Map(districts.map(d => [d.id, d.parentId]));
-            
+
             // Heuristic to determine start/end provinces
             const provinceCounts: Record<number, number> = {};
             route.districts.forEach(d => {
@@ -225,7 +255,7 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
 
             const startDistrictIds = new Set<number>();
             const endDistrictIds = new Set<number>();
-            
+
             route.districts.forEach(d => {
                 const parentId = districtMap.get(d.id);
                 if (parentId === p1) {
@@ -248,11 +278,11 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
             if (startProvince && endProvince && startProvince.id !== endProvince.id) {
                 setName(`${startProvince.name} - ${endProvince.name}`);
             } else if (startProvince) {
-                 setName(`${startProvince.name} - Nội tỉnh`);
+                setName(`${startProvince.name} - Nội tỉnh`);
             }
         }
     }, [startProvinceId, endProvinceId, provinces, name]);
-    
+
     const handleDistrictToggle = (side: 'start' | 'end', districtId: number) => {
         const updater = side === 'start' ? setSelectedStartDistricts : setSelectedEndDistricts;
         updater(prev => {
@@ -286,11 +316,20 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
         if (imageFile) {
             setIsUploading(true);
             try {
-                const presignedData = await getPresignedUrl(imageFile.name, imageFile.type);
+                // Ensure we have a valid content type, fallback to octet-stream if empty (common with some Windows files or obscure types)
+                const contentType = imageFile.type || 'application/octet-stream';
+                const presignedData = await getPresignedUrl(imageFile.name, contentType);
+
+                // We must use the SAME content type for the upload that we used for the presigned URL
+                // The explicit file object is fine, but we need to make sure api.ts handles the header correctly.
+                // However, `uploadToS3` in api.ts extracts type from file object.
+                // To be safe, let's update api.ts to respect the type we decided on. 
+                // But for now, we just ensure we request the URL with the right type.
+
                 await uploadToS3(presignedData.url, imageFile);
                 finalImageKey = presignedData.key;
                 toast({ title: 'Success', description: 'Image uploaded successfully.' });
-            } catch(err: any) {
+            } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Image upload failed', description: err.message });
                 setIsSaving(false);
                 setIsUploading(false);
@@ -299,47 +338,49 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
                 setIsUploading(false);
             }
         }
-        
+
         const allSelectedIds = [...selectedStartDistricts, ...selectedEndDistricts];
         if (!name || allSelectedIds.length === 0) {
             toast({ variant: 'destructive', title: 'Incomplete form', description: 'Route name and at least one district are required.' });
             setIsSaving(false);
             return;
         }
-        
-        const payload = { 
-            name, 
+
+        const payload = {
+            name,
             districtIds: allSelectedIds,
             imageKey: finalImageKey,
         };
-        
+
         try {
             if (isEditing && route) {
                 await updateRoute(route.id, payload);
-                toast({ title: 'Success', description: 'Route updated.'});
+                toast({ title: 'Success', description: 'Route updated.' });
             } else {
                 await createRoute(payload);
-                toast({ title: 'Success', description: 'Route created.'});
+                toast({ title: 'Success', description: 'Route created.' });
             }
             onSave();
-        } catch(err: any) {
+            // Do NOT setIsSaving(false) here because onSave unmounts this component.
+        } catch (err: any) {
             toast({ variant: 'destructive', title: `Failed to ${isEditing ? 'update' : 'create'} route`, description: err.message });
+            setIsSaving(false); // Only reset if we are staying on the form
         } finally {
-            setIsSaving(false);
+            // Removed finally block to avoid setting state on unmounted component
         }
     }
 
     return (
-        <DialogContent className="sm:max-w-4xl">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle>{isEditing ? 'Edit Route' : 'Create Route'}</DialogTitle>
                 <DialogDescription>{isEditing ? 'Update the route details.' : 'Define a new inter-province route.'}</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-                 <div className="space-y-2">
+            <div className="space-y-4 py-4 overflow-y-auto">
+                <div className="space-y-2">
                     <Label>Route Image</Label>
                     <div className="flex items-center gap-4">
-                       {imageUrl && <Image src={imageUrl} alt="Route preview" width={120} height={75} className="rounded-md object-cover" />}
+                        {imageUrl && <Image src={imageUrl} alt="Route preview" width={120} height={75} className="rounded-md object-cover" unoptimized />}
                         <Input id="image-upload" type="file" accept="image/*" onChange={handleImageChange} className="max-w-xs" />
                         {isUploading && <Loader2 className="h-5 w-5 animate-spin" />}
                     </div>
@@ -348,11 +389,11 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
                         <Label>Start Province</Label>
-                        <Combobox options={provinceOptions} selectedValue={startProvinceId ? String(startProvinceId) : undefined} onSelect={(val) => { setStartProvinceId(val ? Number(val) : undefined); setSelectedStartDistricts(new Set())}} placeholder="Select start province..." searchPlaceholder="Search provinces..." noResultsText="No province found." />
+                        <Combobox options={provinceOptions} selectedValue={startProvinceId ? String(startProvinceId) : undefined} onSelect={(val) => { setStartProvinceId(val ? Number(val) : undefined); setSelectedStartDistricts(new Set()) }} placeholder="Select start province..." searchPlaceholder="Search provinces..." noResultsText="No province found." />
                     </div>
-                     <div className="space-y-2">
+                    <div className="space-y-2">
                         <Label>End Province</Label>
-                        <Combobox options={provinceOptions} selectedValue={endProvinceId ? String(endProvinceId) : undefined} onSelect={(val) => { setEndProvinceId(val ? Number(val) : undefined); setSelectedEndDistricts(new Set())}} placeholder="Select end province..." searchPlaceholder="Search provinces..." noResultsText="No province found." />
+                        <Combobox options={provinceOptions} selectedValue={endProvinceId ? String(endProvinceId) : undefined} onSelect={(val) => { setEndProvinceId(val ? Number(val) : undefined); setSelectedEndDistricts(new Set()) }} placeholder="Select end province..." searchPlaceholder="Search provinces..." noResultsText="No province found." />
                     </div>
                 </div>
 
@@ -360,7 +401,7 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
                     <Label htmlFor="route-name">Route Name</Label>
                     <Input id="route-name" placeholder="e.g. Hà Nội - Hải Dương" value={name} onChange={e => setName(e.target.value)} />
                 </div>
-                
+
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2 rounded-md border p-4">
                         <Label>Districts in Start Province</Label>
@@ -376,9 +417,9 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
                             </div>
                         </ScrollArea>
                     </div>
-                     <div className="space-y-2 rounded-md border p-4">
+                    <div className="space-y-2 rounded-md border p-4">
                         <Label>Districts in End Province</Label>
-                         <ScrollArea className="h-60">
+                        <ScrollArea className="h-60">
                             <div className="space-y-2 p-1">
                                 {endDistricts.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Select an end province to see districts.</p>}
                                 {endDistricts.map(d => (

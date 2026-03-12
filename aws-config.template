@@ -1,0 +1,5 @@
+# Copy the content below to a file named .env in the root of your project
+# Fill in your actual AWS Access Key and Secret Key
+
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=

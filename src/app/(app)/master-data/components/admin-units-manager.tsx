@@ -18,6 +18,8 @@ export function AdminUnitsManager() {
     const [provinces, setProvinces] = React.useState<AdminUnit[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isFormOpen, setIsFormOpen] = React.useState(false);
+    const [currentPage, setCurrentPage] = React.useState(1);
+    const itemsPerPage = 50;
     const { toast } = useToast();
 
     const fetchUnits = React.useCallback(async () => {
@@ -36,7 +38,7 @@ export function AdminUnitsManager() {
     React.useEffect(() => {
         fetchUnits();
     }, [fetchUnits]);
-    
+
     function UnitForm({ onSave, onCancel }: { onSave: () => void; onCancel: () => void; }) {
         const [name, setName] = React.useState('');
         const [level, setLevel] = React.useState<'PROVINCE' | 'DISTRICT' | 'WARD'>('PROVINCE');
@@ -52,13 +54,13 @@ export function AdminUnitsManager() {
                 toast({ variant: 'destructive', title: 'Incomplete form', description: 'Parent unit is required for District/Ward.' });
                 return;
             }
-            
+
             setIsSaving(true);
             try {
                 await createAdminUnit({ name, level, parentId: level === 'PROVINCE' ? undefined : parentId });
-                toast({ title: 'Success', description: 'Administrative unit created.'});
+                toast({ title: 'Success', description: 'Administrative unit created.' });
                 onSave();
-            } catch(err: any) {
+            } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Failed to create unit', description: err.message });
             } finally {
                 setIsSaving(false);
@@ -88,9 +90,9 @@ export function AdminUnitsManager() {
                         </Select>
                     </div>
                     {level !== 'PROVINCE' && (
-                         <div className="space-y-2">
+                        <div className="space-y-2">
                             <Label htmlFor="unit-parent">Parent Unit (Province)</Label>
-                             <Select onValueChange={(v: any) => setParentId(Number(v))}>
+                            <Select onValueChange={(v: any) => setParentId(Number(v))}>
                                 <SelectTrigger id="unit-parent"><SelectValue placeholder="Select a parent province" /></SelectTrigger>
                                 <SelectContent>
                                     {provinces.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
@@ -118,6 +120,29 @@ export function AdminUnitsManager() {
                     <CardDescription>All provinces, districts, and wards in the system.</CardDescription>
                 </CardHeader>
                 <CardContent>
+                    <div className="mb-4 flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">
+                            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, units.length)}-{Math.min(currentPage * itemsPerPage, units.length)} of {units.length} units
+                        </div>
+                        <div className="space-x-2">
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                            >
+                                Previous
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(units.length / itemsPerPage), p + 1))}
+                                disabled={currentPage >= Math.ceil(units.length / itemsPerPage)}
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    </div>
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -134,7 +159,7 @@ export function AdminUnitsManager() {
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
-                            ) : units.map(unit => (
+                            ) : units.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(unit => (
                                 <TableRow key={unit.id}>
                                     <TableCell>{unit.id}</TableCell>
                                     <TableCell className="font-medium">{unit.name}</TableCell>
@@ -145,7 +170,10 @@ export function AdminUnitsManager() {
                         </TableBody>
                     </Table>
                 </CardContent>
-                <CardFooter>
+                <CardFooter className="justify-between">
+                    <div className="text-xs text-muted-foreground">
+                        Page {currentPage} of {Math.max(1, Math.ceil(units.length / itemsPerPage))}
+                    </div>
                     <Button onClick={() => setIsFormOpen(true)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
                         Add Unit
@@ -153,7 +181,7 @@ export function AdminUnitsManager() {
                 </CardFooter>
             </Card>
             <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-                <UnitForm 
+                <UnitForm
                     onCancel={() => setIsFormOpen(false)}
                     onSave={() => {
                         setIsFormOpen(false);

@@ -20,6 +20,26 @@ export type Article = {
   imageUrl: string;
 };
 
+export type News = {
+  id: number;
+  title: string;
+  description: string;
+  imageUrl?: string;
+  link?: string;
+  isActive: boolean;
+  createdAt: string;
+  deletedAt?: string;
+};
+
+export type Banner = {
+  id: number;
+  imageUrl: string;
+  priority: number;
+  isActive: boolean;
+  createdAt: string;
+  deletedAt?: string;
+};
+
 export type Role = {
   id: string;
   name: 'Admin' | 'Editor' | 'Viewer';
@@ -33,7 +53,7 @@ export type Driver = {
   name: string;
   phone: string;
   isApproved: 'true' | 'false' | 'pending';
-  vehicle: {
+  vehicle?: {
     id: number;
     plateNumber: string;
     model: string;
@@ -65,7 +85,7 @@ export type Booking = {
   };
 }
 
-export type Permission = 
+export type Permission =
   | 'users:create' | 'users:read' | 'users:update' | 'users:delete'
   | 'content:create' | 'content:read' | 'content:update' | 'content:delete'
   | 'roles:create' | 'roles:read' | 'roles:update' | 'roles:delete'
@@ -86,6 +106,7 @@ export type AdminUnit = {
   name: string;
   level: 'PROVINCE' | 'DISTRICT' | 'WARD';
   parentId?: number;
+  parent?: AdminUnit;
 };
 
 export type Route = {
@@ -100,32 +121,56 @@ export type RoutePricing = {
   id: number;
   routeId: number;
   adminUnitId: number;
+  startDistrictId?: number; // Optional: ID for Start District
   price: number;
   priority: number;
   route: Route;
   adminUnit: AdminUnit;
+  startDistrict?: AdminUnit; // Optional: Start District Entity
 }
 
 export type SystemConfig = {
-    id: number;
-    key: string;
-    value: string;
-    description: string;
+  id: number;
+  key: string;
+  value: string;
+  description: string;
 }
 
 export type Promotion = {
-    id: number;
-    code: string;
-    name: string;
-    discountType: 'FIXED_AMOUNT' | 'PERCENTAGE';
-    discountValue: number;
-    minOrderValue: number;
-    startDate: string;
-    endDate: string;
-    usageLimit: number;
-    usageCount: number;
-    pointCost: number;
-    imageUrl?: string;
+  id: number;
+  code: string;
+  name: string;
+  discountType: 'FIXED_AMOUNT' | 'PERCENTAGE';
+  discountValue: number;
+  minOrderValue: number;
+  startDate: string;
+  endDate: string;
+  usageLimit: number;
+  usageCount: number;
+  pointCost: number;
+
+  imageUrl?: string;
+  description?: string;
+  maxDiscount?: number;
 }
 
-    
+export type ScheduledNotification = {
+  id: number;
+  title: string;
+  body: string;
+  imageUrl?: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  scheduleArn?: string;
+  scheduleTime?: string; // ISO String
+  cronExpression?: string;
+  createdAt: string;
+}
+
+export type GetApiResponse<T> = {
+  data: T[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+

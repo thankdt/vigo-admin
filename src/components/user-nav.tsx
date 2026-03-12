@@ -13,7 +13,9 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { LogOut, Settings, User as UserIcon } from 'lucide-react';
-import { placeholderImages } from '@/lib/placeholder-images.json';
+import placeholderData from '@/lib/placeholder-images.json';
+
+const { placeholderImages } = placeholderData;
 
 export function UserNav() {
   const router = useRouter();
