@@ -240,7 +240,14 @@ export async function getBookings(params: { page?: number; limit?: number; statu
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
-  return response.json();
+  const result = await response.json();
+  return {
+    data: result.data || [],
+    total: result.meta?.total ?? result.total ?? 0,
+    page: result.meta?.page ?? result.page ?? 1,
+    limit: result.meta?.limit ?? result.limit ?? 20,
+    totalPages: result.meta?.totalPages ?? result.totalPages ?? 1,
+  };
 }
 
 export async function getBookingDetails(id: string): Promise<Booking> {

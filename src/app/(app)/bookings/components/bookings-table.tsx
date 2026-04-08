@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { format } from 'date-fns';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import {
   Table,
   TableBody,
@@ -33,6 +34,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking } from '@/lib/api';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
@@ -213,6 +215,12 @@ export function BookingsTable() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
 
+  // Pagination state
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [totalItems, setTotalItems] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(20);
+
   const [selectedBookingId, setSelectedBookingId] = React.useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [reassigningBooking, setReassigningBooking] = React.useState<Booking | null>(null);
@@ -222,17 +230,19 @@ export function BookingsTable() {
   const [isUpdating, setIsUpdating] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async (status: string, search: string) => {
+  const fetchBookings = React.useCallback(async (status: string, search: string, page: number, limit: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const params: any = { status: status === 'ALL' ? undefined : status };
+      const params: any = { page, limit, status: status === 'ALL' ? undefined : status };
       if (search) {
         params.customerId = search;
       }
 
       const response = await getBookings(params);
       setBookings(response.data);
+      setTotalPages(response.totalPages || 1);
+      setTotalItems(response.total || 0);
     } catch (err: any) {
       setError(err.message);
       toast({
@@ -247,14 +257,20 @@ export function BookingsTable() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings(activeTab, searchTerm);
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm]);
+  }, [fetchBookings, activeTab, searchTerm, currentPage, pageSize]);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
+    setCurrentPage(1); // Reset to page 1 on tab change
+  }
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to page 1 on search
   }
 
   const openDetails = (bookingId: string) => {
@@ -270,7 +286,7 @@ export function BookingsTable() {
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
       toast({ title: 'Status Updated', description: `Booking #${dialogState.booking.id} has been updated to ${dialogState.newStatus}.` });
-      fetchBookings(activeTab, searchTerm);
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
       setDialogState({ open: false, booking: null, newStatus: null });
       setStatusNote('');
     } catch (err: any) {
@@ -327,7 +343,7 @@ export function BookingsTable() {
             <Input
               placeholder="Search by Customer/Driver ID"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => handleSearchChange(e.target.value)}
               className="max-w-sm pl-8"
             />
           </div>
@@ -451,6 +467,67 @@ export function BookingsTable() {
                 )))}
             </TableBody>
           </Table>
+          {/* Pagination Controls */}
+          <div className="flex items-center justify-between px-4 py-4 border-t">
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <span>Hiển thị</span>
+              <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
+                <SelectTrigger className="h-8 w-[70px]">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">10</SelectItem>
+                  <SelectItem value="20">20</SelectItem>
+                  <SelectItem value="50">50</SelectItem>
+                  <SelectItem value="100">100</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>/ {totalItems} kết quả</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">
+                Trang {currentPage} / {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage <= 1 || isLoading}
+                >
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage <= 1 || isLoading}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage >= totalPages || isLoading}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage >= totalPages || isLoading}
+                >
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
         </Card>
       </Tabs>
       {selectedBookingId && <BookingDetail bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />}
@@ -488,7 +565,7 @@ export function BookingsTable() {
           onOpenChange={(open) => !open && setReassigningBooking(null)}
           onReassignSuccess={() => {
             setReassigningBooking(null);
-            fetchBookings(activeTab, searchTerm);
+            fetchBookings(activeTab, searchTerm, currentPage, pageSize);
           }}
         />
       </Dialog>
