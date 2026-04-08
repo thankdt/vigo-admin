@@ -49,40 +49,71 @@ export type Role = {
 };
 
 export type Driver = {
-  id: number;
-  name: string;
-  phone: string;
-  isApproved: 'true' | 'false' | 'pending';
+  id: string;
+  name?: string;
+  phone?: string;
+  walletBalance?: number;
+  isApproved: 'true' | 'false' | 'pending' | '-' | string;
   vehicle?: {
     id: number;
     plateNumber: string;
     model: string;
   };
-  user: {
+  vehicleRegistration?: {
+    plateNumber: string;
+    brand: string;
+    model: string;
+    color: string;
+  };
+  user?: {
     id: string;
+    fullName?: string;
+    phone?: string;
     avatarUrl?: string;
-  }
+    avatar?: string;
+  };
+  licenseNumber?: string;
+  licenseImages?: string[];
+  cccdImages?: string[];
+  enabledDropoffDistricts?: number[];
+  fixedRouteId?: number;
+  enabledServices?: string[];
+  isSubmittedForApproval?: boolean;
 }
 
 export type BookingStatus = 'SEARCHING' | 'ACCEPTED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED';
 
 export type Booking = {
-  id: number;
+  id: string;
+  customerId: string;
+  driverId?: string | null;
   pickupAddress: string | { address: string; lat: number; lng: number };
-  destinationAddress: string | { address: string; lat: number; lng: number };
+  dropoffAddress: string | { address: string; lat: number; lng: number } | null;
   price: number;
+  finalPrice?: number;
   status: BookingStatus;
+  serviceType?: string;
+  isPooled?: boolean;
+  requestedSeats?: number;
+  requestedVehicleType?: string | null;
+  paymentMethod?: string;
+  cancelReason?: string | null;
+  note?: string | null;
   createdAt: string;
+  updatedAt?: string;
   customer: {
-    id: number;
-    name: string;
+    id: string;
+    fullName: string;
     phone: string;
-  };
+    role?: string;
+    email?: string | null;
+  } | null;
   driver?: {
-    id: number;
-    name: string;
+    id: string;
+    fullName?: string;
+    name?: string;
     phone: string;
-  };
+  } | null;
 }
 
 export type Permission =

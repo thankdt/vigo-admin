@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { getNews, createNews, updateNews, deleteNews, getPresignedUrl, uploadToS3 } from '@/lib/api';
+import { getNews, createNews, updateNews, deleteNews, getPresignedUrl, uploadToS3, API_BASE_URL } from '@/lib/api';
 import type { News } from '@/lib/types';
 import { Loader2, PlusCircle, Edit, Trash2, Search, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -274,14 +274,8 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
                 // Presigned upload doesn't return public URL directly usually, unless we know the bucket structure.
                 // But `presignedData.key` is available.
                 // Let's assume we construct URL or backend allows Key.
-                // Usually Vigo code uses `https://d191uftsrq8996.cloudfront.net/${key}` or similar.
-                // Let's assume we send the full CloudFront URL if we know it, or just the key if backend handles it?
-                // Looking at `RoutesManager`, it sends `imageKey`.
-                // Looking at `NotificationsManager`, it sends `imageUrl`.
-                // User Reqs for News: `imageUrl: "https://..."`
-                // So I should send the full URL.
-                // cloudfront base: https://d191uftsrq8996.cloudfront.net
-                finalImageKey = `https://d191uftsrq8996.cloudfront.net/${presignedData.key}`;
+                // Using API_BASE_URL
+                finalImageKey = `${API_BASE_URL}/${presignedData.key}`;
 
             } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Upload failed', description: err.message });

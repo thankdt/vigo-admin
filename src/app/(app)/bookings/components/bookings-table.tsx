@@ -49,7 +49,7 @@ import { cn } from '@/lib/utils';
 type SortKey = keyof Booking;
 const allStatuses: BookingStatus[] = ['SEARCHING', 'ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
 
-function BookingDetail({ bookingId, onClose }: { bookingId: number, onClose: () => void }) {
+function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () => void }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -87,10 +87,10 @@ function BookingDetail({ bookingId, onClose }: { bookingId: number, onClose: () 
           {error && <p className="text-destructive text-center">{error}</p>}
           {booking && (
             <div className="space-y-4 text-sm">
-              <div className="font-semibold">Customer: <span className="font-normal">{booking.customer.name} ({booking.customer.phone})</span></div>
-              <div className="font-semibold">Driver: <span className="font-normal">{booking.driver ? `${booking.driver.name} (${booking.driver.phone})` : 'N/A'}</span></div>
-              <div className="font-semibold">From: <span className="font-normal">{typeof booking.pickupAddress === 'object' ? booking.pickupAddress.address : booking.pickupAddress}</span></div>
-              <div className="font-semibold">To: <span className="font-normal">{typeof booking.destinationAddress === 'object' ? booking.destinationAddress.address : booking.destinationAddress}</span></div>
+              <div className="font-semibold">Customer: <span className="font-normal">{booking.customer?.fullName ?? 'N/A'} ({booking.customer?.phone ?? 'N/A'})</span></div>
+              <div className="font-semibold">Driver: <span className="font-normal">{booking.driver ? `${booking.driver.fullName ?? booking.driver.name ?? 'N/A'} (${booking.driver.phone})` : 'N/A'}</span></div>
+              <div className="font-semibold">From: <span className="font-normal">{typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span></div>
+              <div className="font-semibold">To: <span className="font-normal">{typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span></div>
               <div className="font-semibold">Price: <span className="font-normal">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</span></div>
               <div className="font-semibold">Status: {getStatusBadge(booking.status)}</div>
               <div className="font-semibold">Created At: <span className="font-normal">{format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}</span></div>
@@ -140,7 +140,7 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   }
 
   return (
-    <DialogContent className="sm:max-w-lg">
+    <DialogContent className="sm:max-w-lg" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
       <DialogHeader>
         <DialogTitle>Reassign Booking #{booking?.id}</DialogTitle>
         <DialogDescription>Select a new driver for this booking. Only online drivers are shown.</DialogDescription>
@@ -157,18 +157,18 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                 key={driver.id}
                 className={cn(
                   "p-4 flex items-center gap-4 cursor-pointer hover:bg-muted/50",
-                  selectedDriverId === driver.user.id && "ring-2 ring-primary"
+                  selectedDriverId === driver.user?.id && "ring-2 ring-primary"
                 )}
-                onClick={() => setSelectedDriverId(driver.user.id)}
+                onClick={() => setSelectedDriverId(driver.user?.id ?? driver.id)}
               >
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={driver.user?.avatarUrl} alt={driver.name} data-ai-hint="person portrait" />
-                  <AvatarFallback>{driver.name.charAt(0)}</AvatarFallback>
+                  <AvatarImage src={driver.user?.avatarUrl} alt={driver.name ?? ''} data-ai-hint="person portrait" />
+                  <AvatarFallback>{driver.name?.charAt(0) ?? 'D'}</AvatarFallback>
                 </Avatar>
                 <div className='flex-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm'>
                   <div className="flex items-center gap-2 font-semibold"><User className="h-4 w-4 text-muted-foreground" /> {driver.name}</div>
                   <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {driver.phone}</div>
-                  <div className="flex items-center gap-2 col-span-2"><Car className="h-4 w-4 text-muted-foreground" /> {driver.vehicle.model} ({driver.vehicle.plateNumber})</div>
+                  <div className="flex items-center gap-2 col-span-2"><Car className="h-4 w-4 text-muted-foreground" /> {driver.vehicle?.model} ({driver.vehicle?.plateNumber})</div>
                 </div>
               </Card>
             ))}
@@ -199,7 +199,7 @@ function getStatusBadge(status: Booking['status']) {
     case 'CANCELLED':
       return <Badge variant="destructive" className="capitalize">{status.toLowerCase().replace('_', ' ')}</Badge>;
     default:
-      return <Badge className="capitalize">{status ? status.toLowerCase().replace('_', ' ') : ''}</Badge>;
+      return <Badge className="capitalize">{status ? String(status).toLowerCase().replace('_', ' ') : ''}</Badge>;
   }
 };
 
@@ -213,12 +213,13 @@ export function BookingsTable() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
 
-  const [selectedBookingId, setSelectedBookingId] = React.useState<number | null>(null);
+  const [selectedBookingId, setSelectedBookingId] = React.useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [reassigningBooking, setReassigningBooking] = React.useState<Booking | null>(null);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; booking: Booking | null; newStatus: BookingStatus | null }>({ open: false, booking: null, newStatus: null });
   const [statusNote, setStatusNote] = React.useState('');
+  const [isUpdating, setIsUpdating] = React.useState(false);
 
 
   const fetchBookings = React.useCallback(async (status: string, search: string) => {
@@ -256,23 +257,26 @@ export function BookingsTable() {
     setActiveTab(value as string);
   }
 
-  const openDetails = (bookingId: number) => {
+  const openDetails = (bookingId: string) => {
     setSelectedBookingId(bookingId);
     setIsDetailOpen(true);
   }
 
-  const handleStatusUpdate = async () => {
+  const handleStatusUpdate = async (e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
     if (!dialogState.booking || !dialogState.newStatus) return;
 
+    setIsUpdating(true);
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
       toast({ title: 'Status Updated', description: `Booking #${dialogState.booking.id} has been updated to ${dialogState.newStatus}.` });
       fetchBookings(activeTab, searchTerm);
+      setDialogState({ open: false, booking: null, newStatus: null });
+      setStatusNote('');
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Failed to update status', description: err.message });
     } finally {
-      setDialogState({ open: false, booking: null, newStatus: null });
-      setStatusNote('');
+      setIsUpdating(false);
     }
   }
 
@@ -382,14 +386,14 @@ export function BookingsTable() {
                   <TableRow key={booking.id}>
                     <TableCell className="font-medium">
                       <div className="flex flex-col">
-                        <span className='font-semibold'>{booking.customer.name}</span>
-                        <span className='text-sm text-muted-foreground'>{booking.customer.phone}</span>
+                        <span className='font-semibold'>{booking.customer?.fullName ?? 'N/A'}</span>
+                        <span className='text-sm text-muted-foreground'>{booking.customer?.phone ?? 'N/A'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
                       {booking.driver ? (
                         <div className="flex flex-col">
-                          <span className='font-semibold'>{booking.driver.name}</span>
+                          <span className='font-semibold'>{booking.driver.fullName ?? booking.driver.name ?? 'N/A'}</span>
                           <span className='text-sm text-muted-foreground'>{booking.driver.phone}</span>
                         </div>
                       ) : (
@@ -398,8 +402,8 @@ export function BookingsTable() {
                     </TableCell>
                     <TableCell className='max-w-xs'>
                       <div className="flex flex-col">
-                        <span className='truncate'><span className='font-medium'>From:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress.address : booking.pickupAddress}</span>
-                        <span className='truncate'><span className='font-medium'>To:</span> {typeof booking.destinationAddress === 'object' ? booking.destinationAddress.address : booking.destinationAddress}</span>
+                        <span className='truncate'><span className='font-medium'>From:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span>
+                        <span className='truncate'><span className='font-medium'>To:</span> {typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -451,7 +455,7 @@ export function BookingsTable() {
       </Tabs>
       {selectedBookingId && <BookingDetail bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />}
       <AlertDialog open={dialogState.open} onOpenChange={(open) => setDialogState(prev => ({ ...prev, open }))}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
             <AlertDialogDescription>
@@ -469,8 +473,11 @@ export function BookingsTable() {
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setDialogState({ open: false, booking: null, newStatus: null }); setStatusNote(''); }}>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleStatusUpdate}>Confirm</AlertDialogAction>
+            <AlertDialogCancel onClick={() => { setDialogState({ open: false, booking: null, newStatus: null }); setStatusNote(''); }} disabled={isUpdating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleStatusUpdate} disabled={isUpdating}>
+              {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Confirm
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

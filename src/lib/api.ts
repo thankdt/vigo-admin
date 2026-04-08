@@ -1,7 +1,7 @@
 'use client';
 import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner } from '@/lib/types';
 
-const API_BASE_URL = 'http://vigo-alb-dev-1430663311.ap-southeast-1.elb.amazonaws.com';
+export const API_BASE_URL = 'https://api.vigogroup.vn';
 
 let isRefreshing = false;
 let failedQueue: Array<{
@@ -85,7 +85,8 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             window.location.href = '/';
-            throw refreshError;
+            // Return a never-resolving promise to prevent further error propagation during redirect
+            return new Promise<Response>(() => {});
           } finally {
             isRefreshing = false;
           }
@@ -93,16 +94,13 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
           window.location.href = '/';
+          // Return a never-resolving promise to prevent further error propagation during redirect
+          return new Promise<Response>(() => {});
         }
       }
 
       const errorData = await response.json().catch(() => ({ message: response.statusText }));
-      if (response.status !== 401) { // 401 handled by redirect or refresh, don't throw yet if we refreshed? actually if we reach here it means it's NOT a recoverable 401
-        throw new Error(JSON.stringify(errorData) || 'An API error occurred');
-      } else {
-        // If we reached here, it means it's a 401 that wasn't refreshed (e.g. no token), or we just let logic flow.
-        throw new Error(JSON.stringify(errorData) || 'An API error occurred');
-      }
+      throw new Error(JSON.stringify(errorData) || 'An API error occurred');
     }
 
     return response;
@@ -214,17 +212,22 @@ export async function getDrivers(params: { page?: number; limit?: number; search
   return response.json();
 }
 
-export async function approveDriver(id: number): Promise<Driver> {
-  const response = await fetchWithAuth(`/drivers/admin/${id}/approve`, { method: 'POST' });
-  return response.json();
+export async function approveDriver(id: string, enabledServices: string[]): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/approve`, { 
+    method: 'POST',
+    body: JSON.stringify({ enabledServices }),
+  });
+  const data = await response.json();
+  return data.data || data;
 }
 
-export async function rejectDriver(id: number, reason: string): Promise<Driver> {
+export async function rejectDriver(id: string, reason: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/reject`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
-  return response.json();
+  const data = await response.json();
+  return data.data || data;
 }
 
 export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string } = {}): Promise<GetApiResponse<Booking>> {
@@ -240,13 +243,13 @@ export async function getBookings(params: { page?: number; limit?: number; statu
   return response.json();
 }
 
-export async function getBookingDetails(id: number): Promise<Booking> {
+export async function getBookingDetails(id: string): Promise<Booking> {
   const response = await fetchWithAuth(`/bookings/admin/${id}`);
   const result = await response.json();
   return result.data;
 }
 
-export async function updateBookingStatus(id: number, status: BookingStatus, note?: string): Promise<Booking> {
+export async function updateBookingStatus(id: string, status: BookingStatus, note?: string): Promise<Booking> {
   const response = await fetchWithAuth(`/bookings/admin/${id}/status`, {
     method: 'POST',
     body: JSON.stringify({ status, ...(note && { note }) }),
@@ -264,7 +267,7 @@ export async function getAvailableDrivers(lat?: number, long?: number): Promise<
   return result.data;
 }
 
-export async function reassignBooking(bookingId: number, driverId: string): Promise<Booking> {
+export async function reassignBooking(bookingId: string, driverId: string): Promise<Booking> {
   const response = await fetchWithAuth(`/bookings/admin/${bookingId}/reassign`, {
     method: 'PUT',
     body: JSON.stringify({ driverId }),

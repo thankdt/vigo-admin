@@ -50,18 +50,64 @@ const navItems = [
   { href: '/banners', label: 'Banners', icon: ImageIcon },
 ];
 
+// Error Boundary to prevent full page crash
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; error: Error | null }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex items-center justify-center h-full p-8">
+          <div className="text-center space-y-4">
+            <h2 className="text-lg font-semibold text-destructive">Something went wrong</h2>
+            <p className="text-sm text-muted-foreground">{this.state.error?.message}</p>
+            <button
+              className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
+              onClick={() => {
+                this.setState({ hasError: false, error: null });
+                window.location.reload();
+              }}
+            >
+              Reload Page
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const avatarUrl = placeholderImages.find(p => p.id === 'avatar1')?.imageUrl;
+  const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
   React.useEffect(() => {
-    // In a production app, you would want robust token validation here.
     const token = localStorage.getItem('access_token');
     if (!token) {
       router.replace('/');
+    } else {
+      setIsAuthenticated(true);
     }
   }, [router]);
+
+  // Don't render any children until we've verified the token exists
+  // This prevents API calls from firing before auth check completes
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <SidebarProvider>
@@ -105,8 +151,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </Sidebar>
       <SidebarInset>
         <Header />
-        <main className="flex-1 p-4 sm:px-6 sm:py-0">{children}</main>
+        <main className="flex-1 p-4 sm:px-6 sm:py-0">
+          <ErrorBoundary>{children}</ErrorBoundary>
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );
 }
+

@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { getBanners, createBanner, updateBanner, deleteBanner, getPresignedUrl, uploadToS3 } from '@/lib/api';
+import { getBanners, createBanner, updateBanner, deleteBanner, getPresignedUrl, uploadToS3, API_BASE_URL } from '@/lib/api';
 import type { Banner } from '@/lib/types';
 import { Loader2, PlusCircle, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -241,7 +241,7 @@ function BannerForm({ banner, onSave, onCancel }: { banner: Banner | null, onSav
                 const contentType = imageFile.type || 'application/octet-stream';
                 const presignedData = await getPresignedUrl(imageFile.name, contentType);
                 await uploadToS3(presignedData.url, imageFile);
-                finalImageKey = `https://d191uftsrq8996.cloudfront.net/${presignedData.key}`;
+                finalImageKey = `${API_BASE_URL}/${presignedData.key}`;
             } catch (err: any) {
                 toast({ variant: 'destructive', title: 'Upload failed', description: err.message });
                 setIsSaving(false);
