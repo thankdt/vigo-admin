@@ -11,14 +11,14 @@ export default function MasterDataPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Master Data"
-        description="Manage core system data like administrative units, routes, and pricing."
+        title="Dữ liệu chung"
+        description="Quản lý đơn vị hành chính, tuyến đường và bảng giá."
       />
       <Tabs defaultValue="admin-units" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="admin-units">Administrative Units</TabsTrigger>
-          <TabsTrigger value="routes">Defined Routes</TabsTrigger>
-          <TabsTrigger value="route-pricing">Route Pricing</TabsTrigger>
+          <TabsTrigger value="admin-units">Đơn vị hành chính</TabsTrigger>
+          <TabsTrigger value="routes">Tuyến đường</TabsTrigger>
+          <TabsTrigger value="route-pricing">Bảng giá</TabsTrigger>
         </TabsList>
 
         <TabsContent value="admin-units">

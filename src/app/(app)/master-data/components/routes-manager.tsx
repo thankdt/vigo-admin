@@ -38,7 +38,7 @@ export function RoutesManager() {
             setRoutes(routesData);
             setAdminUnits(unitsData);
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch data', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải dữ liệu', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -67,11 +67,11 @@ export function RoutesManager() {
         if (!deletingRoute) return;
         try {
             await deleteRoute(deletingRoute.id);
-            toast({ title: 'Success', description: 'Route deleted.' });
+            toast({ title: 'Thành công', description: 'Đã xóa tuyến đường.' });
             setDeletingRoute(null);
             fetchData();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to delete route', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể xóa tuyến đường', description: err.message });
         }
     };
 
@@ -79,13 +79,13 @@ export function RoutesManager() {
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>Routes List</CardTitle>
-                    <CardDescription>All defined routes in the system.</CardDescription>
+                    <CardTitle>Danh sách tuyến đường</CardTitle>
+                    <CardDescription>Tất cả tuyến đường đã được thiết lập trong hệ thống.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="mb-4 flex items-center justify-between">
                         <div className="text-sm text-muted-foreground">
-                            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, routes.length)}-{Math.min(currentPage * itemsPerPage, routes.length)} of {routes.length} routes
+                            Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, routes.length)}-{Math.min(currentPage * itemsPerPage, routes.length)} / {routes.length} tuyến đường
                         </div>
                         <div className="space-x-2">
                             <Button
@@ -94,7 +94,7 @@ export function RoutesManager() {
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
                             >
-                                Previous
+                                Trước
                             </Button>
                             <Button
                                 variant="outline"
@@ -102,7 +102,7 @@ export function RoutesManager() {
                                 onClick={() => setCurrentPage(p => Math.min(Math.ceil(routes.length / itemsPerPage), p + 1))}
                                 disabled={currentPage >= Math.ceil(routes.length / itemsPerPage)}
                             >
-                                Next
+                                Sau
                             </Button>
                         </div>
                     </div>
@@ -110,10 +110,10 @@ export function RoutesManager() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>ID</TableHead>
-                                <TableHead>Image</TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Districts</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>Ảnh</TableHead>
+                                <TableHead>Tên</TableHead>
+                                <TableHead>Quận/Huyện</TableHead>
+                                <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -141,7 +141,7 @@ export function RoutesManager() {
                                     <TableCell>
                                         <div className="flex flex-wrap gap-1">
                                             {route.districts?.slice(0, 5).map(d => <Badge key={d.id} variant="secondary">{d.name}</Badge>)}
-                                            {route.districts?.length > 5 && <Badge variant="outline">+{route.districts.length - 5} more</Badge>}
+                                            {route.districts?.length > 5 && <Badge variant="outline">+{route.districts.length - 5} khác</Badge>}
                                         </div>
                                     </TableCell>
                                     <TableCell className="text-right">
@@ -153,12 +153,12 @@ export function RoutesManager() {
                                                 </Button>
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                                                <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                                                 <DropdownMenuItem onClick={() => handleOpenForm(route)}>
-                                                    <Edit className="mr-2 h-4 w-4" /> Edit
+                                                    <Edit className="mr-2 h-4 w-4" /> Sửa
                                                 </DropdownMenuItem>
                                                 <DropdownMenuItem onClick={() => setDeletingRoute(route)} className="text-destructive focus:text-destructive">
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Delete
+                                                    <Trash2 className="mr-2 h-4 w-4" /> Xóa
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
@@ -170,11 +170,11 @@ export function RoutesManager() {
                 </CardContent>
                 <CardFooter className="justify-between">
                     <div className="text-xs text-muted-foreground">
-                        Page {currentPage} of {Math.max(1, Math.ceil(routes.length / itemsPerPage))}
+                        Trang {currentPage} / {Math.max(1, Math.ceil(routes.length / itemsPerPage))}
                     </div>
                     <Button onClick={() => handleOpenForm(null)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Route
+                        Thêm tuyến đường
                     </Button>
                 </CardFooter>
             </Card>
@@ -192,14 +192,14 @@ export function RoutesManager() {
             <AlertDialog open={!!deletingRoute} onOpenChange={() => setDeletingRoute(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Bạn có chắc chắn không?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete the route "{deletingRoute?.name}" and all associated pricing rules.
+                            Hành động này không thể hoàn tác. Tuyến đường "{deletingRoute?.name}" và tất cả bảng giá liên quan sẽ bị xóa vĩnh viễn.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -328,9 +328,9 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
 
                 await uploadToS3(presignedData.url, imageFile);
                 finalImageKey = presignedData.key;
-                toast({ title: 'Success', description: 'Image uploaded successfully.' });
+                toast({ title: 'Thành công', description: 'Đã tải ảnh lên thành công.' });
             } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Image upload failed', description: err.message });
+                toast({ variant: 'destructive', title: 'Tải ảnh lên thất bại', description: err.message });
                 setIsSaving(false);
                 setIsUploading(false);
                 return;
@@ -341,7 +341,7 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
 
         const allSelectedIds = [...selectedStartDistricts, ...selectedEndDistricts];
         if (!name || allSelectedIds.length === 0) {
-            toast({ variant: 'destructive', title: 'Incomplete form', description: 'Route name and at least one district are required.' });
+            toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Tên tuyến đường và ít nhất một quận/huyện là bắt buộc.' });
             setIsSaving(false);
             return;
         }
@@ -355,15 +355,15 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
         try {
             if (isEditing && route) {
                 await updateRoute(route.id, payload);
-                toast({ title: 'Success', description: 'Route updated.' });
+                toast({ title: 'Thành công', description: 'Đã cập nhật tuyến đường.' });
             } else {
                 await createRoute(payload);
-                toast({ title: 'Success', description: 'Route created.' });
+                toast({ title: 'Thành công', description: 'Đã tạo tuyến đường.' });
             }
             onSave();
             // Do NOT setIsSaving(false) here because onSave unmounts this component.
         } catch (err: any) {
-            toast({ variant: 'destructive', title: `Failed to ${isEditing ? 'update' : 'create'} route`, description: err.message });
+            toast({ variant: 'destructive', title: `Không thể ${isEditing ? 'cập nhật' : 'tạo'} tuyến đường`, description: err.message });
             setIsSaving(false); // Only reset if we are staying on the form
         } finally {
             // Removed finally block to avoid setting state on unmounted component
@@ -373,12 +373,12 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
     return (
         <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-                <DialogTitle>{isEditing ? 'Edit Route' : 'Create Route'}</DialogTitle>
-                <DialogDescription>{isEditing ? 'Update the route details.' : 'Define a new inter-province route.'}</DialogDescription>
+                <DialogTitle>{isEditing ? 'Sửa tuyến đường' : 'Tạo tuyến đường'}</DialogTitle>
+                <DialogDescription>{isEditing ? 'Cập nhật thông tin tuyến đường.' : 'Thiết lập tuyến đường liên tỉnh mới.'}</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 overflow-y-auto">
                 <div className="space-y-2">
-                    <Label>Route Image</Label>
+                    <Label>Ảnh tuyến đường</Label>
                     <div className="flex items-center gap-4">
                         {imageUrl && <Image src={imageUrl} alt="Route preview" width={120} height={75} className="rounded-md object-cover" unoptimized />}
                         <Input id="image-upload" type="file" accept="image/*" onChange={handleImageChange} className="max-w-xs" />
@@ -388,26 +388,26 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2">
-                        <Label>Start Province</Label>
-                        <Combobox options={provinceOptions} selectedValue={startProvinceId ? String(startProvinceId) : undefined} onSelect={(val) => { setStartProvinceId(val ? Number(val) : undefined); setSelectedStartDistricts(new Set()) }} placeholder="Select start province..." searchPlaceholder="Search provinces..." noResultsText="No province found." />
+                        <Label>Tỉnh/TP bắt đầu</Label>
+                        <Combobox options={provinceOptions} selectedValue={startProvinceId ? String(startProvinceId) : undefined} onSelect={(val) => { setStartProvinceId(val ? Number(val) : undefined); setSelectedStartDistricts(new Set()) }} placeholder="Chọn tỉnh/TP bắt đầu..." searchPlaceholder="Tìm tỉnh/thành phố..." noResultsText="Không tìm thấy." />
                     </div>
                     <div className="space-y-2">
-                        <Label>End Province</Label>
-                        <Combobox options={provinceOptions} selectedValue={endProvinceId ? String(endProvinceId) : undefined} onSelect={(val) => { setEndProvinceId(val ? Number(val) : undefined); setSelectedEndDistricts(new Set()) }} placeholder="Select end province..." searchPlaceholder="Search provinces..." noResultsText="No province found." />
+                        <Label>Tỉnh/TP kết thúc</Label>
+                        <Combobox options={provinceOptions} selectedValue={endProvinceId ? String(endProvinceId) : undefined} onSelect={(val) => { setEndProvinceId(val ? Number(val) : undefined); setSelectedEndDistricts(new Set()) }} placeholder="Chọn tỉnh/TP kết thúc..." searchPlaceholder="Tìm tỉnh/thành phố..." noResultsText="Không tìm thấy." />
                     </div>
                 </div>
 
                 <div className="space-y-2">
-                    <Label htmlFor="route-name">Route Name</Label>
+                    <Label htmlFor="route-name">Tên tuyến đường</Label>
                     <Input id="route-name" placeholder="e.g. Hà Nội - Hải Dương" value={name} onChange={e => setName(e.target.value)} />
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <div className="space-y-2 rounded-md border p-4">
-                        <Label>Districts in Start Province</Label>
+                        <Label>Quận/huyện tỉnh bắt đầu</Label>
                         <ScrollArea className="h-60">
                             <div className="space-y-2 p-1">
-                                {startDistricts.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Select a start province to see districts.</p>}
+                                {startDistricts.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Chọn tỉnh/TP bắt đầu để xem quận/huyện.</p>}
                                 {startDistricts.map(d => (
                                     <div key={d.id} className="flex items-center gap-2">
                                         <Checkbox id={`start-dist-${d.id}`} checked={selectedStartDistricts.has(d.id)} onCheckedChange={() => handleDistrictToggle('start', d.id)} />
@@ -418,10 +418,10 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
                         </ScrollArea>
                     </div>
                     <div className="space-y-2 rounded-md border p-4">
-                        <Label>Districts in End Province</Label>
+                        <Label>Quận/huyện tỉnh kết thúc</Label>
                         <ScrollArea className="h-60">
                             <div className="space-y-2 p-1">
-                                {endDistricts.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Select an end province to see districts.</p>}
+                                {endDistricts.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Chọn tỉnh/TP kết thúc để xem quận/huyện.</p>}
                                 {endDistricts.map(d => (
                                     <div key={d.id} className="flex items-center gap-2">
                                         <Checkbox id={`end-dist-${d.id}`} checked={selectedEndDistricts.has(d.id)} onCheckedChange={() => handleDistrictToggle('end', d.id)} />
@@ -434,10 +434,10 @@ function RouteForm({ route, adminUnits, onSave, onCancel }: { route: Route | nul
                 </div>
             </div>
             <DialogFooter>
-                <Button variant="outline" onClick={onCancel}>Cancel</Button>
+                <Button variant="outline" onClick={onCancel}>Hủy</Button>
                 <Button onClick={handleSubmit} disabled={isSaving || isUploading}>
                     {(isSaving || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save
+                    Lưu
                 </Button>
             </DialogFooter>
         </DialogContent>

@@ -29,7 +29,7 @@ export function AdminUnitsManager() {
             setUnits(data);
             setProvinces(data.filter(u => u.level === 'PROVINCE'));
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch units', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải đơn vị hành chính', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -47,21 +47,21 @@ export function AdminUnitsManager() {
 
         const handleSubmit = async () => {
             if (!name || !level) {
-                toast({ variant: 'destructive', title: 'Incomplete form', description: 'Name and level are required.' });
+                toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Tên và cấp đơn vị là bắt buộc.' });
                 return;
             }
             if (level !== 'PROVINCE' && !parentId) {
-                toast({ variant: 'destructive', title: 'Incomplete form', description: 'Parent unit is required for District/Ward.' });
+                toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Đơn vị cấp trên là bắt buộc cho Quận/Huyện và Phường/Xã.' });
                 return;
             }
 
             setIsSaving(true);
             try {
                 await createAdminUnit({ name, level, parentId: level === 'PROVINCE' ? undefined : parentId });
-                toast({ title: 'Success', description: 'Administrative unit created.' });
+                toast({ title: 'Thành công', description: 'Đã tạo đơn vị hành chính.' });
                 onSave();
             } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Failed to create unit', description: err.message });
+                toast({ variant: 'destructive', title: 'Không thể tạo đơn vị', description: err.message });
             } finally {
                 setIsSaving(false);
             }
@@ -70,30 +70,30 @@ export function AdminUnitsManager() {
         return (
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Create Administrative Unit</DialogTitle>
-                    <DialogDescription>Add a new province, district, or ward.</DialogDescription>
+                    <DialogTitle>Tạo đơn vị hành chính</DialogTitle>
+                    <DialogDescription>Thêm tỉnh/thành phố, quận/huyện hoặc phường/xã mới.</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-4 py-4">
                     <div className="space-y-2">
-                        <Label htmlFor="unit-name">Name</Label>
+                        <Label htmlFor="unit-name">Tên</Label>
                         <Input id="unit-name" value={name} onChange={e => setName(e.target.value)} placeholder="e.g., Hà Nội, Quận Ba Đình" />
                     </div>
                     <div className="space-y-2">
-                        <Label htmlFor="unit-level">Level</Label>
+                        <Label htmlFor="unit-level">Cấp</Label>
                         <Select onValueChange={(v: any) => setLevel(v)} defaultValue={level}>
                             <SelectTrigger id="unit-level"><SelectValue /></SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="PROVINCE">Province</SelectItem>
-                                <SelectItem value="DISTRICT">District</SelectItem>
-                                <SelectItem value="WARD">Ward</SelectItem>
+                                <SelectItem value="PROVINCE">Tỉnh/Thành phố</SelectItem>
+                                <SelectItem value="DISTRICT">Quận/Huyện</SelectItem>
+                                <SelectItem value="WARD">Phường/Xã</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
                     {level !== 'PROVINCE' && (
                         <div className="space-y-2">
-                            <Label htmlFor="unit-parent">Parent Unit (Province)</Label>
+                            <Label htmlFor="unit-parent">Đơn vị cấp trên (Tỉnh/TP)</Label>
                             <Select onValueChange={(v: any) => setParentId(Number(v))}>
-                                <SelectTrigger id="unit-parent"><SelectValue placeholder="Select a parent province" /></SelectTrigger>
+                                <SelectTrigger id="unit-parent"><SelectValue placeholder="Chọn tỉnh/thành phố" /></SelectTrigger>
                                 <SelectContent>
                                     {provinces.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
                                 </SelectContent>
@@ -102,10 +102,10 @@ export function AdminUnitsManager() {
                     )}
                 </div>
                 <DialogFooter>
-                    <Button variant="outline" onClick={onCancel}>Cancel</Button>
+                    <Button variant="outline" onClick={onCancel}>Hủy</Button>
                     <Button onClick={handleSubmit} disabled={isSaving}>
                         {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        Save
+                        Lưu
                     </Button>
                 </DialogFooter>
             </DialogContent>
@@ -116,13 +116,13 @@ export function AdminUnitsManager() {
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>Units List</CardTitle>
-                    <CardDescription>All provinces, districts, and wards in the system.</CardDescription>
+                    <CardTitle>Danh sách đơn vị</CardTitle>
+                    <CardDescription>Tất cả tỉnh/thành phố, quận/huyện và phường/xã trong hệ thống.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="mb-4 flex items-center justify-between">
                         <div className="text-sm text-muted-foreground">
-                            Showing {Math.min((currentPage - 1) * itemsPerPage + 1, units.length)}-{Math.min(currentPage * itemsPerPage, units.length)} of {units.length} units
+                            Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, units.length)}-{Math.min(currentPage * itemsPerPage, units.length)} / {units.length} đơn vị
                         </div>
                         <div className="space-x-2">
                             <Button
@@ -131,7 +131,7 @@ export function AdminUnitsManager() {
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1}
                             >
-                                Previous
+                                Trước
                             </Button>
                             <Button
                                 variant="outline"
@@ -139,7 +139,7 @@ export function AdminUnitsManager() {
                                 onClick={() => setCurrentPage(p => Math.min(Math.ceil(units.length / itemsPerPage), p + 1))}
                                 disabled={currentPage >= Math.ceil(units.length / itemsPerPage)}
                             >
-                                Next
+                                Sau
                             </Button>
                         </div>
                     </div>
@@ -147,9 +147,9 @@ export function AdminUnitsManager() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>ID</TableHead>
-                                <TableHead>Name</TableHead>
-                                <TableHead>Level</TableHead>
-                                <TableHead>Parent ID</TableHead>
+                                <TableHead>Tên</TableHead>
+                                <TableHead>Cấp</TableHead>
+                                <TableHead>ID cấp trên</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -172,11 +172,11 @@ export function AdminUnitsManager() {
                 </CardContent>
                 <CardFooter className="justify-between">
                     <div className="text-xs text-muted-foreground">
-                        Page {currentPage} of {Math.max(1, Math.ceil(units.length / itemsPerPage))}
+                        Trang {currentPage} / {Math.max(1, Math.ceil(units.length / itemsPerPage))}
                     </div>
                     <Button onClick={() => setIsFormOpen(true)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Unit
+                        Thêm đơn vị
                     </Button>
                 </CardFooter>
             </Card>

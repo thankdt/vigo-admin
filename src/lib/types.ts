@@ -9,6 +9,7 @@ export type User = {
   lastLogin: string;
   phone?: string; // From API response
   isLocked: boolean; // From API response
+  createdAt?: string;
 };
 
 export type Article = {
@@ -71,6 +72,7 @@ export type Driver = {
     phone?: string;
     avatarUrl?: string;
     avatar?: string;
+    createdAt?: string;
   };
   licenseNumber?: string;
   licenseImages?: string[];
@@ -79,6 +81,11 @@ export type Driver = {
   fixedRouteId?: number;
   enabledServices?: string[];
   isSubmittedForApproval?: boolean;
+  createdAt?: string;
+  fixedRoute?: {
+    id: number;
+    name: string;
+  };
 }
 
 export type BookingStatus = 'SEARCHING' | 'ACCEPTED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED';

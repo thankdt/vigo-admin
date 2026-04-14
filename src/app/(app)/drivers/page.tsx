@@ -7,8 +7,8 @@ export default function DriversPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Driver Management"
-        description="Approve, reject, and manage driver accounts."
+        title="Quản lý tài xế"
+        description="Duyệt, từ chối và quản lý tài khoản tài xế."
       />
       <DriversTable />
     </div>

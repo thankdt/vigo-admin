@@ -24,12 +24,12 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="User Management"
-        description="Create, edit, and manage user accounts and roles."
+        title="Quản lý người dùng"
+        description="Xem và quản lý tài khoản người dùng."
       >
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add User
+          Thêm người dùng
         </Button>
       </PageHeader>
       <UsersTable />

@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUsers, lockUser, unlockUser } from '@/lib/api';
@@ -50,11 +50,17 @@ export function UsersTable() {
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
 
-  const fetchUsers = React.useCallback(async () => {
+  // Pagination state
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [totalItems, setTotalItems] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(20);
+
+  const fetchUsers = React.useCallback(async (search: string, page: number, limit: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await getUsers({ search: searchTerm });
+      const response = await getUsers({ search, page, limit });
       const mappedUsers: User[] = response.data.map((apiUser: any) => ({
         id: apiUser.id,
         name: apiUser.fullName, // FIX: Use fullName from the API
@@ -65,8 +71,14 @@ export function UsersTable() {
         lastLogin: 'N/A',
         phone: apiUser.phone,
         isLocked: apiUser.isLocked,
+        createdAt: apiUser.createdAt,
       }));
       setUsers(mappedUsers);
+      // Parse pagination meta from response
+      const total = response.meta?.total ?? 0;
+      const apiLimit = response.meta?.limit ?? limit;
+      setTotalItems(total);
+      setTotalPages(Math.max(1, Math.ceil(total / apiLimit)));
     } catch (err: any) {
       setError(err.message);
       toast({
@@ -77,15 +89,20 @@ export function UsersTable() {
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm, toast]);
+  }, [toast]);
   
   React.useEffect(() => {
     const timer = setTimeout(() => {
-        fetchUsers();
+        fetchUsers(searchTerm, currentPage, pageSize);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchUsers]);
+  }, [fetchUsers, searchTerm, currentPage, pageSize]);
+
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1); // Reset to page 1 on search
+  };
 
   const sortedUsers = React.useMemo(() => {
     let sortableUsers = [...users];
@@ -134,7 +151,7 @@ export function UsersTable() {
         toast({ title: 'User Locked', description: `${user.name} has been locked.` });
       }
       // Refresh user list
-      fetchUsers();
+      fetchUsers(searchTerm, currentPage, pageSize);
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -227,9 +244,9 @@ export function UsersTable() {
     <>
       <div className="flex items-center pb-4">
         <Input
-          placeholder="Filter by name or phone..."
+          placeholder="Tìm theo tên hoặc SĐT..."
           value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
+          onChange={(e) => handleSearchChange(e.target.value)}
           className="max-w-sm"
         />
       </div>
@@ -239,30 +256,30 @@ export function UsersTable() {
             <TableRow>
               <TableHead>
                 <Button variant="ghost" onClick={() => requestSort('name')}>
-                  User
+                  Người dùng
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
                <TableHead>
                  <Button variant="ghost" onClick={() => requestSort('phone')}>
-                  Phone
-                  <ArrowUpDown className="ml-2 h-4 w-4" />
-                </Button>
-              </TableHead>
-              <TableHead>
-                 <Button variant="ghost" onClick={() => requestSort('role')}>
-                  Role
+                  SĐT
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => requestSort('status')}>
-                  Status
+                  Trạng thái
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
               <TableHead>
-                <span className="sr-only">Actions</span>
+                <Button variant="ghost" onClick={() => requestSort('createdAt')}>
+                  Ngày tạo
+                  <ArrowUpDown className="ml-2 h-4 w-4" />
+                </Button>
+              </TableHead>
+              <TableHead>
+                <span className="sr-only">Thao tác</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -282,7 +299,7 @@ export function UsersTable() {
             ) : sortedUsers.length === 0 ? (
                 <TableRow>
                     <TableCell colSpan={5} className="h-24 text-center">
-                    No users found.
+                    Không tìm thấy người dùng.
                     </TableCell>
                 </TableRow>
             ) : (
@@ -301,11 +318,15 @@ export function UsersTable() {
                   </div>
                 </TableCell>
                 <TableCell>{user.phone}</TableCell>
-                <TableCell>{user.role}</TableCell>
                 <TableCell>
                    <Badge variant={user.status === 'Active' ? 'default' : 'secondary'} className={user.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' : ''}>
-                    {user.status}
+                    {user.status === 'Active' ? 'Hoạt động' : 'Bị khóa'}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  <span className="text-sm text-muted-foreground">
+                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
+                  </span>
                 </TableCell>
                 <TableCell>
                   <DropdownMenu>
@@ -340,6 +361,67 @@ export function UsersTable() {
             )))}
           </TableBody>
         </Table>
+        {/* Pagination Controls */}
+        <div className="flex items-center justify-between px-4 py-4 border-t">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Hiển thị</span>
+            <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
+              </SelectContent>
+            </Select>
+            <span>/ {totalItems} kết quả</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-sm text-muted-foreground">
+              Trang {currentPage} / {totalPages}
+            </span>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage <= 1 || isLoading}
+              >
+                <ChevronsLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage <= 1 || isLoading}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage >= totalPages || isLoading}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="h-8 w-8"
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage >= totalPages || isLoading}
+              >
+                <ChevronsRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
       </Card>
       {isFormOpen && <UserForm user={editingUser} onClose={handleCloseForm} />}
     </>

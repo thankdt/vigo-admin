@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { getRoutes, getPricingByRoute, createPricing, updatePricing, deletePricing, getAdminUnits } from '@/lib/api';
 import type { Route, RoutePricing, AdminUnit } from '@/lib/types';
-import { Loader2, PlusCircle, Trash2, Edit } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Edit, Star, MapPin, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
@@ -25,9 +25,18 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Combobox } from '@/components/ui/combobox';
 
+const formatCurrency = (value: number | string) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value));
+
+const SERVICE_TYPE_LABELS: Record<string, string> = {
+    DELIVERY: 'Giao hàng',
+    CARPOOL: 'Ghép xe',
+    RIDE: 'Đặt xe',
+};
+
 export function RoutePricingManager() {
     const [routes, setRoutes] = React.useState<Route[]>([]);
-    const [districts, setDistricts] = React.useState<AdminUnit[]>([]);
+    const [allAdminUnits, setAllAdminUnits] = React.useState<AdminUnit[]>([]);
     const [selectedRouteId, setSelectedRouteId] = React.useState<number | null>(null);
     const [pricing, setPricing] = React.useState<RoutePricing[]>([]);
     const [serviceTypeFilter, setServiceTypeFilter] = React.useState<string>('');
@@ -36,23 +45,28 @@ export function RoutePricingManager() {
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [editingPricing, setEditingPricing] = React.useState<RoutePricing | null>(null);
     const [deletingPricing, setDeletingPricing] = React.useState<RoutePricing | null>(null);
-    const [currentPage, setCurrentPage] = React.useState(1);
-    const itemsPerPage = 50;
+    const [defaultFormLevel, setDefaultFormLevel] = React.useState<'province' | 'district'>('district');
     const { toast } = useToast();
 
     const selectedRoute = React.useMemo(() => routes.find(r => r.id === selectedRouteId), [routes, selectedRouteId]);
+
+    // Derived: split pricing into province-level vs district-level
+    const provincePricing = React.useMemo(() =>
+        pricing.filter(p => p.adminUnit?.level === 'PROVINCE'), [pricing]);
+    const districtPricing = React.useMemo(() =>
+        pricing.filter(p => p.adminUnit?.level === 'DISTRICT'), [pricing]);
 
     const fetchInitialData = React.useCallback(async () => {
         setIsLoading(true);
         try {
             const [routesData, unitsData] = await Promise.all([getRoutes(), getAdminUnits()]);
             setRoutes(routesData);
-            setDistricts(unitsData.filter(u => u.level === 'DISTRICT'));
+            setAllAdminUnits(unitsData);
             if (routesData.length > 0) {
                 setSelectedRouteId(routesData[0].id);
             }
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch initial data', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải dữ liệu ban đầu', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -66,8 +80,8 @@ export function RoutePricingManager() {
             const pricingData = await getPricingByRoute(selectedRouteId, filterValue);
             setPricing(pricingData);
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch pricing', description: err.message });
-            setPricing([]); // Clear pricing on error
+            toast({ variant: 'destructive', title: 'Không thể tải bảng giá', description: err.message });
+            setPricing([]);
         } finally {
             setIsPricingLoading(false);
         }
@@ -86,7 +100,8 @@ export function RoutePricingManager() {
         label: r.name,
     })), [routes]);
 
-    const handleOpenForm = (pricingItem: RoutePricing | null) => {
+    const handleOpenForm = (pricingItem: RoutePricing | null, level: 'province' | 'district' = 'district') => {
+        setDefaultFormLevel(level);
         setEditingPricing(pricingItem);
         setIsFormOpen(true);
     };
@@ -101,161 +116,241 @@ export function RoutePricingManager() {
         if (!deletingPricing) return;
         try {
             await deletePricing(deletingPricing.id);
-            toast({ title: 'Success', description: 'Pricing rule deleted.' });
+            toast({ title: 'Thành công', description: 'Đã xóa quy tắc giá.' });
             fetchPricing();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to delete pricing', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể xóa quy tắc giá', description: err.message });
         } finally {
             setDeletingPricing(null);
         }
     };
 
+    // Find provinces related to the selected route (from its districts' parentIds)
+    const routeProvinceNames = React.useMemo(() => {
+        if (!selectedRoute?.districts) return [];
+        const provinceIds = new Set<number>();
+        selectedRoute.districts.forEach(d => {
+            if (d.parentId) provinceIds.add(d.parentId);
+        });
+        return allAdminUnits
+            .filter(u => u.level === 'PROVINCE' && provinceIds.has(u.id))
+            .map(u => u.name);
+    }, [selectedRoute, allAdminUnits]);
+
+    // Districts that don't have a specific pricing override
+    const unconfiguredDistricts = React.useMemo(() => {
+        if (!selectedRoute?.districts) return [];
+        const configuredDistrictIds = new Set(districtPricing.map(p => p.adminUnitId));
+        return selectedRoute.districts.filter(d => !configuredDistrictIds.has(d.id));
+    }, [selectedRoute, districtPricing]);
+
     return (
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>Route Pricing Management</CardTitle>
-                    <CardDescription>Configure prices for districts within a specific route.</CardDescription>
+                    <CardTitle>Quản lý bảng giá tuyến đường</CardTitle>
+                    <CardDescription>Cấu hình giá mặc định tỉnh và ghi đè cho từng huyện cụ thể.</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                    {/* Filters */}
                     <div className="flex items-center gap-4 flex-wrap">
                         <div className="flex items-center space-x-2">
-                            <Label htmlFor="route-select" className="shrink-0">Route:</Label>
+                            <Label htmlFor="route-select" className="shrink-0">Tuyến đường:</Label>
                             <Combobox
                                 options={routeOptions}
                                 selectedValue={selectedRouteId ? String(selectedRouteId) : ""}
                                 onSelect={(value) => setSelectedRouteId(value ? Number(value) : null)}
-                                placeholder="Select a route..."
-                                searchPlaceholder="Search routes..."
-                                noResultsText="No route found."
+                                placeholder="Chọn tuyến đường..."
+                                searchPlaceholder="Tìm tuyến đường..."
+                                noResultsText="Không tìm thấy tuyến đường."
                                 className="w-[350px]"
                                 disabled={isLoading}
                             />
                         </div>
                         <div className="flex items-center space-x-2">
-                            <Label className="shrink-0">Service:</Label>
+                            <Label className="shrink-0">Loại dịch vụ:</Label>
                             <Select value={serviceTypeFilter} onValueChange={setServiceTypeFilter}>
                                 <SelectTrigger className="w-[160px]">
-                                    <SelectValue placeholder="All types" />
+                                    <SelectValue placeholder="Tất cả" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="ALL">All types</SelectItem>
-                                    <SelectItem value="DELIVERY">Delivery</SelectItem>
-                                    <SelectItem value="CARPOOL">Carpool</SelectItem>
-                                    <SelectItem value="RIDE">Ride</SelectItem>
+                                    <SelectItem value="ALL">Tất cả</SelectItem>
+                                    <SelectItem value="DELIVERY">Giao hàng</SelectItem>
+                                    <SelectItem value="CARPOOL">Ghép xe</SelectItem>
+                                    <SelectItem value="RIDE">Đặt xe</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
                     </div>
+
                     {isPricingLoading ? (
                         <div className="h-48 flex items-center justify-center">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                         </div>
                     ) : (
                         <>
-                            <div className="mb-4 flex items-center justify-between">
-                                <div className="text-sm text-muted-foreground">
-                                    Showing {Math.min((currentPage - 1) * itemsPerPage + 1, pricing.length)}-{Math.min(currentPage * itemsPerPage, pricing.length)} of {pricing.length} rules
-                                </div>
-                                <div className="space-x-2">
+                            {/* ===== SECTION 1: PROVINCE DEFAULT PRICING ===== */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Star className="h-5 w-5 text-amber-500 fill-amber-500" />
+                                        <h3 className="text-base font-semibold">Giá mặc định toàn tỉnh</h3>
+                                    </div>
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                                        disabled={currentPage === 1}
+                                        onClick={() => handleOpenForm(null, 'province')}
+                                        disabled={!selectedRouteId}
                                     >
-                                        Previous
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setCurrentPage(p => Math.min(Math.ceil(pricing.length / itemsPerPage), p + 1))}
-                                        disabled={currentPage >= Math.ceil(pricing.length / itemsPerPage)}
-                                    >
-                                        Next
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Thêm giá tỉnh
                                     </Button>
                                 </div>
-                            </div>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Start District</TableHead>
-                                        <TableHead>End District</TableHead>
-                                        <TableHead>Service Type</TableHead>
-                                        <TableHead>Price</TableHead>
-                                        <TableHead>Priority</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {pricing.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="h-24 text-center">No pricing rules found for this route.</TableCell>
-                                        </TableRow>
-                                    ) : (
-                                        pricing.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(p => (
-                                            <TableRow key={p.id}>
-                                                <TableCell className="font-medium">
-                                                    {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Any</span>}
-                                                </TableCell>
-                                                <TableCell className="font-medium">{p.adminUnit.name}</TableCell>
-                                                <TableCell>
-                                                    <Badge variant={p.serviceType === 'CARPOOL' ? 'secondary' : p.serviceType === 'RIDE' ? 'outline' : 'default'}>
-                                                        {p.serviceType || 'DELIVERY'}
+
+                                {provincePricing.length === 0 ? (
+                                    <div className="rounded-lg border border-dashed border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 p-6 text-center">
+                                        <p className="text-sm text-muted-foreground">
+                                            Chưa có giá mặc định tỉnh. Tất cả huyện sẽ sử dụng giá tính theo km.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {provincePricing.map(p => (
+                                            <div
+                                                key={p.id}
+                                                className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20 px-4 py-3"
+                                            >
+                                                <div className="flex items-center gap-3">
+                                                    <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+                                                        {p.adminUnit?.name || 'N/A'}
                                                     </Badge>
-                                                </TableCell>
-                                                <TableCell>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(p.price)}</TableCell>
-                                                <TableCell>{p.priority}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p)}>
+                                                    <span className="text-lg font-semibold">{formatCurrency(p.price)}</span>
+                                                    <Badge variant={p.serviceType === 'CARPOOL' ? 'secondary' : p.serviceType === 'RIDE' ? 'outline' : 'default'}>
+                                                        {SERVICE_TYPE_LABELS[p.serviceType || 'DELIVERY'] || p.serviceType}
+                                                    </Badge>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'province')}>
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
                                                     <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeletingPricing(p)}>
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                            <div className="mt-4 text-xs text-muted-foreground text-center">
-                                Page {currentPage} of {Math.max(1, Math.ceil(pricing.length / itemsPerPage))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
+
+                            {/* ===== SECTION 2: DISTRICT OVERRIDE PRICING ===== */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <MapPin className="h-5 w-5 text-blue-500" />
+                                        <h3 className="text-base font-semibold">Giá riêng theo huyện</h3>
+                                        <span className="text-xs text-muted-foreground">(ghi đè giá tỉnh)</span>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenForm(null, 'district')}
+                                        disabled={!selectedRouteId}
+                                    >
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Thêm giá huyện
+                                    </Button>
+                                </div>
+
+                                {districtPricing.length === 0 ? (
+                                    <div className="rounded-lg border border-dashed p-6 text-center">
+                                        <p className="text-sm text-muted-foreground">
+                                            Chưa có giá riêng cho huyện nào. Tất cả huyện sẽ dùng giá tỉnh mặc định (nếu có).
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Quận/huyện bắt đầu</TableHead>
+                                                <TableHead>Quận/huyện kết thúc</TableHead>
+                                                <TableHead>Loại dịch vụ</TableHead>
+                                                <TableHead>Giá</TableHead>
+                                                <TableHead className="text-right">Thao tác</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {districtPricing.map(p => (
+                                                <TableRow key={p.id}>
+                                                    <TableCell className="font-medium">
+                                                        {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">{p.adminUnit?.name || 'N/A'}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={p.serviceType === 'CARPOOL' ? 'secondary' : p.serviceType === 'RIDE' ? 'outline' : 'default'}>
+                                                            {SERVICE_TYPE_LABELS[p.serviceType || 'DELIVERY'] || p.serviceType}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>{formatCurrency(p.price)}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'district')}>
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeletingPricing(p)}>
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </div>
+
+                            {/* ===== INFO FOOTER ===== */}
+                            {provincePricing.length > 0 && unconfiguredDistricts.length > 0 && (
+                                <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
+                                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <p>
+                                        <span className="font-medium">Huyện kế thừa giá tỉnh:</span>{' '}
+                                        {unconfiguredDistricts.map(d => d.name).join(', ')}
+                                        {' '}— sẽ tự động dùng giá mặc định tỉnh.
+                                    </p>
+                                </div>
+                            )}
                         </>
                     )}
                 </CardContent>
-                <CardFooter>
-                    <Button onClick={() => handleOpenForm(null)} disabled={!selectedRouteId}>
-                        <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Pricing Rule
-                    </Button>
-                </CardFooter>
             </Card>
+
+            {/* ===== PRICING FORM DIALOG ===== */}
             <Dialog open={isFormOpen} onOpenChange={(open) => { if (!open) { setIsFormOpen(false); setEditingPricing(null); } else { setIsFormOpen(true); } }}>
                 {selectedRouteId && (
                     <PricingForm
-                        key={editingPricing?.id} // Re-mount form on edit
+                        key={editingPricing?.id ?? `new-${defaultFormLevel}`}
                         routeId={selectedRouteId}
-                        districts={selectedRoute?.districts || []}
+                        allAdminUnits={allAdminUnits}
+                        routeDistricts={selectedRoute?.districts || []}
                         pricingItem={editingPricing}
+                        defaultLevel={defaultFormLevel}
                         onSave={handleSave}
                         onCancel={() => { setIsFormOpen(false); setEditingPricing(null); }}
                     />
                 )}
             </Dialog>
 
+            {/* ===== DELETE CONFIRMATION ===== */}
             <AlertDialog open={!!deletingPricing} onOpenChange={() => setDeletingPricing(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Bạn có chắc chắn không?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete the pricing rule for "{deletingPricing?.adminUnit.name}". This action cannot be undone.
+                            Quy tắc giá cho &quot;{deletingPricing?.adminUnit?.name}&quot; sẽ bị xóa vĩnh viễn. Hành động này không thể hoàn tác.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -265,35 +360,101 @@ export function RoutePricingManager() {
 
 function PricingForm({
     routeId,
-    districts,
+    allAdminUnits,
+    routeDistricts,
     pricingItem,
+    defaultLevel,
     onSave,
     onCancel,
 }: {
     routeId: number;
-    districts: AdminUnit[];
+    allAdminUnits: AdminUnit[];
+    routeDistricts: AdminUnit[];
     pricingItem: RoutePricing | null;
+    defaultLevel: 'province' | 'district';
     onSave: () => void;
     onCancel: () => void;
 }) {
+    const isEditing = !!pricingItem;
+    const { toast } = useToast();
+
+    // Determine initial level from existing item or default
+    const initialLevel = isEditing
+        ? (pricingItem.adminUnit?.level === 'PROVINCE' ? 'province' : 'district')
+        : defaultLevel;
+
+    const [pricingLevel, setPricingLevel] = React.useState<'province' | 'district'>(initialLevel);
     const [adminUnitId, setAdminUnitId] = React.useState<number | undefined>(pricingItem?.adminUnitId);
     const [startDistrictId, setStartDistrictId] = React.useState<number | undefined>(pricingItem?.startDistrictId);
     const [price, setPrice] = React.useState<number | string>(pricingItem?.price || '');
     const [serviceType, setServiceType] = React.useState<string>(pricingItem?.serviceType || 'DELIVERY');
     const [isSaving, setIsSaving] = React.useState(false);
-    const { toast } = useToast();
-    const isEditing = !!pricingItem;
 
+    // Province options: all provinces from admin units
+    const provinceOptions = React.useMemo(() => {
+        // Get province IDs that are parents of route districts
+        const routeProvinceIds = new Set<number>();
+        routeDistricts.forEach(d => {
+            if (d.parentId) routeProvinceIds.add(d.parentId);
+        });
+        return allAdminUnits
+            .filter(u => u.level === 'PROVINCE' && routeProvinceIds.has(u.id))
+            .map(u => ({ value: String(u.id), label: u.name }));
+    }, [allAdminUnits, routeDistricts]);
 
-
+    // District options: districts belonging to the route, grouped by parent province
     const districtOptions = React.useMemo(() => {
         const groups: Record<string, { value: string; label: string }[]> = {};
         const others: { value: string; label: string }[] = [];
 
-        districts.forEach(d => {
+        routeDistricts.forEach(d => {
             const option = { value: String(d.id), label: d.name };
             if (d.parent && d.parent.name) {
                 const groupName = d.parent.name;
+                if (!groups[groupName]) {
+                    groups[groupName] = [];
+                }
+                groups[groupName].push(option);
+            } else {
+                // Try to find parent name from allAdminUnits
+                const parent = d.parentId ? allAdminUnits.find(u => u.id === d.parentId) : null;
+                if (parent) {
+                    if (!groups[parent.name]) {
+                        groups[parent.name] = [];
+                    }
+                    groups[parent.name].push(option);
+                } else {
+                    others.push(option);
+                }
+            }
+        });
+
+        const groupedOptions = Object.keys(groups).map(groupName => ({
+            label: groupName,
+            options: groups[groupName],
+        }));
+
+        if (others.length > 0) {
+            groupedOptions.push({ label: 'Khác', options: others });
+        }
+
+        if (groupedOptions.length === 0 && routeDistricts.length > 0) {
+            return routeDistricts.map(d => ({ value: String(d.id), label: d.name }));
+        }
+
+        return groupedOptions;
+    }, [routeDistricts, allAdminUnits]);
+
+    // Start district options: all districts from the route (for exact match pricing)
+    const startDistrictOptions = React.useMemo(() => {
+        const groups: Record<string, { value: string; label: string }[]> = {};
+        const others: { value: string; label: string }[] = [];
+
+        routeDistricts.forEach(d => {
+            const option = { value: String(d.id), label: d.name };
+            const parent = d.parent || (d.parentId ? allAdminUnits.find(u => u.id === d.parentId) : null);
+            if (parent && 'name' in parent) {
+                const groupName = parent.name;
                 if (!groups[groupName]) {
                     groups[groupName] = [];
                 }
@@ -303,27 +464,29 @@ function PricingForm({
             }
         });
 
-        // Use Object.entries but sorting keys might be nice. 
-        // For now, let's just map.
         const groupedOptions = Object.keys(groups).map(groupName => ({
             label: groupName,
-            options: groups[groupName]
+            options: groups[groupName],
         }));
 
         if (others.length > 0) {
-            groupedOptions.push({ label: 'Other', options: others });
-        }
-
-        if (groupedOptions.length === 0 && districts.length > 0) {
-            return districts.map(d => ({ value: String(d.id), label: d.name }));
+            groupedOptions.push({ label: 'Khác', options: others });
         }
 
         return groupedOptions;
-    }, [districts]);
+    }, [routeDistricts, allAdminUnits]);
+
+    // Reset adminUnitId when switching levels
+    React.useEffect(() => {
+        if (!isEditing) {
+            setAdminUnitId(undefined);
+            setStartDistrictId(undefined);
+        }
+    }, [pricingLevel, isEditing]);
 
     const handleSubmit = async () => {
         if (!adminUnitId || price === '' || Number(price) <= 0) {
-            toast({ variant: 'destructive', title: 'Incomplete form', description: 'District and a valid price are required.' });
+            toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Đơn vị hành chính và giá hợp lệ là bắt buộc.' });
             return;
         }
 
@@ -331,84 +494,152 @@ function PricingForm({
         try {
             if (isEditing) {
                 await updatePricing(pricingItem.id, { price: Number(price), serviceType });
-                toast({ title: 'Success', description: 'Pricing rule updated.' });
+                toast({ title: 'Thành công', description: 'Đã cập nhật quy tắc giá.' });
             } else {
-                await createPricing({ routeId, adminUnitId, startDistrictId: startDistrictId || null, price: Number(price), priority: 1, serviceType });
-                toast({ title: 'Success', description: 'Pricing rule created.' });
+                await createPricing({
+                    routeId,
+                    adminUnitId,
+                    startDistrictId: pricingLevel === 'district' ? (startDistrictId || null) : null,
+                    price: Number(price),
+                    priority: 1,
+                    serviceType,
+                });
+                toast({ title: 'Thành công', description: `Đã tạo giá ${pricingLevel === 'province' ? 'mặc định tỉnh' : 'riêng huyện'}.` });
             }
             onSave();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: `Failed to ${isEditing ? 'update' : 'create'} pricing`, description: err.message });
+            toast({ variant: 'destructive', title: `Không thể ${isEditing ? 'cập nhật' : 'tạo'} quy tắc giá`, description: err.message });
         } finally {
             setIsSaving(false);
         }
     };
 
     return (
-        <DialogContent>
+        <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-                <DialogTitle>{isEditing ? 'Edit' : 'Create'} Pricing Rule</DialogTitle>
+                <DialogTitle>{isEditing ? 'Sửa' : 'Tạo'} quy tắc giá</DialogTitle>
                 <DialogDescription>
-                    {isEditing ? `Update the price for ${pricingItem.adminUnit.name}.` : 'Add a new pricing rule for the selected route.'}
+                    {isEditing
+                        ? `Cập nhật giá cho ${pricingItem.adminUnit?.name}.`
+                        : 'Thêm quy tắc giá mới cho tuyến đường đã chọn.'}
                 </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
-                <div className="space-y-2">
-                    <Label htmlFor="start-district-select">Start District <span className="text-muted-foreground font-normal">(Optional)</span></Label>
-                    <Combobox
-                        options={districtOptions}
-                        selectedValue={startDistrictId ? String(startDistrictId) : undefined}
-                        onSelect={(value) => setStartDistrictId(value ? Number(value) : undefined)}
-                        placeholder="Select start district (Any)..."
-                        searchPlaceholder="Search districts..."
-                        noResultsText="No district found."
-                        disabled={isEditing}
-                    />
-                </div>
+                {/* Pricing Level Radio */}
+                {!isEditing && (
+                    <div className="space-y-2">
+                        <Label>Cấp giá</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setPricingLevel('province')}
+                                className={`flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                                    pricingLevel === 'province'
+                                        ? 'border-amber-500 bg-amber-50 text-amber-900 dark:bg-amber-950/30 dark:text-amber-300'
+                                        : 'border-muted hover:border-muted-foreground/30'
+                                }`}
+                            >
+                                <Star className={`h-4 w-4 ${pricingLevel === 'province' ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground'}`} />
+                                Giá mặc định tỉnh
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPricingLevel('district')}
+                                className={`flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                                    pricingLevel === 'district'
+                                        ? 'border-blue-500 bg-blue-50 text-blue-900 dark:bg-blue-950/30 dark:text-blue-300'
+                                        : 'border-muted hover:border-muted-foreground/30'
+                                }`}
+                            >
+                                <MapPin className={`h-4 w-4 ${pricingLevel === 'district' ? 'text-blue-500' : 'text-muted-foreground'}`} />
+                                Giá riêng huyện
+                            </button>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                            {pricingLevel === 'province'
+                                ? 'Áp dụng cho tất cả huyện trong tỉnh chưa có giá riêng.'
+                                : 'Ghi đè giá tỉnh cho huyện cụ thể.'}
+                        </p>
+                    </div>
+                )}
 
+                {/* Admin Unit Selection */}
+                {pricingLevel === 'province' ? (
+                    <div className="space-y-2">
+                        <Label>Tỉnh/Thành phố</Label>
+                        <Combobox
+                            options={provinceOptions}
+                            selectedValue={adminUnitId ? String(adminUnitId) : undefined}
+                            onSelect={(value) => setAdminUnitId(value ? Number(value) : undefined)}
+                            placeholder="Chọn tỉnh/thành phố..."
+                            searchPlaceholder="Tìm tỉnh/thành phố..."
+                            noResultsText="Không tìm thấy."
+                            disabled={isEditing}
+                        />
+                    </div>
+                ) : (
+                    <>
+                        <div className="space-y-2">
+                            <Label>Quận/huyện bắt đầu <span className="text-muted-foreground font-normal">(Không bắt buộc)</span></Label>
+                            <Combobox
+                                options={startDistrictOptions}
+                                selectedValue={startDistrictId ? String(startDistrictId) : undefined}
+                                onSelect={(value) => setStartDistrictId(value ? Number(value) : undefined)}
+                                placeholder="Chọn quận/huyện bắt đầu (Tất cả)..."
+                                searchPlaceholder="Tìm quận/huyện..."
+                                noResultsText="Không tìm thấy quận/huyện."
+                                disabled={isEditing}
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Quận/huyện kết thúc</Label>
+                            <Combobox
+                                options={districtOptions}
+                                selectedValue={adminUnitId ? String(adminUnitId) : undefined}
+                                onSelect={(value) => setAdminUnitId(value ? Number(value) : undefined)}
+                                placeholder="Chọn quận/huyện kết thúc..."
+                                searchPlaceholder="Tìm quận/huyện..."
+                                noResultsText="Không tìm thấy quận/huyện."
+                                disabled={isEditing}
+                            />
+                        </div>
+                    </>
+                )}
+
+                {/* Service Type */}
                 <div className="space-y-2">
-                    <Label htmlFor="district-select">End District</Label>
-                    <Combobox
-                        options={districtOptions}
-                        selectedValue={adminUnitId ? String(adminUnitId) : undefined}
-                        onSelect={(value) => setAdminUnitId(value ? Number(value) : undefined)}
-                        placeholder="Select end district..."
-                        searchPlaceholder="Search districts..."
-                        noResultsText="No district found."
-                        disabled={isEditing}
-                    />
-                </div>
-                <div className="space-y-2">
-                    <Label>Service Type</Label>
-                    <Select value={serviceType} onValueChange={setServiceType}>
+                    <Label>Loại dịch vụ</Label>
+                    <Select value={serviceType} onValueChange={setServiceType} disabled={isEditing}>
                         <SelectTrigger>
-                            <SelectValue placeholder="Select service type" />
+                            <SelectValue placeholder="Chọn loại dịch vụ" />
                         </SelectTrigger>
                         <SelectContent>
-                            <SelectItem value="DELIVERY">Delivery</SelectItem>
-                            <SelectItem value="CARPOOL">Carpool</SelectItem>
-                            <SelectItem value="RIDE">Ride</SelectItem>
+                            <SelectItem value="DELIVERY">Giao hàng</SelectItem>
+                            <SelectItem value="CARPOOL">Ghép xe</SelectItem>
+                            <SelectItem value="RIDE">Đặt xe</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
+
+                {/* Price */}
                 <div className="space-y-2">
-                    <Label htmlFor="price-input">Price (VND)</Label>
+                    <Label htmlFor="price-input">Giá (VNĐ)</Label>
                     <Input
                         id="price-input"
                         type="number"
                         value={price}
                         onChange={(e) => setPrice(e.target.value)}
-                        placeholder="e.g., 200000"
+                        placeholder="e.g., 300000"
                     />
                 </div>
             </div>
             <DialogFooter>
-                <Button variant="outline" onClick={onCancel}>Cancel</Button>
+                <Button variant="outline" onClick={onCancel}>Hủy</Button>
                 <Button onClick={handleSubmit} disabled={isSaving}>
                     {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save
+                    Lưu
                 </Button>
             </DialogFooter>
-        </DialogContent >
+        </DialogContent>
     );
 }
