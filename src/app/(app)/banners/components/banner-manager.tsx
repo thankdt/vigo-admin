@@ -43,7 +43,7 @@ export function BannerManager() {
                 setBanners([]);
             }
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch banners', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải banner', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -73,11 +73,11 @@ export function BannerManager() {
         if (!deletingBanner) return;
         try {
             await deleteBanner(deletingBanner.id);
-            toast({ title: 'Success', description: 'Banner deleted.' });
+            toast({ title: 'Thành công', description: 'Đã xóa banner.' });
             setDeletingBanner(null);
             fetchBanners();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to delete banner', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể xóa banner', description: err.message });
         }
     };
 
@@ -85,12 +85,12 @@ export function BannerManager() {
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>Banners</CardTitle>
-                    <CardDescription>Manage promotion banners displayed in the app.</CardDescription>
+                    <CardTitle>Banner</CardTitle>
+                    <CardDescription>Quản lý các banner quảng cáo hiển thị trong ứng dụng.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="mb-4 flex items-center justify-between">
-                        <Button variant="outline" size="sm" onClick={() => fetchBanners()}>Refresh</Button>
+                        <Button variant="outline" size="sm" onClick={() => fetchBanners()}>Làm mới</Button>
                         {banners.length > itemsPerPage && (
                             <div className="space-x-2">
                                 <Button
@@ -99,16 +99,16 @@ export function BannerManager() {
                                     onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                     disabled={currentPage === 1}
                                 >
-                                    Previous
+                                    Trước
                                 </Button>
-                                <span className="text-sm py-2">Page {currentPage}</span>
+                                <span className="text-sm py-2">Trang {currentPage}</span>
                                 <Button
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setCurrentPage(p => p + 1)}
                                     disabled={currentPage * itemsPerPage >= banners.length}
                                 >
-                                    Next
+                                    Sau
                                 </Button>
                             </div>
                         )}
@@ -116,10 +116,10 @@ export function BannerManager() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Image</TableHead>
-                                <TableHead>Priority</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>Hình ảnh</TableHead>
+                                <TableHead>Ưu tiên</TableHead>
+                                <TableHead>Trạng thái</TableHead>
+                                <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -131,7 +131,7 @@ export function BannerManager() {
                                 </TableRow>
                             ) : banners.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center">No banners found.</TableCell>
+                                    <TableCell colSpan={4} className="h-24 text-center">Không tìm thấy banner.</TableCell>
                                 </TableRow>
                             ) : (
                                 banners.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(banner => (
@@ -150,7 +150,7 @@ export function BannerManager() {
                                         <TableCell>{banner.priority}</TableCell>
                                         <TableCell>
                                             <Badge variant={banner.isActive ? "default" : "secondary"}>
-                                                {banner.isActive ? 'Active' : 'Inactive'}
+                                                {banner.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
@@ -170,7 +170,7 @@ export function BannerManager() {
                 <CardFooter>
                     <Button onClick={() => handleOpenForm(null)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Add Banner
+                        Thêm Banner
                     </Button>
                 </CardFooter>
             </Card>
@@ -187,14 +187,14 @@ export function BannerManager() {
             <AlertDialog open={!!deletingBanner} onOpenChange={() => setDeletingBanner(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Bạn có chắc chắn?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will permanently delete this banner.
+                            Hành động này sẽ xóa vĩnh viễn banner này.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -228,7 +228,7 @@ function BannerForm({ banner, onSave, onCancel }: { banner: Banner | null, onSav
 
     const handleSubmit = async () => {
         if (!imageUrl && !imageFile) {
-            toast({ variant: 'destructive', title: 'Image required', description: 'Please upload an image.' });
+            toast({ variant: 'destructive', title: 'Yêu cầu hình ảnh', description: 'Vui lòng tải lên một hình ảnh.' });
             return;
         }
 
@@ -243,7 +243,7 @@ function BannerForm({ banner, onSave, onCancel }: { banner: Banner | null, onSav
                 await uploadToS3(presignedData.url, imageFile);
                 finalImageKey = `${API_BASE_URL}/${presignedData.key}`;
             } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Upload failed', description: err.message });
+                toast({ variant: 'destructive', title: 'Tải lên thất bại', description: err.message });
                 setIsSaving(false);
                 setIsUploading(false);
                 return;
@@ -266,14 +266,14 @@ function BannerForm({ banner, onSave, onCancel }: { banner: Banner | null, onSav
                 // Typically we want to update image too. I'll include it.
                 // If backend ignores it, fine.
                 await updateBanner(banner.id, { ...payload });
-                toast({ title: 'Success', description: 'Banner updated.' });
+                toast({ title: 'Thành công', description: 'Đã cập nhật banner.' });
             } else {
                 await createBanner(payload);
-                toast({ title: 'Success', description: 'Banner created.' });
+                toast({ title: 'Thành công', description: 'Đã tạo banner.' });
             }
             onSave();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Error', description: err.message });
+            toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
             setIsSaving(false);
         }
     };
@@ -281,16 +281,16 @@ function BannerForm({ banner, onSave, onCancel }: { banner: Banner | null, onSav
     return (
         <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
-                <DialogTitle>{isEditing ? 'Edit Banner' : 'Create Banner'}</DialogTitle>
-                <DialogDescription>{isEditing ? 'Update banner details.' : 'Add a new banner.'}</DialogDescription>
+                <DialogTitle>{isEditing ? 'Sửa Banner' : 'Tạo Banner'}</DialogTitle>
+                <DialogDescription>{isEditing ? 'Cập nhật thông tin banner.' : 'Thêm banner mới.'}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                    <Label>Banner Image</Label>
+                    <Label>Hình ảnh Banner</Label>
                     <div className="flex flex-col gap-2">
                         {imageUrl && (
                             <div className="relative w-full h-32 rounded overflow-hidden border bg-muted">
-                                <Image src={imageUrl} alt="Preview" fill className="object-cover" unoptimized />
+                                <Image src={imageUrl} alt="Xem trước" fill className="object-cover" unoptimized />
                             </div>
                         )}
                         <div className="flex items-center gap-2">
@@ -300,20 +300,20 @@ function BannerForm({ banner, onSave, onCancel }: { banner: Banner | null, onSav
                     </div>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="priority">Priority</Label>
+                    <Label htmlFor="priority">Độ ưu tiên</Label>
                     <Input id="priority" type="number" value={priority} onChange={(e) => setPriority(Number(e.target.value))} />
-                    <p className="text-xs text-muted-foreground">Higher number = higher priority.</p>
+                    <p className="text-xs text-muted-foreground">Số càng cao = ưu tiên càng cao.</p>
                 </div>
                 <div className="flex items-center gap-2">
                     <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
-                    <Label htmlFor="active">Active</Label>
+                    <Label htmlFor="active">Hoạt động</Label>
                 </div>
             </div>
             <DialogFooter>
-                <Button variant="outline" onClick={onCancel}>Cancel</Button>
+                <Button variant="outline" onClick={onCancel}>Hủy</Button>
                 <Button onClick={handleSubmit} disabled={isSaving || isUploading}>
                     {(isSaving || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save
+                    Lưu
                 </Button>
             </DialogFooter>
         </DialogContent>

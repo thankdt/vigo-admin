@@ -193,25 +193,25 @@ export function DriversTable() {
     try {
       if (dialogState.action === 'approve') {
         if (enabledServices.length === 0) {
-          toast({ title: "Services Required", description: "Please select at least one service.", variant: "destructive" });
+          toast({ title: "Yêu cầu dịch vụ", description: "Vui lòng chọn ít nhất một dịch vụ.", variant: "destructive" });
           return;
         }
         await approveDriver(dialogState.driver.id, enabledServices);
-        toast({ title: "Driver Approved", description: `${driverName} has been approved.` });
+        toast({ title: "Đã duyệt tài xế", description: `${driverName} đã được duyệt.` });
       } else {
         if (!rejectionReason) {
-          toast({ title: "Reason Required", description: "Please provide a reason for rejection.", variant: "destructive" });
+          toast({ title: "Yêu cầu lý do", description: "Vui lòng cung cấp lý do từ chối.", variant: "destructive" });
           return;
         }
         await rejectDriver(dialogState.driver.id, rejectionReason);
-        toast({ title: "Driver Rejected", description: `${driverName} has been rejected.` });
+        toast({ title: "Đã từ chối tài xế", description: `${driverName} đã bị từ chối.` });
       }
       fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
       closeConfirmationDialog();
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: `Failed to ${dialogState.action} driver`,
+        title: `Không thể ${dialogState.action === 'approve' ? 'duyệt' : 'từ chối'} tài xế`,
         description: err.message,
       });
     }
@@ -284,8 +284,8 @@ export function DriversTable() {
                 </TableRow>
               ) : (
                 sortedDrivers.map((driver) => {
-                  const driverName = driver.name || driver.user?.fullName || 'Unknown Driver';
-                  const driverPhone = driver.phone || driver.user?.phone || 'No Phone';
+                  const driverName = driver.name || driver.user?.fullName || 'Tài xế';
+                  const driverPhone = driver.phone || driver.user?.phone || 'Chưa có SĐT';
                   return (
                   <TableRow key={driver.id}>
                     <TableCell className="font-medium">
@@ -303,7 +303,7 @@ export function DriversTable() {
                     <TableCell>
                       <div className="grid">
                         <span className="font-semibold">{driver.vehicle?.model || driver.vehicleRegistration?.model || 'N/A'}</span>
-                        <span className="text-sm text-muted-foreground">{driver.vehicle?.plateNumber || driver.vehicleRegistration?.plateNumber || 'No Plate'}</span>
+                        <span className="text-sm text-muted-foreground">{driver.vehicle?.plateNumber || driver.vehicleRegistration?.plateNumber || 'Chưa có'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -318,7 +318,7 @@ export function DriversTable() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
+                            <span className="sr-only">Mở menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>
@@ -440,7 +440,7 @@ export function DriversTable() {
                       htmlFor={`service-${service}`}
                       className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
                     >
-                      {service === 'RIDE' ? 'Ride (Taxi)' : service === 'CARPOOL' ? 'Carpool' : 'Delivery'}
+                      {service === 'RIDE' ? 'Chở khách (Taxi)' : service === 'CARPOOL' ? 'Đi chung' : 'Giao hàng'}
                     </label>
                   </div>
                 ))}
@@ -480,9 +480,9 @@ export function DriversTable() {
                   <AvatarFallback>{(viewDriver.name || viewDriver.user?.fullName || 'Driver').charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="text-xl font-bold">{viewDriver.name || viewDriver.user?.fullName || 'Unknown Driver'}</h3>
-                  <p className="text-sm text-muted-foreground">{viewDriver.phone || viewDriver.user?.phone || 'No Phone'}</p>
-                  <p className="text-sm font-medium mt-1">Status: {getStatusBadge(viewDriver.isApproved)}</p>
+                  <h3 className="text-xl font-bold">{viewDriver.name || viewDriver.user?.fullName || 'Tài xế'}</h3>
+                  <p className="text-sm text-muted-foreground">{viewDriver.phone || viewDriver.user?.phone || 'Chưa có SĐT'}</p>
+                  <p className="text-sm font-medium mt-1">Trạng thái: {getStatusBadge(viewDriver.isApproved)}</p>
                 </div>
               </div>
 
@@ -492,11 +492,11 @@ export function DriversTable() {
                   <p className="font-medium text-sm break-all">{viewDriver.id}</p>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Wallet Balance</Label>
+                  <Label className="text-xs text-muted-foreground">Số dư ví</Label>
                   <p className="font-medium text-sm">{viewDriver.walletBalance !== undefined ? `${viewDriver.walletBalance} VNĐ` : 'N/A'}</p>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">License Number</Label>
+                  <Label className="text-xs text-muted-foreground">Số bằng lái</Label>
                   <p className="font-medium text-sm">{viewDriver.licenseNumber || 'N/A'}</p>
                 </div>
               </div>
@@ -506,19 +506,19 @@ export function DriversTable() {
                   <h4 className="font-semibold">Đăng ký xe</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Plate Number</Label>
+                      <Label className="text-xs text-muted-foreground">Biển số</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicleRegistration.plateNumber}</p>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Brand</Label>
+                      <Label className="text-xs text-muted-foreground">Hãng xe</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicleRegistration.brand}</p>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Model</Label>
+                      <Label className="text-xs text-muted-foreground">Dòng xe</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicleRegistration.model}</p>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Color</Label>
+                      <Label className="text-xs text-muted-foreground">Màu sắc</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicleRegistration.color}</p>
                     </div>
                   </div>
@@ -530,11 +530,11 @@ export function DriversTable() {
                   <h4 className="font-semibold">Xe</h4>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Plate Number</Label>
+                      <Label className="text-xs text-muted-foreground">Biển số</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicle.plateNumber}</p>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Model</Label>
+                      <Label className="text-xs text-muted-foreground">Dòng xe</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicle.model}</p>
                     </div>
                   </div>

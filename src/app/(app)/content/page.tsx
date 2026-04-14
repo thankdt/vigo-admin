@@ -7,12 +7,12 @@ export default function ContentPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Content Management"
-        description="Manage articles, blog posts, and other media."
+        title="Quản lý Nội dung"
+        description="Quản lý bài viết, blog và các nội dung khác."
       >
         <Button>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add Content
+          Thêm nội dung
         </Button>
       </PageHeader>
       <ContentTable />

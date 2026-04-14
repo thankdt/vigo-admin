@@ -23,7 +23,7 @@ export function SystemConfigManager() {
             const data = await getSystemConfigs();
             setConfigs(data);
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch configurations', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải cấu hình', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -43,9 +43,9 @@ export function SystemConfigManager() {
         setIsSaving(prev => ({...prev, [config.key]: true}));
         try {
             await updateSystemConfig(config.key, config.value, config.description);
-            toast({ title: 'Success', description: `Configuration "${config.key}" has been updated.` });
+            toast({ title: 'Thành công', description: `Cấu hình "${config.key}" đã được cập nhật.` });
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to update configuration', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể cập nhật cấu hình', description: err.message });
             // Optionally, revert the change in UI on failure
             fetchConfigs();
         } finally {
@@ -57,8 +57,8 @@ export function SystemConfigManager() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>System Configuration</CardTitle>
-                    <CardDescription>Manage core system-wide settings and variables.</CardDescription>
+                    <CardTitle>Cấu hình hệ thống</CardTitle>
+                    <CardDescription>Quản lý các cài đặt và biến toàn hệ thống.</CardDescription>
                 </CardHeader>
                 <CardContent className="h-48 flex items-center justify-center">
                     <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -70,17 +70,17 @@ export function SystemConfigManager() {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>System Configuration</CardTitle>
-                <CardDescription>Manage core system-wide settings and variables. Changes may require an app restart to take full effect.</CardDescription>
+                <CardTitle>Cấu hình hệ thống</CardTitle>
+                <CardDescription>Quản lý các cài đặt và biến toàn hệ thống. Thay đổi có thể cần khởi động lại ứng dụng để có hiệu lực đầy đủ.</CardDescription>
             </CardHeader>
             <CardContent>
                 <Table>
                     <TableHeader>
                         <TableRow>
-                            <TableHead className="w-[25%]">Key</TableHead>
-                            <TableHead className="w-[45%]">Description</TableHead>
-                            <TableHead className="w-[20%]">Value</TableHead>
-                            <TableHead className="w-[10%] text-right">Action</TableHead>
+                            <TableHead className="w-[25%]">Khóa</TableHead>
+                            <TableHead className="w-[45%]">Mô tả</TableHead>
+                            <TableHead className="w-[20%]">Giá trị</TableHead>
+                            <TableHead className="w-[10%] text-right">Thao tác</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>

@@ -409,18 +409,19 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
 
 
 function getStatusBadge(status: Booking['status']) {
+  const label = statusLabelMap[status] ?? status;
   switch (status) {
     case 'COMPLETED':
-      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400 capitalize">{status.toLowerCase().replace('_', ' ')}</Badge>;
+      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">{label}</Badge>;
     case 'ACCEPTED':
     case 'PICKED_UP':
-      return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400 capitalize">{status.toLowerCase().replace('_', ' ')}</Badge>;
+      return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400">{label}</Badge>;
     case 'SEARCHING':
-      return <Badge variant="secondary" className="capitalize">{status.toLowerCase().replace('_', ' ')}</Badge>;
+      return <Badge variant="secondary">{label}</Badge>;
     case 'CANCELLED':
-      return <Badge variant="destructive" className="capitalize">{status.toLowerCase().replace('_', ' ')}</Badge>;
+      return <Badge variant="destructive">{label}</Badge>;
     default:
-      return <Badge className="capitalize">{status ? String(status).toLowerCase().replace('_', ' ') : ''}</Badge>;
+      return <Badge>{label}</Badge>;
   }
 };
 
@@ -468,7 +469,7 @@ export function BookingsTable() {
       setError(err.message);
       toast({
         variant: "destructive",
-        title: "Failed to fetch bookings",
+        title: "Không thể tải chuyến đi",
         description: err.message,
       });
     } finally {
@@ -506,12 +507,12 @@ export function BookingsTable() {
     setIsUpdating(true);
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
-      toast({ title: 'Status Updated', description: `Booking #${dialogState.booking.id} has been updated to ${dialogState.newStatus}.` });
+      toast({ title: 'Đã cập nhật trạng thái', description: `Chuyến #${dialogState.booking.id} đã được chuyển sang ${statusLabelMap[dialogState.newStatus] ?? dialogState.newStatus}.` });
       fetchBookings(activeTab, searchTerm, currentPage, pageSize);
       setDialogState({ open: false, booking: null, newStatus: null });
       setStatusNote('');
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Failed to update status', description: err.message });
+      toast({ variant: 'destructive', title: 'Cập nhật thất bại', description: err.message });
     } finally {
       setIsUpdating(false);
     }
@@ -613,7 +614,7 @@ export function BookingsTable() {
                   </Button>
                 </TableHead>
                 <TableHead>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">Thao tác</span>
                 </TableHead>
               </TableRow>
             </TableHeader>
@@ -657,8 +658,8 @@ export function BookingsTable() {
                     </TableCell>
                     <TableCell className='max-w-xs'>
                       <div className="flex flex-col">
-                        <span className='truncate'><span className='font-medium'>From:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span>
-                        <span className='truncate'><span className='font-medium'>To:</span> {typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span>
+                        <span className='truncate'><span className='font-medium'>Điểm đón:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span>
+                        <span className='truncate'><span className='font-medium'>Điểm trả:</span> {typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
@@ -674,7 +675,7 @@ export function BookingsTable() {
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
-                            <span className="sr-only">Open menu</span>
+                            <span className="sr-only">Mở menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
                         </DropdownMenuTrigger>

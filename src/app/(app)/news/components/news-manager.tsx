@@ -56,7 +56,7 @@ export function NewsManager() {
                 setNews([]);
             }
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch news', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải tin tức', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -86,11 +86,11 @@ export function NewsManager() {
         if (!deletingNews) return;
         try {
             await deleteNews(deletingNews.id);
-            toast({ title: 'Success', description: 'News deleted.' });
+            toast({ title: 'Thành công', description: 'Đã xóa tin tức.' });
             setDeletingNews(null);
             fetchNews();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to delete news', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể xóa tin tức', description: err.message });
         }
     };
 
@@ -98,12 +98,12 @@ export function NewsManager() {
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>News Articles</CardTitle>
-                    <CardDescription>Manage news and updates visible to users.</CardDescription>
+                    <CardTitle>Bài viết Tin tức</CardTitle>
+                    <CardDescription>Quản lý tin tức và cập nhật hiển thị cho người dùng.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="mb-4 flex items-center justify-between">
-                        <Button variant="outline" size="sm" onClick={() => fetchNews()}>Refresh</Button>
+                        <Button variant="outline" size="sm" onClick={() => fetchNews()}>Làm mới</Button>
                         <div className="space-x-2">
                             <Button
                                 variant="outline"
@@ -111,16 +111,16 @@ export function NewsManager() {
                                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                                 disabled={currentPage === 1 || isLoading}
                             >
-                                Previous
+                                Trước
                             </Button>
-                            <span className="text-sm py-2">Page {currentPage}</span>
+                            <span className="text-sm py-2">Trang {currentPage}</span>
                             <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => setCurrentPage(p => p + 1)}
                                 disabled={isLoading || news.length < itemsPerPage}
                             >
-                                Next
+                                Sau
                             </Button>
                         </div>
                     </div>
@@ -128,11 +128,11 @@ export function NewsManager() {
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Image</TableHead>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Description</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>Hình ảnh</TableHead>
+                                <TableHead>Tiêu đề</TableHead>
+                                <TableHead>Mô tả</TableHead>
+                                <TableHead>Trạng thái</TableHead>
+                                <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -144,7 +144,7 @@ export function NewsManager() {
                                 </TableRow>
                             ) : news.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">No news found.</TableCell>
+                                    <TableCell colSpan={5} className="h-24 text-center">Không tìm thấy tin tức.</TableCell>
                                 </TableRow>
                             ) : (
                                 news.map(item => (
@@ -159,21 +159,21 @@ export function NewsManager() {
                                                         className="object-cover"
                                                         unoptimized
                                                     />
-                                                ) : <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">No Img</div>}
+                                                ) : <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Không có</div>}
                                             </div>
                                         </TableCell>
                                         <TableCell className="font-medium">
                                             <div>{item.title}</div>
                                             {item.link && (
                                                 <a href={item.link} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline flex items-center gap-1">
-                                                    Link <ExternalLink className="h-3 w-3" />
+                                                    Liên kết <ExternalLink className="h-3 w-3" />
                                                 </a>
                                             )}
                                         </TableCell>
                                         <TableCell className="max-w-xs truncate text-muted-foreground">{item.description}</TableCell>
                                         <TableCell>
                                             <Badge variant={item.isActive ? "default" : "secondary"}>
-                                                {item.isActive ? 'Active' : 'Inactive'}
+                                                {item.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
                                         <TableCell className="text-right">
@@ -193,7 +193,7 @@ export function NewsManager() {
                 <CardFooter>
                     <Button onClick={() => handleOpenForm(null)}>
                         <PlusCircle className="mr-2 h-4 w-4" />
-                        Create News
+                        Tạo Tin tức
                     </Button>
                 </CardFooter>
             </Card>
@@ -210,14 +210,14 @@ export function NewsManager() {
             <AlertDialog open={!!deletingNews} onOpenChange={() => setDeletingNews(null)}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                        <AlertDialogTitle>Bạn có chắc chắn?</AlertDialogTitle>
                         <AlertDialogDescription>
-                            This will delete "{deletingNews?.title}". This action cannot be undone.
+                            Hành động này sẽ xóa "{deletingNews?.title}". Không thể hoàn tác.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Delete</AlertDialogAction>
+                        <AlertDialogCancel>Hủy</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
@@ -252,7 +252,7 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
 
     const handleSubmit = async () => {
         if (!title || !description) {
-            toast({ variant: 'destructive', title: 'Start', description: 'Title and description are required.' });
+            toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Tiêu đề và mô tả là bắt buộc.' });
             return;
         }
 
@@ -278,7 +278,7 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
                 finalImageKey = `${API_BASE_URL}/${presignedData.key}`;
 
             } catch (err: any) {
-                toast({ variant: 'destructive', title: 'Upload failed', description: err.message });
+                toast({ variant: 'destructive', title: 'Tải lên thất bại', description: err.message });
                 setIsSaving(false);
                 setIsUploading(false);
                 return;
@@ -298,14 +298,14 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
         try {
             if (isEditing && news) {
                 await updateNews(news.id, payload);
-                toast({ title: 'Success', description: 'News updated.' });
+                toast({ title: 'Thành công', description: 'Đã cập nhật tin tức.' });
             } else {
                 await createNews(payload);
-                toast({ title: 'Success', description: 'News created.' });
+                toast({ title: 'Thành công', description: 'Đã tạo tin tức.' });
             }
             onSave();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Error', description: err.message });
+            toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
             setIsSaving(false);
         }
     };
@@ -313,24 +313,24 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
     return (
         <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-                <DialogTitle>{isEditing ? 'Edit News' : 'Create News'}</DialogTitle>
-                <DialogDescription>{isEditing ? 'Update news details.' : 'Publish a new news article.'}</DialogDescription>
+                <DialogTitle>{isEditing ? 'Sửa Tin tức' : 'Tạo Tin tức'}</DialogTitle>
+                <DialogDescription>{isEditing ? 'Cập nhật chi tiết tin tức.' : 'Đăng bài viết tin tức mới.'}</DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                    <Label htmlFor="title">Title</Label>
-                    <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="News title" />
+                    <Label htmlFor="title">Tiêu đề</Label>
+                    <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Tiêu đề tin tức" />
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="description">Description</Label>
-                    <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="News content..." rows={5} />
+                    <Label htmlFor="description">Mô tả</Label>
+                    <Textarea id="description" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Nội dung tin tức..." rows={5} />
                 </div>
                 <div className="grid gap-2">
-                    <Label>Image</Label>
+                    <Label>Hình ảnh</Label>
                     <div className="flex items-center gap-4">
                         {imageUrl && (
                             <div className="relative w-24 h-16 rounded overflow-hidden border">
-                                <Image src={imageUrl} alt="Preview" fill className="object-cover" unoptimized />
+                                <Image src={imageUrl} alt="Xem trước" fill className="object-cover" unoptimized />
                             </div>
                         )}
                         <Input id="image" type="file" accept="image/*" onChange={handleImageChange} className="max-w-xs" />
@@ -338,19 +338,19 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
                     </div>
                 </div>
                 <div className="grid gap-2">
-                    <Label htmlFor="link">Link (Optional)</Label>
+                    <Label htmlFor="link">Liên kết (Tùy chọn)</Label>
                     <Input id="link" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://example.com" />
                 </div>
                 <div className="flex items-center gap-2">
                     <Switch id="active" checked={isActive} onCheckedChange={setIsActive} />
-                    <Label htmlFor="active">Active</Label>
+                    <Label htmlFor="active">Hoạt động</Label>
                 </div>
             </div>
             <DialogFooter>
-                <Button variant="outline" onClick={onCancel}>Cancel</Button>
+                <Button variant="outline" onClick={onCancel}>Hủy</Button>
                 <Button onClick={handleSubmit} disabled={isSaving || isUploading}>
                     {(isSaving || isUploading) && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Save
+                    Lưu
                 </Button>
             </DialogFooter>
         </DialogContent>

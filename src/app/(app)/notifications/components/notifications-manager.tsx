@@ -30,9 +30,9 @@ import { cn } from '@/lib/utils';
 import Image from 'next/image';
 
 const notificationSchema = z.object({
-    title: z.string().min(1, { message: "Title is required" }),
-    body: z.string().min(1, { message: "Body is required" }),
-    imageUrl: z.string().url({ message: "Invalid URL" }).optional().or(z.literal('')),
+    title: z.string().min(1, { message: "Tiêu đề là bắt buộc" }),
+    body: z.string().min(1, { message: "Nội dung là bắt buộc" }),
+    imageUrl: z.string().url({ message: "URL không hợp lệ" }).optional().or(z.literal('')),
     targetType: z.enum(['ALL', 'ROLE', 'SPECIFIC_USERS']),
     targetRole: z.enum(['DRIVER', 'USER']).optional(),
     loyaltyTier: z.enum(['MEMBER', 'SILVER', 'GOLD', 'DIAMOND']).optional(),
@@ -46,7 +46,7 @@ const notificationSchema = z.object({
     }
     return true;
 }, {
-    message: "Schedule time is required for one-time notifications",
+    message: "Thời gian lên lịch là bắt buộc cho thông báo một lần",
     path: ["scheduleTime"],
 }).refine((data) => {
     if (data.scheduleType === 'RECURRING' && !data.cronExpression) {
@@ -54,7 +54,7 @@ const notificationSchema = z.object({
     }
     return true;
 }, {
-    message: "Cron expression is required for recurring notifications",
+    message: "Biểu thức Cron là bắt buộc cho thông báo lặp lại",
     path: ["cronExpression"],
 }).refine((data) => {
     if (data.targetType === 'ROLE' && !data.targetRole) {
@@ -62,7 +62,7 @@ const notificationSchema = z.object({
     }
     return true;
 }, {
-    message: "Please select a role",
+    message: "Vui lòng chọn vai trò",
     path: ["targetRole"],
 }).refine((data) => {
     if (data.targetType === 'SPECIFIC_USERS' && !data.userIds?.trim()) {
@@ -70,7 +70,7 @@ const notificationSchema = z.object({
     }
     return true;
 }, {
-    message: "Please enter at least one user ID",
+    message: "Vui lòng nhập ít nhất một ID người dùng",
     path: ["userIds"],
 });
 
@@ -118,40 +118,40 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
             }
 
             await createScheduledNotification(payload);
-            toast({ title: "Success", description: "Notification scheduled successfully." });
+            toast({ title: "Thành công", description: "Đã lên lịch thông báo thành công." });
             onSaveSuccess();
             reset();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to schedule notification', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể lên lịch thông báo', description: err.message });
         }
     };
 
     return (
         <form onSubmit={handleSubmit(onSubmit)}>
             <DialogHeader>
-                <DialogTitle>Schedule Notification</DialogTitle>
-                <DialogDescription>Create a new push notification schedule.</DialogDescription>
+                <DialogTitle>Lên lịch thông báo</DialogTitle>
+                <DialogDescription>Tạo lịch thông báo đẩy mới.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto p-1">
                 <div className="space-y-2">
-                    <Label htmlFor="title">Title</Label>
-                    <Input id="title" {...register('title')} placeholder="Notification Title" />
+                    <Label htmlFor="title">Tiêu đề</Label>
+                    <Input id="title" {...register('title')} placeholder="Tiêu đề thông báo" />
                     {errors.title && <p className="text-sm text-destructive">{errors.title.message}</p>}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="body">Body</Label>
-                    <Textarea id="body" {...register('body')} placeholder="Notification Body Content" />
+                    <Label htmlFor="body">Nội dung</Label>
+                    <Textarea id="body" {...register('body')} placeholder="Nội dung thông báo" />
                     {errors.body && <p className="text-sm text-destructive">{errors.body.message}</p>}
                 </div>
                 <div className="space-y-2">
-                    <Label htmlFor="imageUrl">Image URL (Optional)</Label>
+                    <Label htmlFor="imageUrl">URL hình ảnh (Tùy chọn)</Label>
                     <Input id="imageUrl" {...register('imageUrl')} placeholder="https://..." />
                     {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
                 </div>
 
                 {/* Target Audience Section */}
                 <div className="space-y-3 rounded-md border p-3 bg-muted/30">
-                    <Label className="text-sm font-semibold">Target Audience</Label>
+                    <Label className="text-sm font-semibold">Đối tượng nhận</Label>
                     <Controller
                         name="targetType"
                         control={control}
@@ -163,15 +163,15 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                             >
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="ALL" id="target-all" />
-                                    <Label htmlFor="target-all" className="font-normal cursor-pointer">📢 All Users (Broadcast)</Label>
+                                    <Label htmlFor="target-all" className="font-normal cursor-pointer">📢 Tất cả người dùng (Phát sóng)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="ROLE" id="target-role" />
-                                    <Label htmlFor="target-role" className="font-normal cursor-pointer">👥 By Role</Label>
+                                    <Label htmlFor="target-role" className="font-normal cursor-pointer">👥 Theo vai trò</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="SPECIFIC_USERS" id="target-specific" />
-                                    <Label htmlFor="target-specific" className="font-normal cursor-pointer">🎯 Specific Users</Label>
+                                    <Label htmlFor="target-specific" className="font-normal cursor-pointer">🎯 Người dùng cụ thể</Label>
                                 </div>
                             </RadioGroup>
                         )}
@@ -181,7 +181,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                     {targetType === 'ROLE' && (
                         <div className="space-y-3 pl-6 border-l-2 border-primary/30">
                             <div className="space-y-2">
-                                <Label>Select Role</Label>
+                                <Label>Chọn vai trò</Label>
                                 <Controller
                                     name="targetRole"
                                     control={control}
@@ -193,11 +193,11 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                         >
                                             <div className="flex items-center space-x-2">
                                                 <RadioGroupItem value="DRIVER" id="role-driver" />
-                                                <Label htmlFor="role-driver" className="font-normal cursor-pointer">🚗 Drivers</Label>
+                                                <Label htmlFor="role-driver" className="font-normal cursor-pointer">🚗 Tài xế</Label>
                                             </div>
                                             <div className="flex items-center space-x-2">
                                                 <RadioGroupItem value="USER" id="role-user" />
-                                                <Label htmlFor="role-user" className="font-normal cursor-pointer">👤 Customers</Label>
+                                                <Label htmlFor="role-user" className="font-normal cursor-pointer">👤 Khách hàng</Label>
                                             </div>
                                         </RadioGroup>
                                     )}
@@ -208,17 +208,17 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                             {/* Loyalty Tier (when USER role is selected) */}
                             {targetRole === 'USER' && (
                                 <div className="space-y-2">
-                                    <Label>Loyalty Tier (Optional)</Label>
+                                    <Label>Hạng thành viên (Tùy chọn)</Label>
                                     <Controller
                                         name="loyaltyTier"
                                         control={control}
                                         render={({ field }) => (
                                             <div className="flex flex-wrap gap-2">
                                                 {[
-                                                    { label: '🥉 Member', value: 'MEMBER' },
-                                                    { label: '🥈 Silver', value: 'SILVER' },
-                                                    { label: '🥇 Gold', value: 'GOLD' },
-                                                    { label: '💎 Diamond', value: 'DIAMOND' },
+                                                    { label: '🥉 Thành viên', value: 'MEMBER' },
+                                                    { label: '🥈 Bạc', value: 'SILVER' },
+                                                    { label: '🥇 Vàng', value: 'GOLD' },
+                                                    { label: '💎 Kim cương', value: 'DIAMOND' },
                                                 ].map((tier) => (
                                                     <Button
                                                         key={tier.value}
@@ -234,7 +234,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                             </div>
                                         )}
                                     />
-                                    <p className="text-xs text-muted-foreground">Leave empty to send to all customers</p>
+                                    <p className="text-xs text-muted-foreground">Để trống để gửi cho tất cả khách hàng</p>
                                 </div>
                             )}
                         </div>
@@ -243,7 +243,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                     {/* User IDs Input (when SPECIFIC_USERS is selected) */}
                     {targetType === 'SPECIFIC_USERS' && (
                         <div className="space-y-2 pl-6 border-l-2 border-primary/30">
-                            <Label htmlFor="userIds">User IDs (comma-separated)</Label>
+                            <Label htmlFor="userIds">ID người dùng (phân cách bằng dấu phẩy)</Label>
                             <Textarea
                                 id="userIds"
                                 {...register('userIds')}
@@ -251,13 +251,13 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                 className="min-h-[80px]"
                             />
                             {errors.userIds && <p className="text-sm text-destructive">{errors.userIds.message}</p>}
-                            <p className="text-xs text-muted-foreground">Enter user UUIDs separated by commas</p>
+                            <p className="text-xs text-muted-foreground">Nhập UUID người dùng phân cách bằng dấu phẩy</p>
                         </div>
                     )}
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Schedule Type</Label>
+                    <Label>Loại lịch</Label>
                     <Controller
                         name="scheduleType"
                         control={control}
@@ -269,11 +269,11 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                             >
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="ONE_TIME" id="one-time" />
-                                    <Label htmlFor="one-time" className="font-normal cursor-pointer">One-time (Specific Date)</Label>
+                                    <Label htmlFor="one-time" className="font-normal cursor-pointer">Một lần (Ngày cụ thể)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="RECURRING" id="recurring" />
-                                    <Label htmlFor="recurring" className="font-normal cursor-pointer">Recurring (Cron)</Label>
+                                    <Label htmlFor="recurring" className="font-normal cursor-pointer">Lặp lại (Cron)</Label>
                                 </div>
                             </RadioGroup>
                         )}
@@ -282,7 +282,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
 
                 {scheduleType === 'ONE_TIME' && (
                     <div className="space-y-2">
-                        <Label>Schedule Time (UTC)</Label>
+                        <Label>Thời gian lên lịch (UTC)</Label>
                         <Controller
                             name="scheduleTime"
                             control={control}
@@ -294,12 +294,12 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                             className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                                         >
                                             <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {field.value ? format(field.value, "PPP HH:mm") : <span>Pick a date & time</span>}
+                                            {field.value ? format(field.value, "PPP HH:mm") : <span>Chọn ngày & giờ</span>}
                                         </Button>
                                     </PopoverTrigger>
                                     <PopoverContent className="w-auto p-0" align="start">
                                         <div className="p-3 border-b border-border">
-                                            <p className="text-xs text-muted-foreground mb-2">Select Date</p>
+                                            <p className="text-xs text-muted-foreground mb-2">Chọn ngày</p>
                                             <Calendar mode="single" selected={field.value} onSelect={(date) => {
                                                 // Combine date with current time selection if exists, else default to 00:00
                                                 const newDate = date || new Date();
@@ -311,7 +311,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                             }} initialFocus />
                                         </div>
                                         <div className="p-3">
-                                            <p className="text-xs text-muted-foreground mb-2">Select Time</p>
+                                            <p className="text-xs text-muted-foreground mb-2">Chọn giờ</p>
                                             <Input
                                                 type="time"
                                                 className="w-full"
@@ -330,20 +330,20 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                             )}
                         />
                         {errors.scheduleTime && <p className="text-sm text-destructive">{errors.scheduleTime.message}</p>}
-                        <p className="text-xs text-muted-foreground">Notification will be sent at this specific time.</p>
+                        <p className="text-xs text-muted-foreground">Thông báo sẽ được gửi vào thời điểm cụ thể này.</p>
                     </div>
                 )}
 
                 {scheduleType === 'RECURRING' && (
                     <div className="space-y-3">
-                        <Label>Quick Presets</Label>
+                        <Label>Mẫu nhanh</Label>
                         <div className="flex flex-wrap gap-2">
                             {[
-                                { label: '🌅 Daily 9AM', value: '0 9 * * *' },
-                                { label: '🏢 Weekdays 9AM', value: '0 9 ? * MON-FRI' },
-                                { label: '🔄 Every Hour', value: '0 * * * *' },
-                                { label: '⏱️ Every 30 min', value: '0/30 * * * ? *' },
-                                { label: '📅 Weekly Monday', value: '0 9 ? * MON' },
+                                { label: '🌅 Hàng ngày 9h', value: '0 9 * * *' },
+                                { label: '🏢 Ngày thường 9h', value: '0 9 ? * MON-FRI' },
+                                { label: '🔄 Mỗi giờ', value: '0 * * * *' },
+                                { label: '⏱️ Mỗi 30 phút', value: '0/30 * * * ? *' },
+                                { label: '📅 Hàng tuần T2', value: '0 9 ? * MON' },
                             ].map((preset) => (
                                 <Button
                                     key={preset.value}
@@ -359,25 +359,25 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                         </div>
 
                         <div className="space-y-2">
-                            <Label htmlFor="cronExpression">Or enter custom Cron Expression</Label>
-                            <Input id="cronExpression" {...register('cronExpression')} placeholder="e.g. 0 9 * * *" />
+                            <Label htmlFor="cronExpression">Hoặc nhập biểu thức Cron tùy chỉnh</Label>
+                            <Input id="cronExpression" {...register('cronExpression')} placeholder="VD: 0 9 * * *" />
                             {errors.cronExpression && <p className="text-sm text-destructive">{errors.cronExpression.message}</p>}
                         </div>
 
                         <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <span>Format: Minutes Hours Day Month DayOfWeek.</span>
+                            <span>Định dạng: Phút Giờ Ngày Tháng NgàyTrongTuần.</span>
                             <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
-                                AWS Cron Guide <ExternalLink className="w-3 h-3" />
+                                Hướng dẫn AWS Cron <ExternalLink className="w-3 h-3" />
                             </a>
                         </div>
                     </div>
                 )}
             </div>
             <DialogFooter>
-                <Button variant="outline" onClick={onCancel} type="button">Cancel</Button>
+                <Button variant="outline" onClick={onCancel} type="button">Hủy</Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Schedule
+                    Lên lịch
                 </Button>
             </DialogFooter>
         </form>
@@ -408,7 +408,7 @@ export function NotificationsManager() {
             }
             setNotifications(notifArray);
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to fetch notifications', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể tải thông báo', description: err.message });
         } finally {
             setIsLoading(false);
         }
@@ -422,10 +422,10 @@ export function NotificationsManager() {
         setDeletingId(id);
         try {
             await cancelScheduledNotification(id);
-            toast({ title: 'Success', description: 'Schedule cancelled.' });
+            toast({ title: 'Thành công', description: 'Đã hủy lịch.' });
             fetchData();
         } catch (err: any) {
-            toast({ variant: 'destructive', title: 'Failed to cancel', description: err.message });
+            toast({ variant: 'destructive', title: 'Không thể hủy', description: err.message });
         } finally {
             setDeletingId(null);
         }
@@ -433,9 +433,9 @@ export function NotificationsManager() {
 
     const getStatusBadge = (status: string) => {
         switch (status) {
-            case 'ACTIVE': return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Active</Badge>;
-            case 'COMPLETED': return <Badge variant="secondary">Completed</Badge>;
-            case 'CANCELLED': return <Badge variant="destructive">Cancelled</Badge>;
+            case 'ACTIVE': return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Hoạt động</Badge>;
+            case 'COMPLETED': return <Badge variant="secondary">Hoàn thành</Badge>;
+            case 'CANCELLED': return <Badge variant="destructive">Đã hủy</Badge>;
             default: return <Badge variant="outline">{status}</Badge>;
         }
     };
@@ -444,26 +444,26 @@ export function NotificationsManager() {
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>Scheduled Notifications</CardTitle>
-                    <CardDescription>Manage automated push notifications via AWS EventBridge.</CardDescription>
+                    <CardTitle>Thông báo đã lên lịch</CardTitle>
+                    <CardDescription>Quản lý thông báo đẩy tự động qua AWS EventBridge.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="mb-4 flex justify-end">
                         <Button onClick={() => setIsFormOpen(true)}>
                             <PlusCircle className="mr-2 h-4 w-4" />
-                            Schedule New
+                            Lên lịch mới
                         </Button>
                     </div>
 
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead>Title</TableHead>
-                                <TableHead>Type</TableHead>
-                                <TableHead>Schedule / Cron</TableHead>
-                                <TableHead>Status</TableHead>
-                                <TableHead>Created At</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead>Tiêu đề</TableHead>
+                                <TableHead>Loại</TableHead>
+                                <TableHead>Lịch / Cron</TableHead>
+                                <TableHead>Trạng thái</TableHead>
+                                <TableHead>Ngày tạo</TableHead>
+                                <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -476,7 +476,7 @@ export function NotificationsManager() {
                             ) : notifications.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={6} className="h-24 text-center">
-                                        No scheduled notifications found.
+                                        Không tìm thấy thông báo đã lên lịch.
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -490,9 +490,9 @@ export function NotificationsManager() {
                                         </TableCell>
                                         <TableCell>
                                             {notif.cronExpression ? (
-                                                <div className="flex items-center text-xs text-muted-foreground"><Repeat className="w-3 h-3 mr-1" /> Recurring</div>
+                                                <div className="flex items-center text-xs text-muted-foreground"><Repeat className="w-3 h-3 mr-1" /> Lặp lại</div>
                                             ) : (
-                                                <div className="flex items-center text-xs text-muted-foreground"><Clock className="w-3 h-3 mr-1" /> One-time</div>
+                                                <div className="flex items-center text-xs text-muted-foreground"><Clock className="w-3 h-3 mr-1" /> Một lần</div>
                                             )}
                                         </TableCell>
                                         <TableCell>

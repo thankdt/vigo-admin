@@ -28,28 +28,28 @@ export function StatCards() {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <StatCard
-        title="Total Users"
+        title="Tổng người dùng"
         value="1,254"
         icon={<Users className="h-4 w-4" />}
-        description="+20.1% from last month"
+        description="+20.1% so với tháng trước"
       />
       <StatCard
-        title="Total Articles"
+        title="Tổng bài viết"
         value="3,402"
         icon={<FileText className="h-4 w-4" />}
-        description="+180.1% from last month"
+        description="+180.1% so với tháng trước"
       />
       <StatCard
-        title="Active Roles"
+        title="Vai trò hoạt động"
         value="3"
         icon={<Shield className="h-4 w-4" />}
-        description="Admin, Editor, Viewer"
+        description="Quản trị, Biên tập, Xem"
       />
       <StatCard
-        title="API Status"
-        value="Connected"
+        title="Trạng thái API"
+        value="Đã kết nối"
         icon={<Wifi className="h-4 w-4 text-green-500" />}
-        description="All systems operational"
+        description="Tất cả hệ thống hoạt động bình thường"
       />
     </div>
   );

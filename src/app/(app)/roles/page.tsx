@@ -7,12 +7,12 @@ export default function RolesPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Roles & Permissions"
-        description="Define user roles and manage their access permissions."
+        title="Vai trò & Quyền hạn"
+        description="Định nghĩa vai trò người dùng và quản lý quyền truy cập."
       >
         <Button disabled>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add Role
+          Thêm vai trò
         </Button>
       </PageHeader>
       <RolesList />

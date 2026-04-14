@@ -14,26 +14,26 @@ export default function SettingsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Settings"
-        description="Manage your account settings and application preferences."
+        title="Cài đặt"
+        description="Quản lý cài đặt tài khoản và tùy chọn ứng dụng."
       />
       <Tabs defaultValue="profile" className="w-full">
         <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="api">API Integrations</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="system">System Config</TabsTrigger>
+          <TabsTrigger value="profile">Hồ sơ</TabsTrigger>
+          <TabsTrigger value="api">Tích hợp API</TabsTrigger>
+          <TabsTrigger value="notifications">Thông báo</TabsTrigger>
+          <TabsTrigger value="system">Cấu hình hệ thống</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile">
           <Card>
             <CardHeader>
-              <CardTitle>Profile</CardTitle>
-              <CardDescription>Update your personal information.</CardDescription>
+              <CardTitle>Hồ sơ</CardTitle>
+              <CardDescription>Cập nhật thông tin cá nhân của bạn.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Full Name</Label>
+                <Label htmlFor="name">Họ và tên</Label>
                 <Input id="name" defaultValue="Alex Johnson" />
               </div>
               <div className="space-y-2">
@@ -44,7 +44,7 @@ export default function SettingsPage() {
             <CardFooter>
               <Button>
                 <Save className="mr-2 h-4 w-4" />
-                Save Changes
+                Lưu thay đổi
               </Button>
             </CardFooter>
           </Card>
@@ -53,15 +53,15 @@ export default function SettingsPage() {
         <TabsContent value="api">
           <Card>
             <CardHeader>
-              <CardTitle>API Integrations</CardTitle>
-              <CardDescription>Connect and manage third-party APIs.</CardDescription>
+              <CardTitle>Tích hợp API</CardTitle>
+              <CardDescription>Kết nối và quản lý API bên thứ ba.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex items-center justify-between rounded-lg border p-4">
                 <div className="space-y-0.5">
                   <Label className="text-base">Stripe</Label>
                   <p className="text-sm text-muted-foreground">
-                    Connect your Stripe account for payment processing.
+                    Kết nối tài khoản Stripe để xử lý thanh toán.
                   </p>
                 </div>
                 <Switch defaultChecked />
@@ -70,7 +70,7 @@ export default function SettingsPage() {
                 <div className="space-y-0.5">
                   <Label className="text-base">Google Analytics</Label>
                    <p className="text-sm text-muted-foreground">
-                    Sync user behavior data from Google Analytics.
+                    Đồng bộ dữ liệu hành vi người dùng từ Google Analytics.
                   </p>
                 </div>
                 <Switch />
@@ -78,14 +78,14 @@ export default function SettingsPage() {
             </CardContent>
             <CardFooter className="flex-col items-start gap-4">
               <Separator />
-               <h3 className="font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4"/> Your API Keys</h3>
-               <p className="text-sm text-muted-foreground">These keys are used to access the Vigo API.</p>
+               <h3 className="font-semibold flex items-center gap-2"><KeyRound className="h-4 w-4"/> Khóa API của bạn</h3>
+               <p className="text-sm text-muted-foreground">Các khóa này được sử dụng để truy cập Vigo API.</p>
                <div className="w-full space-y-2">
-                <Label htmlFor="api-key">Public Key</Label>
+                <Label htmlFor="api-key">Khóa công khai</Label>
                 <Input id="api-key" readOnly defaultValue="pk_test_************************" />
                </div>
                <div className="w-full space-y-2">
-                <Label htmlFor="secret-key">Secret Key</Label>
+                <Label htmlFor="secret-key">Khóa bí mật</Label>
                 <Input id="secret-key" readOnly type="password" defaultValue="sk_test_************************" />
                </div>
             </CardFooter>
@@ -95,24 +95,24 @@ export default function SettingsPage() {
         <TabsContent value="notifications">
           <Card>
             <CardHeader>
-              <CardTitle>Notifications</CardTitle>
-              <CardDescription>Manage how you receive notifications.</CardDescription>
+              <CardTitle>Thông báo</CardTitle>
+              <CardDescription>Quản lý cách bạn nhận thông báo.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
                 <div className="flex items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                    <Label className="text-base">Email Notifications</Label>
+                    <Label className="text-base">Thông báo qua Email</Label>
                     <p className="text-sm text-muted-foreground">
-                        Receive an email for important account activity.
+                        Nhận email cho các hoạt động quan trọng của tài khoản.
                     </p>
                     </div>
                     <Switch defaultChecked />
                 </div>
                  <div className="flex items-center justify-between rounded-lg border p-4">
                     <div className="space-y-0.5">
-                    <Label className="text-base">Weekly Reports</Label>
+                    <Label className="text-base">Báo cáo hàng tuần</Label>
                     <p className="text-sm text-muted-foreground">
-                        Get a summary of application activity every Monday.
+                        Nhận tóm tắt hoạt động ứng dụng mỗi thứ Hai.
                     </p>
                     </div>
                     <Switch defaultChecked />
@@ -121,7 +121,7 @@ export default function SettingsPage() {
             <CardFooter>
               <Button>
                 <Save className="mr-2 h-4 w-4" />
-                Save Preferences
+                Lưu tùy chọn
               </Button>
             </CardFooter>
           </Card>

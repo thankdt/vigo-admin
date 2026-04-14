@@ -11,12 +11,12 @@ export default function PromotionsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Voucher Management"
-        description="Create and manage promotional vouchers."
+        title="Quản lý Voucher"
+        description="Tạo và quản lý các voucher khuyến mãi."
       >
         <Button onClick={() => setIsFormOpen(true)}>
           <PlusCircle className="mr-2 h-4 w-4" />
-          Add Voucher
+          Thêm Voucher
         </Button>
       </PageHeader>
       <PromotionsTable isFormOpen={isFormOpen} setIsFormOpen={setIsFormOpen} />

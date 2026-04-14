@@ -51,11 +51,11 @@ export function ContentTable() {
   const getStatusBadge = (status: Article['status']) => {
     switch (status) {
       case 'Published':
-        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Published</Badge>;
+        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Đã xuất bản</Badge>;
       case 'Draft':
-        return <Badge variant="secondary">Draft</Badge>;
+        return <Badge variant="secondary">Bản nháp</Badge>;
       case 'Archived':
-        return <Badge variant="outline">Archived</Badge>;
+        return <Badge variant="outline">Đã lưu trữ</Badge>;
       default:
         return <Badge>{status}</Badge>;
     }
@@ -65,7 +65,7 @@ export function ContentTable() {
     <>
      <div className="flex items-center pb-4">
         <Input
-          placeholder="Filter articles..."
+          placeholder="Lọc bài viết..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="max-w-sm"
@@ -77,30 +77,30 @@ export function ContentTable() {
             <TableRow>
               <TableHead>
                  <Button variant="ghost" onClick={() => requestSort('title')}>
-                  Title
+                  Tiêu đề
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
               <TableHead>
                  <Button variant="ghost" onClick={() => requestSort('author')}>
-                  Author
+                  Tác giả
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
               <TableHead>
                  <Button variant="ghost" onClick={() => requestSort('status')}>
-                  Status
+                  Trạng thái
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => requestSort('createdAt')}>
-                  Created At
+                  Ngày tạo
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
               <TableHead>
-                <span className="sr-only">Actions</span>
+                <span className="sr-only">Thao tác</span>
               </TableHead>
             </TableRow>
           </TableHeader>
@@ -127,16 +127,16 @@ export function ContentTable() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
+                        <span className="sr-only">Mở menu</span>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem>Edit</DropdownMenuItem>
-                      <DropdownMenuItem>Archive</DropdownMenuItem>
+                      <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+                      <DropdownMenuItem>Sửa</DropdownMenuItem>
+                      <DropdownMenuItem>Lưu trữ</DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">Delete</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">Xóa</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

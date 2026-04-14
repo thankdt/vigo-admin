@@ -24,8 +24,8 @@ export default function ReportsPage() {
     e.preventDefault();
     if (!reportType) {
       toast({
-        title: "Incomplete Form",
-        description: "Please select a report type.",
+        title: "Thiếu thông tin",
+        description: "Vui lòng chọn loại báo cáo.",
         variant: "destructive",
       });
       return;
@@ -50,7 +50,7 @@ export default function ReportsPage() {
 
     if (result.error) {
       toast({
-        title: "Summary Generation Failed",
+        title: "Tạo tóm tắt thất bại",
         description: result.error,
         variant: "destructive",
       });
@@ -63,28 +63,28 @@ export default function ReportsPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Report Generation"
-        description="Generate custom reports and AI-powered summaries."
+        title="Tạo báo cáo"
+        description="Tạo báo cáo tùy chỉnh và tóm tắt bằng AI."
       />
 
       <div className="grid gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-1">
           <form onSubmit={handleGenerateReport}>
             <CardHeader>
-              <CardTitle>Report Builder</CardTitle>
-              <CardDescription>Select criteria to generate your report.</CardDescription>
+              <CardTitle>Trình tạo báo cáo</CardTitle>
+              <CardDescription>Chọn tiêu chí để tạo báo cáo.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="report-type">Report Type</Label>
+                <Label htmlFor="report-type">Loại báo cáo</Label>
                 <Select value={reportType} onValueChange={setReportType}>
                   <SelectTrigger id="report-type">
-                    <SelectValue placeholder="Select a report type" />
+                    <SelectValue placeholder="Chọn loại báo cáo" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="user_activity">User Activity</SelectItem>
-                    <SelectItem value="content_performance">Content Performance</SelectItem>
-                    <SelectItem value="system_health">System Health</SelectItem>
+                    <SelectItem value="user_activity">Hoạt động người dùng</SelectItem>
+                    <SelectItem value="content_performance">Hiệu suất nội dung</SelectItem>
+                    <SelectItem value="system_health">Tình trạng hệ thống</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -93,7 +93,7 @@ export default function ReportsPage() {
             <CardFooter>
               <Button type="submit" disabled={isGeneratingReport}>
                 {isGeneratingReport && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Generate Report
+                Tạo báo cáo
               </Button>
             </CardFooter>
           </form>
@@ -103,19 +103,19 @@ export default function ReportsPage() {
           {reportData && (
             <Card>
               <CardHeader>
-                <CardTitle>Generated Report</CardTitle>
+                <CardTitle>Báo cáo đã tạo</CardTitle>
                 <CardDescription>
-                  Displaying results for the "{reportType.replace(/_/g, ' ')}" report.
+                  Hiển thị kết quả cho báo cáo "{reportType.replace(/_/g, ' ')}".
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Name</TableHead>
+                      <TableHead>Tên</TableHead>
                       <TableHead>Email</TableHead>
-                      <TableHead>Role</TableHead>
-                      <TableHead>Status</TableHead>
+                      <TableHead>Vai trò</TableHead>
+                      <TableHead>Trạng thái</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -133,7 +133,7 @@ export default function ReportsPage() {
                <CardFooter className="flex justify-end">
                 <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || !reportData}>
                   {isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Generate Executive Summary
+                  Tạo tóm tắt tổng quan
                 </Button>
               </CardFooter>
             </Card>
@@ -142,8 +142,8 @@ export default function ReportsPage() {
           {isGeneratingSummary && (
              <Card className="flex flex-col items-center justify-center p-8 text-center">
               <Bot className="h-10 w-10 text-primary animate-bounce" />
-              <p className="mt-4 font-medium">Our AI is analyzing the data...</p>
-              <p className="text-sm text-muted-foreground">This may take a moment.</p>
+              <p className="mt-4 font-medium">AI đang phân tích dữ liệu...</p>
+              <p className="text-sm text-muted-foreground">Quá trình này có thể mất một lúc.</p>
             </Card>
           )}
 
@@ -152,7 +152,7 @@ export default function ReportsPage() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-primary" />
-                  AI-Generated Executive Summary
+                  Tóm tắt tổng quan bằng AI
                 </CardTitle>
               </CardHeader>
               <CardContent className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans">

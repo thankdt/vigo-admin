@@ -12,18 +12,18 @@ import { userSignupsData, contentPublishedData } from '@/lib/data';
 
 const chartConfigSignups = {
   "New Users": {
-    label: "New Users",
+    label: "Người dùng mới",
     color: "hsl(var(--primary))",
   },
 };
 
 const chartConfigContent = {
   "Published": {
-    label: "Published",
+    label: "Đã xuất bản",
     color: "hsl(var(--primary))",
   },
   "Drafts": {
-    label: "Drafts",
+    label: "Bản nháp",
     color: "hsl(var(--secondary-foreground))",
   },
 }
@@ -32,7 +32,7 @@ export function UserSignupsChart() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>New Users Over Time</CardTitle>
+        <CardTitle>Người dùng mới theo thời gian</CardTitle>
       </CardHeader>
       <CardContent>
         <ChartContainer config={chartConfigSignups} className="h-[300px] w-full">
@@ -64,7 +64,7 @@ export function ContentPublishedChart() {
     return (
         <Card>
             <CardHeader>
-                <CardTitle>Content Status</CardTitle>
+                <CardTitle>Trạng thái nội dung</CardTitle>
             </CardHeader>
             <CardContent>
                 <ChartContainer config={chartConfigContent} className="h-[300px] w-full">

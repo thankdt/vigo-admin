@@ -33,8 +33,8 @@ export default function LoginPage() {
       await login(phone, password);
       console.log('Login successful, redirecting...');
       toast({
-        title: 'Login Successful',
-        description: 'Redirecting to dashboard...',
+        title: 'Đăng nhập thành công',
+        description: 'Đang chuyển hướng đến trang quản trị...',
       });
       // Use client-side navigation to avoid S3 404s
       router.push('/dashboard');
@@ -42,8 +42,8 @@ export default function LoginPage() {
       console.error('Login error:', error);
       toast({
         variant: 'destructive',
-        title: 'Login Failed',
-        description: error.message || 'Please check your credentials and try again.',
+        title: 'Đăng nhập thất bại',
+        description: error.message || 'Vui lòng kiểm tra thông tin đăng nhập và thử lại.',
       });
       setIsLoading(false);
     }
@@ -56,23 +56,23 @@ export default function LoginPage() {
           <CardHeader className="items-center text-center">
             <Logo className="mb-4 h-12 w-12 text-primary" />
             <CardTitle className="text-2xl font-bold tracking-tight">Vigo Admin</CardTitle>
-            <CardDescription>Welcome back! Please sign in to continue.</CardDescription>
+            <CardDescription>Chào mừng trở lại! Vui lòng đăng nhập để tiếp tục.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="phone">Phone</Label>
+                <Label htmlFor="phone">Số điện thoại</Label>
                 <Input id="phone" type="tel" placeholder="0999999999" required value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">Mật khẩu</Label>
                 </div>
                 <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Sign In
+                Đăng nhập
               </Button>
             </form>
           </CardContent>

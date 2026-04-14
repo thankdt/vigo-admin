@@ -28,18 +28,18 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 const promotionSchema = z.object({
-  name: z.string().min(1, { message: "Name is required" }),
-  code: z.string().min(1, { message: "Code is required" }),
+  name: z.string().min(1, { message: "Tên là bắt buộc" }),
+  code: z.string().min(1, { message: "Mã là bắt buộc" }),
   discountType: z.enum(['FIXED_AMOUNT', 'PERCENTAGE']),
-  discountValue: z.coerce.number().positive({ message: "Discount value must be positive" }),
-  minOrderValue: z.coerce.number().min(0, { message: "Minimum order value cannot be negative" }),
-  usageLimit: z.coerce.number().positive({ message: "Usage limit must be positive" }),
-  startDate: z.date({ required_error: "Start date is required" }),
-  endDate: z.date({ required_error: "End date is required" }),
-  pointCost: z.coerce.number().min(0, { message: "Point cost cannot be negative" }).default(0),
-  imageUrl: z.string().url({ message: "Please enter a valid URL" }).optional().or(z.literal('')),
+  discountValue: z.coerce.number().positive({ message: "Giá trị giảm giá phải là số dương" }),
+  minOrderValue: z.coerce.number().min(0, { message: "Giá trị đơn hàng tối thiểu không thể âm" }),
+  usageLimit: z.coerce.number().positive({ message: "Giới hạn sử dụng phải là số dương" }),
+  startDate: z.date({ required_error: "Ngày bắt đầu là bắt buộc" }),
+  endDate: z.date({ required_error: "Ngày kết thúc là bắt buộc" }),
+  pointCost: z.coerce.number().min(0, { message: "Chi phí điểm không thể âm" }).default(0),
+  imageUrl: z.string().url({ message: "Vui lòng nhập URL hợp lệ" }).optional().or(z.literal('')),
   description: z.string().optional(),
-  maxDiscount: z.coerce.number().positive({ message: "Max discount must be positive" }).optional(),
+  maxDiscount: z.coerce.number().positive({ message: "Giảm tối đa phải là số dương" }).optional(),
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
@@ -63,11 +63,11 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
         startDate: format(data.startDate, 'yyyy-MM-dd') + 'T00:00:00Z',
         endDate: format(data.endDate, 'yyyy-MM-dd') + 'T23:59:59Z',
       });
-      toast({ title: "Success", description: "Voucher created successfully." });
+      toast({ title: "Thành công", description: "Đã tạo voucher thành công." });
       onSaveSuccess();
       reset(); // Reset form after successful submission
     } catch (err: any) {
-      const errorMessage = err.message || 'An unknown error occurred';
+      const errorMessage = err.message || 'Đã xảy ra lỗi không xác định';
       let finalDescription = errorMessage;
 
       // Attempt to parse if the message is a JSON string
@@ -82,35 +82,35 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
         // Not a JSON string, use the original message
       }
 
-      toast({ variant: 'destructive', title: 'Failed to create voucher', description: finalDescription });
+      toast({ variant: 'destructive', title: 'Không thể tạo voucher', description: finalDescription });
     }
   };
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <DialogHeader>
-        <DialogTitle>Create Voucher</DialogTitle>
-        <DialogDescription>Fill in the details to create a new promotional voucher.</DialogDescription>
+        <DialogTitle>Tạo Voucher</DialogTitle>
+        <DialogDescription>Điền thông tin chi tiết để tạo voucher khuyến mãi mới.</DialogDescription>
       </DialogHeader>
       <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto p-1 sm:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="name">Name</Label>
+          <Label htmlFor="name">Tên</Label>
           <Input id="name" {...register('name')} />
           {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="code">Code</Label>
+          <Label htmlFor="code">Mã</Label>
           <Input id="code" {...register('code')} />
           {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="description">Description (Optional)</Label>
-          <Input id="description" {...register('description')} placeholder="e.g. Giảm 10% tối đa 50k" />
+          <Label htmlFor="description">Mô tả (Tùy chọn)</Label>
+          <Input id="description" {...register('description')} placeholder="VD: Giảm 10% tối đa 50k" />
         </div>
 
         <div className="space-y-2">
-          <Label>Discount Type</Label>
+          <Label>Loại giảm giá</Label>
           <Controller
             name="discountType"
             control={control}
@@ -118,40 +118,40 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="FIXED_AMOUNT">Fixed Amount</SelectItem>
-                  <SelectItem value="PERCENTAGE">Percentage</SelectItem>
+                  <SelectItem value="FIXED_AMOUNT">Số tiền cố định</SelectItem>
+                  <SelectItem value="PERCENTAGE">Phần trăm</SelectItem>
                 </SelectContent>
               </Select>
             )}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="discountValue">Discount Value</Label>
+          <Label htmlFor="discountValue">Giá trị giảm</Label>
           <Input id="discountValue" type="number" {...register('discountValue')} />
           {errors.discountValue && <p className="text-sm text-destructive">{errors.discountValue.message}</p>}
         </div>
 
         {discountType === 'PERCENTAGE' && (
           <div className="space-y-2">
-            <Label htmlFor="maxDiscount">Max Discount Amount (VND)</Label>
+            <Label htmlFor="maxDiscount">Giảm tối đa (VND)</Label>
             <Input id="maxDiscount" type="number" {...register('maxDiscount')} />
             {errors.maxDiscount && <p className="text-sm text-destructive">{errors.maxDiscount.message}</p>}
           </div>
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="minOrderValue">Min. Order Value (VND)</Label>
+          <Label htmlFor="minOrderValue">Đơn tối thiểu (VND)</Label>
           <Input id="minOrderValue" type="number" {...register('minOrderValue')} />
           {errors.minOrderValue && <p className="text-sm text-destructive">{errors.minOrderValue.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="usageLimit">Usage Limit</Label>
+          <Label htmlFor="usageLimit">Giới hạn sử dụng</Label>
           <Input id="usageLimit" type="number" {...register('usageLimit')} />
           {errors.usageLimit && <p className="text-sm text-destructive">{errors.usageLimit.message}</p>}
         </div>
 
         <div className="space-y-2">
-          <Label>Start Date</Label>
+          <Label>Ngày bắt đầu</Label>
           <Controller
             name="startDate"
             control={control}
@@ -163,7 +163,7 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
                     className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                    {field.value ? format(field.value, "PPP") : <span>Chọn ngày</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
@@ -175,7 +175,7 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
           {errors.startDate && <p className="text-sm text-destructive">{errors.startDate.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label>End Date</Label>
+          <Label>Ngày kết thúc</Label>
           <Controller
             name="endDate"
             control={control}
@@ -187,7 +187,7 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
                     className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                   >
                     <CalendarIcon className="mr-2 h-4 w-4" />
-                    {field.value ? format(field.value, "PPP") : <span>Pick a date</span>}
+                    {field.value ? format(field.value, "PPP") : <span>Chọn ngày</span>}
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
@@ -199,21 +199,21 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
           {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="pointCost">Loyalty Point Cost</Label>
+          <Label htmlFor="pointCost">Chi phí điểm thưởng</Label>
           <Input id="pointCost" type="number" {...register('pointCost')} />
           {errors.pointCost && <p className="text-sm text-destructive">{errors.pointCost.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="imageUrl">Image URL (Optional)</Label>
+          <Label htmlFor="imageUrl">URL hình ảnh (Tùy chọn)</Label>
           <Input id="imageUrl" {...register('imageUrl')} placeholder="https://..." />
           {errors.imageUrl && <p className="text-sm text-destructive">{errors.imageUrl.message}</p>}
         </div>
       </div>
       <DialogFooter className="pt-4">
-        <Button variant="outline" onClick={onCancel} type="button">Cancel</Button>
+        <Button variant="outline" onClick={onCancel} type="button">Hủy</Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save Voucher
+          Lưu Voucher
         </Button>
       </DialogFooter>
     </form>
@@ -231,7 +231,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
       const data = await getVouchers();
       setPromotions(data);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Failed to fetch vouchers', description: err.message });
+      toast({ variant: 'destructive', title: 'Không thể tải voucher', description: err.message });
     } finally {
       setIsLoading(false);
     }
@@ -251,30 +251,30 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
     const startDate = new Date(promo.startDate);
     const endDate = new Date(promo.endDate);
     if (now < startDate) {
-      return <Badge variant="secondary">Scheduled</Badge>;
+      return <Badge variant="secondary">Đã lên lịch</Badge>;
     }
     if (now > endDate) {
-      return <Badge variant="outline">Expired</Badge>;
+      return <Badge variant="outline">Hết hạn</Badge>;
     }
-    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Active</Badge>;
+    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Hoạt động</Badge>;
   };
 
   return (
     <>
       <Card>
         <CardHeader>
-          <CardTitle>Voucher List</CardTitle>
+          <CardTitle>Danh sách Voucher</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Discount</TableHead>
-                <TableHead>Validity</TableHead>
-                <TableHead>Usage</TableHead>
-                <TableHead>Status</TableHead>
+                <TableHead>Mã</TableHead>
+                <TableHead>Tên</TableHead>
+                <TableHead>Giảm giá</TableHead>
+                <TableHead>Hiệu lực</TableHead>
+                <TableHead>Đã dùng</TableHead>
+                <TableHead>Trạng thái</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -287,7 +287,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
               ) : promotions.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">
-                    No vouchers found.
+                    Không tìm thấy voucher.
                   </TableCell>
                 </TableRow>
               ) : (

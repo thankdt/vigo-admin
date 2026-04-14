@@ -37,17 +37,17 @@ import React from 'react';
 const { placeholderImages } = placeholderData;
 
 const navItems = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { href: '/users', label: 'Users', icon: Users },
-  { href: '/drivers', label: 'Drivers', icon: Car },
-  { href: '/bookings', label: 'Bookings', icon: Book },
-  { href: '/master-data', label: 'Master Data', icon: Map },
-  { href: '/promotions', label: 'Promotions', icon: Ticket },
-  { href: '/reports', label: 'Reports', icon: Bot },
-  { href: '/settings', label: 'Settings', icon: Settings },
-  { href: '/notifications', label: 'Notifications', icon: Bell },
-  { href: '/news', label: 'News', icon: Newspaper },
-  { href: '/banners', label: 'Banners', icon: ImageIcon },
+  { href: '/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
+  { href: '/users', label: 'Người dùng', icon: Users },
+  { href: '/drivers', label: 'Tài xế', icon: Car },
+  { href: '/bookings', label: 'Chuyến đi', icon: Book },
+  { href: '/master-data', label: 'Dữ liệu chung', icon: Map },
+  { href: '/promotions', label: 'Khuyến mãi', icon: Ticket },
+  { href: '/reports', label: 'Báo cáo', icon: Bot },
+  { href: '/settings', label: 'Cài đặt', icon: Settings },
+  { href: '/notifications', label: 'Thông báo', icon: Bell },
+  { href: '/news', label: 'Tin tức', icon: Newspaper },
+  { href: '/banners', label: 'Banner', icon: ImageIcon },
 ];
 
 // Error Boundary to prevent full page crash
@@ -69,7 +69,7 @@ class ErrorBoundary extends React.Component<
       return (
         <div className="flex items-center justify-center h-full p-8">
           <div className="text-center space-y-4">
-            <h2 className="text-lg font-semibold text-destructive">Something went wrong</h2>
+            <h2 className="text-lg font-semibold text-destructive">Đã xảy ra lỗi</h2>
             <p className="text-sm text-muted-foreground">{this.state.error?.message}</p>
             <button
               className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm"
@@ -78,7 +78,7 @@ class ErrorBoundary extends React.Component<
                 window.location.reload();
               }}
             >
-              Reload Page
+              Tải lại trang
             </button>
           </div>
         </div>
@@ -140,11 +140,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-3 duration-200 group-data-[collapsible=icon]:hidden">
             <Avatar className="h-9 w-9">
               <AvatarImage src={avatarUrl} alt="@vigo-admin" />
-              <AvatarFallback>AJ</AvatarFallback>
+              <AvatarFallback>QT</AvatarFallback>
             </Avatar>
             <div className="flex flex-col">
-              <span className="text-sm font-medium">Alex Johnson</span>
-              <span className="text-xs text-muted-foreground">alex.j@example.com</span>
+              <span className="text-sm font-medium">Quản trị viên</span>
+              <span className="text-xs text-muted-foreground">admin@vigo.com</span>
             </div>
           </div>
         </SidebarFooter>
@@ -158,4 +158,3 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     </SidebarProvider>
   );
 }
-

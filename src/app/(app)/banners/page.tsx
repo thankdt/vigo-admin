@@ -7,8 +7,8 @@ export default function BannerPage() {
     return (
         <div className="space-y-6">
             <PageHeader
-                title="Banner Management"
-                description="Manage promotional banners displayed in the user application."
+                title="Quản lý Banner"
+                description="Quản lý các banner quảng cáo hiển thị trong ứng dụng."
             />
             <BannerManager />
         </div>

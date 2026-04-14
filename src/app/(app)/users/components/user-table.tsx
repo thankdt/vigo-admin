@@ -83,7 +83,7 @@ export function UsersTable() {
       setError(err.message);
       toast({
         variant: "destructive",
-        title: "Failed to fetch users",
+        title: "Không thể tải người dùng",
         description: err.message,
       });
     } finally {
@@ -145,17 +145,17 @@ export function UsersTable() {
     try {
       if (user.isLocked) {
         await unlockUser(user.id);
-        toast({ title: 'User Unlocked', description: `${user.name} has been unlocked.` });
+        toast({ title: 'Đã mở khóa', description: `${user.name} đã được mở khóa.` });
       } else {
         await lockUser(user.id);
-        toast({ title: 'User Locked', description: `${user.name} has been locked.` });
+        toast({ title: 'Đã khóa', description: `${user.name} đã bị khóa.` });
       }
       // Refresh user list
       fetchUsers(searchTerm, currentPage, pageSize);
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: `Failed to ${user.isLocked ? 'unlock' : 'lock'} user`,
+        title: `Không thể ${user.isLocked ? 'mở khóa' : 'khóa'} người dùng`,
         description: err.message,
       });
     }
@@ -183,7 +183,7 @@ export function UsersTable() {
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       console.log('Form submitted', formData);
-      toast({ title: 'Success', description: `User ${isEditing ? 'updated' : 'created'}. (Not implemented)` });
+      toast({ title: 'Thành công', description: `Người dùng đã được ${isEditing ? 'cập nhật' : 'tạo'}. (Chưa triển khai)` });
       onClose();
     }
 
@@ -191,14 +191,14 @@ export function UsersTable() {
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? 'Edit User' : 'Create User'}</DialogTitle>
+            <DialogTitle>{isEditing ? 'Sửa người dùng' : 'Tạo người dùng'}</DialogTitle>
             <DialogDescription>
-              {isEditing ? "Make changes to the user's profile." : "Add a new user to the system."}
+              {isEditing ? "Chỉnh sửa thông tin người dùng." : "Thêm người dùng mới vào hệ thống."}
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 py-4">
              <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">Name</Label>
+              <Label htmlFor="name" className="text-right">Họ tên</Label>
               <Input id="name" value={formData.name} onChange={handleChange} className="col-span-3" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
@@ -206,33 +206,33 @@ export function UsersTable() {
               <Input id="email" type="email" value={formData.email} onChange={handleChange} className="col-span-3" />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="role" className="text-right">Role</Label>
+              <Label htmlFor="role" className="text-right">Vai trò</Label>
                <Select onValueChange={handleSelectChange('role')} defaultValue={formData.role}>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a role" />
+                  <SelectValue placeholder="Chọn vai trò" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
-                  <SelectItem value="DRIVER">Driver</SelectItem>
-                  <SelectItem value="USER">User</SelectItem>
+                  <SelectItem value="ADMIN">Quản trị</SelectItem>
+                  <SelectItem value="DRIVER">Tài xế</SelectItem>
+                  <SelectItem value="USER">Người dùng</SelectItem>
                 </SelectContent>
               </Select>
             </div>
              <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">Status</Label>
+              <Label htmlFor="status" className="text-right">Trạng thái</Label>
               <Select onValueChange={handleSelectChange('status')} defaultValue={formData.status}>
                 <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Select a status" />
+                  <SelectValue placeholder="Chọn trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Active">Active</SelectItem>
-                  <SelectItem value="Inactive">Inactive</SelectItem>
+                  <SelectItem value="Active">Hoạt động</SelectItem>
+                  <SelectItem value="Inactive">Không hoạt động</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Cancel</Button>
-              <Button type="submit">Save changes</Button>
+              <Button type="button" variant="outline" onClick={onClose}>Hủy</Button>
+              <Button type="submit">Lưu thay đổi</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -332,28 +332,28 @@ export function UsersTable() {
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
-                        <span className="sr-only">Open menu</span>
+                        <span className="sr-only">Mở menu</span>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => handleOpenForm(user)}>Edit</DropdownMenuItem>
+                      <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+                      <DropdownMenuItem onClick={() => handleOpenForm(user)}>Sửa</DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleToggleLock(user)}>
                         {user.isLocked ? (
                           <>
                             <Unlock className="mr-2 h-4 w-4" />
-                            <span>Unlock</span>
+                            <span>Mở khóa</span>
                           </>
                         ) : (
                           <>
                             <Lock className="mr-2 h-4 w-4" />
-                            <span>Lock</span>
+                            <span>Khóa</span>
                           </>
                         )}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">Delete</DropdownMenuItem>
+                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">Xóa</DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

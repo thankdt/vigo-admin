@@ -49,20 +49,20 @@ function RoleForm({ role, onSave, onCancel }: { role: Role | Partial<Role>; onSa
   return (
     <DialogContent className="sm:max-w-2xl">
       <DialogHeader>
-        <DialogTitle>{role.id ? 'Edit Role' : 'Create Role'}</DialogTitle>
-        <DialogDescription>Define the role and its access permissions.</DialogDescription>
+        <DialogTitle>{role.id ? 'Sửa vai trò' : 'Tạo vai trò'}</DialogTitle>
+        <DialogDescription>Định nghĩa vai trò và quyền truy cập.</DialogDescription>
       </DialogHeader>
       <div className="space-y-4 py-4">
         <div className="space-y-2">
-          <Label htmlFor="role-name">Role Name</Label>
+          <Label htmlFor="role-name">Tên vai trò</Label>
           <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="role-description">Description</Label>
+          <Label htmlFor="role-description">Mô tả</Label>
           <Input id="role-description" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
         <div className="space-y-2">
-          <Label>Permissions</Label>
+          <Label>Quyền hạn</Label>
           <ScrollArea className="h-72 rounded-md border p-4">
             <div className="space-y-4">
               {Object.entries(groupedPermissions).map(([group, permissions], index) => (
@@ -90,8 +90,8 @@ function RoleForm({ role, onSave, onCancel }: { role: Role | Partial<Role>; onSa
         </div>
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>Cancel</Button>
-        <Button onClick={handleSubmit}>Save Role</Button>
+        <Button variant="outline" onClick={onCancel}>Hủy</Button>
+        <Button onClick={handleSubmit}>Lưu vai trò</Button>
       </DialogFooter>
     </DialogContent>
   );
@@ -134,7 +134,7 @@ export function RolesList() {
               <CardDescription>{role.description}</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-sm font-medium">Permissions ({role.permissions.length}/{allPermissions.length})</div>
+              <div className="text-sm font-medium">Quyền hạn ({role.permissions.length}/{allPermissions.length})</div>
               <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
                 {role.permissions.slice(0, 5).map(p => (
                   <li key={p} className="flex items-center gap-2">
@@ -143,7 +143,7 @@ export function RolesList() {
                 ))}
                  {role.permissions.length > 5 && (
                   <li className="flex items-center gap-2">
-                    <Plus className="h-3 w-3" /> <span>and {role.permissions.length - 5} more...</span>
+                    <Plus className="h-3 w-3" /> <span>và {role.permissions.length - 5} quyền khác...</span>
                   </li>
                 )}
               </ul>
@@ -151,7 +151,7 @@ export function RolesList() {
             <CardFooter>
                 <div className="flex items-center text-sm text-muted-foreground">
                     <Users className="mr-2 h-4 w-4" />
-                    {role.userCount} users
+                    {role.userCount} người dùng
                 </div>
             </CardFooter>
           </Card>
