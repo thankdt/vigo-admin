@@ -283,6 +283,31 @@ export async function reassignBooking(bookingId: string, driverId: string): Prom
   return result.data;
 }
 
+export async function createAdminBooking(data: {
+  customerPhone: string;
+  customerName?: string;
+  pickupAddress: { address: string; lat: number; long: number };
+  dropoffAddress: { address: string; lat: number; long: number };
+  serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
+  note?: string;
+  driverId?: string;
+}): Promise<Booking> {
+  const response = await fetchWithAuth('/bookings/admin/create', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function adminAcceptBooking(bookingId: string): Promise<Booking> {
+  const response = await fetchWithAuth(`/bookings/admin/${bookingId}/accept`, {
+    method: 'POST',
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
 
 // Master Data APIs
 export async function getAdminUnits(): Promise<AdminUnit[]> {
@@ -504,4 +529,49 @@ export async function deleteBanner(id: number): Promise<void> {
   await fetchWithAuth(`/banners/${id}`, {
     method: 'DELETE',
   });
+}
+
+// ── Maps / Autocomplete ──────────────────────────────────────────────
+
+export interface AutocompleteResult {
+  description: string;
+  place_id: string;
+  structured_formatting?: {
+    main_text: string;
+    secondary_text: string;
+  };
+  compound?: {
+    district: string;
+    commune: string;
+    province: string;
+  };
+}
+
+export interface PlaceDetail {
+  place_id: string;
+  formatted_address: string;
+  name?: string;
+  geometry: {
+    location: {
+      lat: number;
+      lng: number;
+    };
+  };
+  compound?: {
+    district: string;
+    commune: string;
+    province: string;
+  };
+}
+
+export async function searchAddress(input: string): Promise<AutocompleteResult[]> {
+  const response = await fetchWithAuth(`/maps/autocomplete?input=${encodeURIComponent(input)}`);
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function getPlaceDetail(placeId: string): Promise<PlaceDetail> {
+  const response = await fetchWithAuth(`/maps/place-detail?place_id=${encodeURIComponent(placeId)}`);
+  const result = await response.json();
+  return result.data || result;
 }

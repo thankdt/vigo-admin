@@ -36,7 +36,8 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking } from '@/lib/api';
+import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking } from '@/lib/api';
+import { CreateBookingDialog } from './create-booking-dialog';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
@@ -49,7 +50,17 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 type SortKey = keyof Booking;
-const allStatuses: BookingStatus[] = ['SEARCHING', 'ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
+const allStatuses: BookingStatus[] = ['SEARCHING', 'SCHEDULED', 'ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
+
+const statusLabelMap: Record<string, string> = {
+  ALL: 'Tất cả',
+  SEARCHING: 'Đang tìm',
+  SCHEDULED: 'Đặt lịch',
+  ACCEPTED: 'Đã nhận',
+  PICKED_UP: 'Đã đón',
+  COMPLETED: 'Hoàn thành',
+  CANCELLED: 'Đã hủy',
+};
 
 function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () => void }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
@@ -67,7 +78,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
         setBooking(details);
       } catch (err: any) {
         setError(err.message);
-        toast({ variant: 'destructive', title: 'Failed to fetch details', description: err.message });
+        toast({ variant: 'destructive', title: 'Không thể tải chi tiết', description: err.message });
       } finally {
         setIsLoading(false);
       }
@@ -75,28 +86,200 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
     fetchDetails();
   }, [bookingId, toast]);
 
+  const serviceTypeMap: Record<string, string> = {
+    RIDE: '🚗 Chở khách',
+    DELIVERY: '📦 Giao hàng',
+    CARPOOL: '🚌 Đi chung',
+  };
+
+  const paymentMethodMap: Record<string, string> = {
+    CASH: '💵 Tiền mặt',
+    WALLET: '💳 Ví điện tử',
+  };
+
+  const getAddress = (addr: string | { address: string; lat?: number; lng?: number; long?: number } | null | undefined): string => {
+    if (!addr) return 'N/A';
+    if (typeof addr === 'string') return addr;
+    return addr.address || 'N/A';
+  };
+
+  const getCoords = (addr: string | { address: string; lat?: number; lng?: number; long?: number } | null | undefined): string | null => {
+    if (!addr || typeof addr === 'string') return null;
+    const lat = addr.lat;
+    const lng = addr.lng ?? (addr as any).long;
+    if (lat != null && lng != null) return `${lat}, ${lng}`;
+    return null;
+  };
+
+  const driverName = booking?.driver
+    ? (booking.driver as any).fullName || booking.driver.name || booking.driver.fullName || 'N/A'
+    : null;
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
         <DialogHeader>
-          <DialogTitle>Booking Details</DialogTitle>
+          <DialogTitle>Chi tiết chuyến đi</DialogTitle>
           <DialogDescription>
-            Detailed information for booking #{bookingId}.
+            Mã chuyến: {bookingId}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-4 py-4">
-          {isLoading && <div className="flex justify-center"><Loader2 className="h-8 w-8 animate-spin" /></div>}
-          {error && <p className="text-destructive text-center">{error}</p>}
+        <div className="space-y-4 py-2">
+          {isLoading && <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}
+          {error && <p className="text-destructive text-center py-4">{error}</p>}
           {booking && (
-            <div className="space-y-4 text-sm">
-              <div className="font-semibold">Customer: <span className="font-normal">{booking.customer?.fullName ?? 'N/A'} ({booking.customer?.phone ?? 'N/A'})</span></div>
-              <div className="font-semibold">Driver: <span className="font-normal">{booking.driver ? `${booking.driver.fullName ?? booking.driver.name ?? 'N/A'} (${booking.driver.phone})` : 'N/A'}</span></div>
-              <div className="font-semibold">From: <span className="font-normal">{typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span></div>
-              <div className="font-semibold">To: <span className="font-normal">{typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span></div>
-              <div className="font-semibold">Price: <span className="font-normal">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</span></div>
-              <div className="font-semibold">Status: {getStatusBadge(booking.status)}</div>
-              <div className="font-semibold">Created At: <span className="font-normal">{format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}</span></div>
-            </div>
+            <>
+              {/* Status & Service */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(booking.status)}
+                  {booking.serviceType && (
+                    <Badge variant="outline" className="text-xs">
+                      {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
+                    </Badge>
+                  )}
+                  {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}
+                </div>
+                {booking.paymentMethod && (
+                  <span className="text-xs text-muted-foreground">
+                    {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
+                  </span>
+                )}
+              </div>
+
+              {/* Customer */}
+              <Card className="p-3 space-y-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Khách hàng</div>
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <User className="h-4 w-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1 text-sm">
+                    <div className="font-semibold">{booking.customer?.fullName ?? 'N/A'}</div>
+                    <div className="text-muted-foreground">{booking.customer?.phone ?? 'N/A'}</div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Driver */}
+              <Card className="p-3 space-y-1">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tài xế</div>
+                {driverName ? (
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
+                      <Car className="h-4 w-4 text-green-600" />
+                    </div>
+                    <div className="flex-1 text-sm">
+                      <div className="font-semibold">{driverName}</div>
+                      <div className="text-muted-foreground">{booking.driver?.phone ?? 'N/A'}</div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground italic">Chưa có tài xế</p>
+                )}
+              </Card>
+
+              {/* Addresses */}
+              <Card className="p-3 space-y-3">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tuyến đường</div>
+                <div className="space-y-2">
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-3 w-3 rounded-full bg-green-500 mt-1" />
+                      <div className="w-0.5 flex-1 bg-border my-1" />
+                    </div>
+                    <div className="flex-1 text-sm">
+                      <div className="font-medium">Điểm đón</div>
+                      <div className="text-muted-foreground">{getAddress(booking.pickupAddress)}</div>
+                      {getCoords(booking.pickupAddress) && (
+                        <div className="text-xs text-muted-foreground/60 mt-0.5">📍 {getCoords(booking.pickupAddress)}</div>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex gap-3">
+                    <div className="flex flex-col items-center">
+                      <div className="h-3 w-3 rounded-full bg-red-500 mt-1" />
+                    </div>
+                    <div className="flex-1 text-sm">
+                      <div className="font-medium">Điểm trả</div>
+                      <div className="text-muted-foreground">{getAddress(booking.dropoffAddress)}</div>
+                      {getCoords(booking.dropoffAddress) && (
+                        <div className="text-xs text-muted-foreground/60 mt-0.5">📍 {getCoords(booking.dropoffAddress)}</div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Pricing */}
+              <Card className="p-3 space-y-2">
+                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi phí</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div>
+                    <div className="text-muted-foreground">Giá gốc</div>
+                    <div className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</div>
+                  </div>
+                  {booking.finalPrice != null && booking.finalPrice !== booking.price && (
+                    <div>
+                      <div className="text-muted-foreground">Giá cuối</div>
+                      <div className="font-semibold text-green-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.finalPrice)}</div>
+                    </div>
+                  )}
+                  {booking.requestedSeats != null && (
+                    <div>
+                      <div className="text-muted-foreground">Số ghế yêu cầu</div>
+                      <div className="font-semibold">{booking.requestedSeats}</div>
+                    </div>
+                  )}
+                  {booking.requestedVehicleType && (
+                    <div>
+                      <div className="text-muted-foreground">Loại xe</div>
+                      <div className="font-semibold">{booking.requestedVehicleType}</div>
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              {/* Note */}
+              {booking.note && (
+                <Card className="p-3 space-y-1">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ghi chú</div>
+                  <p className="text-sm whitespace-pre-wrap">{booking.note}</p>
+                </Card>
+              )}
+
+              {/* Cancel Reason */}
+              {booking.cancelReason && (
+                <Card className="p-3 space-y-1 border-destructive/30 bg-destructive/5">
+                  <div className="text-xs font-semibold text-destructive uppercase tracking-wider">Lý do hủy</div>
+                  <p className="text-sm">{booking.cancelReason}</p>
+                </Card>
+              )}
+
+              {/* Timestamps */}
+              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-3">
+                <div>
+                  <span className="font-medium">Ngày tạo:</span>{' '}
+                  {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
+                </div>
+                {booking.updatedAt && (
+                  <div>
+                    <span className="font-medium">Cập nhật:</span>{' '}
+                    {format(new Date(booking.updatedAt), "dd/MM/yyyy HH:mm")}
+                  </div>
+                )}
+              </div>
+
+              {/* Share Link */}
+              {booking.shareLink && (
+                <div className="text-xs border-t pt-3">
+                  <span className="font-medium text-muted-foreground">Link chia sẻ:</span>{' '}
+                  <a href={booking.shareLink} target="_blank" rel="noopener noreferrer" className="text-primary underline break-all">
+                    {booking.shareLink}
+                  </a>
+                </div>
+              )}
+            </>
           )}
         </div>
       </DialogContent>
@@ -119,7 +302,7 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
         const response = await getAvailableDrivers();
         setDrivers(response);
       } catch (err: any) {
-        toast({ variant: 'destructive', title: 'Failed to fetch available drivers', description: err.message });
+        toast({ variant: 'destructive', title: 'Không thể tải danh sách tài xế', description: err.message });
       } finally {
         setIsLoading(false);
       }
@@ -132,56 +315,92 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
     setIsReassigning(true);
     try {
       await reassignBooking(booking.id, selectedDriverId);
-      toast({ title: 'Success', description: `Booking #${booking.id} reassigned successfully.` });
+      toast({ title: 'Thành công', description: `Đã chuyển quốc chuyến thành công.` });
       onReassignSuccess();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Reassignment Failed', description: err.message });
+      toast({ variant: 'destructive', title: 'Chuyển quốc thất bại', description: err.message });
     } finally {
       setIsReassigning(false);
     }
   }
 
+  // Derive display name: API may return fullName at top level or nested under user
+  const getDriverName = (driver: Driver) =>
+    (driver as any).fullName || driver.name || driver.user?.fullName || 'N/A';
+
+  const getDriverId = (driver: Driver) =>
+    (driver as any).driverId || driver.user?.id || driver.id;
+
+  const getDriverAvatar = (driver: Driver) =>
+    driver.user?.avatarUrl || driver.user?.avatar || (driver as any).avatar || '';
+
+  const getDriverRoute = (driver: Driver) =>
+    driver.fixedRoute?.name || null;
+
+  const getDriverPlate = (driver: Driver) =>
+    driver.vehicle?.plateNumber || driver.vehicleRegistration?.plateNumber || null;
+
   return (
     <DialogContent className="sm:max-w-lg" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
       <DialogHeader>
-        <DialogTitle>Reassign Booking #{booking?.id}</DialogTitle>
-        <DialogDescription>Select a new driver for this booking. Only online drivers are shown.</DialogDescription>
+        <DialogTitle>Chuyển quốc chuyến #{booking?.id?.slice(0, 8)}...</DialogTitle>
+        <DialogDescription>Chọn tài xế mới cho chuyến này. Chỉ hiển thị tài xế đang online.</DialogDescription>
       </DialogHeader>
       <div className="max-h-[60vh] overflow-y-auto p-1">
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
         ) : drivers.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">No available drivers found.</p>
+          <p className="text-center text-muted-foreground py-8">Không tìm thấy tài xế khả dụng.</p>
         ) : (
           <div className="space-y-2">
-            {drivers.map(driver => (
-              <Card
-                key={driver.id}
-                className={cn(
-                  "p-4 flex items-center gap-4 cursor-pointer hover:bg-muted/50",
-                  selectedDriverId === driver.user?.id && "ring-2 ring-primary"
-                )}
-                onClick={() => setSelectedDriverId(driver.user?.id ?? driver.id)}
-              >
-                <Avatar className="h-12 w-12">
-                  <AvatarImage src={driver.user?.avatarUrl} alt={driver.name ?? ''} data-ai-hint="person portrait" />
-                  <AvatarFallback>{driver.name?.charAt(0) ?? 'D'}</AvatarFallback>
-                </Avatar>
-                <div className='flex-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm'>
-                  <div className="flex items-center gap-2 font-semibold"><User className="h-4 w-4 text-muted-foreground" /> {driver.name}</div>
-                  <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {driver.phone}</div>
-                  <div className="flex items-center gap-2 col-span-2"><Car className="h-4 w-4 text-muted-foreground" /> {driver.vehicle?.model} ({driver.vehicle?.plateNumber})</div>
-                </div>
-              </Card>
-            ))}
+            {drivers.map(driver => {
+              const name = getDriverName(driver);
+              const id = getDriverId(driver);
+              const avatar = getDriverAvatar(driver);
+              const route = getDriverRoute(driver);
+              const plate = getDriverPlate(driver);
+
+              return (
+                <Card
+                  key={driver.id || id}
+                  className={cn(
+                    "p-4 flex items-center gap-4 cursor-pointer hover:bg-muted/50 transition-colors",
+                    selectedDriverId === id && "ring-2 ring-primary bg-primary/5"
+                  )}
+                  onClick={() => setSelectedDriverId(id)}
+                >
+                  <Avatar className="h-12 w-12">
+                    <AvatarImage src={avatar} alt={name} data-ai-hint="person portrait" />
+                    <AvatarFallback>{name.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <div className='flex-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm'>
+                    <div className="flex items-center gap-2 font-semibold"><User className="h-4 w-4 text-muted-foreground" /> {name}</div>
+                    <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {driver.phone}</div>
+                    <div className="flex items-center gap-2 text-muted-foreground">
+                      <Car className="h-4 w-4" />
+                      {route ? route : ''}
+                      {plate ? ` • ${plate}` : ''}
+                      {!route && !plate ? 'Chưa có thông tin xe' : ''}
+                    </div>
+                    <div className="flex items-center gap-2 justify-end">
+                      {(driver as any).availableSeats != null && (
+                        <Badge variant="outline" className="text-xs">
+                          {(driver as any).availableSeats} ghế trống
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+        <Button variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
         <Button onClick={handleReassign} disabled={!selectedDriverId || isReassigning}>
           {isReassigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Confirm Reassignment
+          Xác nhận chuyển quốc
         </Button>
       </DialogFooter>
     </DialogContent>
@@ -228,6 +447,8 @@ export function BookingsTable() {
   const [dialogState, setDialogState] = React.useState<{ open: boolean; booking: Booking | null; newStatus: BookingStatus | null }>({ open: false, booking: null, newStatus: null });
   const [statusNote, setStatusNote] = React.useState('');
   const [isUpdating, setIsUpdating] = React.useState(false);
+  const [acceptingBookingId, setAcceptingBookingId] = React.useState<string | null>(null);
+  const [isAccepting, setIsAccepting] = React.useState(false);
 
 
   const fetchBookings = React.useCallback(async (status: string, search: string, page: number, limit: number) => {
@@ -300,6 +521,21 @@ export function BookingsTable() {
     setDialogState({ open: true, booking, newStatus });
   }
 
+  const handleAcceptBooking = async () => {
+    if (!acceptingBookingId) return;
+    setIsAccepting(true);
+    try {
+      await adminAcceptBooking(acceptingBookingId);
+      toast({ title: 'Thành công', description: 'Đã nhận chuyến thành công.' });
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+      setAcceptingBookingId(null);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Nhận chuyến thất bại', description: err.message });
+    } finally {
+      setIsAccepting(false);
+    }
+  }
+
   const sortedBookings = React.useMemo(() => {
     let sortableBookings = [...bookings];
     if (sortConfig !== null) {
@@ -333,43 +569,46 @@ export function BookingsTable() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex items-center pb-4">
           <TabsList className='flex-wrap h-auto'>
-            <TabsTrigger value="ALL">All</TabsTrigger>
+            <TabsTrigger value="ALL">{statusLabelMap['ALL']}</TabsTrigger>
             {allStatuses.map(status => (
-              <TabsTrigger key={status} value={status}>{status.charAt(0).toUpperCase() + status.slice(1).toLowerCase().replace('_', ' ')}</TabsTrigger>
+              <TabsTrigger key={status} value={status}>{statusLabelMap[status] ?? status}</TabsTrigger>
             ))}
           </TabsList>
-          <div className='ml-auto relative'>
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by Customer/Driver ID"
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="max-w-sm pl-8"
-            />
+          <div className='ml-auto flex items-center gap-2'>
+            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, currentPage, pageSize)} />
+            <div className='relative'>
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm theo ID khách/tài xế"
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="max-w-sm pl-8"
+              />
+            </div>
           </div>
         </div>
         <Card>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Driver</TableHead>
-                <TableHead>Route</TableHead>
+                <TableHead>Khách hàng</TableHead>
+                <TableHead>Tài xế</TableHead>
+                <TableHead>Tuyến đường</TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('price')}>
-                    Price
+                    Giá
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('createdAt')}>
-                    Date
+                    Ngày tạo
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('status')}>
-                    Status
+                    Trạng thái
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
@@ -394,7 +633,7 @@ export function BookingsTable() {
               ) : sortedBookings.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="h-24 text-center">
-                    No bookings found.
+                    Không tìm thấy chuyến nào.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -440,14 +679,19 @@ export function BookingsTable() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuItem onSelect={() => openDetails(booking.id)}>View Details</DropdownMenuItem>
+                          <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+                          <DropdownMenuItem onSelect={() => openDetails(booking.id)}>Xem chi tiết</DropdownMenuItem>
+                          {(booking.status === 'SEARCHING' || booking.status === 'SCHEDULED') && (
+                            <DropdownMenuItem onSelect={() => setAcceptingBookingId(booking.id)}>
+                              ⭐ Nhận chuyến
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onSelect={() => setReassigningBooking(booking)} disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}>
-                            Reassign Driver
+                            Chuyển quốc
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Update Status</DropdownMenuSubTrigger>
+                            <DropdownMenuSubTrigger>Cập nhật trạng thái</DropdownMenuSubTrigger>
                             <DropdownMenuSubContent>
                               {statusChangeOptions.map(status => (
                                 <DropdownMenuItem
@@ -455,7 +699,7 @@ export function BookingsTable() {
                                   disabled={booking.status === status || booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
                                   onSelect={() => openConfirmationDialog(booking, status)}
                                 >
-                                  Set as {status.charAt(0) + status.slice(1).toLowerCase().replace('_', ' ')}
+                                  {statusLabelMap[status] ?? status}
                                 </DropdownMenuItem>
                               ))}
                             </DropdownMenuSubContent>
@@ -534,26 +778,26 @@ export function BookingsTable() {
       <AlertDialog open={dialogState.open} onOpenChange={(open) => setDialogState(prev => ({ ...prev, open }))}>
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
+            <AlertDialogTitle>Xác nhận thay đổi trạng thái</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to change the status of booking #{dialogState.booking?.id} to "{dialogState.newStatus?.toLowerCase().replace('_', ' ')}"?
+              Bạn có chắc muốn chuyển trạng thái chuyến #{dialogState.booking?.id} sang "{statusLabelMap[dialogState.newStatus ?? ''] ?? dialogState.newStatus}"?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
-            <Label htmlFor="status-note">Note <span className="text-muted-foreground font-normal">(Optional)</span></Label>
+            <Label htmlFor="status-note">Ghi chú <span className="text-muted-foreground font-normal">(Tùy chọn)</span></Label>
             <Textarea
               id="status-note"
-              placeholder="e.g., Customer called to cancel"
+              placeholder="VD: Khách gọi hủy chuyến"
               value={statusNote}
               onChange={(e) => setStatusNote(e.target.value)}
               rows={2}
             />
           </div>
           <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setDialogState({ open: false, booking: null, newStatus: null }); setStatusNote(''); }} disabled={isUpdating}>Cancel</AlertDialogCancel>
+            <AlertDialogCancel onClick={() => { setDialogState({ open: false, booking: null, newStatus: null }); setStatusNote(''); }} disabled={isUpdating}>Hủy</AlertDialogCancel>
             <AlertDialogAction onClick={handleStatusUpdate} disabled={isUpdating}>
               {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Confirm
+              Xác nhận
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -569,6 +813,24 @@ export function BookingsTable() {
           }}
         />
       </Dialog>
+      {/* Accept Booking Confirmation */}
+      <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Nhận chuyến</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc muốn nhận chuyến này? Chuyến sẽ được gán về tài khoản operator của bạn.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isAccepting}>Hủy</AlertDialogCancel>
+            <AlertDialogAction onClick={handleAcceptBooking} disabled={isAccepting}>
+              {isAccepting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận nhận chuyến
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

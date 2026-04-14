@@ -88,7 +88,7 @@ export type Driver = {
   };
 }
 
-export type BookingStatus = 'SEARCHING' | 'ACCEPTED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED';
+export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';
 
 export type Booking = {
   id: string;
@@ -106,6 +106,7 @@ export type Booking = {
   paymentMethod?: string;
   cancelReason?: string | null;
   note?: string | null;
+  shareLink?: string;
   createdAt: string;
   updatedAt?: string;
   customer: {
