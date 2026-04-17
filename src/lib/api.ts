@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany } from '@/lib/types';
 
 export const API_BASE_URL = 'https://api.vigogroup.vn';
 
@@ -572,6 +572,62 @@ export async function searchAddress(input: string): Promise<AutocompleteResult[]
 
 export async function getPlaceDetail(placeId: string): Promise<PlaceDetail> {
   const response = await fetchWithAuth(`/maps/place-detail?place_id=${encodeURIComponent(placeId)}`);
+  const result = await response.json();
+  return result.data || result;
+}
+
+// Transport Company APIs
+export async function getTransportCompanies(params: { page?: number; limit?: number; search?: string } = {}): Promise<GetApiResponse<TransportCompany>> {
+  const query = new URLSearchParams({
+    page: params.page?.toString() || '1',
+    limit: params.limit?.toString() || '20',
+    ...(params.search && { search: params.search }),
+  });
+  const response = await fetchWithAuth(`/transport-companies/admin?${query.toString()}`);
+  return response.json();
+}
+
+export async function createTransportCompany(data: { name: string; ownerName?: string; ownerPhone?: string; isActive?: boolean }): Promise<TransportCompany> {
+  const response = await fetchWithAuth('/transport-companies', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function getTransportCompany(id: string): Promise<TransportCompany> {
+  const response = await fetchWithAuth(`/transport-companies/${id}`);
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function updateTransportCompany(id: string, data: { name?: string; ownerName?: string; ownerPhone?: string; isActive?: boolean }): Promise<TransportCompany> {
+  const response = await fetchWithAuth(`/transport-companies/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function deleteTransportCompany(id: string): Promise<void> {
+  await fetchWithAuth(`/transport-companies/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function assignTransportCompany(driverId: string, transportCompanyId: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${driverId}/transport-company`, {
+    method: 'PUT',
+    body: JSON.stringify({ transportCompanyId }),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function getTransportCompanyList(): Promise<TransportCompany[]> {
+  const response = await fetchWithAuth('/transport-companies');
   const result = await response.json();
   return result.data || result;
 }

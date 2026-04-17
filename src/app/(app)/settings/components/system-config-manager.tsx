@@ -34,13 +34,13 @@ export function SystemConfigManager() {
     }, [fetchConfigs]);
 
     const handleValueChange = (key: string, value: string) => {
-        setConfigs(currentConfigs => 
+        setConfigs(currentConfigs =>
             currentConfigs.map(c => c.key === key ? { ...c, value } : c)
         );
     };
 
     const handleSave = async (config: SystemConfig) => {
-        setIsSaving(prev => ({...prev, [config.key]: true}));
+        setIsSaving(prev => ({ ...prev, [config.key]: true }));
         try {
             await updateSystemConfig(config.key, config.value, config.description);
             toast({ title: 'Thành công', description: `Cấu hình "${config.key}" đã được cập nhật.` });
@@ -49,7 +49,7 @@ export function SystemConfigManager() {
             // Optionally, revert the change in UI on failure
             fetchConfigs();
         } finally {
-            setIsSaving(prev => ({...prev, [config.key]: false}));
+            setIsSaving(prev => ({ ...prev, [config.key]: false }));
         }
     };
 
@@ -89,7 +89,7 @@ export function SystemConfigManager() {
                                 <TableCell className="font-mono text-sm">{config.key}</TableCell>
                                 <TableCell className="text-muted-foreground">{config.description}</TableCell>
                                 <TableCell>
-                                    <Input 
+                                    <Input
                                         value={config.value}
                                         onChange={(e) => handleValueChange(config.key, e.target.value)}
                                         className="h-8"

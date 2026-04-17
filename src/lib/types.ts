@@ -49,6 +49,17 @@ export type Role = {
   permissions: Permission[];
 };
 
+export type TransportCompany = {
+  id: string;
+  name: string;
+  ownerName?: string;
+  ownerPhone?: string;
+  isActive: boolean;
+  driverCount?: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export type Driver = {
   id: string;
   name?: string;
@@ -86,6 +97,10 @@ export type Driver = {
     id: number;
     name: string;
   };
+  transportCompanyId?: string;
+  transportCompany?: TransportCompany;
+  customTransportCompanyName?: string;
+  isIndependentDriver?: boolean;
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';

@@ -26,6 +26,7 @@ import {
   Bell,
   Newspaper,
   Image as ImageIcon,
+  Building2,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -40,6 +41,7 @@ const navItems = [
   { href: '/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
   { href: '/users', label: 'Người dùng', icon: Users },
   { href: '/drivers', label: 'Tài xế', icon: Car },
+  { href: '/transport-companies', label: 'Đơn vị vận tải', icon: Building2 },
   { href: '/bookings', label: 'Chuyến đi', icon: Book },
   { href: '/master-data', label: 'Dữ liệu chung', icon: Map },
   { href: '/promotions', label: 'Khuyến mãi', icon: Ticket },

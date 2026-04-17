@@ -18,11 +18,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getDrivers, approveDriver, rejectDriver, API_BASE_URL } from '@/lib/api';
-import type { Driver } from '@/lib/types';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, API_BASE_URL } from '@/lib/api';
+import type { Driver, TransportCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -46,6 +46,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { getImageUrl } from '@/lib/utils';
 
@@ -91,6 +92,12 @@ export function DriversTable() {
   const [enabledServices, setEnabledServices] = React.useState<string[]>(['RIDE', 'CARPOOL', 'DELIVERY']);
 
   const [viewDriver, setViewDriver] = React.useState<Driver | null>(null);
+
+  // Assign transport company state
+  const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
+  const [transportCompanies, setTransportCompanies] = React.useState<TransportCompany[]>([]);
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>('');
+  const [isAssigning, setIsAssigning] = React.useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -217,6 +224,33 @@ export function DriversTable() {
     }
   }
 
+  const openAssignDialog = async (driver: Driver) => {
+    setAssignDriver(driver);
+    setSelectedCompanyId(driver.transportCompanyId || '');
+    try {
+      const list = await getTransportCompanyList();
+      setTransportCompanies(list);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Không thể tải danh sách đơn vị vận tải.' });
+    }
+  };
+
+  const handleAssign = async () => {
+    if (!assignDriver || !selectedCompanyId) return;
+    setIsAssigning(true);
+    try {
+      await assignTransportCompany(assignDriver.id, selectedCompanyId);
+      toast({ title: 'Thành công', description: 'Đã gán đơn vị vận tải cho tài xế.' });
+      setAssignDriver(null);
+      setSelectedCompanyId('');
+      fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   return (
     <>
       <Tabs value={activeTab} onValueChange={handleTabChange}>
@@ -246,6 +280,7 @@ export function DriversTable() {
                   </Button>
                 </TableHead>
                 <TableHead>Phương tiện</TableHead>
+                <TableHead>Đơn vị vận tải</TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('isApproved')}>
                     Trạng thái
@@ -266,19 +301,19 @@ export function DriversTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-destructive">
+                  <TableCell colSpan={6} className="text-center text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
               ) : sortedDrivers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="h-24 text-center">
+                  <TableCell colSpan={6} className="h-24 text-center">
                     Không tìm thấy tài xế nào.
                   </TableCell>
                 </TableRow>
@@ -307,6 +342,20 @@ export function DriversTable() {
                       </div>
                     </TableCell>
                     <TableCell>
+                      {driver.transportCompany ? (
+                        <span className="text-sm font-medium">{driver.transportCompany.name}</span>
+                      ) : driver.customTransportCompanyName ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">{driver.customTransportCompanyName}</span>
+                          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Chưa xác nhận</Badge>
+                        </div>
+                      ) : driver.isIndependentDriver ? (
+                        <Badge variant="secondary">Tài xế độc lập</Badge>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Chưa cung cấp</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {getStatusBadge(driver.isApproved)}
                     </TableCell>
                     <TableCell>
@@ -325,6 +374,9 @@ export function DriversTable() {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                           <DropdownMenuItem onSelect={() => setTimeout(() => setViewDriver(driver), 0)}>Xem chi tiết</DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setTimeout(() => openAssignDialog(driver), 0)}>
+                            <Building2 className="mr-2 h-4 w-4" /> Gán đơn vị vận tải
+                          </DropdownMenuItem>
                           {(driver.isApproved === 'pending' || driver.isApproved === '-' || activeTab === 'pending') && (
                             <>
                               <DropdownMenuSeparator />
@@ -587,6 +639,77 @@ export function DriversTable() {
               )}
             </div>
           )}
+
+          {/* Transport company info in detail dialog */}
+          {viewDriver && (
+            <div className="space-y-2 border-t pt-4">
+              <h4 className="font-semibold">Đơn vị vận tải</h4>
+              {viewDriver.transportCompany ? (
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Tên đơn vị</Label>
+                    <p className="font-medium text-sm">{viewDriver.transportCompany.name}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Chủ đơn vị</Label>
+                    <p className="font-medium text-sm">{viewDriver.transportCompany.ownerName || 'N/A'}</p>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">SĐT chủ</Label>
+                    <p className="font-medium text-sm">{viewDriver.transportCompany.ownerPhone || 'N/A'}</p>
+                  </div>
+                </div>
+              ) : viewDriver.customTransportCompanyName ? (
+                <div className="flex items-center gap-2">
+                  <p className="text-sm">{viewDriver.customTransportCompanyName}</p>
+                  <Badge variant="outline" className="text-amber-600 border-amber-300">Chưa xác nhận</Badge>
+                </div>
+              ) : viewDriver.isIndependentDriver ? (
+                <Badge variant="secondary">Tài xế độc lập</Badge>
+              ) : (
+                <p className="text-sm text-muted-foreground">Chưa cung cấp</p>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign Transport Company Dialog */}
+      <Dialog open={!!assignDriver} onOpenChange={(open) => { if (!open) { setAssignDriver(null); setSelectedCompanyId(''); } }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gán đơn vị vận tải</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Gán đơn vị vận tải chính thức cho tài xế <span className="font-semibold text-foreground">{assignDriver?.name || assignDriver?.user?.fullName || 'N/A'}</span>.
+            </p>
+            {assignDriver?.customTransportCompanyName && (
+              <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
+                <span className="text-sm">Tài xế đã nhập: <span className="font-medium">{assignDriver.customTransportCompanyName}</span></span>
+              </div>
+            )}
+            <div className="grid gap-2">
+              <Label>Chọn đơn vị vận tải</Label>
+              <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Chọn đơn vị..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {transportCompanies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setAssignDriver(null); setSelectedCompanyId(''); }}>Huỷ</Button>
+            <Button onClick={handleAssign} disabled={!selectedCompanyId || isAssigning}>
+              {isAssigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Gán đơn vị
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </>
