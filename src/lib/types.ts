@@ -54,6 +54,8 @@ export type TransportCompany = {
   name: string;
   ownerName?: string;
   ownerPhone?: string;
+  // Set by admin via "Gán chủ" form — links to a User row with role TRANSPORT_COMPANY_OWNER.
+  ownerUserId?: string | null;
   isActive: boolean;
   driverCount?: number;
   createdAt?: string;

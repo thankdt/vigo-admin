@@ -618,6 +618,80 @@ export async function deleteTransportCompany(id: string): Promise<void> {
   });
 }
 
+// Admin: link a User account to this TC so the owner can sign into htx.vigogroup.vn.
+// Backend creates the user if missing, or upgrades an existing one to TRANSPORT_COMPANY_OWNER.
+export async function assignTransportCompanyOwner(
+  id: string,
+  data: { phone: string; password: string; fullName?: string },
+): Promise<TransportCompany> {
+  const response = await fetchWithAuth(`/transport-companies/${id}/assign-owner`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Không gán được chủ HTX');
+  }
+  return response.json();
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// HTX portal — endpoints for the cooperative owner (htx.vigogroup.vn).
+// All require an access token belonging to a TRANSPORT_COMPANY_OWNER.
+// ─────────────────────────────────────────────────────────────────────
+
+export type HtxDriverRow = {
+  id: string;
+  userId: string;
+  fullName: string | null;
+  phone: string | null;
+  avatar: string | null;
+  status: 'ONLINE' | 'BUSY' | 'OFFLINE' | string;
+  isActive: boolean;
+  isApproved: boolean;
+  createdAt: string;
+  vehicleRegistration: { plateNumber?: string; brand?: string; model?: string; seats?: number } | null;
+  tripCount: number;
+};
+
+export type HtxDashboard = {
+  period: 'day' | 'month' | 'year';
+  date: string;
+  range: { start: string; end: string };
+  vehicleCount: number;
+  ticketCount: number;
+  grossRevenue: number;
+  finalRevenue: number;
+  vatAmount: number;
+  commissionRate: number;
+  commissionAmount: number;
+  netIncome: number;
+};
+
+export async function htxGetMe(): Promise<TransportCompany> {
+  const response = await fetchWithAuth('/htx/me');
+  return response.json();
+}
+
+export async function htxListDrivers(): Promise<HtxDriverRow[]> {
+  const response = await fetchWithAuth('/htx/drivers');
+  return response.json();
+}
+
+export async function htxToggleDriverActive(driverId: string): Promise<{ id: string; isActive: boolean }> {
+  const response = await fetchWithAuth(`/htx/drivers/${driverId}/toggle-active`, {
+    method: 'POST',
+  });
+  return response.json();
+}
+
+export async function htxGetDashboard(period: 'day' | 'month' | 'year', dateISO?: string): Promise<HtxDashboard> {
+  const query = new URLSearchParams({ period });
+  if (dateISO) query.set('date', dateISO);
+  const response = await fetchWithAuth(`/htx/dashboard?${query.toString()}`);
+  return response.json();
+}
+
 export async function assignTransportCompany(driverId: string, transportCompanyId: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${driverId}/transport-company`, {
     method: 'PUT',

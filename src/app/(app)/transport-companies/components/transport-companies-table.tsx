@@ -30,6 +30,8 @@ import {
   Pencil,
   Trash2,
   Building2,
+  KeyRound,
+  CheckCircle2,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -37,6 +39,7 @@ import {
   createTransportCompany,
   updateTransportCompany,
   deleteTransportCompany,
+  assignTransportCompanyOwner,
 } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -100,6 +103,12 @@ export function TransportCompaniesTable() {
 
   // Delete dialog
   const [deleteTarget, setDeleteTarget] = React.useState<TransportCompany | null>(null);
+
+  // Assign-owner dialog — admin links a User account to this TC so the owner can sign into
+  // htx.vigogroup.vn. Existing phone → upgraded to TRANSPORT_COMPANY_OWNER + password reset.
+  const [assignTarget, setAssignTarget] = React.useState<TransportCompany | null>(null);
+  const [assignForm, setAssignForm] = React.useState({ phone: '', password: '', fullName: '' });
+  const [isAssigning, setIsAssigning] = React.useState(false);
 
   const fetchCompanies = React.useCallback(async (search: string, page: number, limit: number) => {
     setIsLoading(true);
@@ -213,6 +222,48 @@ export function TransportCompaniesTable() {
     }
   };
 
+  const openAssignOwner = (company: TransportCompany) => {
+    // Pre-fill name/phone from existing freeform fields so admin doesn't retype if the row was
+    // first created via the legacy "ownerName/ownerPhone" form.
+    setAssignTarget(company);
+    setAssignForm({
+      phone: company.ownerPhone || '',
+      password: '',
+      fullName: company.ownerName || '',
+    });
+  };
+
+  const handleAssignOwner = async () => {
+    if (!assignTarget) return;
+    if (!assignForm.phone.trim() || !/^\d{8,15}$/.test(assignForm.phone.trim())) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Số điện thoại phải là 8-15 chữ số.' });
+      return;
+    }
+    if (!assignForm.password || assignForm.password.length < 6) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Mật khẩu phải tối thiểu 6 ký tự.' });
+      return;
+    }
+    setIsAssigning(true);
+    try {
+      await assignTransportCompanyOwner(assignTarget.id, {
+        phone: assignForm.phone.trim(),
+        password: assignForm.password,
+        fullName: assignForm.fullName.trim() || undefined,
+      });
+      toast({
+        title: 'Đã gán chủ HTX',
+        description: `Chủ HTX có thể đăng nhập htx.vigogroup.vn bằng SĐT ${assignForm.phone.trim()}.`,
+      });
+      setAssignTarget(null);
+      setAssignForm({ phone: '', password: '', fullName: '' });
+      fetchCompanies(searchTerm, currentPage, pageSize);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không gán được', description: err.message });
+    } finally {
+      setIsAssigning(false);
+    }
+  };
+
   return (
     <>
       <div className="flex items-center justify-between pb-4">
@@ -316,6 +367,11 @@ export function TransportCompaniesTable() {
                         <DropdownMenuItem onSelect={() => setTimeout(() => openEditForm(company), 0)}>
                           <Pencil className="mr-2 h-4 w-4" />
                           Chỉnh sửa
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => setTimeout(() => openAssignOwner(company), 0)}>
+                          <KeyRound className="mr-2 h-4 w-4" />
+                          {company.ownerUserId ? 'Đặt lại tài khoản chủ' : 'Gán chủ HTX'}
+                          {company.ownerUserId && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-green-600" />}
                         </DropdownMenuItem>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
@@ -427,6 +483,67 @@ export function TransportCompaniesTable() {
             <Button onClick={handleSave} disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {editingId ? 'Cập nhật' : 'Tạo mới'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Assign-owner dialog — admin links a User account so the owner can sign into htx.vigogroup.vn */}
+      <Dialog open={!!assignTarget} onOpenChange={(open) => { if (!open && !isAssigning) setAssignTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              {assignTarget?.ownerUserId ? 'Đặt lại tài khoản chủ HTX' : 'Gán chủ HTX'}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <p className="text-sm text-muted-foreground">
+              Tạo / cập nhật tài khoản đăng nhập cho chủ HTX <span className="font-medium text-foreground">{assignTarget?.name}</span>.
+              Chủ HTX dùng SĐT + mật khẩu này để đăng nhập tại <span className="font-mono text-xs">htx.vigogroup.vn</span>.
+            </p>
+            <div className="grid gap-2">
+              <Label htmlFor="assign-phone">
+                Số điện thoại <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="assign-phone"
+                placeholder="VD: 0912345678"
+                value={assignForm.phone}
+                onChange={(e) => setAssignForm({ ...assignForm, phone: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">
+                Nếu SĐT đã tồn tại trong hệ thống, tài khoản sẽ được nâng cấp thành chủ HTX và đặt lại mật khẩu.
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="assign-fullname">Họ tên</Label>
+              <Input
+                id="assign-fullname"
+                placeholder="VD: Nguyễn Văn A"
+                value={assignForm.fullName}
+                onChange={(e) => setAssignForm({ ...assignForm, fullName: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="assign-password">
+                Mật khẩu <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                id="assign-password"
+                type="password"
+                placeholder="Tối thiểu 6 ký tự"
+                value={assignForm.password}
+                onChange={(e) => setAssignForm({ ...assignForm, password: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAssignTarget(null)} disabled={isAssigning}>
+              Huỷ
+            </Button>
+            <Button onClick={handleAssignOwner} disabled={isAssigning}>
+              {isAssigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {assignTarget?.ownerUserId ? 'Cập nhật' : 'Gán chủ'}
             </Button>
           </DialogFooter>
         </DialogContent>
