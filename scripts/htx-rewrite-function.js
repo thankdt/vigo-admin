@@ -3,11 +3,13 @@
 // CloudFront fetches `/htx/dashboard/index.html` from the same S3 bucket as the admin app.
 //
 // Static-export quirks the rewrite has to honour:
-//   - "/" maps to "/htx" (so it eventually serves /htx/index.html via the next-config
-//     trailingSlash:true behavior).
+//   - next.config sets trailingSlash:true → on disk every page is `<route>/index.html`. We
+//     rewrite directly to the final file path so S3 never issues a 301-to-add-slash, which
+//     would leak the `/htx/` prefix into the user's URL bar.
+//   - "/" maps to "/htx/index.html" (the portal's root redirect page).
 //   - Asset paths under /_next/* are SHARED with the admin distribution and must NOT be
-//     prefixed — the same hashed chunks are at /_next/... in S3.
-//   - Any /htx/* URI passes through unchanged so direct access still works.
+//     prefixed — the same hashed chunks live at /_next/... in S3.
+//   - Any /htx/* URI passes through unchanged (still served by the same bucket).
 function handler(event) {
   var req = event.request;
   var uri = req.uri;
@@ -17,18 +19,30 @@ function handler(event) {
     return req;
   }
 
-  // Already inside the portal tree — no-op.
+  // Already inside the portal tree — no-op (still in the same bucket).
   if (uri === '/htx' || uri.indexOf('/htx/') === 0) {
     return req;
   }
 
-  // Root → /htx (resolves to /htx/index.html via static-export's directory routing).
+  // Root → portal index.
   if (uri === '/') {
-    req.uri = '/htx';
+    req.uri = '/htx/index.html';
     return req;
   }
 
-  // Anything else: prefix with /htx so /dashboard becomes /htx/dashboard.
-  req.uri = '/htx' + uri;
+  // For paths that look like a route (no file extension), rewrite directly to the
+  // backing index.html under /htx so S3 returns 200 instead of redirecting.
+  // Path with extension (e.g. /robots.txt) is rewritten as-is so S3 either serves it or 404s.
+  var lastSlash = uri.lastIndexOf('/');
+  var lastDot = uri.lastIndexOf('.');
+  var hasExtension = lastDot > lastSlash;
+
+  if (hasExtension) {
+    req.uri = '/htx' + uri;
+  } else {
+    // Strip optional trailing slash so we don't double up: "/login" or "/login/" → "/htx/login/index.html".
+    var clean = uri.charAt(uri.length - 1) === '/' ? uri.slice(0, -1) : uri;
+    req.uri = '/htx' + clean + '/index.html';
+  }
   return req;
 }
