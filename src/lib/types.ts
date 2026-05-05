@@ -171,6 +171,10 @@ export type Route = {
   imageKey?: string;
 }
 
+// Vehicle classes used by RIDE (private/charter) pricing — 5-seater vs 7-seater have separate
+// fares, so each RIDE route typically has 2 RoutePricing rows distinguished by `vehicleType`.
+export type VehicleType = 'CAR_4' | 'CAR_7';
+
 export type RoutePricing = {
   id: number;
   routeId: number;
@@ -179,6 +183,8 @@ export type RoutePricing = {
   price: number;
   priority: number;
   serviceType?: 'DELIVERY' | 'CARPOOL' | 'RIDE';
+  // Required by backend when serviceType = RIDE; ignored for DELIVERY/CARPOOL.
+  vehicleType?: VehicleType | null;
   route: Route;
   adminUnit: AdminUnit;
   startDistrict?: AdminUnit; // Optional: Start District Entity

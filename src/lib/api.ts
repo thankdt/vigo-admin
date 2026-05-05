@@ -353,16 +353,17 @@ export async function deleteRoute(id: number): Promise<void> {
 }
 
 
-export async function getPricingByRoute(routeId: number, serviceType?: string): Promise<RoutePricing[]> {
+export async function getPricingByRoute(routeId: number, serviceType?: string, vehicleType?: string): Promise<RoutePricing[]> {
   const query = new URLSearchParams();
   if (serviceType) query.set('serviceType', serviceType);
+  if (vehicleType) query.set('vehicleType', vehicleType);
   const queryStr = query.toString();
   const response = await fetchWithAuth(`/master-data/pricing/${routeId}${queryStr ? '?' + queryStr : ''}`);
   const result = await response.json();
   return result.data;
 }
 
-export async function createPricing(data: { routeId: number; adminUnitId: number; startDistrictId?: number | null; price: number; priority?: number; serviceType?: string }): Promise<RoutePricing> {
+export async function createPricing(data: { routeId: number; adminUnitId: number; startDistrictId?: number | null; price: number; priority?: number; serviceType?: string; vehicleType?: string }): Promise<RoutePricing> {
   const response = await fetchWithAuth('/master-data/pricing', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -370,7 +371,7 @@ export async function createPricing(data: { routeId: number; adminUnitId: number
   return response.json();
 }
 
-export async function updatePricing(id: number, data: { price: number; serviceType?: string }): Promise<RoutePricing> {
+export async function updatePricing(id: number, data: { price: number; serviceType?: string; vehicleType?: string }): Promise<RoutePricing> {
   const response = await fetchWithAuth(`/master-data/pricing/${id}`, {
     method: 'POST',
     body: JSON.stringify(data),
