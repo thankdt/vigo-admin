@@ -668,28 +668,37 @@ export type HtxDashboard = {
   netIncome: number;
 };
 
+// NestJS wraps responses globally as { data, success, ... } so every htx/* call has to
+// unwrap .data — the rest of the app does the same with master-data + transport-companies.
+async function unwrap<T>(response: Response): Promise<T> {
+  const body = await response.json();
+  // Some endpoints (e.g. POST that returns the entity directly) might not be wrapped — fall
+  // back to the raw body when there's no .data field so we don't lose the result.
+  return (body && typeof body === 'object' && 'data' in body ? body.data : body) as T;
+}
+
 export async function htxGetMe(): Promise<TransportCompany> {
   const response = await fetchWithAuth('/htx/me');
-  return response.json();
+  return unwrap<TransportCompany>(response);
 }
 
 export async function htxListDrivers(): Promise<HtxDriverRow[]> {
   const response = await fetchWithAuth('/htx/drivers');
-  return response.json();
+  return unwrap<HtxDriverRow[]>(response);
 }
 
 export async function htxToggleDriverActive(driverId: string): Promise<{ id: string; isActive: boolean }> {
   const response = await fetchWithAuth(`/htx/drivers/${driverId}/toggle-active`, {
     method: 'POST',
   });
-  return response.json();
+  return unwrap<{ id: string; isActive: boolean }>(response);
 }
 
 export async function htxGetDashboard(period: 'day' | 'month' | 'year', dateISO?: string): Promise<HtxDashboard> {
   const query = new URLSearchParams({ period });
   if (dateISO) query.set('date', dateISO);
   const response = await fetchWithAuth(`/htx/dashboard?${query.toString()}`);
-  return response.json();
+  return unwrap<HtxDashboard>(response);
 }
 
 export async function assignTransportCompany(driverId: string, transportCompanyId: string): Promise<Driver> {

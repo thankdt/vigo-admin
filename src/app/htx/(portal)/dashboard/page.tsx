@@ -118,12 +118,14 @@ export default function HtxDashboardPage() {
         <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
       ) : data ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <StatCard icon={<Car className="h-5 w-5" />} label="Số xe" value={data.vehicleCount.toString()} hint="Tài xế thuộc HTX" />
-          <StatCard icon={<Ticket className="h-5 w-5" />} label="Số vé" value={data.ticketCount.toString()} hint={`Chuyến hoàn thành trong ${periodLabels[period].toLowerCase()}`} />
-          <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue)} hint="Giá vận chuyển trước thuế / giảm giá" />
-          <StatCard icon={<Percent className="h-5 w-5" />} label="% App lấy" value={formatPercent(data.commissionRate)} hint={`Hoa hồng: ${formatCurrency(data.commissionAmount)}`} />
-          <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount)} hint="Tổng VAT thu hộ" />
-          <StatCard icon={<Wallet className="h-5 w-5" />} label="Thu nhập (HTX)" value={formatCurrency(data.netIncome)} hint="Sau hoa hồng + VAT" highlight />
+          {/* Defensive `?? 0` everywhere — first dashboard load might race the API response */}
+          {/* and we never want a missing field to crash the whole page. */}
+          <StatCard icon={<Car className="h-5 w-5" />} label="Số xe" value={String(data.vehicleCount ?? 0)} hint="Tài xế thuộc HTX" />
+          <StatCard icon={<Ticket className="h-5 w-5" />} label="Số vé" value={String(data.ticketCount ?? 0)} hint={`Chuyến hoàn thành trong ${periodLabels[period].toLowerCase()}`} />
+          <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
+          <StatCard icon={<Percent className="h-5 w-5" />} label="% App lấy" value={formatPercent(data.commissionRate ?? 0)} hint={`Hoa hồng: ${formatCurrency(data.commissionAmount ?? 0)}`} />
+          <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />
+          <StatCard icon={<Wallet className="h-5 w-5" />} label="Thu nhập (HTX)" value={formatCurrency(data.netIncome ?? 0)} hint="Sau hoa hồng + VAT" highlight />
         </div>
       ) : null}
     </div>
