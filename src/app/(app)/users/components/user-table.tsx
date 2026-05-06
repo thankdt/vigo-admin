@@ -18,10 +18,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUsers, lockUser, unlockUser } from '@/lib/api';
+import { getUsers, lockUser, unlockUser, adminGetUserReferralStats, type AdminUserReferralStats } from '@/lib/api';
 import type { User } from '@/lib/types';
 import {
   Dialog,
@@ -49,6 +49,13 @@ export function UsersTable() {
   const [searchTerm, setSearchTerm] = React.useState('');
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
+
+  // Affiliate stats viewer — admin support tool. Targets the same /referrals/me data the
+  // mobile app shows but for any user, so support can answer "what's my balance?" without
+  // asking the user to read it off their phone.
+  const [statsTarget, setStatsTarget] = React.useState<User | null>(null);
+  const [stats, setStats] = React.useState<AdminUserReferralStats | null>(null);
+  const [isLoadingStats, setIsLoadingStats] = React.useState(false);
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -141,6 +148,21 @@ export function UsersTable() {
     setIsFormOpen(false);
   };
   
+  const handleOpenStats = async (user: User) => {
+    setStatsTarget(user);
+    setStats(null);
+    setIsLoadingStats(true);
+    try {
+      const result = await adminGetUserReferralStats(user.id);
+      setStats(result);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không tải được', description: err.message });
+      setStatsTarget(null);
+    } finally {
+      setIsLoadingStats(false);
+    }
+  };
+
   const handleToggleLock = async (user: User) => {
     try {
       if (user.isLocked) {
@@ -339,6 +361,10 @@ export function UsersTable() {
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
                       <DropdownMenuItem onClick={() => handleOpenForm(user)}>Sửa</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleOpenStats(user)}>
+                        <Share2 className="mr-2 h-4 w-4" />
+                        <span>Xem affiliate</span>
+                      </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => handleToggleLock(user)}>
                         {user.isLocked ? (
                           <>
@@ -424,6 +450,83 @@ export function UsersTable() {
         </div>
       </Card>
       {isFormOpen && <UserForm user={editingUser} onClose={handleCloseForm} />}
+
+      {/* Affiliate stats viewer — same data the user sees in their mobile app, scoped by userId. */}
+      <Dialog open={!!statsTarget} onOpenChange={(open) => { if (!open) { setStatsTarget(null); setStats(null); } }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Affiliate · {statsTarget?.name ?? statsTarget?.phone ?? '—'}</DialogTitle>
+            <DialogDescription>
+              Số dư & lịch sử giới thiệu của user này (giống màn hình khách thấy trên app).
+            </DialogDescription>
+          </DialogHeader>
+          {isLoadingStats || !stats ? (
+            <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="bg-muted/50 rounded p-3">
+                  <div className="text-muted-foreground text-xs">Mã giới thiệu</div>
+                  <div className="font-mono font-bold tracking-wider mt-1">{stats.code}</div>
+                </div>
+                <div className="bg-muted/50 rounded p-3">
+                  <div className="text-muted-foreground text-xs">Số người đã mời</div>
+                  <div className="font-bold mt-1 text-lg">{stats.refereeCount}</div>
+                </div>
+                <div className="bg-blue-50 dark:bg-blue-950/30 rounded p-3 border border-blue-200 dark:border-blue-800">
+                  <div className="text-muted-foreground text-xs">Số dư affiliate</div>
+                  <div className="font-bold mt-1 text-lg text-blue-700 dark:text-blue-300">
+                    {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(stats.balance)}
+                  </div>
+                </div>
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold mb-2">Người được giới thiệu</h3>
+                {stats.referees.length === 0 ? (
+                  <div className="text-sm text-muted-foreground py-4 text-center">User này chưa giới thiệu được ai.</div>
+                ) : (
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Người được mời</TableHead>
+                        <TableHead className="text-right">Chuyến</TableHead>
+                        <TableHead className="text-right">Tiền nhận</TableHead>
+                        <TableHead>Bonus signup</TableHead>
+                        <TableHead>Ngày mời</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {stats.referees.map((r) => (
+                        <TableRow key={r.refereeId}>
+                          <TableCell>
+                            <div className="font-medium">{r.refereeName ?? '—'}</div>
+                            <div className="text-xs text-muted-foreground">{r.refereePhone ?? r.refereeId.slice(0, 8)}</div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
+                          <TableCell className="text-right tabular-nums font-medium">
+                            {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(r.tripRewardTotal)}
+                          </TableCell>
+                          <TableCell>
+                            {r.signupRewardCredited
+                              ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã trả</Badge>
+                              : <Badge variant="secondary">Chưa</Badge>}
+                          </TableCell>
+                          <TableCell className="text-sm text-muted-foreground">
+                            {new Date(r.createdAt).toLocaleDateString('vi-VN')}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setStatsTarget(null); setStats(null); }}>Đóng</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

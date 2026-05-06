@@ -752,6 +752,29 @@ export async function adminClawbackReferralEvent(eventId: string, reason: string
   return unwrap(response);
 }
 
+// Same shape the end user sees on the mobile app — for admin support to look up a specific
+// customer's affiliate balance + recent referees on their behalf.
+export type AdminUserReferralStats = {
+  code: string;
+  shareLink: string;
+  balance: number;
+  refereeCount: number;
+  referees: Array<{
+    refereeId: string;
+    refereePhone: string | null;
+    refereeName: string | null;
+    signupRewardCredited: boolean;
+    tripCountUsed: number;
+    tripRewardTotal: number;
+    createdAt: string;
+  }>;
+};
+
+export async function adminGetUserReferralStats(userId: string): Promise<AdminUserReferralStats> {
+  const response = await fetchWithAuth(`/referrals/admin/users/${userId}/stats`);
+  return unwrap<AdminUserReferralStats>(response);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Withdrawals (admin)
 // ─────────────────────────────────────────────────────────────────────

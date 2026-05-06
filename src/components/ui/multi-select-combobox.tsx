@@ -78,36 +78,34 @@ export function MultiSelectComboBox({
     .filter(Boolean) as string[];
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
-        <div className={cn("relative", className)}>
-            <Button
-                variant="outline"
-                role="combobox"
-                aria-expanded={open}
-                className="w-full justify-between h-auto min-h-10"
-                disabled={disabled}
-            >
-                <div className="flex flex-wrap gap-1">
-                    {selectedLabels.length > 0 ? (
-                        selectedLabels.map((label) => (
-                        <Badge
-                            key={label}
-                            variant="secondary"
-                            className="mr-1"
-                        >
-                            {label}
-                        </Badge>
-                        ))
-                    ) : (
-                        <span className="text-muted-foreground">{placeholder}</span>
-                    )}
-                </div>
-                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-            </Button>
-        </div>
+        <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            className={cn("w-full justify-between h-auto min-h-10", className)}
+            disabled={disabled}
+        >
+            <div className="flex flex-wrap gap-1">
+                {selectedLabels.length > 0 ? (
+                    selectedLabels.map((label) => (
+                    <Badge
+                        key={label}
+                        variant="secondary"
+                        className="mr-1"
+                    >
+                        {label}
+                    </Badge>
+                    ))
+                ) : (
+                    <span className="text-muted-foreground">{placeholder}</span>
+                )}
+            </div>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+        </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" style={{ zIndex: 9999 }}>
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
         <Command>
           <CommandInput
             placeholder={searchPlaceholder}

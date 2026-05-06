@@ -15,8 +15,8 @@ export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = React.useState(false);
-  const [phone, setPhone] = React.useState('0999999999');
-  const [password, setPassword] = React.useState('admin123');
+  const [phone, setPhone] = React.useState('');
+  const [password, setPassword] = React.useState('');
 
   React.useEffect(() => {
     const token = localStorage.getItem('access_token');
