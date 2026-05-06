@@ -701,6 +701,128 @@ export async function htxGetDashboard(period: 'day' | 'month' | 'year', dateISO?
   return unwrap<HtxDashboard>(response);
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Affiliate / referrals (admin)
+// ─────────────────────────────────────────────────────────────────────
+
+export type AdminReferralRow = {
+  id: string;
+  referrer: { id: string; phone?: string; fullName?: string };
+  referee: { id: string; phone?: string; fullName?: string };
+  codeUsed: string;
+  signupRewardCredited: boolean;
+  tripCountUsed: number;
+  tripRewardTotal: number;
+  createdAt: string;
+};
+
+export type AdminReferralListResponse = {
+  data: AdminReferralRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
+};
+
+export async function adminListReferrals(params: { page?: number; limit?: number; referrerId?: string } = {}): Promise<AdminReferralListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.referrerId) q.set('referrerId', params.referrerId);
+  const qs = q.toString();
+  const response = await fetchWithAuth(`/referrals/admin${qs ? '?' + qs : ''}`);
+  return unwrap<AdminReferralListResponse>(response);
+}
+
+export type AdminReferralDetail = AdminReferralRow & {
+  events: Array<{ id: string; type: 'SIGNUP' | 'TRIP' | 'CLAWBACK'; amount: number; bookingId: string | null; note: string | null; createdAt: string; createdByAdminId: string | null }>;
+};
+
+export async function adminGetReferralDetail(id: string): Promise<AdminReferralDetail> {
+  const response = await fetchWithAuth(`/referrals/admin/${id}`);
+  return unwrap<AdminReferralDetail>(response);
+}
+
+export async function adminClawbackReferralEvent(eventId: string, reason: string): Promise<{ id: string }> {
+  const response = await fetchWithAuth(`/referrals/admin/events/${eventId}/clawback`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Clawback failed');
+  }
+  return unwrap(response);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Withdrawals (admin)
+// ─────────────────────────────────────────────────────────────────────
+
+export type WithdrawalStatus = 'PENDING' | 'APPROVED' | 'TRANSFERRED' | 'REJECTED';
+
+export type AdminWithdrawalRow = {
+  id: string;
+  userId: string;
+  userPhone?: string;
+  userName?: string;
+  amount: number;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  status: WithdrawalStatus;
+  adminNote?: string | null;
+  createdAt: string;
+  reviewedAt?: string | null;
+};
+
+export type AdminWithdrawalListResponse = {
+  data: AdminWithdrawalRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
+};
+
+export async function adminListWithdrawals(params: { status?: WithdrawalStatus; page?: number; limit?: number } = {}): Promise<AdminWithdrawalListResponse> {
+  const q = new URLSearchParams();
+  if (params.status) q.set('status', params.status);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  const qs = q.toString();
+  const response = await fetchWithAuth(`/withdrawals${qs ? '?' + qs : ''}`);
+  return unwrap<AdminWithdrawalListResponse>(response);
+}
+
+export async function adminApproveWithdrawal(id: string, note?: string): Promise<AdminWithdrawalRow> {
+  const response = await fetchWithAuth(`/withdrawals/${id}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Approve failed');
+  }
+  return unwrap(response);
+}
+
+export async function adminRejectWithdrawal(id: string, note: string): Promise<AdminWithdrawalRow> {
+  const response = await fetchWithAuth(`/withdrawals/${id}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Reject failed');
+  }
+  return unwrap(response);
+}
+
+export async function adminMarkWithdrawalTransferred(id: string): Promise<AdminWithdrawalRow> {
+  const response = await fetchWithAuth(`/withdrawals/${id}/mark-transferred`, {
+    method: 'POST',
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || 'Mark transferred failed');
+  }
+  return unwrap(response);
+}
+
 export async function assignTransportCompany(driverId: string, transportCompanyId: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${driverId}/transport-company`, {
     method: 'PUT',
