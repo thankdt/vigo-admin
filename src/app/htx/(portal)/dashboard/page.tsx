@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Car, DollarSign, Percent, Wallet, Ticket, Receipt } from 'lucide-react';
+import { Loader2, Car, DollarSign, Percent, Wallet, Ticket, Receipt, Wifi, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxGetDashboard, htxGetMe, type HtxDashboard } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
@@ -121,7 +121,9 @@ export default function HtxDashboardPage() {
           {/* Defensive `?? 0` everywhere — first dashboard load might race the API response */}
           {/* and we never want a missing field to crash the whole page. */}
           <StatCard icon={<Car className="h-5 w-5" />} label="Số xe" value={String(data.vehicleCount ?? 0)} hint="Tài xế thuộc HTX" />
-          <StatCard icon={<Ticket className="h-5 w-5" />} label="Số vé" value={String(data.ticketCount ?? 0)} hint={`Chuyến hoàn thành trong ${periodLabels[period].toLowerCase()}`} />
+          <StatCard icon={<Wifi className="h-5 w-5" />} label="Xe đang online" value={String(data.onlineVehicleCount ?? 0)} hint="Trạng thái thời gian thực" />
+          <StatCard icon={<Ticket className="h-5 w-5" />} label="Chuyến thành công" value={String(data.ticketCount ?? 0)} hint={`Hoàn thành trong ${periodLabels[period].toLowerCase()}`} />
+          <StatCard icon={<XCircle className="h-5 w-5" />} label="Chuyến hủy" value={String(data.cancelledTripCount ?? 0)} hint={`Bị hủy trong ${periodLabels[period].toLowerCase()}`} />
           <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
           <StatCard icon={<Percent className="h-5 w-5" />} label="% App lấy" value={formatPercent(data.commissionRate ?? 0)} hint={`Hoa hồng: ${formatCurrency(data.commissionAmount ?? 0)}`} />
           <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />

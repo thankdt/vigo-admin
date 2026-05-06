@@ -659,7 +659,9 @@ export type HtxDashboard = {
   date: string;
   range: { start: string; end: string };
   vehicleCount: number;
+  onlineVehicleCount: number;
   ticketCount: number;
+  cancelledTripCount: number;
   grossRevenue: number;
   finalRevenue: number;
   vatAmount: number;
