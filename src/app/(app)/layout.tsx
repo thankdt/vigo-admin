@@ -29,6 +29,7 @@ import {
   Building2,
   Share2,
   Wallet,
+  Megaphone,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -54,6 +55,7 @@ const navItems = [
   { href: '/notifications', label: 'Thông báo', icon: Bell },
   { href: '/news', label: 'Tin tức', icon: Newspaper },
   { href: '/banners', label: 'Banner', icon: ImageIcon },
+  { href: '/app-popups', label: 'Popup quảng cáo', icon: Megaphone },
 ];
 
 // Error Boundary to prevent full page crash

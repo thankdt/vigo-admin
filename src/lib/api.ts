@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup } from '@/lib/types';
 
 export const API_BASE_URL = 'https://api.vigogroup.vn';
 
@@ -528,6 +528,47 @@ export async function updateBanner(id: number, data: { priority?: number; isActi
 
 export async function deleteBanner(id: number): Promise<void> {
   await fetchWithAuth(`/banners/${id}`, {
+    method: 'DELETE',
+  });
+}
+
+// App Popup API
+export type AppPopupPayload = {
+  imageUrl: string;
+  linkUrl?: string | null;
+  displayMode: 'ALWAYS' | 'DISMISSIBLE' | 'ONCE';
+  isActive: boolean;
+  priority: number;
+  startAt?: string | null;
+  endAt?: string | null;
+};
+
+export async function getAppPopups(): Promise<AppPopup[]> {
+  const response = await fetchWithAuth('/app-popups/admin');
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function createAppPopup(data: AppPopupPayload): Promise<AppPopup> {
+  const response = await fetchWithAuth('/app-popups', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function updateAppPopup(id: string, data: Partial<AppPopupPayload>): Promise<AppPopup> {
+  const response = await fetchWithAuth(`/app-popups/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function deleteAppPopup(id: string): Promise<void> {
+  await fetchWithAuth(`/app-popups/${id}`, {
     method: 'DELETE',
   });
 }

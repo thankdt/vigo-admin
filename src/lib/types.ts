@@ -41,6 +41,22 @@ export type Banner = {
   deletedAt?: string;
 };
 
+export type AppPopupDisplayMode = 'ALWAYS' | 'DISMISSIBLE' | 'ONCE';
+
+export type AppPopup = {
+  id: string;
+  imageUrl: string;
+  linkUrl: string | null;
+  displayMode: AppPopupDisplayMode;
+  isActive: boolean;
+  priority: number;
+  startAt: string | null;
+  endAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+};
+
 export type Role = {
   id: string;
   name: 'Admin' | 'Editor' | 'Viewer';
