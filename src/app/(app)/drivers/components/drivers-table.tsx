@@ -21,7 +21,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, API_BASE_URL } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, API_BASE_URL } from '@/lib/api';
 import type { Driver, TransportCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
@@ -92,6 +92,10 @@ export function DriversTable() {
   const [enabledServices, setEnabledServices] = React.useState<string[]>(['RIDE', 'CARPOOL', 'DELIVERY']);
 
   const [viewDriver, setViewDriver] = React.useState<Driver | null>(null);
+
+  // Edit-services state (inline in viewDriver dialog). Null = not editing; array = staging picks.
+  const [editingServices, setEditingServices] = React.useState<string[] | null>(null);
+  const [isSavingServices, setIsSavingServices] = React.useState(false);
 
   // Assign transport company state
   const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
@@ -519,7 +523,7 @@ export function DriversTable() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!viewDriver} onOpenChange={(open) => !open && setViewDriver(null)}>
+      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết tài xế</DialogTitle>
@@ -627,16 +631,88 @@ export function DriversTable() {
                 </div>
               )}
 
-              {viewDriver.enabledServices && viewDriver.enabledServices.length > 0 && (
-                <div className="space-y-2 border-t pt-4">
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
                   <h4 className="font-semibold">Dịch vụ được phép</h4>
+                  {editingServices === null ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingServices([...(viewDriver.enabledServices ?? [])])}
+                    >
+                      Sửa
+                    </Button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={isSavingServices}
+                        onClick={() => setEditingServices(null)}
+                      >
+                        Hủy
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={isSavingServices || editingServices.length === 0}
+                        onClick={async () => {
+                          if (!viewDriver) return;
+                          if (editingServices.length === 0) {
+                            toast({ variant: 'destructive', title: 'Thiếu dịch vụ', description: 'Phải bật ít nhất một dịch vụ.' });
+                            return;
+                          }
+                          setIsSavingServices(true);
+                          try {
+                            const updated = await updateDriverServices(viewDriver.id, editingServices);
+                            setViewDriver({ ...viewDriver, enabledServices: updated.enabledServices ?? editingServices });
+                            setEditingServices(null);
+                            toast({ title: 'Đã cập nhật dịch vụ' });
+                            fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
+                          } catch (err: any) {
+                            toast({ variant: 'destructive', title: 'Không thể cập nhật', description: err.message });
+                          } finally {
+                            setIsSavingServices(false);
+                          }
+                        }}
+                      >
+                        {isSavingServices && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                        Lưu
+                      </Button>
+                    </div>
+                  )}
+                </div>
+                {editingServices === null ? (
                   <div className="flex flex-wrap gap-2">
-                    {viewDriver.enabledServices.map(service => (
-                      <Badge key={service} variant="outline">{service}</Badge>
+                    {(viewDriver.enabledServices ?? []).length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">Chưa bật dịch vụ nào.</p>
+                    ) : (
+                      viewDriver.enabledServices!.map(service => (
+                        <Badge key={service} variant="outline">
+                          {service === 'RIDE' ? 'Chở khách (Taxi)' : service === 'CARPOOL' ? 'Đi chung' : service === 'DELIVERY' ? 'Giao hàng' : service}
+                        </Badge>
+                      ))
+                    )}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                    {['RIDE', 'CARPOOL', 'DELIVERY'].map(service => (
+                      <div key={service} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`edit-svc-${service}`}
+                          checked={editingServices.includes(service)}
+                          onCheckedChange={(checked) => {
+                            if (checked) setEditingServices([...editingServices, service]);
+                            else setEditingServices(editingServices.filter(s => s !== service));
+                          }}
+                        />
+                        <Label htmlFor={`edit-svc-${service}`} className="text-sm font-normal cursor-pointer">
+                          {service === 'RIDE' ? 'Chở khách (Taxi)' : service === 'CARPOOL' ? 'Đi chung' : 'Giao hàng'}
+                        </Label>
+                      </div>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </div>
           )}
 

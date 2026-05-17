@@ -230,7 +230,16 @@ export async function rejectDriver(id: string, reason: string): Promise<Driver> 
   return data.data || data;
 }
 
-export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string } = {}): Promise<GetApiResponse<Booking>> {
+export async function updateDriverServices(id: string, enabledServices: string[]): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/services`, {
+    method: 'PATCH',
+    body: JSON.stringify({ enabledServices }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
@@ -715,9 +724,16 @@ export type HtxDashboard = {
 // unwrap .data — the rest of the app does the same with master-data + transport-companies.
 async function unwrap<T>(response: Response): Promise<T> {
   const body = await response.json();
-  // Some endpoints (e.g. POST that returns the entity directly) might not be wrapped — fall
-  // back to the raw body when there's no .data field so we don't lose the result.
-  return (body && typeof body === 'object' && 'data' in body ? body.data : body) as T;
+  if (body && typeof body === 'object') {
+    // Paginated response — backend's TransformInterceptor wraps as {success, data, meta}.
+    // Caller's typed shape is `{data, meta}`, so return the whole body (minus `success`)
+    // rather than peeling off `data` alone, otherwise we lose pagination metadata.
+    if ('data' in body && 'meta' in body) return body as T;
+    // Standard wrapped response: return just the data field.
+    if ('data' in body) return body.data as T;
+  }
+  // Unwrapped (rare — e.g. raw POST returning the entity directly): use the body as-is.
+  return body as T;
 }
 
 export async function htxGetMe(): Promise<TransportCompany> {
