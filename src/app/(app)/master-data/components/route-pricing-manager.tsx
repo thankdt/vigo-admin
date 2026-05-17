@@ -420,6 +420,7 @@ function PricingForm({
 
     // District options: districts belonging to the route, grouped by parent province
     const districtOptions = React.useMemo(() => {
+        const collator = new Intl.Collator('vi');
         const groups: Record<string, { value: string; label: string }[]> = {};
         const others: { value: string; label: string }[] = [];
 
@@ -445,17 +446,25 @@ function PricingForm({
             }
         });
 
-        const groupedOptions = Object.keys(groups).map(groupName => ({
-            label: groupName,
-            options: groups[groupName],
-        }));
+        // Sort by Vietnamese locale so cuối-list items don't appear "missing" behind the scroll.
+        Object.values(groups).forEach(arr => arr.sort((a, b) => collator.compare(a.label, b.label)));
+        others.sort((a, b) => collator.compare(a.label, b.label));
+
+        const groupedOptions = Object.keys(groups)
+            .sort((a, b) => collator.compare(a, b))
+            .map(groupName => ({
+                label: groupName,
+                options: groups[groupName],
+            }));
 
         if (others.length > 0) {
             groupedOptions.push({ label: 'Khác', options: others });
         }
 
         if (groupedOptions.length === 0 && routeDistricts.length > 0) {
-            return routeDistricts.map(d => ({ value: String(d.id), label: d.name }));
+            return [...routeDistricts]
+                .sort((a, b) => collator.compare(a.name, b.name))
+                .map(d => ({ value: String(d.id), label: d.name }));
         }
 
         return groupedOptions;
@@ -473,6 +482,7 @@ function PricingForm({
 
     // Start district options: all districts from the route (for exact match pricing)
     const startDistrictOptions = React.useMemo(() => {
+        const collator = new Intl.Collator('vi');
         const groups: Record<string, { value: string; label: string }[]> = {};
         const others: { value: string; label: string }[] = [];
 
@@ -490,10 +500,15 @@ function PricingForm({
             }
         });
 
-        const groupedOptions = Object.keys(groups).map(groupName => ({
-            label: groupName,
-            options: groups[groupName],
-        }));
+        Object.values(groups).forEach(arr => arr.sort((a, b) => collator.compare(a.label, b.label)));
+        others.sort((a, b) => collator.compare(a.label, b.label));
+
+        const groupedOptions = Object.keys(groups)
+            .sort((a, b) => collator.compare(a, b))
+            .map(groupName => ({
+                label: groupName,
+                options: groups[groupName],
+            }));
 
         if (others.length > 0) {
             groupedOptions.push({ label: 'Khác', options: others });
