@@ -360,12 +360,12 @@ export function UsersTable() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                      <DropdownMenuItem onClick={() => handleOpenForm(user)}>Sửa</DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleOpenStats(user)}>
+                      <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenForm(user), 0)}>Sửa</DropdownMenuItem>
+                      <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenStats(user), 0)}>
                         <Share2 className="mr-2 h-4 w-4" />
                         <span>Xem affiliate</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleLock(user)}>
+                      <DropdownMenuItem onSelect={() => setTimeout(() => handleToggleLock(user), 0)}>
                         {user.isLocked ? (
                           <>
                             <Unlock className="mr-2 h-4 w-4" />

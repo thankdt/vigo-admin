@@ -154,10 +154,10 @@ export function RoutesManager() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                                                <DropdownMenuItem onClick={() => handleOpenForm(route)}>
+                                                <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenForm(route), 0)}>
                                                     <Edit className="mr-2 h-4 w-4" /> Sửa
                                                 </DropdownMenuItem>
-                                                <DropdownMenuItem onClick={() => setDeletingRoute(route)} className="text-destructive focus:text-destructive">
+                                                <DropdownMenuItem onSelect={() => setTimeout(() => setDeletingRoute(route), 0)} className="text-destructive focus:text-destructive">
                                                     <Trash2 className="mr-2 h-4 w-4" /> Xóa
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
