@@ -936,3 +936,49 @@ export async function getTransportCompanyList(): Promise<TransportCompany[]> {
   const result = await response.json();
   return result.data || result;
 }
+
+export type FinanceDashboard = {
+  range: { from: string; to: string };
+  cashFlow: {
+    totalIn: number;
+    totalOut: number;
+    net: number;
+    operationalRevenue: number;
+  };
+  breakdown: {
+    htxNetIncome: number;
+    driverNetEarnings: number;
+    affiliateCredited: number;
+    customerRefund: number;
+  };
+  trend: Array<{ date: string; in: number; out: number }>;
+  topHtx: Array<{
+    id: string;
+    name: string;
+    bookingCount: number;
+    grossRevenue: number;
+    commissionAmount: number;
+    netIncome: number;
+  }>;
+  topDrivers: Array<{
+    id: string;
+    fullName: string;
+    phone: string;
+    bookingCount: number;
+    netEarnings: number;
+  }>;
+  topAffiliates: Array<{
+    id: string;
+    fullName: string;
+    phone: string;
+    tripCount: number;
+    totalCredited: number;
+  }>;
+};
+
+export async function getFinanceDashboard(from: string, to: string): Promise<FinanceDashboard> {
+  const qs = new URLSearchParams({ from, to });
+  const response = await fetchWithAuth(`/admin/finance/dashboard?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
+}
