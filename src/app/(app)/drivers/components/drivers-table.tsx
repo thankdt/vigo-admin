@@ -18,7 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices } from '@/lib/api';
@@ -137,9 +137,8 @@ export function DriversTable() {
       const response = await getDrivers(apiParams);
       if (gen !== fetchGenRef.current) return;
       setDrivers(response.data);
-      const meta = (response as any).meta;
-      const total = meta?.total ?? 0;
-      const apiLimit = meta?.limit ?? limit;
+      const total = response.meta?.total ?? 0;
+      const apiLimit = response.meta?.limit ?? limit;
       setTotalItems(total);
       setTotalPages(Math.max(1, Math.ceil(total / apiLimit)));
     } catch (err: any) {
@@ -160,7 +159,7 @@ export function DriversTable() {
   const refreshNeedsReviewCount = React.useCallback(async () => {
     try {
       const response = await getDrivers({ needsReview: 'true', limit: 1, page: 1 });
-      const total = (response as any).meta?.total ?? 0;
+      const total = response.meta?.total ?? 0;
       setNeedsReviewCount(total);
     } catch {
       // Non-fatal; leave previous count
