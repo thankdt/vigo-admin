@@ -10,6 +10,9 @@ import { Loader2, Car } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxListDrivers, htxToggleDriverActive, type HtxDriverRow } from '@/lib/api';
 
+const formatCurrency = (n: number) =>
+  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
+
 const statusBadge = (status: string) => {
   switch (status) {
     case 'ONLINE':
@@ -84,6 +87,8 @@ export default function HtxDriversPage() {
               <TableHead>Tài xế</TableHead>
               <TableHead>Số điện thoại</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
+              <TableHead className="text-right">Thu nhập</TableHead>
+              <TableHead className="text-right">Thuế TNCN</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead>Ngày tạo</TableHead>
               <TableHead className="text-right">Hoạt động</TableHead>
@@ -92,13 +97,13 @@ export default function HtxDriversPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : drivers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Car className="h-8 w-8 text-muted-foreground" />
                     <span className="text-muted-foreground">HTX chưa có tài xế nào.</span>
@@ -125,6 +130,8 @@ export default function HtxDriversPage() {
                   </TableCell>
                   <TableCell>{d.phone ?? '—'}</TableCell>
                   <TableCell className="text-right tabular-nums">{d.tripCount}</TableCell>
+                  <TableCell className="text-right tabular-nums font-medium">{formatCurrency(d.lifetimeIncome ?? 0)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-amber-700 dark:text-amber-400">{formatCurrency(d.lifetimeTax ?? 0)}</TableCell>
                   <TableCell>{statusBadge(d.status)}</TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground">

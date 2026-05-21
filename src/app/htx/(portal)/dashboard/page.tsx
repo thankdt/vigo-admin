@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Car, DollarSign, Percent, Wallet, Ticket, Receipt, Wifi, XCircle } from 'lucide-react';
+import { Loader2, Car, DollarSign, Wallet, Ticket, Receipt, Wifi, XCircle, Landmark } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxGetDashboard, htxGetMe, type HtxDashboard } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
@@ -18,9 +18,6 @@ const periodLabels: Record<HtxDashboard['period'], string> = {
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
-
-const formatPercent = (rate: number) =>
-  `${(rate * 100).toFixed(rate < 0.01 ? 2 : 1)}%`;
 
 const todayISO = () => {
   const d = new Date();
@@ -125,9 +122,9 @@ export default function HtxDashboardPage() {
           <StatCard icon={<Ticket className="h-5 w-5" />} label="Chuyến thành công" value={String(data.ticketCount ?? 0)} hint={`Hoàn thành trong ${periodLabels[period].toLowerCase()}`} />
           <StatCard icon={<XCircle className="h-5 w-5" />} label="Chuyến hủy" value={String(data.cancelledTripCount ?? 0)} hint={`Bị hủy trong ${periodLabels[period].toLowerCase()}`} />
           <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
-          <StatCard icon={<Percent className="h-5 w-5" />} label="% App lấy" value={formatPercent(data.commissionRate ?? 0)} hint={`Hoa hồng: ${formatCurrency(data.commissionAmount ?? 0)}`} />
+          <StatCard icon={<Landmark className="h-5 w-5" />} label="Thuế TNCN" value={formatCurrency(data.pitAmount ?? 0)} hint="Thuế thu nhập cá nhân tài xế trong kỳ" />
           <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />
-          <StatCard icon={<Wallet className="h-5 w-5" />} label="Thu nhập (HTX)" value={formatCurrency(data.netIncome ?? 0)} hint="Sau hoa hồng + VAT" highlight />
+          <StatCard icon={<Wallet className="h-5 w-5" />} label="Hoa hồng HTX" value={formatCurrency(data.netIncome ?? 0)} hint="Sau hoa hồng app + VAT" highlight />
         </div>
       ) : null}
     </div>

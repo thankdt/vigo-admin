@@ -719,6 +719,8 @@ export type HtxDriverRow = {
   createdAt: string;
   vehicleRegistration: { plateNumber?: string; brand?: string; model?: string; seats?: number } | null;
   tripCount: number;
+  lifetimeIncome: number;
+  lifetimeTax: number;
 };
 
 export type HtxDashboard = {
@@ -734,6 +736,7 @@ export type HtxDashboard = {
   vatAmount: number;
   commissionRate: number;
   commissionAmount: number;
+  pitAmount: number;
   netIncome: number;
 };
 
