@@ -204,7 +204,7 @@ export async function getDrivers(params: {
   page?: number;
   limit?: number;
   search?: string;
-  isApproved?: 'true' | 'false' | 'pending';
+  isApproved?: 'true' | 'false' | 'pending' | 'unsubmitted';
   name?: string;
   phone?: string;
   plate?: string;
