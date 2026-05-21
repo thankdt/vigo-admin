@@ -73,6 +73,8 @@ export type TransportCompany = {
   // Set by admin via "Gán chủ" form — links to a User row with role TRANSPORT_COMPANY_OWNER.
   ownerUserId?: string | null;
   isActive: boolean;
+  // Decimal 0..1 — 0.05 = 5%. HTX takes this slice of each booking's finalPrice.
+  htxCommissionRate?: number;
   driverCount?: number;
   createdAt?: string;
   updatedAt?: string;

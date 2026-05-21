@@ -124,7 +124,13 @@ export default function HtxDashboardPage() {
           <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
           <StatCard icon={<Landmark className="h-5 w-5" />} label="Thuế TNCN" value={formatCurrency(data.pitAmount ?? 0)} hint="Thuế thu nhập cá nhân tài xế trong kỳ" />
           <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />
-          <StatCard icon={<Wallet className="h-5 w-5" />} label="Hoa hồng HTX" value={formatCurrency(data.netIncome ?? 0)} hint="Sau hoa hồng app + VAT" highlight />
+          <StatCard
+            icon={<Wallet className="h-5 w-5" />}
+            label="Hoa hồng HTX"
+            value={formatCurrency(data.htxCommissionAmount ?? 0)}
+            hint={`${((data.htxCommissionRate ?? 0) * 100).toFixed(2)}% × tiền khách trả (sau discount, kèm VAT + phụ phí)`}
+            highlight
+          />
         </div>
       ) : null}
     </div>

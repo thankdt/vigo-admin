@@ -655,7 +655,7 @@ export async function getTransportCompanies(params: { page?: number; limit?: num
   return response.json();
 }
 
-export async function createTransportCompany(data: { name: string; ownerName?: string; ownerPhone?: string; isActive?: boolean }): Promise<TransportCompany> {
+export async function createTransportCompany(data: { name: string; ownerName?: string; ownerPhone?: string; isActive?: boolean; htxCommissionRate?: number }): Promise<TransportCompany> {
   const response = await fetchWithAuth('/transport-companies', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -670,7 +670,7 @@ export async function getTransportCompany(id: string): Promise<TransportCompany>
   return result.data || result;
 }
 
-export async function updateTransportCompany(id: string, data: { name?: string; ownerName?: string; ownerPhone?: string; isActive?: boolean }): Promise<TransportCompany> {
+export async function updateTransportCompany(id: string, data: { name?: string; ownerName?: string; ownerPhone?: string; isActive?: boolean; htxCommissionRate?: number }): Promise<TransportCompany> {
   const response = await fetchWithAuth(`/transport-companies/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -737,7 +737,8 @@ export type HtxDashboard = {
   commissionRate: number;
   commissionAmount: number;
   pitAmount: number;
-  netIncome: number;
+  htxCommissionRate: number;
+  htxCommissionAmount: number;
 };
 
 // NestJS wraps responses globally as { data, success, ... } so every htx/* call has to

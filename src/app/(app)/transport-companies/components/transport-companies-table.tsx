@@ -71,6 +71,8 @@ type FormData = {
   ownerName: string;
   ownerPhone: string;
   isActive: boolean;
+  // Stored as percent in the form (e.g. 5 = 5%); converted to decimal on submit.
+  htxCommissionPercent: string;
 };
 
 const emptyForm: FormData = {
@@ -78,6 +80,7 @@ const emptyForm: FormData = {
   ownerName: '',
   ownerPhone: '',
   isActive: true,
+  htxCommissionPercent: '5',
 };
 
 export function TransportCompaniesTable() {
@@ -175,6 +178,7 @@ export function TransportCompaniesTable() {
       ownerName: company.ownerName || '',
       ownerPhone: company.ownerPhone || '',
       isActive: company.isActive,
+      htxCommissionPercent: ((company.htxCommissionRate ?? 0.05) * 100).toString(),
     });
     setFormOpen(true);
   };
@@ -185,6 +189,12 @@ export function TransportCompaniesTable() {
       return;
     }
 
+    const percentNum = Number(formData.htxCommissionPercent);
+    if (!Number.isFinite(percentNum) || percentNum < 0 || percentNum > 100) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Mức hoa hồng phải là số 0-100.' });
+      return;
+    }
+
     setIsSaving(true);
     try {
       const payload = {
@@ -192,6 +202,7 @@ export function TransportCompaniesTable() {
         ownerName: formData.ownerName.trim() || undefined,
         ownerPhone: formData.ownerPhone.trim() || undefined,
         isActive: formData.isActive,
+        htxCommissionRate: percentNum / 100,
       };
 
       if (editingId) {
@@ -464,6 +475,20 @@ export function TransportCompaniesTable() {
                 value={formData.ownerPhone}
                 onChange={(e) => setFormData({ ...formData, ownerPhone: e.target.value })}
               />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="htx-commission">Mức hoa hồng HTX (%)</Label>
+              <Input
+                id="htx-commission"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="5"
+                value={formData.htxCommissionPercent}
+                onChange={(e) => setFormData({ ...formData, htxCommissionPercent: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">HTX nhận % này × tiền khách trả mỗi chuyến (sau discount, kèm VAT + phụ phí).</p>
             </div>
             {editingId && (
               <div className="flex items-center justify-between">
