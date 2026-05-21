@@ -4,8 +4,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 
 export const ISSUE_LABELS: Record<string, string> = {
   missing_name: 'Thiếu tên',
-  invalid_phone: 'SDT sai định dạng',
-  missing_license: 'Thiếu số bằng lái',
   missing_license_images: 'Thiếu ảnh bằng lái',
   missing_cccd_images: 'Thiếu ảnh CCCD',
   missing_vehicle: 'Chưa có thông tin xe',
