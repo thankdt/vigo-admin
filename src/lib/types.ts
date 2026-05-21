@@ -119,6 +119,7 @@ export type Driver = {
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
   isIndependentDriver?: boolean;
+  issues?: string[];
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';
