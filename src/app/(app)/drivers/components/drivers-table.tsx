@@ -76,7 +76,7 @@ function safeImageArray(images: any): string[] {
 }
 
 type SortKey = keyof Driver;
-type TableTab = 'pending' | 'true' | 'false' | 'needsReview';
+type TableTab = 'all' | 'pending' | 'true' | 'false' | 'needsReview';
 
 export function DriversTable() {
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
@@ -130,7 +130,7 @@ export function DriversTable() {
       };
       if (tab === 'needsReview') {
         apiParams.needsReview = 'true';
-      } else {
+      } else if (tab !== 'all') {
         apiParams.isApproved = tab as 'pending' | 'true' | 'false';
       }
 
@@ -307,6 +307,7 @@ export function DriversTable() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="pb-4">
           <TabsList>
+            <TabsTrigger value="all">Tất cả</TabsTrigger>
             <TabsTrigger value="pending">Chờ duyệt</TabsTrigger>
             <TabsTrigger value="true">Đã duyệt</TabsTrigger>
             <TabsTrigger value="false">Từ chối</TabsTrigger>

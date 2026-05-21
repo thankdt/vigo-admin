@@ -11,18 +11,18 @@ describe('DriverIssueBadges', () => {
   });
 
   it('renders all badges when there are 2 or fewer', () => {
-    render(<DriverIssueBadges issues={['missing_license', 'invalid_plate']} />);
-    expect(screen.getByText('Thiếu số bằng lái')).toBeInTheDocument();
+    render(<DriverIssueBadges issues={['missing_license_images', 'invalid_plate']} />);
+    expect(screen.getByText('Thiếu ảnh bằng lái')).toBeInTheDocument();
     expect(screen.getByText('Biển số sai định dạng')).toBeInTheDocument();
   });
 
   it('shows first 2 badges and a +N overflow chip when more than 2', () => {
     render(
       <DriverIssueBadges
-        issues={['missing_license', 'invalid_plate', 'missing_cccd_images', 'missing_name']}
+        issues={['missing_license_images', 'invalid_plate', 'missing_cccd_images', 'missing_name']}
       />,
     );
-    expect(screen.getByText('Thiếu số bằng lái')).toBeInTheDocument();
+    expect(screen.getByText('Thiếu ảnh bằng lái')).toBeInTheDocument();
     expect(screen.getByText('Biển số sai định dạng')).toBeInTheDocument();
     expect(screen.queryByText('Thiếu ảnh CCCD')).not.toBeInTheDocument();
     expect(screen.getByText('+2')).toBeInTheDocument();
