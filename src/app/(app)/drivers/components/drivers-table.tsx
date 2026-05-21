@@ -23,11 +23,11 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices } from '@/lib/api';
 import { DriverIssueBadges } from './driver-issue-badges';
-import { DriversFilterBar, EMPTY_FILTERS, type DriverFilters } from './drivers-filter-bar';
+import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
 import type { Driver, TransportCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   AlertDialog,
@@ -112,7 +112,10 @@ export function DriversTable() {
   const [totalItems, setTotalItems] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(20);
 
+  const fetchGenRef = React.useRef(0);
+
   const fetchDrivers = React.useCallback(async (tab: TableTab, f: DriverFilters, page: number, limit: number) => {
+    const gen = ++fetchGenRef.current;
     setIsLoading(true);
     setError(null);
     try {
@@ -128,10 +131,11 @@ export function DriversTable() {
       if (tab === 'needsReview') {
         apiParams.needsReview = 'true';
       } else {
-        apiParams.isApproved = tab;
+        apiParams.isApproved = tab as 'pending' | 'true' | 'false';
       }
 
       const response = await getDrivers(apiParams);
+      if (gen !== fetchGenRef.current) return;
       setDrivers(response.data);
       const meta = (response as any).meta;
       const total = meta?.total ?? 0;
@@ -139,6 +143,7 @@ export function DriversTable() {
       setTotalItems(total);
       setTotalPages(Math.max(1, Math.ceil(total / apiLimit)));
     } catch (err: any) {
+      if (gen !== fetchGenRef.current) return;
       setError(err.message);
       toast({
         variant: 'destructive',
@@ -146,7 +151,9 @@ export function DriversTable() {
         description: err.message,
       });
     } finally {
-      setIsLoading(false);
+      if (gen === fetchGenRef.current) {
+        setIsLoading(false);
+      }
     }
   }, [toast]);
 
@@ -308,7 +315,10 @@ export function DriversTable() {
               <AlertTriangle className="h-3.5 w-3.5" />
               Cần kiểm tra
               {needsReviewCount > 0 && (
-                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-medium text-white">
+                <span
+                  aria-label={`${needsReviewCount} tài xế cần kiểm tra`}
+                  className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-medium text-white"
+                >
                   {needsReviewCount}
                 </span>
               )}
@@ -373,7 +383,7 @@ export function DriversTable() {
               ) : sortedDrivers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">
-                    {activeTab === 'needsReview' && !Object.values(filters).some(Boolean)
+                    {activeTab === 'needsReview' && !hasAnyFilter(filters)
                       ? '✅ Tất cả tài xế đều có thông tin đầy đủ.'
                       : 'Không tìm thấy tài xế nào.'}
                   </TableCell>

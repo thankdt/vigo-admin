@@ -23,7 +23,7 @@ export const EMPTY_FILTERS: DriverFilters = {
   transportCompanyId: '',
 };
 
-function hasAnyFilter(f: DriverFilters): boolean {
+export function hasAnyFilter(f: DriverFilters): boolean {
   return Boolean(f.name || f.phone || f.plate || f.serviceType || f.transportCompanyId);
 }
 
