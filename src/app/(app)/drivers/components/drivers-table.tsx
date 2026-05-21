@@ -373,7 +373,7 @@ export function DriversTable() {
               ) : sortedDrivers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">
-                    {activeTab === 'needsReview'
+                    {activeTab === 'needsReview' && !Object.values(filters).some(Boolean)
                       ? '✅ Tất cả tài xế đều có thông tin đầy đủ.'
                       : 'Không tìm thấy tài xế nào.'}
                   </TableCell>
