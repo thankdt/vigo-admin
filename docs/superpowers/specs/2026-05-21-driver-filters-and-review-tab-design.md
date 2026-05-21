@@ -90,7 +90,7 @@ After `getManyAndCount()`, map each driver through `computeDriverIssues(d)` and 
   OR driver.vehicleRegistration->>'model' IS NULL
   OR driver.vehicleRegistration->>'color' IS NULL
   OR driver.vehicleRegistration->>'plateNumber' !~* '^\d{2}[A-Z]{1,2}-?\d{3}\.?\d{2,3}$'
-  OR (driver.customTransportCompanyName IS NOT NULL AND driver.transportCompanyId IS NULL)
+  OR (driver.customTransportCompanyName IS NOT NULL AND driver.transportCompanyId IS NULL AND driver.isIndependentDriver = false)
   OR (driver.transportCompanyId IS NULL AND driver.isIndependentDriver = false AND driver.customTransportCompanyName IS NULL)
 )
 ```
