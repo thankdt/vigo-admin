@@ -30,6 +30,7 @@ import {
   Share2,
   Wallet,
   Megaphone,
+  DollarSign,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -48,6 +49,7 @@ const navItems = [
   { href: '/bookings', label: 'Chuyến đi', icon: Book },
   { href: '/referrals', label: 'Affiliate', icon: Share2 },
   { href: '/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
+  { href: '/finance', label: 'Tài chính', icon: DollarSign },
   { href: '/master-data', label: 'Dữ liệu chung', icon: Map },
   { href: '/promotions', label: 'Khuyến mãi', icon: Ticket },
   { href: '/reports', label: 'Báo cáo', icon: Bot },
