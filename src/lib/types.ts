@@ -123,6 +123,30 @@ export type Driver = {
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';
 
+export type PriceBreakdown = {
+  transportPrice: number;
+  sizeSurcharge: number;
+  weightSurcharge: number;
+  weekendSurcharge: number;
+  holidaySurcharge: number;
+  serviceFee: number;
+  vatAmount: number;
+  loyaltyDiscount: number;
+  promotionDiscount: number;
+};
+
+export type DriverEarnings = {
+  grossPrice: number;
+  commissionRate: number;          // 0..1, e.g. 0.15
+  commissionAmount: number;
+  commissionVatRate: number;       // 0..1, e.g. 0.08
+  commissionVatAmount: number;
+  grossEarnings: number;
+  personalIncomeTaxRate: number;
+  personalIncomeTaxAmount: number;
+  netEarnings: number;
+};
+
 export type Booking = {
   id: string;
   customerId: string;
@@ -155,6 +179,10 @@ export type Booking = {
     name?: string;
     phone: string;
   } | null;
+  priceBreakdown?: PriceBreakdown | null;
+  driverEarnings?: DriverEarnings;
+  finalPriceVAT?: number;
+  distanceKm?: number;
 }
 
 export type Permission =
