@@ -5,6 +5,7 @@ import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getFinanceDashboard, type FinanceDashboard } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from './components/finance-filter';
+import { FinanceStatCards } from './components/finance-stat-cards';
 
 export default function FinancePage() {
   const { toast } = useToast();
@@ -42,10 +43,7 @@ export default function FinancePage() {
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </div>
       ) : data ? (
-        <div className="text-sm text-muted-foreground">
-          Loaded range: {data.range.from} → {data.range.to}.
-          (Stat cards / chart / top tables added in subsequent tasks.)
-        </div>
+        <FinanceStatCards data={data} />
       ) : null}
     </div>
   );
