@@ -141,10 +141,10 @@ export type DriverEarnings = {
   commissionAmount: number;
   commissionVatRate: number;       // 0..1, e.g. 0.08
   commissionVatAmount: number;
-  grossEarnings: number;
+  grossEarnings: number;          // grossPrice - commissionAmount - commissionVatAmount
   personalIncomeTaxRate: number;
   personalIncomeTaxAmount: number;
-  netEarnings: number;
+  netEarnings: number;             // grossEarnings - personalIncomeTaxAmount
 };
 
 export type Booking = {
