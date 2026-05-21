@@ -221,7 +221,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
   };
 
   const driverName = booking?.driver
-    ? (booking.driver as any).fullName || booking.driver.name || booking.driver.fullName || 'N/A'
+    ? booking.driver.user?.fullName || (booking.driver as any).fullName || booking.driver.name || 'N/A'
     : null;
 
   return (
@@ -280,7 +280,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                     </div>
                     <div className="flex-1 text-sm">
                       <div className="font-semibold">{driverName}</div>
-                      <div className="text-muted-foreground">{booking.driver?.phone ?? 'N/A'}</div>
+                      <div className="text-muted-foreground">{booking.driver?.user?.phone ?? booking.driver?.phone ?? 'N/A'}</div>
                     </div>
                   </div>
                 ) : (
@@ -746,8 +746,8 @@ export function BookingsTable() {
                     <TableCell>
                       {booking.driver ? (
                         <div className="flex flex-col">
-                          <span className='font-semibold'>{booking.driver.fullName ?? booking.driver.name ?? 'N/A'}</span>
-                          <span className='text-sm text-muted-foreground'>{booking.driver.phone}</span>
+                          <span className='font-semibold'>{booking.driver.user?.fullName ?? booking.driver.fullName ?? booking.driver.name ?? 'N/A'}</span>
+                          <span className='text-sm text-muted-foreground'>{booking.driver.user?.phone ?? booking.driver.phone ?? 'N/A'}</span>
                         </div>
                       ) : (
                         <span className='text-sm text-muted-foreground'>N/A</span>

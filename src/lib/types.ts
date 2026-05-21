@@ -183,7 +183,14 @@ export type Booking = {
     id: string;
     fullName?: string;
     name?: string;
-    phone: string;
+    phone?: string;
+    user?: {
+      id?: string;
+      fullName?: string;
+      phone?: string;
+      avatar?: string;
+      avatarUrl?: string;
+    };
   } | null;
   priceBreakdown?: PriceBreakdown | null;
   driverEarnings?: DriverEarnings;
