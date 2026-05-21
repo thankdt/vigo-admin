@@ -26,14 +26,14 @@ Issues are computed server-side per driver and returned as a string-code array (
 | `missing_cccd_images` | `cccdImages` is null OR `jsonb_array_length = 0` |
 | `missing_vehicle` | `vehicleRegistration` JSONB is null |
 | `incomplete_vehicle` | `vehicleRegistration` exists but missing any of `plateNumber`, `brand`, `model`, `color` |
-| `invalid_plate` | `vehicleRegistration.plateNumber` exists but fails `/^\d{2}[A-Z]{1,2}-?\d{3}\.?\d{2,3}$/i` |
+| `invalid_plate` | `vehicleRegistration.plateNumber` exists but fails `/^\d{2}[A-Z]{1,2}-?\d{3}\.?\d{2}$/i` |
 | `unconfirmed_company` | `customTransportCompanyName` set AND `transportCompanyId` null |
 | `no_transport_company` | `transportCompanyId` null AND `isIndependentDriver = false` AND `customTransportCompanyName` null (mutually exclusive with `unconfirmed_company`) |
 
 A driver with `issues.length > 0` is considered "needs review".
 
 VN phone format: 10 digits starting with `0` (e.g. `0901234567`).
-VN plate format: 2 digits + 1-2 uppercase letters + optional dash + 3 digits + optional dot + 2-3 digits (e.g. `29A-12345`, `30F-123.45`).
+VN plate format: 2 digits + 1-2 uppercase letters + optional dash + 3 digits + optional dot + 2 digits (e.g. `29A-12345`, `30F-123.45`, `51AB-12345`). Total of 5 digits in the numeric portion.
 
 ## Backend changes — `vigo-backend`
 

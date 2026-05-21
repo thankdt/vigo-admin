@@ -443,7 +443,7 @@ async findAllDrivers(params: {
         OR driver.vehicleRegistration->>'brand' IS NULL
         OR driver.vehicleRegistration->>'model' IS NULL
         OR driver.vehicleRegistration->>'color' IS NULL
-        OR driver.vehicleRegistration->>'plateNumber' !~* '^[0-9]{2}[A-Z]{1,2}-?[0-9]{3}\\.?[0-9]{2,3}$'
+        OR driver.vehicleRegistration->>'plateNumber' !~* '^[0-9]{2}[A-Z]{1,2}-?[0-9]{3}\\.?[0-9]{2}$'
         OR (driver.customTransportCompanyName IS NOT NULL AND driver.transportCompanyId IS NULL AND driver.isIndependentDriver = false)
         OR (driver.transportCompanyId IS NULL AND driver.isIndependentDriver = false AND driver.customTransportCompanyName IS NULL)
       )`,
