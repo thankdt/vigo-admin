@@ -200,13 +200,30 @@ export async function unlockUser(id: string): Promise<void> {
   await fetchWithAuth(`/users/admin/${id}/unlock`, { method: 'POST' });
 }
 
-export async function getDrivers(params: { page?: number; limit?: number; search?: string; isApproved?: 'true' | 'false' | 'pending' } = {}): Promise<GetApiResponse<Driver>> {
+export async function getDrivers(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  isApproved?: 'true' | 'false' | 'pending';
+  name?: string;
+  phone?: string;
+  plate?: string;
+  serviceType?: 'RIDE' | 'CARPOOL' | 'DELIVERY';
+  transportCompanyId?: string;
+  needsReview?: 'true' | 'false';
+} = {}): Promise<GetApiResponse<Driver>> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
-    ...(params.search && { search: params.search }),
-    ...(params.isApproved && { isApproved: params.isApproved }),
   });
+  if (params.search) query.set('search', params.search);
+  if (params.isApproved) query.set('isApproved', params.isApproved);
+  if (params.name) query.set('name', params.name);
+  if (params.phone) query.set('phone', params.phone);
+  if (params.plate) query.set('plate', params.plate);
+  if (params.serviceType) query.set('serviceType', params.serviceType);
+  if (params.transportCompanyId) query.set('transportCompanyId', params.transportCompanyId);
+  if (params.needsReview) query.set('needsReview', params.needsReview);
 
   const response = await fetchWithAuth(`/drivers/admin/list?${query.toString()}`);
   return response.json();
