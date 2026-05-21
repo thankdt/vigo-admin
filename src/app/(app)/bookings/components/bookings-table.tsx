@@ -62,11 +62,16 @@ const statusLabelMap: Record<string, string> = {
   CANCELLED: 'Đã hủy',
 };
 
+const paymentMethodMap: Record<string, string> = {
+  CASH: '💵 Tiền mặt',
+  WALLET: '💳 Ví điện tử',
+};
+
 function PriceBreakdownCard({ booking }: { booking: Booking }) {
   const fmtVnd = (v: number | string | null | undefined) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
 
-  const fmtPct = (rate: number) => `${(rate * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
+  const fmtPct = (rate: number | string) => `${(Number(rate) * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
 
   const breakdown = booking.priceBreakdown;
   const earnings = booking.driverEarnings;
@@ -84,11 +89,6 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
     { label: 'Khách thân thiết', value: Number(breakdown.loyaltyDiscount ?? 0) },
     { label: 'Mã khuyến mãi', value: Number(breakdown.promotionDiscount ?? 0) },
   ].filter(r => r.value > 0) : [];
-
-  const paymentMethodMap: Record<string, string> = {
-    CASH: '💵 Tiền mặt',
-    WALLET: '💳 Ví điện tử',
-  };
 
   return (
     <Card className="p-3 space-y-3">
@@ -204,11 +204,6 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
     RIDE: '🚗 Chở khách',
     DELIVERY: '📦 Giao hàng',
     CARPOOL: '🚌 Đi chung',
-  };
-
-  const paymentMethodMap: Record<string, string> = {
-    CASH: '💵 Tiền mặt',
-    WALLET: '💳 Ví điện tử',
   };
 
   const getAddress = (addr: string | { address: string; lat?: number; lng?: number; long?: number } | null | undefined): string => {
