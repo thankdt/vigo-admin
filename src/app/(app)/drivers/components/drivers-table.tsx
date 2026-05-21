@@ -18,14 +18,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2 } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, Clock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, API_BASE_URL } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices } from '@/lib/api';
+import { DriverIssueBadges } from './driver-issue-badges';
+import { DriversFilterBar, EMPTY_FILTERS, type DriverFilters } from './drivers-filter-bar';
 import type { Driver, TransportCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -75,7 +76,7 @@ function safeImageArray(images: any): string[] {
 }
 
 type SortKey = keyof Driver;
-type ApprovalStatus = 'pending' | 'true' | 'false';
+type TableTab = 'pending' | 'true' | 'false' | 'needsReview';
 
 export function DriversTable() {
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
@@ -84,8 +85,10 @@ export function DriversTable() {
   const { toast } = useToast();
 
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
-  const [searchTerm, setSearchTerm] = React.useState('');
-  const [activeTab, setActiveTab] = React.useState<ApprovalStatus>('pending');
+  const [filters, setFilters] = React.useState<DriverFilters>(EMPTY_FILTERS);
+  const [activeTab, setActiveTab] = React.useState<TableTab>('pending');
+  const [needsReviewCount, setNeedsReviewCount] = React.useState<number>(0);
+  const [allTransportCompanies, setAllTransportCompanies] = React.useState<TransportCompany[]>([]);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; driver: Driver | null, action: 'approve' | 'reject' }>({ open: false, driver: null, action: 'approve' });
   const [rejectionReason, setRejectionReason] = React.useState('');
@@ -109,13 +112,27 @@ export function DriversTable() {
   const [totalItems, setTotalItems] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(20);
 
-  const fetchDrivers = React.useCallback(async (status: ApprovalStatus, search: string, page: number, limit: number) => {
+  const fetchDrivers = React.useCallback(async (tab: TableTab, f: DriverFilters, page: number, limit: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await getDrivers({ isApproved: status, search: search, page, limit });
+      const apiParams: Parameters<typeof getDrivers>[0] = {
+        page,
+        limit,
+        name: f.name || undefined,
+        phone: f.phone || undefined,
+        plate: f.plate || undefined,
+        serviceType: f.serviceType || undefined,
+        transportCompanyId: f.transportCompanyId || undefined,
+      };
+      if (tab === 'needsReview') {
+        apiParams.needsReview = 'true';
+      } else {
+        apiParams.isApproved = tab;
+      }
+
+      const response = await getDrivers(apiParams);
       setDrivers(response.data);
-      // Parse pagination meta from response
       const meta = (response as any).meta;
       const total = meta?.total ?? 0;
       const apiLimit = meta?.limit ?? limit;
@@ -124,8 +141,8 @@ export function DriversTable() {
     } catch (err: any) {
       setError(err.message);
       toast({
-        variant: "destructive",
-        title: "Không thể tải danh sách tài xế",
+        variant: 'destructive',
+        title: 'Không thể tải danh sách tài xế',
         description: err.message,
       });
     } finally {
@@ -133,18 +150,40 @@ export function DriversTable() {
     }
   }, [toast]);
 
+  const refreshNeedsReviewCount = React.useCallback(async () => {
+    try {
+      const response = await getDrivers({ needsReview: 'true', limit: 1, page: 1 });
+      const total = (response as any).meta?.total ?? 0;
+      setNeedsReviewCount(total);
+    } catch {
+      // Non-fatal; leave previous count
+    }
+  }, []);
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
-    }, 500); // Debounce search
+      fetchDrivers(activeTab, filters, currentPage, pageSize);
+    }, 400);
 
     return () => clearTimeout(timer);
-  }, [fetchDrivers, activeTab, searchTerm, currentPage, pageSize]);
+  }, [fetchDrivers, activeTab, filters, currentPage, pageSize]);
+
+  React.useEffect(() => {
+    refreshNeedsReviewCount();
+    getTransportCompanyList()
+      .then(setAllTransportCompanies)
+      .catch(() => { /* dropdown stays empty if it fails */ });
+  }, [refreshNeedsReviewCount]);
 
   const handleTabChange = (value: string) => {
-    setActiveTab(value as ApprovalStatus);
-    setCurrentPage(1); // Reset to page 1 on tab change
-  }
+    setActiveTab(value as TableTab);
+    setCurrentPage(1);
+  };
+
+  const handleFiltersChange = (next: DriverFilters) => {
+    setFilters(next);
+    setCurrentPage(1);
+  };
 
   const sortedDrivers = React.useMemo(() => {
     let sortableDrivers = [...drivers];
@@ -217,7 +256,8 @@ export function DriversTable() {
         await rejectDriver(dialogState.driver.id, rejectionReason);
         toast({ title: "Đã từ chối tài xế", description: `${driverName} đã bị từ chối.` });
       }
-      fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      refreshNeedsReviewCount();
       closeConfirmationDialog();
     } catch (err: any) {
       toast({
@@ -247,7 +287,8 @@ export function DriversTable() {
       toast({ title: 'Thành công', description: 'Đã gán đơn vị vận tải cho tài xế.' });
       setAssignDriver(null);
       setSelectedCompanyId('');
-      fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      refreshNeedsReviewCount();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
     } finally {
@@ -258,21 +299,35 @@ export function DriversTable() {
   return (
     <>
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <div className="flex items-center pb-4">
+        <div className="pb-4">
           <TabsList>
             <TabsTrigger value="pending">Chờ duyệt</TabsTrigger>
             <TabsTrigger value="true">Đã duyệt</TabsTrigger>
             <TabsTrigger value="false">Từ chối</TabsTrigger>
+            <TabsTrigger value="needsReview" className="gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" />
+              Cần kiểm tra
+              {needsReviewCount > 0 && (
+                <span className="inline-flex h-5 min-w-[1.25rem] items-center justify-center rounded-full bg-red-500 px-1.5 text-xs font-medium text-white">
+                  {needsReviewCount}
+                </span>
+              )}
+            </TabsTrigger>
           </TabsList>
-          <div className='ml-auto'>
-            <Input
-              placeholder="Tìm theo tên, SĐT, biển số..."
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              className="max-w-sm"
-            />
-          </div>
         </div>
+
+        <DriversFilterBar
+          value={filters}
+          onChange={handleFiltersChange}
+          transportCompanies={allTransportCompanies}
+        />
+
+        {activeTab === 'needsReview' && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4" />
+            Đang hiển thị tài xế có thông tin chưa chuẩn. Tổng: {totalItems} tài xế.
+          </div>
+        )}
         <Card>
           <Table>
             <TableHeader>
@@ -318,7 +373,9 @@ export function DriversTable() {
               ) : sortedDrivers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="h-24 text-center">
-                    Không tìm thấy tài xế nào.
+                    {activeTab === 'needsReview'
+                      ? '✅ Tất cả tài xế đều có thông tin đầy đủ.'
+                      : 'Không tìm thấy tài xế nào.'}
                   </TableCell>
                 </TableRow>
               ) : (
@@ -336,6 +393,7 @@ export function DriversTable() {
                         <div className="grid">
                           <span className="font-semibold">{driverName}</span>
                           <span className="text-sm text-muted-foreground">{driverPhone}</span>
+                          <DriverIssueBadges issues={driver.issues} />
                         </div>
                       </div>
                     </TableCell>
@@ -667,7 +725,8 @@ export function DriversTable() {
                             setViewDriver({ ...viewDriver, enabledServices: updated.enabledServices ?? editingServices });
                             setEditingServices(null);
                             toast({ title: 'Đã cập nhật dịch vụ' });
-                            fetchDrivers(activeTab, searchTerm, currentPage, pageSize);
+                            fetchDrivers(activeTab, filters, currentPage, pageSize);
+                            refreshNeedsReviewCount();
                           } catch (err: any) {
                             toast({ variant: 'destructive', title: 'Không thể cập nhật', description: err.message });
                           } finally {
