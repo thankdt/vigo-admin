@@ -62,6 +62,120 @@ const statusLabelMap: Record<string, string> = {
   CANCELLED: 'Đã hủy',
 };
 
+function PriceBreakdownCard({ booking }: { booking: Booking }) {
+  const fmtVnd = (v: number | string | null | undefined) =>
+    new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
+
+  const fmtPct = (rate: number) => `${(rate * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
+
+  const breakdown = booking.priceBreakdown;
+  const earnings = booking.driverEarnings;
+
+  const surcharges: Array<{ label: string; value: number }> = breakdown ? [
+    { label: 'Phụ phí kích thước', value: Number(breakdown.sizeSurcharge ?? 0) },
+    { label: 'Phụ phí trọng lượng', value: Number(breakdown.weightSurcharge ?? 0) },
+    { label: 'Phụ phí cuối tuần', value: Number(breakdown.weekendSurcharge ?? 0) },
+    { label: 'Phụ phí ngày lễ', value: Number(breakdown.holidaySurcharge ?? 0) },
+    { label: 'Phí dịch vụ', value: Number(breakdown.serviceFee ?? 0) },
+    { label: 'Thuế VAT', value: Number(breakdown.vatAmount ?? 0) },
+  ].filter(r => r.value > 0) : [];
+
+  const discounts: Array<{ label: string; value: number }> = breakdown ? [
+    { label: 'Khách thân thiết', value: Number(breakdown.loyaltyDiscount ?? 0) },
+    { label: 'Mã khuyến mãi', value: Number(breakdown.promotionDiscount ?? 0) },
+  ].filter(r => r.value > 0) : [];
+
+  const paymentMethodMap: Record<string, string> = {
+    CASH: '💵 Tiền mặt',
+    WALLET: '💳 Ví điện tử',
+  };
+
+  return (
+    <Card className="p-3 space-y-3">
+      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi phí</div>
+
+      {booking.distanceKm != null && (
+        <div className="text-sm text-muted-foreground">
+          Khoảng cách: <span className="font-medium text-foreground">{Number(booking.distanceKm).toFixed(1)} km</span>
+        </div>
+      )}
+
+      {breakdown ? (
+        <div className="space-y-1.5 text-sm">
+          <div className="text-xs font-medium text-muted-foreground">Tạm tính</div>
+          <div className="flex justify-between">
+            <span>Giá vận chuyển</span>
+            <span>{fmtVnd(breakdown.transportPrice)}</span>
+          </div>
+          {surcharges.map(s => (
+            <div key={s.label} className="flex justify-between">
+              <span>{s.label}</span>
+              <span>+{fmtVnd(s.value)}</span>
+            </div>
+          ))}
+          <div className="flex justify-between border-t pt-1.5 font-medium">
+            <span>Giá gốc</span>
+            <span>{fmtVnd(booking.price)}</span>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-between text-sm">
+          <span className="text-muted-foreground">Giá gốc</span>
+          <span className="font-medium">{fmtVnd(booking.price)}</span>
+        </div>
+      )}
+
+      {discounts.length > 0 && (
+        <div className="space-y-1.5 text-sm">
+          <div className="text-xs font-medium text-muted-foreground">Giảm giá</div>
+          {discounts.map(d => (
+            <div key={d.label} className="flex justify-between text-orange-600">
+              <span>{d.label}</span>
+              <span>-{fmtVnd(d.value)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex justify-between border-t pt-2 text-sm">
+        <span className="font-semibold">Khách trả</span>
+        <span className="font-semibold text-green-600">{fmtVnd(booking.finalPrice ?? booking.price)}</span>
+      </div>
+      {booking.paymentMethod && (
+        <div className="text-xs text-muted-foreground -mt-1">
+          Phương thức: {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
+        </div>
+      )}
+
+      {earnings && (
+        <div className="space-y-1.5 text-sm border-t pt-2">
+          <div className="text-xs font-medium text-muted-foreground">Phân bổ doanh thu</div>
+          <div className="flex justify-between">
+            <span>Hoa hồng nền tảng ({fmtPct(earnings.commissionRate)})</span>
+            <span className="text-red-600">-{fmtVnd(earnings.commissionAmount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>VAT hoa hồng ({fmtPct(earnings.commissionVatRate)})</span>
+            <span className="text-red-600">-{fmtVnd(earnings.commissionVatAmount)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Tài xế nhận (gross)</span>
+            <span>{fmtVnd(earnings.grossEarnings)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Thuế TNCN tài xế ({fmtPct(earnings.personalIncomeTaxRate)})</span>
+            <span className="text-red-600">-{fmtVnd(earnings.personalIncomeTaxAmount)}</span>
+          </div>
+          <div className="flex justify-between border-t pt-1.5 font-medium">
+            <span>Tài xế thực nhận</span>
+            <span>{fmtVnd(earnings.netEarnings)}</span>
+          </div>
+        </div>
+      )}
+    </Card>
+  );
+}
+
 function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () => void }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -209,36 +323,24 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                     </div>
                   </div>
                 </div>
+                {(booking.requestedSeats != null || booking.requestedVehicleType) && (
+                  <div className="flex gap-4 border-t pt-2 text-xs text-muted-foreground">
+                    {booking.requestedSeats != null && (
+                      <div>
+                        <span className="font-medium">Số ghế:</span> {booking.requestedSeats}
+                      </div>
+                    )}
+                    {booking.requestedVehicleType && (
+                      <div>
+                        <span className="font-medium">Loại xe:</span> {booking.requestedVehicleType}
+                      </div>
+                    )}
+                  </div>
+                )}
               </Card>
 
               {/* Pricing */}
-              <Card className="p-3 space-y-2">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi phí</div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <div className="text-muted-foreground">Giá gốc</div>
-                    <div className="font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</div>
-                  </div>
-                  {booking.finalPrice != null && booking.finalPrice !== booking.price && (
-                    <div>
-                      <div className="text-muted-foreground">Giá cuối</div>
-                      <div className="font-semibold text-green-600">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.finalPrice)}</div>
-                    </div>
-                  )}
-                  {booking.requestedSeats != null && (
-                    <div>
-                      <div className="text-muted-foreground">Số ghế yêu cầu</div>
-                      <div className="font-semibold">{booking.requestedSeats}</div>
-                    </div>
-                  )}
-                  {booking.requestedVehicleType && (
-                    <div>
-                      <div className="text-muted-foreground">Loại xe</div>
-                      <div className="font-semibold">{booking.requestedVehicleType}</div>
-                    </div>
-                  )}
-                </div>
-              </Card>
+              <PriceBreakdownCard booking={booking} />
 
               {/* Note */}
               {booking.note && (
