@@ -96,6 +96,9 @@ export type Driver = {
     brand: string;
     model: string;
     color: string;
+    year?: number;
+    seats?: number;
+    images?: string[];
   };
   user?: {
     id: string;

@@ -647,6 +647,22 @@ export function DriversTable() {
                       <p className="font-medium text-sm">{viewDriver.vehicleRegistration.color}</p>
                     </div>
                   </div>
+                  {safeImageArray(viewDriver.vehicleRegistration.images).length > 0 && (
+                    <div className="space-y-2 pt-3">
+                      <Label className="text-xs text-muted-foreground">Ảnh xe</Label>
+                      <div className="flex gap-4 overflow-x-auto pb-2">
+                        {safeImageArray(viewDriver.vehicleRegistration.images).map((img, idx) => (
+                          <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
+                            <img
+                              src={getImageUrl(img)}
+                              alt={`Vehicle ${idx + 1}`}
+                              className="h-32 object-cover rounded-md border"
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
