@@ -7,6 +7,7 @@ import { getFinanceDashboard, type FinanceDashboard } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from './components/finance-filter';
 import { FinanceStatCards } from './components/finance-stat-cards';
 import { FinanceTrendChart } from './components/finance-trend-chart';
+import { FinanceTopTables } from './components/finance-top-tables';
 
 export default function FinancePage() {
   const { toast } = useToast();
@@ -47,6 +48,7 @@ export default function FinancePage() {
         <>
           <FinanceStatCards data={data} />
           <FinanceTrendChart data={data} />
+          <FinanceTopTables data={data} />
         </>
       ) : null}
     </div>
