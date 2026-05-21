@@ -761,9 +761,29 @@ export async function htxGetMe(): Promise<TransportCompany> {
   return unwrap<TransportCompany>(response);
 }
 
-export async function htxListDrivers(): Promise<HtxDriverRow[]> {
-  const response = await fetchWithAuth('/htx/drivers');
-  return unwrap<HtxDriverRow[]>(response);
+export type HtxDriverListResponse = {
+  data: HtxDriverRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export async function htxListDrivers(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  isApproved?: 'true' | 'false' | 'pending' | 'unsubmitted';
+  status?: 'ONLINE' | 'OFFLINE' | 'BUSY';
+  isActive?: 'true' | 'false';
+} = {}): Promise<HtxDriverListResponse> {
+  const q = new URLSearchParams({
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 20),
+  });
+  if (params.search) q.set('search', params.search);
+  if (params.isApproved) q.set('isApproved', params.isApproved);
+  if (params.status) q.set('status', params.status);
+  if (params.isActive) q.set('isActive', params.isActive);
+  const response = await fetchWithAuth(`/htx/drivers?${q.toString()}`);
+  return unwrap<HtxDriverListResponse>(response);
 }
 
 export async function htxToggleDriverActive(driverId: string): Promise<{ id: string; isActive: boolean }> {
