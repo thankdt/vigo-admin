@@ -8,6 +8,8 @@ import {
   ChevronsRight,
   Receipt,
   RotateCcw,
+  Search,
+  Loader2,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,50 +18,85 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { DEFAULT_INVOICE_DATE_RANGE, mockInvoiceTrips } from './invoice-data';
+import { useToast } from '@/hooks/use-toast';
 import {
-  filterInvoiceTrips,
+  getAdminInvoices,
+  getTransportCompanyList,
+  type AdminInvoiceRow,
+} from '@/lib/api';
+import type { TransportCompany } from '@/lib/types';
+import {
   formatInvoiceCurrency,
   formatInvoiceTripDate,
-  getInvoiceTotalAmount,
-  getInvoiceTotalPages,
-  paginateInvoiceTrips,
 } from './invoice-utils';
 
+const ALL_TC = '__ALL__';
+
 export default function InvoicesPage() {
-  const [fromDate, setFromDate] = React.useState(DEFAULT_INVOICE_DATE_RANGE.from);
-  const [toDate, setToDate] = React.useState(DEFAULT_INVOICE_DATE_RANGE.to);
-  const [currentPage, setCurrentPage] = React.useState(1);
+  const { toast } = useToast();
+  const [fromDate, setFromDate] = React.useState('');
+  const [toDate, setToDate] = React.useState('');
+  const [search, setSearch] = React.useState('');
+  const [transportCompanyId, setTransportCompanyId] = React.useState<string>('');
+  const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
 
-  const filteredTrips = React.useMemo(
-    () => filterInvoiceTrips(mockInvoiceTrips, { from: fromDate, to: toDate }),
-    [fromDate, toDate],
-  );
+  const [rows, setRows] = React.useState<AdminInvoiceRow[]>([]);
+  const [total, setTotal] = React.useState(0);
+  const [totalPages, setTotalPages] = React.useState(1);
+  const [isLoading, setIsLoading] = React.useState(true);
 
-  const totalPages = getInvoiceTotalPages(filteredTrips.length, pageSize);
-  const effectivePage = Math.min(currentPage, totalPages);
-  const currentTrips = React.useMemo(
-    () => paginateInvoiceTrips(filteredTrips, effectivePage, pageSize),
-    [filteredTrips, effectivePage, pageSize],
-  );
+  const [companies, setCompanies] = React.useState<TransportCompany[]>([]);
 
+  // Load transport-company options once for the dropdown.
   React.useEffect(() => {
-    setCurrentPage(1);
-  }, [fromDate, toDate, pageSize]);
+    getTransportCompanyList()
+      .then(setCompanies)
+      .catch(() => { /* non-fatal — dropdown stays empty */ });
+  }, []);
 
+  // Reset to page 1 whenever any filter changes.
   React.useEffect(() => {
-    if (currentPage > totalPages) {
-      setCurrentPage(totalPages);
+    setPage(1);
+  }, [fromDate, toDate, search, transportCompanyId, pageSize]);
+
+  const load = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const response = await getAdminInvoices({
+        page,
+        limit: pageSize,
+        from: fromDate || undefined,
+        to: toDate || undefined,
+        search: search.trim() || undefined,
+        transportCompanyId: transportCompanyId || undefined,
+      });
+      setRows(response.data);
+      setTotal(response.meta?.total ?? 0);
+      setTotalPages(Math.max(1, response.meta?.totalPages ?? 1));
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không tải được hoá đơn', description: err.message });
+    } finally {
+      setIsLoading(false);
     }
-  }, [currentPage, totalPages]);
+  }, [page, pageSize, fromDate, toDate, search, transportCompanyId, toast]);
+
+  // Debounce: search input fires keystroke-by-keystroke; the other filters are dropdown/date so
+  // they don't need debounce but the timer captures them uniformly.
+  React.useEffect(() => {
+    const timer = setTimeout(load, 350);
+    return () => clearTimeout(timer);
+  }, [load]);
 
   const resetFilters = () => {
-    setFromDate(DEFAULT_INVOICE_DATE_RANGE.from);
-    setToDate(DEFAULT_INVOICE_DATE_RANGE.to);
+    setFromDate('');
+    setToDate('');
+    setSearch('');
+    setTransportCompanyId('');
   };
 
-  const totalAmount = React.useMemo(() => getInvoiceTotalAmount(filteredTrips), [filteredTrips]);
+  const hasFilters = Boolean(fromDate || toDate || search || transportCompanyId);
+  const pageTotalAmount = rows.reduce((sum, r) => sum + (r.totalWithVat ?? 0), 0);
 
   return (
     <div className="space-y-6">
@@ -70,44 +107,61 @@ export default function InvoicesPage() {
             Hoá đơn
           </h1>
           <p className="text-sm text-muted-foreground">
-            Danh sách hoá đơn chuyến đi. Dữ liệu hiện là mock-up trong lúc chờ backend.
+            Danh sách hoá đơn chuyến đi (chỉ chuyến đã hoàn thành). Filter theo ngày, HTX, mã chuyến hoặc biển số.
           </p>
         </div>
         <Badge variant="secondary" className="w-fit">
-          {filteredTrips.length} chuyến · {formatInvoiceCurrency(totalAmount)}
+          {total} chuyến · {formatInvoiceCurrency(pageTotalAmount)} (trang này)
         </Badge>
       </div>
 
       <Card className="p-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          <div className="space-y-1.5">
-            <Label htmlFor="invoice-from" className="text-xs text-muted-foreground">
-              Từ ngày
-            </Label>
-            <Input
-              id="invoice-from"
-              type="date"
-              value={fromDate}
-              onChange={(e) => setFromDate(e.target.value)}
-              className="w-full md:w-44"
-            />
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1.5">
+              <Label htmlFor="invoice-from" className="text-xs text-muted-foreground">Từ ngày</Label>
+              <Input id="invoice-from" type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="invoice-to" className="text-xs text-muted-foreground">Đến ngày</Label>
+              <Input id="invoice-to" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">HTX</Label>
+              <Select
+                value={transportCompanyId || ALL_TC}
+                onValueChange={(v) => setTransportCompanyId(v === ALL_TC ? '' : v)}
+              >
+                <SelectTrigger><SelectValue placeholder="Tất cả HTX" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL_TC}>Tất cả HTX</SelectItem>
+                  {companies.map((c) => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="invoice-search" className="text-xs text-muted-foreground">Mã chuyến / Biển số</Label>
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  id="invoice-search"
+                  className="pl-9"
+                  placeholder="VD: 29A hoặc UUID prefix..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="invoice-to" className="text-xs text-muted-foreground">
-              Đến ngày
-            </Label>
-            <Input
-              id="invoice-to"
-              type="date"
-              value={toDate}
-              onChange={(e) => setToDate(e.target.value)}
-              className="w-full md:w-44"
-            />
-          </div>
-          <Button variant="outline" onClick={resetFilters} className="w-full md:w-auto">
-            <RotateCcw className="mr-2 h-4 w-4" />
-            Đặt lại
-          </Button>
+          {hasFilters && (
+            <div className="flex justify-end">
+              <Button variant="ghost" size="sm" onClick={resetFilters}>
+                <RotateCcw className="mr-1 h-4 w-4" /> Đặt lại bộ lọc
+              </Button>
+            </div>
+          )}
         </div>
       </Card>
 
@@ -125,14 +179,20 @@ export default function InvoicesPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {currentTrips.length === 0 ? (
+            {isLoading ? (
+              <TableRow>
+                <TableCell colSpan={7} className="h-24 text-center">
+                  <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
+                </TableCell>
+              </TableRow>
+            ) : rows.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
-                  Không có chuyến đi nào trong khoảng ngày đã chọn.
+                  Không có chuyến đi nào khớp bộ lọc.
                 </TableCell>
               </TableRow>
             ) : (
-              currentTrips.map((trip) => (
+              rows.map((trip) => (
                 <TableRow key={trip.id}>
                   <TableCell className="whitespace-nowrap">{formatInvoiceTripDate(trip.tripDate)}</TableCell>
                   <TableCell>
@@ -155,56 +215,29 @@ export default function InvoicesPage() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Hiển thị</span>
             <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
-              <SelectTrigger className="h-8 w-[74px]">
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger className="h-8 w-[74px]"><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="5">5</SelectItem>
                 <SelectItem value="10">10</SelectItem>
                 <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
               </SelectContent>
             </Select>
-            <span>/ {filteredTrips.length} kết quả</span>
+            <span>/ {total} kết quả</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-sm text-muted-foreground">
-              Trang {effectivePage} / {totalPages}
-            </span>
+            <span className="text-sm text-muted-foreground">Trang {page} / {totalPages}</span>
             <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(1)}
-                disabled={effectivePage <= 1}
-              >
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(1)} disabled={page <= 1 || isLoading}>
                 <ChevronsLeft className="h-4 w-4" />
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage((prev) => Math.max(1, prev - 1))}
-                disabled={effectivePage <= 1}
-              >
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1 || isLoading}>
                 <ChevronLeft className="h-4 w-4" />
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage((prev) => Math.min(totalPages, prev + 1))}
-                disabled={effectivePage >= totalPages}
-              >
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page >= totalPages || isLoading}>
                 <ChevronRight className="h-4 w-4" />
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={effectivePage >= totalPages}
-              >
+              <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(totalPages)} disabled={page >= totalPages || isLoading}>
                 <ChevronsRight className="h-4 w-4" />
               </Button>
             </div>

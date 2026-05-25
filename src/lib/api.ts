@@ -256,6 +256,43 @@ export async function updateDriverServices(id: string, enabledServices: string[]
   return data.data || data;
 }
 
+export type AdminInvoiceRow = {
+  id: string;
+  tripDate: string;
+  bookingCode: string;
+  contractNo: string;
+  pickupAddress: string;
+  dropoffAddress: string;
+  totalWithVat: number;
+  vehiclePlate: string;
+};
+
+export type AdminInvoiceListResponse = {
+  data: AdminInvoiceRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export async function getAdminInvoices(params: {
+  page?: number;
+  limit?: number;
+  from?: string;
+  to?: string;
+  search?: string;
+  transportCompanyId?: string;
+  driverId?: string;
+} = {}): Promise<AdminInvoiceListResponse> {
+  const q = new URLSearchParams();
+  q.set('page', String(params.page ?? 1));
+  q.set('limit', String(params.limit ?? 20));
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  if (params.search) q.set('search', params.search);
+  if (params.transportCompanyId) q.set('transportCompanyId', params.transportCompanyId);
+  if (params.driverId) q.set('driverId', params.driverId);
+  const response = await fetchWithAuth(`/bookings/admin/invoices?${q.toString()}`);
+  return unwrap<AdminInvoiceListResponse>(response);
+}
+
 export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',

@@ -10,8 +10,10 @@
     "deploy:prod": "tsx scripts/deploy-s3.ts",
     "start": "next start",
     "lint": "next lint",
-    "test": "tsx --test \"src/app/(app)/invoices/invoice-utils.node.test.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:invoice-utils": "tsx --test \"src/app/(app)/invoices/invoice-utils.node.test.ts\""
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.20.0",
@@ -61,14 +63,20 @@
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.966.0",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/user-event": "^14.6.1",
     "@types/mime-types": "^3.0.1",
     "@types/node": "^20",
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
+    "@vitejs/plugin-react": "^6.0.2",
     "genkit-cli": "^1.20.0",
+    "jsdom": "^29.1.1",
     "mime-types": "^3.0.2",
     "postcss": "^8",
     "tailwindcss": "^3.4.1",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.7"
   }
 }
