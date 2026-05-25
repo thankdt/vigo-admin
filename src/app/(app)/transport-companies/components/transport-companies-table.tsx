@@ -131,9 +131,23 @@ export function TransportCompaniesTable() {
   const openViewDrivers = async (company: TransportCompany) => {
     setViewDriversCompany(company);
     setCompanyDriversLoading(true);
+    setCompanyDrivers([]);
     try {
-      const response = await getDrivers({ transportCompanyId: company.id, limit: 100, page: 1 });
-      setCompanyDrivers(response.data);
+      // BE caps limit at 100. Loop through pages until done. Hundreds of drivers in a single
+      // HTX is normal — fetching all upfront keeps the dialog simple (no per-dialog pagination).
+      const PAGE_SIZE = 100;
+      let page = 1;
+      const all: Driver[] = [];
+      while (true) {
+        const response = await getDrivers({ transportCompanyId: company.id, limit: PAGE_SIZE, page });
+        all.push(...response.data);
+        const meta = (response as any).meta;
+        const totalPages = meta?.totalPages ?? 1;
+        if (page >= totalPages || response.data.length === 0) break;
+        page += 1;
+        if (page > 100) break; // hard safety stop
+      }
+      setCompanyDrivers(all);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
     } finally {
