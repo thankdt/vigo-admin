@@ -44,6 +44,7 @@ import {
 } from '@/lib/api';
 import type { TransportCompany, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+import { DriverDetailDialog } from '../../drivers/components/driver-detail-dialog';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -127,6 +128,7 @@ export function TransportCompaniesTable() {
   const [viewDriversCompany, setViewDriversCompany] = React.useState<TransportCompany | null>(null);
   const [companyDrivers, setCompanyDrivers] = React.useState<Driver[]>([]);
   const [companyDriversLoading, setCompanyDriversLoading] = React.useState(false);
+  const [viewDriver, setViewDriver] = React.useState<Driver | null>(null);
   const [driversPage, setDriversPage] = React.useState(1);
   const [driversTotalPages, setDriversTotalPages] = React.useState(1);
   const [driversTotal, setDriversTotal] = React.useState(0);
@@ -705,7 +707,11 @@ export function TransportCompaniesTable() {
                       : d.isApproved === 'false' ? <Badge variant="destructive">Từ chối</Badge>
                       : <Badge variant="secondary">Chờ duyệt</Badge>;
                     return (
-                      <TableRow key={d.id}>
+                      <TableRow
+                        key={d.id}
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => setViewDriver(d)}
+                      >
                         <TableCell className="font-medium">{name}</TableCell>
                         <TableCell>{phone}</TableCell>
                         <TableCell className="font-mono text-sm">{plate}</TableCell>
@@ -740,6 +746,9 @@ export function TransportCompaniesTable() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Driver detail dialog — nested above the drivers-of-company dialog */}
+      <DriverDetailDialog driver={viewDriver} onClose={() => setViewDriver(null)} />
 
       {/* Delete confirm dialog */}
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}>
