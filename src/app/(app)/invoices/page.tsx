@@ -10,6 +10,7 @@ import {
   RotateCcw,
   Search,
   Loader2,
+  Download,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -22,6 +23,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   getAdminInvoices,
   getTransportCompanyList,
+  downloadAdminContractPdf,
   type AdminInvoiceRow,
 } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
@@ -47,6 +49,26 @@ export default function InvoicesPage() {
   const [isLoading, setIsLoading] = React.useState(true);
 
   const [companies, setCompanies] = React.useState<TransportCompany[]>([]);
+  const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
+
+  const handleDownloadContract = async (trip: AdminInvoiceRow) => {
+    setDownloadingId(trip.id);
+    try {
+      const blob = await downloadAdminContractPdf(trip.id);
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${trip.contractNo || `contract-${trip.id}`}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Tải hợp đồng thất bại', description: err.message });
+    } finally {
+      setDownloadingId(null);
+    }
+  };
 
   // Load transport-company options once for the dropdown.
   React.useEffect(() => {
@@ -176,18 +198,19 @@ export default function InvoicesPage() {
               <TableHead>Điểm đến</TableHead>
               <TableHead className="text-right">Tổng tiền gồm VAT</TableHead>
               <TableHead>Biển số xe</TableHead>
+              <TableHead className="text-right">Hợp đồng</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   Không có chuyến đi nào khớp bộ lọc.
                 </TableCell>
               </TableRow>
@@ -205,6 +228,20 @@ export default function InvoicesPage() {
                     {formatInvoiceCurrency(trip.totalWithVat)}
                   </TableCell>
                   <TableCell className="font-mono">{trip.vehiclePlate}</TableCell>
+                  <TableCell className="text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={downloadingId === trip.id}
+                      onClick={() => handleDownloadContract(trip)}
+                    >
+                      {downloadingId === trip.id ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <><Download className="mr-1 h-4 w-4" /> PDF</>
+                      )}
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))
             )}

@@ -272,6 +272,16 @@ export type AdminInvoiceListResponse = {
   meta: { page: number; limit: number; total: number; totalPages: number };
 };
 
+// Returns a Blob of the contract PDF. Caller wires the download (object URL + click).
+export async function downloadAdminContractPdf(bookingId: string): Promise<Blob> {
+  const response = await fetchWithAuth(`/bookings/admin/${bookingId}/contract.pdf`);
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw new Error(text || `Không tải được hợp đồng (${response.status})`);
+  }
+  return response.blob();
+}
+
 export async function getAdminInvoices(params: {
   page?: number;
   limit?: number;
