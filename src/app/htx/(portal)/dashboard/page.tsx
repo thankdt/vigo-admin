@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Car, DollarSign, Ticket, Receipt, Wifi, XCircle, Landmark } from 'lucide-react';
+import { Loader2, Car, DollarSign, Ticket, Receipt, Wifi, XCircle, Landmark, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxGetDashboard, htxGetMe, type HtxDashboard } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
@@ -167,6 +167,13 @@ export default function HtxDashboardPage() {
           <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
           <StatCard icon={<Landmark className="h-5 w-5" />} label="Thuế TNCN" value={formatCurrency(data.pitAmount ?? 0)} hint="Thuế thu nhập cá nhân tài xế trong kỳ" />
           <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />
+          <StatCard
+            icon={<Wallet className="h-5 w-5" />}
+            label="Hoa hồng HTX"
+            value={formatCurrency(data.htxCommissionAmount ?? 0)}
+            hint={`${((data.htxCommissionRate ?? 0) * 100).toFixed(2)}% × tổng tiền trước thuế`}
+            highlight
+          />
         </div>
       ) : null}
     </div>
