@@ -794,9 +794,19 @@ export async function htxToggleDriverActive(driverId: string): Promise<{ id: str
   return unwrap<{ id: string; isActive: boolean }>(response);
 }
 
-export async function htxGetDashboard(period: 'day' | 'month' | 'year', dateISO?: string): Promise<HtxDashboard> {
-  const query = new URLSearchParams({ period });
-  if (dateISO) query.set('date', dateISO);
+export type HtxDashboardRange =
+  | { mode: 'period'; period: 'day' | 'month' | 'year'; dateISO?: string }
+  | { mode: 'range'; from: string; to: string };
+
+export async function htxGetDashboard(range: HtxDashboardRange): Promise<HtxDashboard> {
+  const query = new URLSearchParams();
+  if (range.mode === 'period') {
+    query.set('period', range.period);
+    if (range.dateISO) query.set('date', range.dateISO);
+  } else {
+    query.set('from', range.from);
+    query.set('to', range.to);
+  }
   const response = await fetchWithAuth(`/htx/dashboard?${query.toString()}`);
   return unwrap<HtxDashboard>(response);
 }
