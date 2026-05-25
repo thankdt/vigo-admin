@@ -394,7 +394,11 @@ export function DriversTable() {
                   const driverName = driver.name || driver.user?.fullName || 'Tài xế';
                   const driverPhone = driver.phone || driver.user?.phone || 'Chưa có SĐT';
                   return (
-                  <TableRow key={driver.id}>
+                  <TableRow
+                    key={driver.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setViewDriver(driver)}
+                  >
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <Avatar>
@@ -436,7 +440,7 @@ export function DriversTable() {
                         {driver.createdAt ? new Date(driver.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
