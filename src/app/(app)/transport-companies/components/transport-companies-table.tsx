@@ -45,6 +45,7 @@ import type { TransportCompany } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -73,6 +74,10 @@ type FormData = {
   isActive: boolean;
   // Stored as percent in the form (e.g. 5 = 5%); converted to decimal on submit.
   htxCommissionPercent: string;
+  taxCode: string;
+  address: string;
+  htxHotline: string;
+  accountingHotline: string;
 };
 
 const emptyForm: FormData = {
@@ -81,6 +86,10 @@ const emptyForm: FormData = {
   ownerPhone: '',
   isActive: true,
   htxCommissionPercent: '5',
+  taxCode: '',
+  address: '',
+  htxHotline: '',
+  accountingHotline: '',
 };
 
 export function TransportCompaniesTable() {
@@ -179,6 +188,10 @@ export function TransportCompaniesTable() {
       ownerPhone: company.ownerPhone || '',
       isActive: company.isActive,
       htxCommissionPercent: ((company.htxCommissionRate ?? 0.05) * 100).toString(),
+      taxCode: company.taxCode ?? '',
+      address: company.address ?? '',
+      htxHotline: company.htxHotline ?? '',
+      accountingHotline: company.accountingHotline ?? '',
     });
     setFormOpen(true);
   };
@@ -203,6 +216,10 @@ export function TransportCompaniesTable() {
         ownerPhone: formData.ownerPhone.trim() || undefined,
         isActive: formData.isActive,
         htxCommissionRate: percentNum / 100,
+        taxCode: formData.taxCode.trim() || undefined,
+        address: formData.address.trim() || undefined,
+        htxHotline: formData.htxHotline.trim() || undefined,
+        accountingHotline: formData.accountingHotline.trim() || undefined,
       };
 
       if (editingId) {
@@ -489,6 +506,45 @@ export function TransportCompaniesTable() {
                 onChange={(e) => setFormData({ ...formData, htxCommissionPercent: e.target.value })}
               />
               <p className="text-xs text-muted-foreground">HTX nhận % này × tiền khách trả mỗi chuyến (sau discount, kèm VAT + phụ phí).</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label htmlFor="tax-code">Mã số thuế</Label>
+                <Input
+                  id="tax-code"
+                  placeholder="VD: 0101234567"
+                  value={formData.taxCode}
+                  onChange={(e) => setFormData({ ...formData, taxCode: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="htx-hotline">Hotline HTX</Label>
+                <Input
+                  id="htx-hotline"
+                  placeholder="VD: 19001234"
+                  value={formData.htxHotline}
+                  onChange={(e) => setFormData({ ...formData, htxHotline: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="accounting-hotline">Hotline kế toán</Label>
+              <Input
+                id="accounting-hotline"
+                placeholder="VD: 0901234568"
+                value={formData.accountingHotline}
+                onChange={(e) => setFormData({ ...formData, accountingHotline: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="address">Địa chỉ</Label>
+              <Textarea
+                id="address"
+                placeholder="Địa chỉ trụ sở chính"
+                value={formData.address}
+                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                rows={2}
+              />
             </div>
             {editingId && (
               <div className="flex items-center justify-between">

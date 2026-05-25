@@ -655,7 +655,7 @@ export async function getTransportCompanies(params: { page?: number; limit?: num
   return response.json();
 }
 
-export async function createTransportCompany(data: { name: string; ownerName?: string; ownerPhone?: string; isActive?: boolean; htxCommissionRate?: number }): Promise<TransportCompany> {
+export async function createTransportCompany(data: { name: string; ownerName?: string; ownerPhone?: string; isActive?: boolean; htxCommissionRate?: number; taxCode?: string; address?: string; htxHotline?: string; accountingHotline?: string }): Promise<TransportCompany> {
   const response = await fetchWithAuth('/transport-companies', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -670,7 +670,7 @@ export async function getTransportCompany(id: string): Promise<TransportCompany>
   return result.data || result;
 }
 
-export async function updateTransportCompany(id: string, data: { name?: string; ownerName?: string; ownerPhone?: string; isActive?: boolean; htxCommissionRate?: number }): Promise<TransportCompany> {
+export async function updateTransportCompany(id: string, data: { name?: string; ownerName?: string; ownerPhone?: string; isActive?: boolean; htxCommissionRate?: number; taxCode?: string; address?: string; htxHotline?: string; accountingHotline?: string }): Promise<TransportCompany> {
   const response = await fetchWithAuth(`/transport-companies/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
@@ -759,21 +759,6 @@ async function unwrap<T>(response: Response): Promise<T> {
 
 export async function htxGetMe(): Promise<TransportCompany> {
   const response = await fetchWithAuth('/htx/me');
-  return unwrap<TransportCompany>(response);
-}
-
-export async function htxUpdateMe(patch: {
-  name?: string;
-  taxCode?: string;
-  address?: string;
-  ownerName?: string;
-  htxHotline?: string;
-  accountingHotline?: string;
-}): Promise<TransportCompany> {
-  const response = await fetchWithAuth('/htx/me', {
-    method: 'PATCH',
-    body: JSON.stringify(patch),
-  });
   return unwrap<TransportCompany>(response);
 }
 
