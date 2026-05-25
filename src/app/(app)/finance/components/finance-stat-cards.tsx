@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowDownCircle, ArrowUpCircle, Banknote, Building2, Car, DollarSign, RefreshCcw, Share2 } from 'lucide-react';
+import { ArrowDownCircle, ArrowUpCircle, Banknote, Building2, Car, DollarSign, RefreshCcw, Share2, Wallet, MinusCircle } from 'lucide-react';
 import type { FinanceDashboard } from '@/lib/api';
 
 const fmtVnd = (v: number) =>
@@ -18,15 +18,37 @@ type CardConfig = {
 };
 
 export function FinanceStatCards({ data }: { data: FinanceDashboard }) {
+  const htxTotal = data.breakdown.htxNetIncome + data.breakdown.htxVatCollected + data.breakdown.htxPitCollected;
   const cards: CardConfig[] = [
-    { label: 'Tổng vào', value: data.cashFlow.totalIn, icon: <ArrowDownCircle className="h-5 w-5" />, hint: 'Dòng tiền chảy vào hệ thống' },
-    { label: 'Tổng ra', value: data.cashFlow.totalOut, icon: <ArrowUpCircle className="h-5 w-5" />, hint: 'Dòng tiền chảy ra khỏi hệ thống' },
-    { label: 'Net', value: data.cashFlow.net, icon: <Banknote className="h-5 w-5" />, hint: 'Vào − Ra', highlight: true, negative: data.cashFlow.net < 0 },
-    { label: 'Doanh thu Vigo', value: data.cashFlow.operationalRevenue, icon: <DollarSign className="h-5 w-5" />, hint: 'Commission + phí vào ví doanh thu' },
-    { label: 'Tiền HTX', value: data.breakdown.htxNetIncome, icon: <Building2 className="h-5 w-5" />, hint: 'Tổng phần các HTX' },
+    {
+      label: 'Tài xế nạp vào ví',
+      value: data.cashFlow.driverTopUp,
+      icon: <ArrowDownCircle className="h-5 w-5" />,
+      hint: 'Tổng top-up vào ví tài xế trong kỳ',
+    },
+    {
+      label: 'Trừ từ ví tài xế',
+      value: data.cashFlow.driverDeducted,
+      icon: <MinusCircle className="h-5 w-5" />,
+      hint: 'Commission + rút + chuyển đi từ ví tài xế',
+    },
+    {
+      label: 'Tổng tiền chuyến đi (kèm thuế)',
+      value: data.cashFlow.totalTripIncludingTax,
+      icon: <Banknote className="h-5 w-5" />,
+      hint: 'SUM(finalPrice) — bao gồm VAT + phụ phí',
+      highlight: true,
+    },
+    {
+      label: 'Tiền HTX',
+      value: htxTotal,
+      icon: <Building2 className="h-5 w-5" />,
+      hint: 'Bao gồm VAT + Thuế TNCN HTX phải nộp',
+    },
     { label: 'Tiền tài xế', value: data.breakdown.driverNetEarnings, icon: <Car className="h-5 w-5" />, hint: 'Tổng thực nhận của tài xế' },
     { label: 'Affiliate đã credit', value: data.breakdown.affiliateCredited, icon: <Share2 className="h-5 w-5" />, hint: 'Trip commission cho referrer' },
     { label: 'Refund khách', value: data.breakdown.customerRefund, icon: <RefreshCcw className="h-5 w-5" />, hint: 'Tổng REFUND thành công' },
+    { label: 'Doanh thu Vigo', value: data.cashFlow.operationalRevenue, icon: <DollarSign className="h-5 w-5" />, hint: 'Commission + phí vào ví doanh thu' },
   ];
 
   return (

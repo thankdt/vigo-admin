@@ -1010,9 +1010,14 @@ export type FinanceDashboard = {
     totalOut: number;
     net: number;
     operationalRevenue: number;
+    driverTopUp: number;
+    driverDeducted: number;
+    totalTripIncludingTax: number;
   };
   breakdown: {
     htxNetIncome: number;
+    htxVatCollected: number;
+    htxPitCollected: number;
     driverNetEarnings: number;
     affiliateCredited: number;
     customerRefund: number;
