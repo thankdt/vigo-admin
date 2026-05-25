@@ -831,6 +831,36 @@ export type AdminReferralListResponse = {
   meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
 };
 
+export type AdminReferrerSummary = {
+  id: string;
+  phone?: string;
+  fullName?: string;
+  refereeCount: number;
+  tripCount: number;
+  totalReward: number;
+};
+
+export type AdminReferrerListResponse = {
+  data: AdminReferrerSummary[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
+};
+
+export async function adminListReferrers(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  sort?: 'amount' | 'trips' | 'referees';
+} = {}): Promise<AdminReferrerListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.search) q.set('search', params.search);
+  if (params.sort) q.set('sort', params.sort);
+  const qs = q.toString();
+  const response = await fetchWithAuth(`/referrals/admin/referrers${qs ? '?' + qs : ''}`);
+  return unwrap<AdminReferrerListResponse>(response);
+}
+
 export async function adminListReferrals(params: { page?: number; limit?: number; referrerId?: string } = {}): Promise<AdminReferralListResponse> {
   const q = new URLSearchParams();
   if (params.page) q.set('page', String(params.page));
