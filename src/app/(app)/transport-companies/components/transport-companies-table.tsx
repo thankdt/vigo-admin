@@ -127,33 +127,37 @@ export function TransportCompaniesTable() {
   const [viewDriversCompany, setViewDriversCompany] = React.useState<TransportCompany | null>(null);
   const [companyDrivers, setCompanyDrivers] = React.useState<Driver[]>([]);
   const [companyDriversLoading, setCompanyDriversLoading] = React.useState(false);
+  const [driversPage, setDriversPage] = React.useState(1);
+  const [driversTotalPages, setDriversTotalPages] = React.useState(1);
+  const [driversTotal, setDriversTotal] = React.useState(0);
+  const DRIVERS_PAGE_SIZE = 20;
 
-  const openViewDrivers = async (company: TransportCompany) => {
-    setViewDriversCompany(company);
+  const fetchCompanyDriversPage = React.useCallback(async (companyId: string, page: number) => {
     setCompanyDriversLoading(true);
-    setCompanyDrivers([]);
     try {
-      // BE caps limit at 100. Loop through pages until done. Hundreds of drivers in a single
-      // HTX is normal — fetching all upfront keeps the dialog simple (no per-dialog pagination).
-      const PAGE_SIZE = 100;
-      let page = 1;
-      const all: Driver[] = [];
-      while (true) {
-        const response = await getDrivers({ transportCompanyId: company.id, limit: PAGE_SIZE, page });
-        all.push(...response.data);
-        const meta = (response as any).meta;
-        const totalPages = meta?.totalPages ?? 1;
-        if (page >= totalPages || response.data.length === 0) break;
-        page += 1;
-        if (page > 100) break; // hard safety stop
-      }
-      setCompanyDrivers(all);
+      const response = await getDrivers({ transportCompanyId: companyId, limit: DRIVERS_PAGE_SIZE, page });
+      setCompanyDrivers(response.data);
+      const meta = (response as any).meta;
+      setDriversTotal(meta?.total ?? 0);
+      setDriversTotalPages(Math.max(1, meta?.totalPages ?? 1));
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
     } finally {
       setCompanyDriversLoading(false);
     }
+  }, [toast]);
+
+  const openViewDrivers = (company: TransportCompany) => {
+    setViewDriversCompany(company);
+    setDriversPage(1);
+    fetchCompanyDriversPage(company.id, 1);
   };
+
+  React.useEffect(() => {
+    if (viewDriversCompany && driversPage > 1) {
+      fetchCompanyDriversPage(viewDriversCompany.id, driversPage);
+    }
+  }, [driversPage, viewDriversCompany, fetchCompanyDriversPage]);
 
   const fetchCompanies = React.useCallback(async (search: string, page: number, limit: number) => {
     setIsLoading(true);
@@ -668,16 +672,16 @@ export function TransportCompaniesTable() {
       </Dialog>
 
       {/* Drivers-of-company dialog — click TC row to see who's in it */}
-      <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); } }}>
+      <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); setDriversPage(1); } }}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>Tài xế của {viewDriversCompany?.name}</DialogTitle>
             <p className="text-sm text-muted-foreground">
-              {companyDriversLoading ? 'Đang tải...' : `${companyDrivers.length} tài xế thuộc đơn vị này.`}
+              {companyDriversLoading && companyDrivers.length === 0 ? 'Đang tải...' : `${driversTotal} tài xế thuộc đơn vị này.`}
             </p>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-y-auto">
-            {companyDriversLoading ? (
+            {companyDriversLoading && companyDrivers.length === 0 ? (
               <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
             ) : companyDrivers.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">Đơn vị này chưa có tài xế nào.</div>
@@ -713,6 +717,27 @@ export function TransportCompaniesTable() {
               </Table>
             )}
           </div>
+          {driversTotalPages > 1 && (
+            <div className="flex items-center justify-between border-t pt-3">
+              <span className="text-sm text-muted-foreground">
+                Trang {driversPage} / {driversTotalPages} · {driversTotal} tài xế
+              </span>
+              <div className="flex items-center gap-1">
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={driversPage <= 1 || companyDriversLoading} onClick={() => setDriversPage(1)}>
+                  <ChevronsLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={driversPage <= 1 || companyDriversLoading} onClick={() => setDriversPage((p) => Math.max(1, p - 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={driversPage >= driversTotalPages || companyDriversLoading} onClick={() => setDriversPage((p) => Math.min(driversTotalPages, p + 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" className="h-8 w-8" disabled={driversPage >= driversTotalPages || companyDriversLoading} onClick={() => setDriversPage(driversTotalPages)}>
+                  <ChevronsRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
