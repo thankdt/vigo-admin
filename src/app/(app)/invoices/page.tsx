@@ -6,6 +6,7 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  Download,
   Receipt,
   RotateCcw,
   Search,
@@ -26,11 +27,14 @@ import {
 } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
 import {
+  buildInvoiceExcelDocument,
   formatInvoiceCurrency,
   formatInvoiceTripDate,
+  getInvoiceExportFileName,
 } from './invoice-utils';
 
 const ALL_TC = '__ALL__';
+const EXPORT_PAGE_SIZE = 1000;
 
 export default function InvoicesPage() {
   const { toast } = useToast();
@@ -45,6 +49,7 @@ export default function InvoicesPage() {
   const [total, setTotal] = React.useState(0);
   const [totalPages, setTotalPages] = React.useState(1);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isExporting, setIsExporting] = React.useState(false);
 
   const [companies, setCompanies] = React.useState<TransportCompany[]>([]);
 
@@ -60,17 +65,21 @@ export default function InvoicesPage() {
     setPage(1);
   }, [fromDate, toDate, search, transportCompanyId, pageSize]);
 
+  const getInvoiceQuery = React.useCallback(
+    (pagination: { page: number; limit: number }) => ({
+      ...pagination,
+      from: fromDate || undefined,
+      to: toDate || undefined,
+      search: search.trim() || undefined,
+      transportCompanyId: transportCompanyId || undefined,
+    }),
+    [fromDate, toDate, search, transportCompanyId],
+  );
+
   const load = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await getAdminInvoices({
-        page,
-        limit: pageSize,
-        from: fromDate || undefined,
-        to: toDate || undefined,
-        search: search.trim() || undefined,
-        transportCompanyId: transportCompanyId || undefined,
-      });
+      const response = await getAdminInvoices(getInvoiceQuery({ page, limit: pageSize }));
       setRows(response.data);
       setTotal(response.meta?.total ?? 0);
       setTotalPages(Math.max(1, response.meta?.totalPages ?? 1));
@@ -79,7 +88,7 @@ export default function InvoicesPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [page, pageSize, fromDate, toDate, search, transportCompanyId, toast]);
+  }, [page, pageSize, getInvoiceQuery, toast]);
 
   // Debounce: search input fires keystroke-by-keystroke; the other filters are dropdown/date so
   // they don't need debounce but the timer captures them uniformly.
@@ -94,6 +103,42 @@ export default function InvoicesPage() {
     setSearch('');
     setTransportCompanyId('');
   };
+
+  const exportInvoices = React.useCallback(async () => {
+    setIsExporting(true);
+    try {
+      const firstPage = await getAdminInvoices(getInvoiceQuery({ page: 1, limit: EXPORT_PAGE_SIZE }));
+      const exportRows = [...firstPage.data];
+      const exportTotalPages = Math.max(1, firstPage.meta?.totalPages ?? 1);
+
+      for (let nextPage = 2; nextPage <= exportTotalPages; nextPage += 1) {
+        const response = await getAdminInvoices(getInvoiceQuery({ page: nextPage, limit: EXPORT_PAGE_SIZE }));
+        exportRows.push(...response.data);
+      }
+
+      const blob = new Blob(['\ufeff', buildInvoiceExcelDocument(exportRows)], {
+        type: 'application/vnd.ms-excel;charset=utf-8',
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+
+      link.href = url;
+      link.download = getInvoiceExportFileName({ from: fromDate, to: toDate });
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Đã xuất Excel',
+        description: `Đã xuất ${exportRows.length} hoá đơn theo bộ lọc hiện tại.`,
+      });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không xuất được Excel', description: err.message });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [fromDate, getInvoiceQuery, toDate, toast]);
 
   const hasFilters = Boolean(fromDate || toDate || search || transportCompanyId);
   const pageTotalAmount = rows.reduce((sum, r) => sum + (r.totalWithVat ?? 0), 0);
@@ -155,13 +200,17 @@ export default function InvoicesPage() {
               </div>
             </div>
           </div>
-          {hasFilters && (
-            <div className="flex justify-end">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+            {hasFilters && (
               <Button variant="ghost" size="sm" onClick={resetFilters}>
                 <RotateCcw className="mr-1 h-4 w-4" /> Đặt lại bộ lọc
               </Button>
-            </div>
-          )}
+            )}
+            <Button onClick={exportInvoices} disabled={isLoading || isExporting || total === 0} className="w-full sm:w-auto">
+              {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Xuất Excel
+            </Button>
+          </div>
         </div>
       </Card>
 
