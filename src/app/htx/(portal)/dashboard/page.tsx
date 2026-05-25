@@ -153,13 +153,6 @@ export default function HtxDashboardPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {/* Defensive `?? 0` everywhere — first dashboard load might race the API response */}
           {/* and we never want a missing field to crash the whole page. */}
-          <StatCard icon={<Car className="h-5 w-5" />} label="Số xe" value={String(data.vehicleCount ?? 0)} hint="Tài xế thuộc HTX" />
-          <StatCard icon={<Wifi className="h-5 w-5" />} label="Xe đang online" value={String(data.onlineVehicleCount ?? 0)} hint="Trạng thái thời gian thực" />
-          <StatCard icon={<Ticket className="h-5 w-5" />} label="Chuyến thành công" value={String(data.ticketCount ?? 0)} hint="Hoàn thành trong khoảng đã chọn" />
-          <StatCard icon={<XCircle className="h-5 w-5" />} label="Chuyến hủy" value={String(data.cancelledTripCount ?? 0)} hint="Bị hủy trong khoảng đã chọn" />
-          <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
-          <StatCard icon={<Landmark className="h-5 w-5" />} label="Thuế TNCN" value={formatCurrency(data.pitAmount ?? 0)} hint="Thuế thu nhập cá nhân tài xế trong kỳ" />
-          <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />
           <StatCard
             icon={<Ticket className="h-5 w-5" />}
             label="Số lượng chuyến"
@@ -167,6 +160,13 @@ export default function HtxDashboardPage() {
             hint={`Tổng chuyến (thành công + hủy) trong khoảng đã chọn`}
             highlight
           />
+          <StatCard icon={<Car className="h-5 w-5" />} label="Số xe" value={String(data.vehicleCount ?? 0)} hint="Tài xế thuộc HTX" />
+          <StatCard icon={<Wifi className="h-5 w-5" />} label="Xe đã online trong ngày" value={String(data.onlineVehicleCount ?? 0)} hint="Tài xế có chuyến trong khoảng đã chọn" />
+          <StatCard icon={<Ticket className="h-5 w-5" />} label="Chuyến thành công" value={String(data.ticketCount ?? 0)} hint="Hoàn thành trong khoảng đã chọn" />
+          <StatCard icon={<XCircle className="h-5 w-5" />} label="Chuyến hủy" value={String(data.cancelledTripCount ?? 0)} hint="Bị hủy trong khoảng đã chọn" />
+          <StatCard icon={<DollarSign className="h-5 w-5" />} label="Tổng tiền" value={formatCurrency(data.grossRevenue ?? 0)} hint="Giá vận chuyển trước thuế / giảm giá" />
+          <StatCard icon={<Landmark className="h-5 w-5" />} label="Thuế TNCN" value={formatCurrency(data.pitAmount ?? 0)} hint="Thuế thu nhập cá nhân tài xế trong kỳ" />
+          <StatCard icon={<Receipt className="h-5 w-5" />} label="Thuế VAT" value={formatCurrency(data.vatAmount ?? 0)} hint="Tổng VAT thu hộ" />
         </div>
       ) : null}
     </div>
