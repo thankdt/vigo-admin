@@ -10,6 +10,7 @@
     "deploy:prod": "tsx scripts/deploy-s3.ts",
     "start": "next start",
     "lint": "next lint",
+    "test": "tsx --test \"src/app/(app)/invoices/invoice-utils.node.test.ts\"",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

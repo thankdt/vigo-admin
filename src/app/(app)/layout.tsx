@@ -31,6 +31,7 @@ import {
   Wallet,
   Megaphone,
   DollarSign,
+  Receipt,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -47,6 +48,7 @@ const navItems = [
   { href: '/drivers', label: 'Tài xế', icon: Car },
   { href: '/transport-companies', label: 'Đơn vị vận tải', icon: Building2 },
   { href: '/bookings', label: 'Chuyến đi', icon: Book },
+  { href: '/invoices', label: 'Hoá đơn', icon: Receipt },
   { href: '/referrals', label: 'Affiliate', icon: Share2 },
   { href: '/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
   { href: '/finance', label: 'Tài chính', icon: DollarSign },
