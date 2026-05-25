@@ -13,13 +13,14 @@ import {
   SidebarMenuButton,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, LogOut, Car } from 'lucide-react';
+import { LayoutDashboard, LogOut, Car, Building2 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import React from 'react';
 
 const navItems = [
   { href: '/htx/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
   { href: '/htx/drivers', label: 'Tài xế', icon: Car },
+  { href: '/htx/settings', label: 'Thông tin HTX', icon: Building2 },
 ];
 
 /**

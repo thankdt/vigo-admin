@@ -75,6 +75,10 @@ export type TransportCompany = {
   isActive: boolean;
   // Decimal 0..1 — 0.05 = 5%. HTX takes this slice of each booking's finalPrice.
   htxCommissionRate?: number;
+  taxCode?: string | null;
+  address?: string | null;
+  htxHotline?: string | null;
+  accountingHotline?: string | null;
   driverCount?: number;
   createdAt?: string;
   updatedAt?: string;

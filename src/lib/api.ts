@@ -762,6 +762,21 @@ export async function htxGetMe(): Promise<TransportCompany> {
   return unwrap<TransportCompany>(response);
 }
 
+export async function htxUpdateMe(patch: {
+  name?: string;
+  taxCode?: string;
+  address?: string;
+  ownerName?: string;
+  htxHotline?: string;
+  accountingHotline?: string;
+}): Promise<TransportCompany> {
+  const response = await fetchWithAuth('/htx/me', {
+    method: 'PATCH',
+    body: JSON.stringify(patch),
+  });
+  return unwrap<TransportCompany>(response);
+}
+
 export type HtxDriverListResponse = {
   data: HtxDriverRow[];
   meta: { page: number; limit: number; total: number; totalPages: number };
