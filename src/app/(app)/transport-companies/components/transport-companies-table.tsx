@@ -40,8 +40,9 @@ import {
   updateTransportCompany,
   deleteTransportCompany,
   assignTransportCompanyOwner,
+  getDrivers,
 } from '@/lib/api';
-import type { TransportCompany } from '@/lib/types';
+import type { TransportCompany, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -121,6 +122,24 @@ export function TransportCompaniesTable() {
   const [assignTarget, setAssignTarget] = React.useState<TransportCompany | null>(null);
   const [assignForm, setAssignForm] = React.useState({ phone: '', password: '', fullName: '' });
   const [isAssigning, setIsAssigning] = React.useState(false);
+
+  // Drivers-of-company dialog
+  const [viewDriversCompany, setViewDriversCompany] = React.useState<TransportCompany | null>(null);
+  const [companyDrivers, setCompanyDrivers] = React.useState<Driver[]>([]);
+  const [companyDriversLoading, setCompanyDriversLoading] = React.useState(false);
+
+  const openViewDrivers = async (company: TransportCompany) => {
+    setViewDriversCompany(company);
+    setCompanyDriversLoading(true);
+    try {
+      const response = await getDrivers({ transportCompanyId: company.id, limit: 100, page: 1 });
+      setCompanyDrivers(response.data);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
+    } finally {
+      setCompanyDriversLoading(false);
+    }
+  };
 
   const fetchCompanies = React.useCallback(async (search: string, page: number, limit: number) => {
     setIsLoading(true);
@@ -361,7 +380,11 @@ export function TransportCompaniesTable() {
               </TableRow>
             ) : (
               sortedCompanies.map((company) => (
-                <TableRow key={company.id}>
+                <TableRow
+                  key={company.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => openViewDrivers(company)}
+                >
                   <TableCell className="font-semibold">{company.name}</TableCell>
                   <TableCell>{company.ownerName || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>{company.ownerPhone || <span className="text-muted-foreground">—</span>}</TableCell>
@@ -382,7 +405,7 @@ export function TransportCompaniesTable() {
                         : 'N/A'}
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" className="h-8 w-8 p-0">
@@ -627,6 +650,55 @@ export function TransportCompaniesTable() {
               {assignTarget?.ownerUserId ? 'Cập nhật' : 'Gán chủ'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Drivers-of-company dialog — click TC row to see who's in it */}
+      <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); } }}>
+        <DialogContent className="sm:max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Tài xế của {viewDriversCompany?.name}</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              {companyDriversLoading ? 'Đang tải...' : `${companyDrivers.length} tài xế thuộc đơn vị này.`}
+            </p>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {companyDriversLoading ? (
+              <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
+            ) : companyDrivers.length === 0 ? (
+              <div className="py-12 text-center text-muted-foreground">Đơn vị này chưa có tài xế nào.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tên tài xế</TableHead>
+                    <TableHead>SĐT</TableHead>
+                    <TableHead>Biển số</TableHead>
+                    <TableHead>Trạng thái duyệt</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {companyDrivers.map((d) => {
+                    const name = d.name || d.user?.fullName || '—';
+                    const phone = d.phone || d.user?.phone || '—';
+                    const plate = d.vehicle?.plateNumber || d.vehicleRegistration?.plateNumber || '—';
+                    const approvalBadge =
+                      d.isApproved === 'true' ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã duyệt</Badge>
+                      : d.isApproved === 'false' ? <Badge variant="destructive">Từ chối</Badge>
+                      : <Badge variant="secondary">Chờ duyệt</Badge>;
+                    return (
+                      <TableRow key={d.id}>
+                        <TableCell className="font-medium">{name}</TableCell>
+                        <TableCell>{phone}</TableCell>
+                        <TableCell className="font-mono text-sm">{plate}</TableCell>
+                        <TableCell>{approvalBadge}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
