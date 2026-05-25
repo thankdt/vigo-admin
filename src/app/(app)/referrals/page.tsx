@@ -290,7 +290,7 @@ export default function ReferralsPage() {
                       </TableCell>
                       <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.codeUsed}</code></TableCell>
                       <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">{formatVND(r.tripRewardTotal)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
                       <TableCell>
                         {r.signupRewardCredited
                           ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã trả</Badge>

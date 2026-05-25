@@ -823,6 +823,8 @@ export type AdminReferralRow = {
   signupRewardCredited: boolean;
   tripCountUsed: number;
   tripRewardTotal: number;
+  // Net amount = signup bonus + trip rewards - clawbacks. Sourced from referral_event sum.
+  totalAmount: number;
   createdAt: string;
 };
 
