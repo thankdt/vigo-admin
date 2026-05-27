@@ -1,8 +1,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
+  buildInvoiceExcelDocument,
+  buildInvoiceExportRows,
   filterInvoiceTrips,
   formatInvoiceCurrency,
+  formatInvoiceTripDate,
+  getInvoiceExportFileName,
   getInvoiceTotalAmount,
   getInvoiceTotalPages,
   paginateInvoiceTrips,
@@ -76,5 +80,39 @@ describe('invoice utils', () => {
   it('calculates and formats total invoice amount', () => {
     assert.equal(getInvoiceTotalAmount(trips), 600000);
     assert.equal(formatInvoiceCurrency(600000), '600.000 ₫');
+  });
+
+  it('builds export rows with the same invoice columns', () => {
+    assert.deepEqual(buildInvoiceExportRows([trips[1]]), [
+      {
+        tripDate: formatInvoiceTripDate(trips[1].tripDate),
+        bookingCode: 'VGO-260515-001',
+        contractNo: 'HD-2026-0515-001',
+        pickupAddress: 'C',
+        dropoffAddress: 'D',
+        totalWithVat: 200000,
+        vehiclePlate: '30A-222.22',
+      },
+    ]);
+  });
+
+  it('builds an Excel-compatible document and escapes cell content', () => {
+    const html = buildInvoiceExcelDocument([
+      {
+        ...trips[0],
+        pickupAddress: 'A & B <C>',
+      },
+    ]);
+
+    assert.match(html, /<th>Ngày tháng<\/th>/);
+    assert.match(html, /A &amp; B &lt;C&gt;/);
+    assert.match(html, /<td class="number">100000<\/td>/);
+  });
+
+  it('builds an export file name from the active date range', () => {
+    assert.equal(
+      getInvoiceExportFileName({ from: '2026-05-01', to: '2026-05-31' }),
+      'hoa-don-2026-05-01-2026-05-31.xls',
+    );
   });
 });
