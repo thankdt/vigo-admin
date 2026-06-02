@@ -18,10 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices } from '@/lib/api';
+import { ImageThumbList } from '@/components/ui/image-thumb-list';
+import { Combobox } from '@/components/ui/combobox';
+import { Input } from '@/components/ui/input';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile } from '@/lib/api';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
 import type { Driver, TransportCompany } from '@/lib/types';
@@ -40,7 +43,6 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
@@ -50,6 +52,8 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { getImageUrl } from '@/lib/utils';
+import { RejectReasonPicker } from '@/components/reject-reason-picker';
+import { combineRejectReason } from '@/lib/reject-reasons';
 
 // Safely parse image arrays - handles string, comma-separated, PostgreSQL array format, etc.
 function safeImageArray(images: any): string[] {
@@ -88,10 +92,10 @@ export function DriversTable() {
   const [filters, setFilters] = React.useState<DriverFilters>(EMPTY_FILTERS);
   const [activeTab, setActiveTab] = React.useState<TableTab>('pending');
   const [needsReviewCount, setNeedsReviewCount] = React.useState<number>(0);
-  const [allTransportCompanies, setAllTransportCompanies] = React.useState<TransportCompany[]>([]);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; driver: Driver | null, action: 'approve' | 'reject' }>({ open: false, driver: null, action: 'approve' });
-  const [rejectionReason, setRejectionReason] = React.useState('');
+  const [rejectionValues, setRejectionValues] = React.useState<string[]>([]);
+  const [rejectionNote, setRejectionNote] = React.useState('');
   const [enabledServices, setEnabledServices] = React.useState<string[]>(['RIDE', 'CARPOOL', 'DELIVERY']);
 
   const [viewDriver, setViewDriver] = React.useState<Driver | null>(null);
@@ -100,11 +104,44 @@ export function DriversTable() {
   const [editingServices, setEditingServices] = React.useState<string[] | null>(null);
   const [isSavingServices, setIsSavingServices] = React.useState(false);
 
+  // Inline approve/reject inside the detail dialog. Null = showing the two trigger buttons.
+  const [detailAction, setDetailAction] = React.useState<'approve' | 'reject' | null>(null);
+  const [detailServices, setDetailServices] = React.useState<string[]>(['RIDE', 'CARPOOL', 'DELIVERY']);
+  const [detailReasonValues, setDetailReasonValues] = React.useState<string[]>([]);
+  const [detailReasonNote, setDetailReasonNote] = React.useState('');
+  const [isSubmittingDetail, setIsSubmittingDetail] = React.useState(false);
+
   // Assign transport company state
   const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
   const [transportCompanies, setTransportCompanies] = React.useState<TransportCompany[]>([]);
   const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>('');
   const [isAssigning, setIsAssigning] = React.useState(false);
+
+  // Inline edit name state (in view-driver detail dialog)
+  const [editingName, setEditingName] = React.useState(false);
+  const [nameDraft, setNameDraft] = React.useState('');
+  const [savingName, setSavingName] = React.useState(false);
+
+  const handleSaveName = async () => {
+    if (!viewDriver) return;
+    const trimmed = nameDraft.trim();
+    if (!trimmed || trimmed === (viewDriver.name || viewDriver.user?.fullName || '')) {
+      setEditingName(false);
+      return;
+    }
+    setSavingName(true);
+    try {
+      const updated = await updateDriverProfile(viewDriver.id, { fullName: trimmed });
+      setViewDriver({ ...viewDriver, ...updated });
+      toast({ title: 'Đã cập nhật tên tài xế' });
+      setEditingName(false);
+      fetchDrivers(activeTab, filters, currentPage, pageSize);
+    } catch (e: any) {
+      toast({ title: 'Không cập nhật được tên', description: e?.message, variant: 'destructive' });
+    } finally {
+      setSavingName(false);
+    }
+  };
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -126,7 +163,8 @@ export function DriversTable() {
         phone: f.phone || undefined,
         plate: f.plate || undefined,
         serviceType: f.serviceType || undefined,
-        transportCompanyId: f.transportCompanyId || undefined,
+        transportCompanyName: f.transportCompanyName || undefined,
+        unconfirmedTransportCompany: f.unconfirmedTransportCompany ? 'true' : undefined,
       };
       if (tab === 'needsReview') {
         apiParams.needsReview = 'true';
@@ -176,9 +214,6 @@ export function DriversTable() {
 
   React.useEffect(() => {
     refreshNeedsReviewCount();
-    getTransportCompanyList()
-      .then(setAllTransportCompanies)
-      .catch(() => { /* dropdown stays empty if it fails */ });
   }, [refreshNeedsReviewCount]);
 
   const handleTabChange = (value: string) => {
@@ -237,7 +272,8 @@ export function DriversTable() {
 
   const closeConfirmationDialog = () => {
     setDialogState({ open: false, driver: null, action: 'approve' });
-    setRejectionReason('');
+    setRejectionValues([]);
+    setRejectionNote('');
     setEnabledServices(['RIDE', 'CARPOOL', 'DELIVERY']);
   }
 
@@ -255,11 +291,11 @@ export function DriversTable() {
         await approveDriver(dialogState.driver.id, enabledServices);
         toast({ title: "Đã duyệt tài xế", description: `${driverName} đã được duyệt.` });
       } else {
-        if (!rejectionReason) {
-          toast({ title: "Yêu cầu lý do", description: "Vui lòng cung cấp lý do từ chối.", variant: "destructive" });
+        if (rejectionValues.length === 0) {
+          toast({ title: "Yêu cầu lý do", description: "Vui lòng chọn ít nhất một lý do từ chối.", variant: "destructive" });
           return;
         }
-        await rejectDriver(dialogState.driver.id, rejectionReason);
+        await rejectDriver(dialogState.driver.id, combineRejectReason(rejectionValues, rejectionNote));
         toast({ title: "Đã từ chối tài xế", description: `${driverName} đã bị từ chối.` });
       }
       fetchDrivers(activeTab, filters, currentPage, pageSize);
@@ -273,6 +309,50 @@ export function DriversTable() {
       });
     }
   }
+
+  const resetDetailAction = () => {
+    setDetailAction(null);
+    setDetailServices(['RIDE', 'CARPOOL', 'DELIVERY']);
+    setDetailReasonValues([]);
+    setDetailReasonNote('');
+  };
+
+  const handleDetailAction = async () => {
+    if (!viewDriver || !detailAction) return;
+    const driverName = viewDriver.name || viewDriver.user?.fullName || 'Driver';
+
+    if (detailAction === 'approve' && detailServices.length === 0) {
+      toast({ title: 'Yêu cầu dịch vụ', description: 'Vui lòng chọn ít nhất một dịch vụ.', variant: 'destructive' });
+      return;
+    }
+    if (detailAction === 'reject' && detailReasonValues.length === 0) {
+      toast({ title: 'Yêu cầu lý do', description: 'Vui lòng chọn ít nhất một lý do từ chối.', variant: 'destructive' });
+      return;
+    }
+
+    setIsSubmittingDetail(true);
+    try {
+      if (detailAction === 'approve') {
+        await approveDriver(viewDriver.id, detailServices);
+        toast({ title: 'Đã duyệt tài xế', description: `${driverName} đã được duyệt.` });
+      } else {
+        await rejectDriver(viewDriver.id, combineRejectReason(detailReasonValues, detailReasonNote));
+        toast({ title: 'Đã từ chối tài xế', description: `${driverName} đã bị từ chối.` });
+      }
+      setViewDriver(null);
+      resetDetailAction();
+      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      refreshNeedsReviewCount();
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: `Không thể ${detailAction === 'approve' ? 'duyệt' : 'từ chối'} tài xế`,
+        description: err.message,
+      });
+    } finally {
+      setIsSubmittingDetail(false);
+    }
+  };
 
   const openAssignDialog = async (driver: Driver) => {
     setAssignDriver(driver);
@@ -330,7 +410,6 @@ export function DriversTable() {
         <DriversFilterBar
           value={filters}
           onChange={handleFiltersChange}
-          transportCompanies={allTransportCompanies}
         />
 
         {activeTab === 'needsReview' && (
@@ -577,13 +656,12 @@ export function DriversTable() {
             </div>
           )}
           {dialogState.action === 'reject' && (
-            <div className="grid gap-2 pt-2">
-              <Label htmlFor="rejection-reason">Lý do từ chối</Label>
-              <Textarea
-                id="rejection-reason"
-                placeholder="VD: Thiếu giấy tờ, ảnh bằng lái mờ..."
-                value={rejectionReason}
-                onChange={(e) => setRejectionReason(e.target.value)}
+            <div className="pt-2">
+              <RejectReasonPicker
+                selectedValues={rejectionValues}
+                onSelectedValuesChange={setRejectionValues}
+                note={rejectionNote}
+                onNoteChange={setRejectionNote}
               />
             </div>
           )}
@@ -596,8 +674,8 @@ export function DriversTable() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); } }}>
-        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); } }}>
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Chi tiết tài xế</DialogTitle>
           </DialogHeader>
@@ -608,9 +686,59 @@ export function DriversTable() {
                   <AvatarImage src={viewDriver.user?.avatarUrl || viewDriver.user?.avatar} alt={viewDriver.name || viewDriver.user?.fullName} />
                   <AvatarFallback>{(viewDriver.name || viewDriver.user?.fullName || 'Driver').charAt(0)}</AvatarFallback>
                 </Avatar>
-                <div>
-                  <h3 className="text-xl font-bold">{viewDriver.name || viewDriver.user?.fullName || 'Tài xế'}</h3>
-                  <p className="text-sm text-muted-foreground">{viewDriver.phone || viewDriver.user?.phone || 'Chưa có SĐT'}</p>
+                <div className="flex-1 min-w-0">
+                  {editingName ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={nameDraft}
+                        onChange={(e) => setNameDraft(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') handleSaveName();
+                          if (e.key === 'Escape') setEditingName(false);
+                        }}
+                        disabled={savingName}
+                        autoFocus
+                        className="h-8 text-base font-bold"
+                      />
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0"
+                        onClick={handleSaveName}
+                        disabled={savingName}
+                        aria-label="Lưu"
+                      >
+                        {savingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckIcon className="h-4 w-4" />}
+                      </Button>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0"
+                        onClick={() => setEditingName(false)}
+                        disabled={savingName}
+                        aria-label="Huỷ"
+                      >
+                        <XIcon className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 group">
+                      <h3 className="text-xl font-bold truncate">{viewDriver.name || viewDriver.user?.fullName || 'Tài xế'}</h3>
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-7 w-7 shrink-0 opacity-60 hover:opacity-100"
+                        onClick={() => {
+                          setNameDraft(viewDriver.name || viewDriver.user?.fullName || '');
+                          setEditingName(true);
+                        }}
+                        aria-label="Sửa tên"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
+                  <p className="text-sm text-muted-foreground truncate">{viewDriver.phone || viewDriver.user?.phone || 'Chưa có SĐT'}</p>
                   <p className="text-sm font-medium mt-1">Trạng thái: {getStatusBadge(viewDriver.isApproved)}</p>
                 </div>
               </div>
@@ -654,17 +782,10 @@ export function DriversTable() {
                   {safeImageArray(viewDriver.vehicleRegistration.images).length > 0 && (
                     <div className="space-y-2 pt-3">
                       <Label className="text-xs text-muted-foreground">Ảnh xe</Label>
-                      <div className="flex gap-4 overflow-x-auto pb-2">
-                        {safeImageArray(viewDriver.vehicleRegistration.images).map((img, idx) => (
-                          <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
-                            <img
-                              src={getImageUrl(img)}
-                              alt={`Vehicle ${idx + 1}`}
-                              className="h-32 object-cover rounded-md border"
-                            />
-                          </a>
-                        ))}
-                      </div>
+                      <ImageThumbList
+                        urls={safeImageArray(viewDriver.vehicleRegistration.images).map((img) => getImageUrl(img))}
+                        altPrefix="Vehicle"
+                      />
                     </div>
                   )}
                 </div>
@@ -689,34 +810,20 @@ export function DriversTable() {
               {safeImageArray(viewDriver.cccdImages).length > 0 && (
                 <div className="space-y-2 border-t pt-4">
                   <h4 className="font-semibold">Ảnh CCCD</h4>
-                  <div className="flex gap-4 overflow-x-auto pb-2">
-                    {safeImageArray(viewDriver.cccdImages).map((img, idx) => (
-                      <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
-                        <img 
-                          src={getImageUrl(img)} 
-                          alt={`CCCD ${idx + 1}`} 
-                          className="h-32 object-cover rounded-md border" 
-                        />
-                      </a>
-                    ))}
-                  </div>
+                  <ImageThumbList
+                    urls={safeImageArray(viewDriver.cccdImages).map((img) => getImageUrl(img))}
+                    altPrefix="CCCD"
+                  />
                 </div>
               )}
 
               {safeImageArray(viewDriver.licenseImages).length > 0 && (
                 <div className="space-y-2 border-t pt-4">
                   <h4 className="font-semibold">Ảnh bằng lái</h4>
-                  <div className="flex gap-4 overflow-x-auto pb-2">
-                    {safeImageArray(viewDriver.licenseImages).map((img, idx) => (
-                      <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
-                        <img 
-                          src={getImageUrl(img)} 
-                          alt={`License ${idx + 1}`} 
-                          className="h-32 object-cover rounded-md border" 
-                        />
-                      </a>
-                    ))}
-                  </div>
+                  <ImageThumbList
+                    urls={safeImageArray(viewDriver.licenseImages).map((img) => getImageUrl(img))}
+                    altPrefix="License"
+                  />
                 </div>
               )}
 
@@ -837,12 +944,76 @@ export function DriversTable() {
               )}
             </div>
           )}
+
+          {viewDriver && viewDriver.isApproved !== 'true' && viewDriver.isApproved !== 'false' && (
+            <div className="border-t pt-4">
+              {detailAction === null && (
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDetailAction('reject')}>
+                    <XCircle className="mr-2 h-4 w-4" /> Từ chối
+                  </Button>
+                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => setDetailAction('approve')}>
+                    <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
+                  </Button>
+                </div>
+              )}
+
+              {detailAction === 'approve' && (
+                <div className="space-y-3">
+                  <Label>Loại dịch vụ được phép</Label>
+                  <div className="flex flex-col gap-2">
+                    {['RIDE', 'CARPOOL', 'DELIVERY'].map((service) => (
+                      <div key={service} className="flex items-center space-x-2">
+                        <Checkbox
+                          id={`detail-approve-${service}`}
+                          checked={detailServices.includes(service)}
+                          onCheckedChange={(checked) => {
+                            if (checked) setDetailServices([...detailServices, service]);
+                            else setDetailServices(detailServices.filter(s => s !== service));
+                          }}
+                        />
+                        <Label htmlFor={`detail-approve-${service}`} className="text-sm font-normal cursor-pointer">
+                          {service === 'RIDE' ? 'Chở khách (Taxi)' : service === 'CARPOOL' ? 'Đi chung' : 'Giao hàng'}
+                        </Label>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button variant="ghost" disabled={isSubmittingDetail} onClick={resetDetailAction}>Huỷ</Button>
+                    <Button className="bg-green-600 hover:bg-green-700" disabled={isSubmittingDetail || detailServices.length === 0} onClick={handleDetailAction}>
+                      {isSubmittingDetail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Xác nhận duyệt
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {detailAction === 'reject' && (
+                <div className="space-y-3">
+                  <RejectReasonPicker
+                    selectedValues={detailReasonValues}
+                    onSelectedValuesChange={setDetailReasonValues}
+                    note={detailReasonNote}
+                    onNoteChange={setDetailReasonNote}
+                    disabled={isSubmittingDetail}
+                  />
+                  <div className="flex justify-end gap-2 pt-1">
+                    <Button variant="ghost" disabled={isSubmittingDetail} onClick={resetDetailAction}>Huỷ</Button>
+                    <Button variant="destructive" disabled={isSubmittingDetail || detailReasonValues.length === 0} onClick={handleDetailAction}>
+                      {isSubmittingDetail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      Xác nhận từ chối
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 
       {/* Assign Transport Company Dialog */}
       <Dialog open={!!assignDriver} onOpenChange={(open) => { if (!open) { setAssignDriver(null); setSelectedCompanyId(''); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="w-[95vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Gán đơn vị vận tải</DialogTitle>
           </DialogHeader>
@@ -857,16 +1028,15 @@ export function DriversTable() {
             )}
             <div className="grid gap-2">
               <Label>Chọn đơn vị vận tải</Label>
-              <Select value={selectedCompanyId} onValueChange={setSelectedCompanyId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Chọn đơn vị..." />
-                </SelectTrigger>
-                <SelectContent>
-                  {transportCompanies.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Combobox
+                options={transportCompanies.map((c) => ({ value: c.id, label: c.name }))}
+                selectedValue={selectedCompanyId}
+                onSelect={(v) => setSelectedCompanyId(v || '')}
+                placeholder="Chọn đơn vị..."
+                searchPlaceholder="Tìm đơn vị..."
+                noResultsText="Không tìm thấy đơn vị nào."
+                className="w-full"
+              />
             </div>
           </div>
           <DialogFooter>

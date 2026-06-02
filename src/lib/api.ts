@@ -200,6 +200,20 @@ export async function unlockUser(id: string): Promise<void> {
   await fetchWithAuth(`/users/admin/${id}/unlock`, { method: 'POST' });
 }
 
+export async function createAdminUser(body: {
+  phone: string;
+  password: string;
+  fullName?: string;
+  email?: string;
+}): Promise<User> {
+  const response = await fetchWithAuth('/users/admin/create', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export async function getDrivers(params: {
   page?: number;
   limit?: number;
@@ -210,7 +224,9 @@ export async function getDrivers(params: {
   plate?: string;
   serviceType?: 'RIDE' | 'CARPOOL' | 'DELIVERY';
   transportCompanyId?: string;
+  transportCompanyName?: string;
   needsReview?: 'true' | 'false';
+  unconfirmedTransportCompany?: 'true' | 'false';
 } = {}): Promise<GetApiResponse<Driver>> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -223,7 +239,9 @@ export async function getDrivers(params: {
   if (params.plate) query.set('plate', params.plate);
   if (params.serviceType) query.set('serviceType', params.serviceType);
   if (params.transportCompanyId) query.set('transportCompanyId', params.transportCompanyId);
+  if (params.transportCompanyName) query.set('transportCompanyName', params.transportCompanyName);
   if (params.needsReview) query.set('needsReview', params.needsReview);
+  if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
 
   const response = await fetchWithAuth(`/drivers/admin/list?${query.toString()}`);
   return response.json();
@@ -254,6 +272,15 @@ export async function updateDriverServices(id: string, enabledServices: string[]
   });
   const data = await response.json();
   return data.data || data;
+}
+
+export async function updateDriverProfile(id: string, data: { fullName?: string }): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/profile`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+  const json = await response.json();
+  return json.data || json;
 }
 
 export type AdminInvoiceRow = {

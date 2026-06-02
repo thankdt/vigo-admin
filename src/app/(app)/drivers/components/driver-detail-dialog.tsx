@@ -5,6 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { getImageUrl } from '@/lib/utils';
 import type { Driver } from '@/lib/types';
 
@@ -43,7 +44,7 @@ function approvalBadge(status: Driver['isApproved']) {
 export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null; onClose: () => void }) {
   return (
     <Dialog open={!!driver} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Chi tiết tài xế</DialogTitle>
         </DialogHeader>
@@ -100,13 +101,10 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                 {safeImageArray(driver.vehicleRegistration.images).length > 0 && (
                   <div className="space-y-2 pt-3">
                     <Label className="text-xs text-muted-foreground">Ảnh xe</Label>
-                    <div className="flex gap-4 overflow-x-auto pb-2">
-                      {safeImageArray(driver.vehicleRegistration.images).map((img, idx) => (
-                        <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
-                          <img src={getImageUrl(img)} alt={`Vehicle ${idx + 1}`} className="h-32 object-cover rounded-md border" />
-                        </a>
-                      ))}
-                    </div>
+                    <ImageThumbList
+                      urls={safeImageArray(driver.vehicleRegistration.images).map((img) => getImageUrl(img))}
+                      altPrefix="Vehicle"
+                    />
                   </div>
                 )}
               </div>
@@ -115,26 +113,20 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
             {safeImageArray(driver.cccdImages).length > 0 && (
               <div className="space-y-2 border-t pt-4">
                 <h4 className="font-semibold">Ảnh CCCD</h4>
-                <div className="flex gap-4 overflow-x-auto pb-2">
-                  {safeImageArray(driver.cccdImages).map((img, idx) => (
-                    <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
-                      <img src={getImageUrl(img)} alt={`CCCD ${idx + 1}`} className="h-32 object-cover rounded-md border" />
-                    </a>
-                  ))}
-                </div>
+                <ImageThumbList
+                  urls={safeImageArray(driver.cccdImages).map((img) => getImageUrl(img))}
+                  altPrefix="CCCD"
+                />
               </div>
             )}
 
             {safeImageArray(driver.licenseImages).length > 0 && (
               <div className="space-y-2 border-t pt-4">
                 <h4 className="font-semibold">Ảnh bằng lái</h4>
-                <div className="flex gap-4 overflow-x-auto pb-2">
-                  {safeImageArray(driver.licenseImages).map((img, idx) => (
-                    <a key={idx} href={getImageUrl(img)} target="_blank" rel="noreferrer">
-                      <img src={getImageUrl(img)} alt={`License ${idx + 1}`} className="h-32 object-cover rounded-md border" />
-                    </a>
-                  ))}
-                </div>
+                <ImageThumbList
+                  urls={safeImageArray(driver.licenseImages).map((img) => getImageUrl(img))}
+                  altPrefix="License"
+                />
               </div>
             )}
 
