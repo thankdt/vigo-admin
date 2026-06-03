@@ -242,6 +242,8 @@ export async function getDrivers(params: {
   transportCompanyName?: string;
   needsReview?: 'true' | 'false';
   unconfirmedTransportCompany?: 'true' | 'false';
+  sort?: 'name' | 'isApproved' | 'createdAt';
+  order?: 'asc' | 'desc';
 } = {}): Promise<GetApiResponse<Driver>> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -257,6 +259,8 @@ export async function getDrivers(params: {
   if (params.transportCompanyName) query.set('transportCompanyName', params.transportCompanyName);
   if (params.needsReview) query.set('needsReview', params.needsReview);
   if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
+  if (params.sort) query.set('sort', params.sort);
+  if (params.order) query.set('order', params.order);
 
   const response = await fetchWithAuth(`/drivers/admin/list?${query.toString()}`);
   return response.json();

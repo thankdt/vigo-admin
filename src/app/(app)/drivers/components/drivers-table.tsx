@@ -81,7 +81,10 @@ function safeImageArray(images: any): string[] {
   return [];
 }
 
-type SortKey = keyof Driver;
+// Only fields the backend can ORDER BY (whitelisted in
+// drivers.service.findAllForAdmin). Adding a new key requires server-side
+// support — there's no client-side fallback anymore.
+type SortKey = 'name' | 'isApproved' | 'createdAt';
 type TableTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false' | 'needsReview';
 
 export function DriversTable() {
@@ -165,7 +168,7 @@ export function DriversTable() {
       setViewDriver({ ...viewDriver, ...updated });
       toast({ title: 'Đã cập nhật thông tin xe' });
       setEditingVehicle(false);
-      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
     } catch (e: any) {
       toast({ title: 'Không cập nhật được thông tin xe', description: e?.message, variant: 'destructive' });
     } finally {
@@ -186,7 +189,7 @@ export function DriversTable() {
       setViewDriver({ ...viewDriver, ...updated });
       toast({ title: 'Đã cập nhật tên tài xế' });
       setEditingName(false);
-      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
     } catch (e: any) {
       toast({ title: 'Không cập nhật được tên', description: e?.message, variant: 'destructive' });
     } finally {
@@ -202,7 +205,13 @@ export function DriversTable() {
 
   const fetchGenRef = React.useRef(0);
 
-  const fetchDrivers = React.useCallback(async (tab: TableTab, f: DriverFilters, page: number, limit: number) => {
+  const fetchDrivers = React.useCallback(async (
+    tab: TableTab,
+    f: DriverFilters,
+    page: number,
+    limit: number,
+    sort: { key: SortKey; direction: 'ascending' | 'descending' } | null,
+  ) => {
     const gen = ++fetchGenRef.current;
     setIsLoading(true);
     setError(null);
@@ -217,6 +226,10 @@ export function DriversTable() {
         transportCompanyName: f.transportCompanyName || undefined,
         unconfirmedTransportCompany: f.unconfirmedTransportCompany ? 'true' : undefined,
       };
+      if (sort) {
+        apiParams.sort = sort.key;
+        apiParams.order = sort.direction === 'ascending' ? 'asc' : 'desc';
+      }
       if (tab === 'needsReview') {
         apiParams.needsReview = 'true';
       } else if (tab !== 'all') {
@@ -257,11 +270,11 @@ export function DriversTable() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [fetchDrivers, activeTab, filters, currentPage, pageSize]);
+  }, [fetchDrivers, activeTab, filters, currentPage, pageSize, sortConfig]);
 
   React.useEffect(() => {
     refreshNeedsReviewCount();
@@ -277,23 +290,9 @@ export function DriversTable() {
     setCurrentPage(1);
   };
 
-  const sortedDrivers = React.useMemo(() => {
-    let sortableDrivers = [...drivers];
-    if (sortConfig !== null) {
-      sortableDrivers.sort((a, b) => {
-        const aValue = a[sortConfig.key] as any;
-        const bValue = b[sortConfig.key] as any;
-        if (aValue < bValue) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableDrivers;
-  }, [drivers, sortConfig]);
+  // Sort now happens on the server (drivers.service.findAllForAdmin), so this
+  // is just an alias — `drivers` already contains the ordered current page.
+  const sortedDrivers = drivers;
 
   const requestSort = (key: SortKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -301,6 +300,9 @@ export function DriversTable() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
+    // Reset to page 1 so the user starts at the top of the new ordering and
+    // doesn't end up on a page that no longer exists for the new sort.
+    setCurrentPage(1);
   };
 
   const getStatusBadge = (status: Driver['isApproved']) => {
@@ -349,7 +351,7 @@ export function DriversTable() {
         await rejectDriver(dialogState.driver.id, combineRejectReason(rejectionValues, rejectionNote));
         toast({ title: "Đã từ chối tài xế", description: `${driverName} đã bị từ chối.` });
       }
-      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
       refreshNeedsReviewCount();
       closeConfirmationDialog();
     } catch (err: any) {
@@ -392,7 +394,7 @@ export function DriversTable() {
       }
       setViewDriver(null);
       resetDetailAction();
-      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
       refreshNeedsReviewCount();
     } catch (err: any) {
       toast({
@@ -424,7 +426,7 @@ export function DriversTable() {
       toast({ title: 'Thành công', description: 'Đã gán đơn vị vận tải cho tài xế.' });
       setAssignDriver(null);
       setSelectedCompanyId('');
-      fetchDrivers(activeTab, filters, currentPage, pageSize);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
       refreshNeedsReviewCount();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Lỗi', description: err.message });
@@ -1019,7 +1021,7 @@ export function DriversTable() {
                             setViewDriver({ ...viewDriver, enabledServices: updated.enabledServices ?? editingServices });
                             setEditingServices(null);
                             toast({ title: 'Đã cập nhật dịch vụ' });
-                            fetchDrivers(activeTab, filters, currentPage, pageSize);
+                            fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
                             refreshNeedsReviewCount();
                           } catch (err: any) {
                             toast({ variant: 'destructive', title: 'Không thể cập nhật', description: err.message });
@@ -1170,7 +1172,7 @@ export function DriversTable() {
       <WalletAdjustDialog
         driver={walletDriver}
         onClose={() => setWalletDriver(null)}
-        onAdjusted={() => fetchDrivers(activeTab, filters, currentPage, pageSize)}
+        onAdjusted={() => fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig)}
       />
 
       {/* Assign Transport Company Dialog */}
