@@ -43,11 +43,14 @@ export type Banner = {
 
 export type AppPopupDisplayMode = 'ALWAYS' | 'DISMISSIBLE' | 'ONCE';
 
+export type AppPopupAudience = 'CUSTOMER' | 'DRIVER' | 'BOTH';
+
 export type AppPopup = {
   id: string;
   imageUrl: string;
   linkUrl: string | null;
   displayMode: AppPopupDisplayMode;
+  audience: AppPopupAudience;
   isActive: boolean;
   priority: number;
   startAt: string | null;
@@ -89,6 +92,10 @@ export type Driver = {
   name?: string;
   phone?: string;
   walletBalance?: number;
+  wallets?: {
+    deposit: number;
+    main: number;
+  };
   isApproved: 'true' | 'false' | 'pending' | '-' | string;
   vehicle?: {
     id: number;
@@ -147,11 +154,9 @@ export type PriceBreakdown = {
 
 export type DriverEarnings = {
   grossPrice: number;
-  commissionRate: number;          // 0..1, e.g. 0.15
-  commissionAmount: number;
-  commissionVatRate: number;       // 0..1, e.g. 0.08
-  commissionVatAmount: number;
-  grossEarnings: number;          // grossPrice - commissionAmount - commissionVatAmount
+  commissionRate: number;          // 0..1, e.g. 0.15 — base rate before VAT roll-in
+  commissionAmount: number;        // commission + commission VAT combined
+  grossEarnings: number;           // grossPrice - commissionAmount
   personalIncomeTaxRate: number;
   personalIncomeTaxAmount: number;
   netEarnings: number;             // grossEarnings - personalIncomeTaxAmount

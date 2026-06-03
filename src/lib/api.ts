@@ -200,6 +200,21 @@ export async function unlockUser(id: string): Promise<void> {
   await fetchWithAuth(`/users/admin/${id}/unlock`, { method: 'POST' });
 }
 
+export async function adminAdjustDriverWallet(driverId: string, body: {
+  wallet: 'DRIVER_DEPOSIT' | 'DRIVER_MAIN';
+  operation: 'credit' | 'debit';
+  amount: number;
+  note?: string;
+  secondaryPassword: string;
+}): Promise<{ wallet: string; operation: 'credit' | 'debit'; amount: number; newBalance: number }> {
+  const response = await fetchWithAuth(`/wallets/admin/drivers/${driverId}/adjust`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export async function createAdminUser(body: {
   phone: string;
   password: string;
@@ -637,6 +652,7 @@ export type AppPopupPayload = {
   imageUrl: string;
   linkUrl?: string | null;
   displayMode: 'ALWAYS' | 'DISMISSIBLE' | 'ONCE';
+  audience: 'CUSTOMER' | 'DRIVER' | 'BOTH';
   isActive: boolean;
   priority: number;
   startAt?: string | null;

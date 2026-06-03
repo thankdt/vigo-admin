@@ -28,7 +28,7 @@ import {
     API_BASE_URL,
     AppPopupPayload,
 } from '@/lib/api';
-import type { AppPopup, AppPopupDisplayMode } from '@/lib/types';
+import type { AppPopup, AppPopupAudience, AppPopupDisplayMode } from '@/lib/types';
 import { Loader2, PlusCircle, Edit, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -61,6 +61,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import Image from 'next/image';
+
+const AUDIENCE_LABEL: Record<AppPopupAudience, string> = {
+    CUSTOMER: 'App khách',
+    DRIVER: 'App tài xế',
+    BOTH: 'Cả hai',
+};
 
 const DISPLAY_MODE_LABEL: Record<AppPopupDisplayMode, string> = {
     ALWAYS: 'Luôn hiển thị',
@@ -168,6 +174,7 @@ export function AppPopupManager() {
                                 <TableHead>Hình ảnh</TableHead>
                                 <TableHead>Liên kết</TableHead>
                                 <TableHead>Chế độ</TableHead>
+                                <TableHead>Hiển thị cho</TableHead>
                                 <TableHead>Ưu tiên</TableHead>
                                 <TableHead>Lịch chạy</TableHead>
                                 <TableHead>Trạng thái</TableHead>
@@ -177,13 +184,13 @@ export function AppPopupManager() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center">
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
                             ) : popups.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={7} className="h-24 text-center">
+                                    <TableCell colSpan={8} className="h-24 text-center">
                                         Chưa có popup nào.
                                     </TableCell>
                                 </TableRow>
@@ -216,6 +223,7 @@ export function AppPopupManager() {
                                             )}
                                         </TableCell>
                                         <TableCell>{DISPLAY_MODE_LABEL[p.displayMode]}</TableCell>
+                                        <TableCell>{AUDIENCE_LABEL[p.audience ?? 'CUSTOMER']}</TableCell>
                                         <TableCell>{p.priority}</TableCell>
                                         <TableCell className="text-xs">
                                             {p.startAt || p.endAt ? (
@@ -314,6 +322,9 @@ function AppPopupForm({
     const [displayMode, setDisplayMode] = React.useState<AppPopupDisplayMode>(
         popup?.displayMode ?? 'ALWAYS',
     );
+    const [audience, setAudience] = React.useState<AppPopupAudience>(
+        popup?.audience ?? 'CUSTOMER',
+    );
     const [priority, setPriority] = React.useState(popup?.priority ?? 0);
     const [isActive, setIsActive] = React.useState(popup?.isActive ?? true);
     const [startAt, setStartAt] = React.useState(isoToLocalInput(popup?.startAt));
@@ -370,6 +381,7 @@ function AppPopupForm({
             imageUrl: finalImageUrl,
             linkUrl: linkUrl.trim() || null,
             displayMode,
+            audience,
             isActive,
             priority,
             startAt: localInputToIso(startAt),
@@ -452,6 +464,23 @@ function AppPopupForm({
                                 {DISPLAY_MODE_LABEL.DISMISSIBLE}
                             </SelectItem>
                             <SelectItem value="ONCE">{DISPLAY_MODE_LABEL.ONCE}</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+
+                <div className="grid gap-2">
+                    <Label htmlFor="audience">Hiển thị cho</Label>
+                    <Select
+                        value={audience}
+                        onValueChange={(v) => setAudience(v as AppPopupAudience)}
+                    >
+                        <SelectTrigger id="audience">
+                            <SelectValue placeholder="Chọn ứng dụng" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="CUSTOMER">{AUDIENCE_LABEL.CUSTOMER}</SelectItem>
+                            <SelectItem value="DRIVER">{AUDIENCE_LABEL.DRIVER}</SelectItem>
+                            <SelectItem value="BOTH">{AUDIENCE_LABEL.BOTH}</SelectItem>
                         </SelectContent>
                     </Select>
                 </div>
