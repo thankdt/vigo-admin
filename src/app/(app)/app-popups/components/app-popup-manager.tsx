@@ -379,7 +379,13 @@ function AppPopupForm({
 
         const payload: AppPopupPayload = {
             imageUrl: finalImageUrl,
-            linkUrl: linkUrl.trim() || null,
+            // Auto-prepend https:// for bare domains like `zalo.me/g/...` so old
+            // mobile clients (no client-side scheme fix) can still open the URL.
+            linkUrl: (() => {
+                const raw = linkUrl.trim();
+                if (!raw) return null;
+                return /^[a-zA-Z][a-zA-Z0-9+\-.]*:/.test(raw) ? raw : `https://${raw}`;
+            })(),
             displayMode,
             audience,
             isActive,
