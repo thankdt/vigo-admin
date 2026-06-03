@@ -54,6 +54,8 @@ import {
 import { getImageUrl } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { combineRejectReason } from '@/lib/reject-reasons';
+import { WalletAdjustDialog } from './wallet-adjust-dialog';
+import { Wallet as WalletIcon } from 'lucide-react';
 
 // Safely parse image arrays - handles string, comma-separated, PostgreSQL array format, etc.
 function safeImageArray(images: any): string[] {
@@ -111,6 +113,9 @@ export function DriversTable() {
   const [detailReasonNote, setDetailReasonNote] = React.useState('');
   const [isSubmittingDetail, setIsSubmittingDetail] = React.useState(false);
 
+  // Wallet adjust state — used by both the row dropdown and the detail dialog.
+  const [walletDriver, setWalletDriver] = React.useState<Driver | null>(null);
+
   // Assign transport company state
   const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
   const [transportCompanies, setTransportCompanies] = React.useState<TransportCompany[]>([]);
@@ -121,6 +126,52 @@ export function DriversTable() {
   const [editingName, setEditingName] = React.useState(false);
   const [nameDraft, setNameDraft] = React.useState('');
   const [savingName, setSavingName] = React.useState(false);
+
+  // Inline edit vehicle state — admin can correct biển số / hãng / dòng / màu.
+  const [editingVehicle, setEditingVehicle] = React.useState(false);
+  const [vehicleDraft, setVehicleDraft] = React.useState<{
+    plateNumber: string;
+    brand: string;
+    model: string;
+    color: string;
+  }>({ plateNumber: '', brand: '', model: '', color: '' });
+  const [savingVehicle, setSavingVehicle] = React.useState(false);
+
+  const handleSaveVehicle = async () => {
+    if (!viewDriver) return;
+    const current = viewDriver.vehicleRegistration;
+    // Only send fields that actually changed; lets backend skip the write
+    // entirely if the admin opened edit mode but didn't touch anything.
+    const patch: { plateNumber?: string; brand?: string; model?: string; color?: string } = {};
+    if (vehicleDraft.plateNumber.trim() !== (current?.plateNumber ?? '')) {
+      patch.plateNumber = vehicleDraft.plateNumber.trim();
+    }
+    if (vehicleDraft.brand.trim() !== (current?.brand ?? '')) {
+      patch.brand = vehicleDraft.brand.trim();
+    }
+    if (vehicleDraft.model.trim() !== (current?.model ?? '')) {
+      patch.model = vehicleDraft.model.trim();
+    }
+    if (vehicleDraft.color.trim() !== (current?.color ?? '')) {
+      patch.color = vehicleDraft.color.trim();
+    }
+    if (Object.keys(patch).length === 0) {
+      setEditingVehicle(false);
+      return;
+    }
+    setSavingVehicle(true);
+    try {
+      const updated = await updateDriverProfile(viewDriver.id, { vehicleRegistration: patch });
+      setViewDriver({ ...viewDriver, ...updated });
+      toast({ title: 'Đã cập nhật thông tin xe' });
+      setEditingVehicle(false);
+      fetchDrivers(activeTab, filters, currentPage, pageSize);
+    } catch (e: any) {
+      toast({ title: 'Không cập nhật được thông tin xe', description: e?.message, variant: 'destructive' });
+    } finally {
+      setSavingVehicle(false);
+    }
+  };
 
   const handleSaveName = async () => {
     if (!viewDriver) return;
@@ -430,6 +481,7 @@ export function DriversTable() {
                 </TableHead>
                 <TableHead>Phương tiện</TableHead>
                 <TableHead>Đơn vị vận tải</TableHead>
+                <TableHead className="text-right">Số dư ví</TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('isApproved')}>
                     Trạng thái
@@ -450,19 +502,19 @@ export function DriversTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-destructive">
+                  <TableCell colSpan={7} className="text-center text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
               ) : sortedDrivers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     {activeTab === 'needsReview' && !hasAnyFilter(filters)
                       ? '✅ Tất cả tài xế đều có thông tin đầy đủ.'
                       : 'Không tìm thấy tài xế nào.'}
@@ -511,6 +563,12 @@ export function DriversTable() {
                         <span className="text-sm text-muted-foreground">Chưa cung cấp</span>
                       )}
                     </TableCell>
+                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                      <div className="text-sm">
+                        <div className="font-medium">{new Intl.NumberFormat('vi-VN').format(driver.wallets?.deposit ?? 0)}<span className="text-muted-foreground"> đ</span></div>
+                        <div className="text-xs text-muted-foreground">KM: {new Intl.NumberFormat('vi-VN').format(driver.wallets?.main ?? 0)} đ</div>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       {getStatusBadge(driver.isApproved)}
                     </TableCell>
@@ -532,6 +590,9 @@ export function DriversTable() {
                           <DropdownMenuItem onSelect={() => setTimeout(() => setViewDriver(driver), 0)}>Xem chi tiết</DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setTimeout(() => openAssignDialog(driver), 0)}>
                             <Building2 className="mr-2 h-4 w-4" /> Gán đơn vị vận tải
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onSelect={() => setTimeout(() => setWalletDriver(driver), 0)}>
+                            <WalletIcon className="mr-2 h-4 w-4" /> Nạp / trừ tiền
                           </DropdownMenuItem>
                           {(driver.isApproved === 'pending' || driver.isApproved === '-' || activeTab === 'pending') && (
                             <>
@@ -674,7 +735,7 @@ export function DriversTable() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); } }}>
+      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); setEditingVehicle(false); } }}>
         <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Chi tiết tài xế</DialogTitle>
@@ -749,34 +810,129 @@ export function DriversTable() {
                   <p className="font-medium text-sm break-all">{viewDriver.id}</p>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Số dư ví</Label>
-                  <p className="font-medium text-sm">{viewDriver.walletBalance !== undefined ? `${viewDriver.walletBalance} VNĐ` : 'N/A'}</p>
-                </div>
-                <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Số bằng lái</Label>
                   <p className="font-medium text-sm">{viewDriver.licenseNumber || 'N/A'}</p>
                 </div>
               </div>
 
+              <div className="border-t pt-4 space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold">Số dư ví</h4>
+                  <Button size="sm" variant="outline" onClick={() => { const d = viewDriver; setViewDriver(null); setWalletDriver(d); }}>
+                    <WalletIcon className="mr-2 h-4 w-4" /> Nạp / trừ tiền
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-md border bg-muted/40 p-3">
+                    <div className="text-xs text-muted-foreground">Ví chính (cọc)</div>
+                    <div className="font-semibold tabular-nums">{new Intl.NumberFormat('vi-VN').format(viewDriver.wallets?.deposit ?? 0)} đ</div>
+                  </div>
+                  <div className="rounded-md border bg-muted/40 p-3">
+                    <div className="text-xs text-muted-foreground">Ví khuyến mại</div>
+                    <div className="font-semibold tabular-nums">{new Intl.NumberFormat('vi-VN').format(viewDriver.wallets?.main ?? 0)} đ</div>
+                  </div>
+                </div>
+              </div>
+
               {viewDriver.vehicleRegistration && (
                 <div className="space-y-2 border-t pt-4">
-                  <h4 className="font-semibold">Đăng ký xe</h4>
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-semibold">Đăng ký xe</h4>
+                    {!editingVehicle ? (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="h-7 gap-1"
+                        onClick={() => {
+                          setVehicleDraft({
+                            plateNumber: viewDriver.vehicleRegistration?.plateNumber ?? '',
+                            brand: viewDriver.vehicleRegistration?.brand ?? '',
+                            model: viewDriver.vehicleRegistration?.model ?? '',
+                            color: viewDriver.vehicleRegistration?.color ?? '',
+                          });
+                          setEditingVehicle(true);
+                        }}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                        Sửa
+                      </Button>
+                    ) : (
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1"
+                          onClick={handleSaveVehicle}
+                          disabled={savingVehicle}
+                        >
+                          {savingVehicle ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckIcon className="h-3.5 w-3.5" />}
+                          Lưu
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 gap-1"
+                          onClick={() => setEditingVehicle(false)}
+                          disabled={savingVehicle}
+                        >
+                          <XIcon className="h-3.5 w-3.5" />
+                          Huỷ
+                        </Button>
+                      </div>
+                    )}
+                  </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Biển số</Label>
-                      <p className="font-medium text-sm">{viewDriver.vehicleRegistration.plateNumber}</p>
+                      {editingVehicle ? (
+                        <Input
+                          className="h-8"
+                          value={vehicleDraft.plateNumber}
+                          onChange={(e) => setVehicleDraft((d) => ({ ...d, plateNumber: e.target.value }))}
+                          disabled={savingVehicle}
+                        />
+                      ) : (
+                        <p className="font-medium text-sm">{viewDriver.vehicleRegistration.plateNumber}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Hãng xe</Label>
-                      <p className="font-medium text-sm">{viewDriver.vehicleRegistration.brand}</p>
+                      {editingVehicle ? (
+                        <Input
+                          className="h-8"
+                          value={vehicleDraft.brand}
+                          onChange={(e) => setVehicleDraft((d) => ({ ...d, brand: e.target.value }))}
+                          disabled={savingVehicle}
+                        />
+                      ) : (
+                        <p className="font-medium text-sm">{viewDriver.vehicleRegistration.brand}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Dòng xe</Label>
-                      <p className="font-medium text-sm">{viewDriver.vehicleRegistration.model}</p>
+                      {editingVehicle ? (
+                        <Input
+                          className="h-8"
+                          value={vehicleDraft.model}
+                          onChange={(e) => setVehicleDraft((d) => ({ ...d, model: e.target.value }))}
+                          disabled={savingVehicle}
+                        />
+                      ) : (
+                        <p className="font-medium text-sm">{viewDriver.vehicleRegistration.model}</p>
+                      )}
                     </div>
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Màu sắc</Label>
-                      <p className="font-medium text-sm">{viewDriver.vehicleRegistration.color}</p>
+                      {editingVehicle ? (
+                        <Input
+                          className="h-8"
+                          value={vehicleDraft.color}
+                          onChange={(e) => setVehicleDraft((d) => ({ ...d, color: e.target.value }))}
+                          disabled={savingVehicle}
+                        />
+                      ) : (
+                        <p className="font-medium text-sm">{viewDriver.vehicleRegistration.color}</p>
+                      )}
                     </div>
                   </div>
                   {safeImageArray(viewDriver.vehicleRegistration.images).length > 0 && (
@@ -1010,6 +1166,12 @@ export function DriversTable() {
           )}
         </DialogContent>
       </Dialog>
+
+      <WalletAdjustDialog
+        driver={walletDriver}
+        onClose={() => setWalletDriver(null)}
+        onAdjusted={() => fetchDrivers(activeTab, filters, currentPage, pageSize)}
+      />
 
       {/* Assign Transport Company Dialog */}
       <Dialog open={!!assignDriver} onOpenChange={(open) => { if (!open) { setAssignDriver(null); setSelectedCompanyId(''); } }}>

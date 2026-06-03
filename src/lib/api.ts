@@ -289,7 +289,18 @@ export async function updateDriverServices(id: string, enabledServices: string[]
   return data.data || data;
 }
 
-export async function updateDriverProfile(id: string, data: { fullName?: string }): Promise<Driver> {
+export async function updateDriverProfile(
+  id: string,
+  data: {
+    fullName?: string;
+    vehicleRegistration?: {
+      plateNumber?: string;
+      brand?: string;
+      model?: string;
+      color?: string;
+    };
+  },
+): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/profile`, {
     method: 'PATCH',
     body: JSON.stringify(data),
