@@ -144,7 +144,7 @@ export function MultiSelectComboBox({
               return (
                 <CommandItem
                   key={option.value}
-                  value={option.label}
+                  value={`${option.label}__${option.value}`}
                   onSelect={() => handleSelect(option.value)}
                 >
                   <Check
