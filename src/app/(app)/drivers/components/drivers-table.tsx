@@ -1141,7 +1141,15 @@ export function DriversTable() {
                 <div className="flex flex-wrap justify-end gap-2">
                   {status === 'rejected' && (
                     <Button
-                      onClick={() => viewDriver && setMoveBackTarget(viewDriver)}
+                      onClick={() => {
+                        if (!viewDriver) return;
+                        // Close the detail Dialog before opening the confirm
+                        // AlertDialog — Radix leaves body.pointer-events=none
+                        // when two modals close in rapid succession.
+                        const d = viewDriver;
+                        setViewDriver(null);
+                        setMoveBackTarget(d);
+                      }}
                       className="bg-blue-600 hover:bg-blue-700 text-white"
                     >
                       <RotateCcw className="mr-2 h-4 w-4" /> Đưa lại Chờ duyệt
@@ -1240,6 +1248,9 @@ export function DriversTable() {
                   toast({ title: 'Đã đưa về Chờ duyệt', description: moveBackTarget.name || moveBackTarget.user?.fullName || '' });
                   setMoveBackTarget(null);
                   if (viewDriver?.id === moveBackTarget.id) setViewDriver(null);
+                  // Defensive: clear any leftover pointer-events lock from
+                  // Radix Dialog/AlertDialog so the page stays clickable.
+                  setTimeout(() => { document.body.style.pointerEvents = ''; }, 0);
                   fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
                   refreshNeedsReviewCount();
                 } catch (err: any) {
