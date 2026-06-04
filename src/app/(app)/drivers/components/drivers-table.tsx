@@ -1228,7 +1228,7 @@ export function DriversTable() {
 
       {/* Move-back-to-pending confirm */}
       <AlertDialog open={!!moveBackTarget} onOpenChange={(open) => { if (!open && !isMovingBack) setMoveBackTarget(null); }}>
-        <AlertDialogContent>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
             <AlertDialogTitle>Đưa lại Chờ duyệt</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1248,9 +1248,6 @@ export function DriversTable() {
                   toast({ title: 'Đã đưa về Chờ duyệt', description: moveBackTarget.name || moveBackTarget.user?.fullName || '' });
                   setMoveBackTarget(null);
                   if (viewDriver?.id === moveBackTarget.id) setViewDriver(null);
-                  // Defensive: clear any leftover pointer-events lock from
-                  // Radix Dialog/AlertDialog so the page stays clickable.
-                  setTimeout(() => { document.body.style.pointerEvents = ''; }, 0);
                   fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
                   refreshNeedsReviewCount();
                 } catch (err: any) {
