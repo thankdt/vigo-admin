@@ -284,6 +284,11 @@ export type Promotion = {
   imageUrl?: string;
   description?: string;
   maxDiscount?: number;
+  // Max times a single user can redeem this voucher. null/omitted = unlimited.
+  userUsageLimit?: number | null;
+  // Max times this voucher can be redeemed in a single calendar day across
+  // all users (resets at midnight Asia/Ho_Chi_Minh). 0/omitted = unlimited.
+  dailyUsageLimit?: number;
 }
 
 export type ScheduledNotification = {

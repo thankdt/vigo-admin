@@ -34,6 +34,10 @@ const promotionSchema = z.object({
   discountValue: z.coerce.number().positive({ message: "Giá trị giảm giá phải là số dương" }),
   minOrderValue: z.coerce.number().min(0, { message: "Giá trị đơn hàng tối thiểu không thể âm" }),
   usageLimit: z.coerce.number().positive({ message: "Giới hạn sử dụng phải là số dương" }),
+  // Empty input → undefined → BE keeps it NULL = unlimited per user.
+  userUsageLimit: z.coerce.number().int().positive({ message: "Phải là số nguyên dương" }).optional(),
+  // Empty input → 0 = unlimited per day. Coerced so blank submits as undefined.
+  dailyUsageLimit: z.coerce.number().int().min(0, { message: "Không thể âm" }).optional(),
   startDate: z.date({ required_error: "Ngày bắt đầu là bắt buộc" }),
   endDate: z.date({ required_error: "Ngày kết thúc là bắt buộc" }),
   pointCost: z.coerce.number().min(0, { message: "Chi phí điểm không thể âm" }).default(0),
@@ -145,9 +149,35 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
           {errors.minOrderValue && <p className="text-sm text-destructive">{errors.minOrderValue.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="usageLimit">Giới hạn sử dụng</Label>
+          <Label htmlFor="usageLimit">Giới hạn sử dụng (tổng)</Label>
           <Input id="usageLimit" type="number" {...register('usageLimit')} />
           {errors.usageLimit && <p className="text-sm text-destructive">{errors.usageLimit.message}</p>}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="userUsageLimit">Mỗi user được đổi (lần)</Label>
+          <Input
+            id="userUsageLimit"
+            type="number"
+            placeholder="Bỏ trống = không giới hạn"
+            {...register('userUsageLimit')}
+          />
+          {errors.userUsageLimit && (
+            <p className="text-sm text-destructive">{errors.userUsageLimit.message}</p>
+          )}
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="dailyUsageLimit">Giới hạn đổi mỗi ngày</Label>
+          <Input
+            id="dailyUsageLimit"
+            type="number"
+            placeholder="0 = không giới hạn"
+            {...register('dailyUsageLimit')}
+          />
+          {errors.dailyUsageLimit && (
+            <p className="text-sm text-destructive">{errors.dailyUsageLimit.message}</p>
+          )}
         </div>
 
         <div className="space-y-2">
