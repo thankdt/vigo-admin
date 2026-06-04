@@ -558,6 +558,26 @@ export async function createVoucher(data: Omit<Promotion, 'id' | 'usageCount'>):
   return result.data;
 }
 
+export async function updateVoucher(
+  id: number,
+  data: Partial<Omit<Promotion, 'id' | 'usageCount' | 'code'>>,
+): Promise<Promotion> {
+  // Same FIXED_AMOUNT → FIXED mapping as create. discountType is optional on
+  // update so only translate when present.
+  const body = {
+    ...data,
+    ...(data.discountType !== undefined && {
+      discountType: data.discountType === 'FIXED_AMOUNT' ? 'FIXED' : 'PERCENTAGE',
+    }),
+  };
+  const response = await fetchWithAuth(`/promotions/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
 // Scheduled Notifications API
 export async function getScheduledNotifications(params: { page?: number; limit?: number } = {}): Promise<GetApiResponse<ScheduledNotification>> {
   const query = new URLSearchParams({

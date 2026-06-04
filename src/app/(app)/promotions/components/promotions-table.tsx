@@ -4,7 +4,7 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { getVouchers, createVoucher } from '@/lib/api';
+import { getVouchers, createVoucher, updateVoucher } from '@/lib/api';
 import type { Promotion } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -48,28 +48,72 @@ const promotionSchema = z.object({
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
 
-function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void, onCancel: () => void }) {
+// Backend stores discountType as 'FIXED' | 'PERCENTAGE'; the form uses
+// 'FIXED_AMOUNT' to match the Promotion type union. Normalize the loaded value
+// so RHF defaultValues align with the schema's enum.
+function normalizeDiscountType(t: string | undefined): 'FIXED_AMOUNT' | 'PERCENTAGE' {
+  return t === 'PERCENTAGE' ? 'PERCENTAGE' : 'FIXED_AMOUNT';
+}
+
+function PromotionForm({
+  mode,
+  initial,
+  onSaveSuccess,
+  onCancel,
+}: {
+  mode: 'create' | 'edit';
+  initial?: Promotion;
+  onSaveSuccess: () => void;
+  onCancel: () => void;
+}) {
   const { toast } = useToast();
+  const defaultValues = React.useMemo<Partial<PromotionFormValues>>(() => {
+    if (mode === 'edit' && initial) {
+      return {
+        name: initial.name,
+        code: initial.code,
+        description: initial.description,
+        discountType: normalizeDiscountType(initial.discountType),
+        discountValue: initial.discountValue,
+        maxDiscount: initial.maxDiscount,
+        minOrderValue: initial.minOrderValue,
+        usageLimit: initial.usageLimit,
+        userUsageLimit: initial.userUsageLimit ?? undefined,
+        dailyUsageLimit: initial.dailyUsageLimit ?? undefined,
+        startDate: new Date(initial.startDate),
+        endDate: new Date(initial.endDate),
+        pointCost: initial.pointCost ?? 0,
+        imageUrl: initial.imageUrl ?? '',
+      };
+    }
+    return { discountType: 'FIXED_AMOUNT', pointCost: 0 };
+  }, [mode, initial]);
+
   const { register, handleSubmit, control, watch, formState: { errors, isSubmitting }, reset } = useForm<PromotionFormValues>({
     resolver: zodResolver(promotionSchema),
-    defaultValues: {
-      discountType: 'FIXED_AMOUNT',
-      pointCost: 0,
-    },
+    defaultValues,
   });
 
   const discountType = watch('discountType');
 
   const onSubmit = async (data: PromotionFormValues) => {
     try {
-      await createVoucher({
+      const payload = {
         ...data,
         startDate: format(data.startDate, 'yyyy-MM-dd') + 'T00:00:00Z',
         endDate: format(data.endDate, 'yyyy-MM-dd') + 'T23:59:59Z',
-      });
-      toast({ title: "Thành công", description: "Đã tạo voucher thành công." });
+      };
+      if (mode === 'edit' && initial) {
+        // Don't allow code changes — already issued to customers.
+        const { code: _code, ...patch } = payload;
+        await updateVoucher(initial.id, patch);
+        toast({ title: 'Đã cập nhật', description: `Voucher "${initial.code}" được cập nhật.` });
+      } else {
+        await createVoucher(payload);
+        toast({ title: "Thành công", description: "Đã tạo voucher thành công." });
+      }
       onSaveSuccess();
-      reset(); // Reset form after successful submission
+      if (mode === 'create') reset();
     } catch (err: any) {
       const errorMessage = err.message || 'Đã xảy ra lỗi không xác định';
       let finalDescription = errorMessage;
@@ -86,15 +130,21 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
         // Not a JSON string, use the original message
       }
 
-      toast({ variant: 'destructive', title: 'Không thể tạo voucher', description: finalDescription });
+      toast({ variant: 'destructive', title: mode === 'edit' ? 'Không thể cập nhật voucher' : 'Không thể tạo voucher', description: finalDescription });
     }
   };
+
+  const isEdit = mode === 'edit';
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <DialogHeader>
-        <DialogTitle>Tạo Voucher</DialogTitle>
-        <DialogDescription>Điền thông tin chi tiết để tạo voucher khuyến mãi mới.</DialogDescription>
+        <DialogTitle>{isEdit ? `Sửa Voucher · ${initial?.code ?? ''}` : 'Tạo Voucher'}</DialogTitle>
+        <DialogDescription>
+          {isEdit
+            ? 'Cập nhật thông tin voucher. Mã voucher không thể đổi vì đã được phát hành.'
+            : 'Điền thông tin chi tiết để tạo voucher khuyến mãi mới.'}
+        </DialogDescription>
       </DialogHeader>
       <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto p-1 sm:grid-cols-2">
         <div className="space-y-2">
@@ -103,10 +153,16 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
           {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
         </div>
         <div className="space-y-2">
-          <Label htmlFor="code">Mã</Label>
-          <Input id="code" {...register('code')} />
+          <Label htmlFor="code">Mã{isEdit ? ' (không sửa được)' : ''}</Label>
+          <Input id="code" {...register('code')} disabled={isEdit} />
           {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
         </div>
+        {isEdit && initial && (
+          <div className="space-y-2">
+            <Label>Đã dùng</Label>
+            <Input value={`${initial.usageCount} / ${initial.usageLimit}`} disabled readOnly />
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="description">Mô tả (Tùy chọn)</Label>
@@ -243,7 +299,7 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
         <Button variant="outline" onClick={onCancel} type="button">Hủy</Button>
         <Button type="submit" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Lưu Voucher
+          {isEdit ? 'Lưu thay đổi' : 'Lưu Voucher'}
         </Button>
       </DialogFooter>
     </form>
@@ -253,6 +309,7 @@ function PromotionForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void,
 export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boolean; setIsFormOpen: React.Dispatch<React.SetStateAction<boolean>> }) {
   const [promotions, setPromotions] = React.useState<Promotion[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [editing, setEditing] = React.useState<Promotion | null>(null);
   const { toast } = useToast();
 
   const fetchPromotions = React.useCallback(async () => {
@@ -322,7 +379,11 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                 </TableRow>
               ) : (
                 promotions.map(promo => (
-                  <TableRow key={promo.id}>
+                  <TableRow
+                    key={promo.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => setEditing(promo)}
+                  >
                     <TableCell>
                       <Badge variant="destructive">{promo.code}</Badge>
                     </TableCell>
@@ -352,9 +413,23 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-2xl">
           <PromotionForm
+            mode="create"
             onCancel={() => setIsFormOpen(false)}
             onSaveSuccess={handleSaveSuccess}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editing} onOpenChange={(open) => { if (!open) setEditing(null); }}>
+        <DialogContent className="sm:max-w-2xl">
+          {editing && (
+            <PromotionForm
+              mode="edit"
+              initial={editing}
+              onCancel={() => setEditing(null)}
+              onSaveSuccess={() => { setEditing(null); fetchPromotions(); }}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </>
