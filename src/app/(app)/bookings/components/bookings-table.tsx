@@ -50,11 +50,12 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 type SortKey = keyof Booking;
-const allStatuses: BookingStatus[] = ['SEARCHING', 'SCHEDULED', 'ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
+const allStatuses: BookingStatus[] = ['SEARCHING', 'PROCESSING', 'SCHEDULED', 'ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
 
 const statusLabelMap: Record<string, string> = {
   ALL: 'Tất cả',
   SEARCHING: 'Đang tìm',
+  PROCESSING: 'Đang xử lý',
   SCHEDULED: 'Đặt lịch',
   ACCEPTED: 'Đã nhận',
   PICKED_UP: 'Đã đón',
@@ -536,6 +537,8 @@ function getStatusBadge(status: Booking['status']) {
       return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400">{label}</Badge>;
     case 'SEARCHING':
       return <Badge variant="secondary">{label}</Badge>;
+    case 'PROCESSING':
+      return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">{label}</Badge>;
     case 'CANCELLED':
       return <Badge variant="destructive">{label}</Badge>;
     default:
