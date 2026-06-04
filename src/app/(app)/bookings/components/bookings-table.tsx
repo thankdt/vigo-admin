@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking } from '@/lib/api';
@@ -150,13 +150,21 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
       {earnings && (
         <div className="space-y-1.5 text-sm border-t pt-2">
           <div className="text-xs font-medium text-muted-foreground">Phân bổ doanh thu</div>
+          {/* Repeat the starting numbers so the deduction chain visibly
+              reconciles end-to-end (mirrors the mobile driver breakdown). */}
+          <div className="flex justify-between">
+            <span>Giá</span>
+            <span>{fmtVnd(booking.finalPrice ?? booking.price)}</span>
+          </div>
+          {breakdown && Number(breakdown.vatAmount ?? 0) > 0 && (
+            <div className="flex justify-between">
+              <span>VAT</span>
+              <span className="text-red-600">-{fmtVnd(breakdown.vatAmount)}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span>Hoa hồng nền tảng ({fmtPct(earnings.commissionRate)})</span>
             <span className="text-red-600">-{fmtVnd(earnings.commissionAmount)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span>VAT hoa hồng ({fmtPct(earnings.commissionVatRate)})</span>
-            <span className="text-red-600">-{fmtVnd(earnings.commissionVatAmount)}</span>
           </div>
           <div className="flex justify-between">
             <span>Tài xế nhận (gross)</span>
@@ -201,7 +209,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
   }, [bookingId, toast]);
 
   const serviceTypeMap: Record<string, string> = {
-    RIDE: '🚗 Chở khách',
+    RIDE: '🚗 Bao xe',
     DELIVERY: '📦 Giao hàng',
     CARPOOL: '🚌 Đi chung',
   };
@@ -255,6 +263,19 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                   </span>
                 )}
               </div>
+
+              {/* Scheduled pickup time — only when the customer booked ahead. */}
+              {booking.scheduledTime && (
+                <Card className="p-3 flex items-center gap-3 border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30">
+                  <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <Clock className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                  </div>
+                  <div className="flex-1 text-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Hẹn giờ</div>
+                    <div className="font-semibold">{format(new Date(booking.scheduledTime), "HH:mm — dd/MM/yyyy")}</div>
+                  </div>
+                </Card>
+              )}
 
               {/* Customer */}
               <Card className="p-3 space-y-1">
@@ -356,7 +377,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
               {/* Timestamps */}
               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-3">
                 <div>
-                  <span className="font-medium">Ngày tạo:</span>{' '}
+                  <span className="font-medium">Thời gian đặt:</span>{' '}
                   {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
                 </div>
                 {booking.updatedAt && (
@@ -736,7 +757,11 @@ export function BookingsTable() {
                 </TableRow>
               ) : (
                 sortedBookings.map((booking) => (
-                  <TableRow key={booking.id}>
+                  <TableRow
+                    key={booking.id}
+                    className="cursor-pointer hover:bg-muted/50"
+                    onClick={() => openDetails(booking.id)}
+                  >
                     <TableCell className="font-medium">
                       <div className="flex flex-col">
                         <span className='font-semibold'>{booking.customer?.fullName ?? 'N/A'}</span>
@@ -768,7 +793,7 @@ export function BookingsTable() {
                     <TableCell>
                       {getStatusBadge(booking.status)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" className="h-8 w-8 p-0">
@@ -778,7 +803,6 @@ export function BookingsTable() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                          <DropdownMenuItem onSelect={() => openDetails(booking.id)}>Xem chi tiết</DropdownMenuItem>
                           {(booking.status === 'SEARCHING' || booking.status === 'SCHEDULED') && (
                             <DropdownMenuItem onSelect={() => setAcceptingBookingId(booking.id)}>
                               ⭐ Nhận chuyến
