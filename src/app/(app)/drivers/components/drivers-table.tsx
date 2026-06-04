@@ -18,13 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
-import { Combobox } from '@/components/ui/combobox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending } from '@/lib/api';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
 import type { Driver, TransportCompany } from '@/lib/types';
@@ -51,7 +51,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { getImageUrl } from '@/lib/utils';
+import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
@@ -84,6 +84,21 @@ function safeImageArray(images: any): string[] {
 // Only fields the backend can ORDER BY (whitelisted in
 // drivers.service.findAllForAdmin). Adding a new key requires server-side
 // support — there's no client-side fallback anymore.
+// Normalize the driver's approval state into one enum. Backend stores
+// `isApproved` as a boolean but list payloads have shipped it as both boolean
+// and string ('true'/'false'/'pending'/'-') over time. A pending driver and a
+// rejected driver BOTH have `isApproved=false`; the only signal that separates
+// them is `rejectionReason` (set = rejected). This helper centralizes that
+// rule so callers don't get it wrong (e.g. showing Duyệt/Từ chối on an
+// already-approved driver because `false !== 'true'`).
+type DriverApprovalStatus = 'approved' | 'rejected' | 'pending';
+function getDriverApprovalStatus(driver: { isApproved?: unknown; rejectionReason?: string | null } | null | undefined): DriverApprovalStatus {
+  const v = driver?.isApproved;
+  if (v === true || v === 'true') return 'approved';
+  if (typeof driver?.rejectionReason === 'string' && driver.rejectionReason.trim().length > 0) return 'rejected';
+  return 'pending';
+}
+
 type SortKey = 'name' | 'isApproved' | 'createdAt';
 type TableTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false' | 'needsReview';
 
@@ -118,6 +133,10 @@ export function DriversTable() {
 
   // Wallet adjust state — used by both the row dropdown and the detail dialog.
   const [walletDriver, setWalletDriver] = React.useState<Driver | null>(null);
+
+  // Move-back-to-pending state (admin reverses a rejection without re-approving).
+  const [moveBackTarget, setMoveBackTarget] = React.useState<Driver | null>(null);
+  const [isMovingBack, setIsMovingBack] = React.useState(false);
 
   // Assign transport company state
   const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
@@ -222,7 +241,7 @@ export function DriversTable() {
         name: f.name || undefined,
         phone: f.phone || undefined,
         plate: f.plate || undefined,
-        serviceType: f.serviceType || undefined,
+        fixedRouteId: f.fixedRouteId || undefined,
         transportCompanyName: f.transportCompanyName || undefined,
         unconfirmedTransportCompany: f.unconfirmedTransportCompany ? 'true' : undefined,
       };
@@ -484,12 +503,7 @@ export function DriversTable() {
                 <TableHead>Phương tiện</TableHead>
                 <TableHead>Đơn vị vận tải</TableHead>
                 <TableHead className="text-right">Số dư ví</TableHead>
-                <TableHead>
-                  <Button variant="ghost" onClick={() => requestSort('isApproved')}>
-                    Trạng thái
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
+                <TableHead>Tuyến đường</TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('createdAt')}>
                     Ngày tạo
@@ -572,7 +586,11 @@ export function DriversTable() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {getStatusBadge(driver.isApproved)}
+                      {driver.fixedRoute?.name ? (
+                        <span className="text-sm font-medium">{driver.fixedRoute.name}</span>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Chưa đăng ký</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
@@ -596,17 +614,28 @@ export function DriversTable() {
                           <DropdownMenuItem onSelect={() => setTimeout(() => setWalletDriver(driver), 0)}>
                             <WalletIcon className="mr-2 h-4 w-4" /> Nạp / trừ tiền
                           </DropdownMenuItem>
-                          {(driver.isApproved === 'pending' || driver.isApproved === '-' || activeTab === 'pending') && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'approve'), 0)}>
-                                <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'reject'), 0)} className="text-destructive focus:text-destructive">
-                                <XCircle className="mr-2 h-4 w-4" /> Từ chối
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                          {(() => {
+                            const ds = getDriverApprovalStatus(driver);
+                            if (ds === 'approved') return null;
+                            return (
+                              <>
+                                <DropdownMenuSeparator />
+                                {ds === 'rejected' && (
+                                  <DropdownMenuItem onSelect={() => setTimeout(() => setMoveBackTarget(driver), 0)}>
+                                    <RotateCcw className="mr-2 h-4 w-4" /> Đưa lại Chờ duyệt
+                                  </DropdownMenuItem>
+                                )}
+                                {ds === 'pending' && (
+                                  <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'reject'), 0)} className="text-destructive focus:text-destructive">
+                                    <XCircle className="mr-2 h-4 w-4" /> Từ chối
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'approve'), 0)}>
+                                  <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
+                                </DropdownMenuItem>
+                              </>
+                            );
+                          })()}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -1103,13 +1132,26 @@ export function DriversTable() {
             </div>
           )}
 
-          {viewDriver && viewDriver.isApproved !== 'true' && viewDriver.isApproved !== 'false' && (
+          {(() => {
+            const status = getDriverApprovalStatus(viewDriver);
+            if (status === 'approved') return null;
+            return (
             <div className="border-t pt-4">
               {detailAction === null && (
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDetailAction('reject')}>
-                    <XCircle className="mr-2 h-4 w-4" /> Từ chối
-                  </Button>
+                <div className="flex flex-wrap justify-end gap-2">
+                  {status === 'rejected' && (
+                    <Button
+                      onClick={() => viewDriver && setMoveBackTarget(viewDriver)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      <RotateCcw className="mr-2 h-4 w-4" /> Đưa lại Chờ duyệt
+                    </Button>
+                  )}
+                  {status === 'pending' && (
+                    <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDetailAction('reject')}>
+                      <XCircle className="mr-2 h-4 w-4" /> Từ chối
+                    </Button>
+                  )}
                   <Button className="bg-green-600 hover:bg-green-700" onClick={() => setDetailAction('approve')}>
                     <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
                   </Button>
@@ -1146,7 +1188,7 @@ export function DriversTable() {
                 </div>
               )}
 
-              {detailAction === 'reject' && (
+              {detailAction === 'reject' && status === 'pending' && (
                 <div className="space-y-3">
                   <RejectReasonPicker
                     selectedValues={detailReasonValues}
@@ -1165,7 +1207,8 @@ export function DriversTable() {
                 </div>
               )}
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
@@ -1174,6 +1217,44 @@ export function DriversTable() {
         onClose={() => setWalletDriver(null)}
         onAdjusted={() => fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig)}
       />
+
+      {/* Move-back-to-pending confirm */}
+      <AlertDialog open={!!moveBackTarget} onOpenChange={(open) => { if (!open && !isMovingBack) setMoveBackTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Đưa lại Chờ duyệt</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài xế <span className="font-semibold text-foreground">{moveBackTarget?.name || moveBackTarget?.user?.fullName || 'N/A'}</span> sẽ chuyển từ "Từ chối" về "Chờ duyệt". Lý do từ chối cũ sẽ bị xoá.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isMovingBack}>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isMovingBack}
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!moveBackTarget) return;
+                setIsMovingBack(true);
+                try {
+                  await moveDriverBackToPending(moveBackTarget.id);
+                  toast({ title: 'Đã đưa về Chờ duyệt', description: moveBackTarget.name || moveBackTarget.user?.fullName || '' });
+                  setMoveBackTarget(null);
+                  if (viewDriver?.id === moveBackTarget.id) setViewDriver(null);
+                  fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+                  refreshNeedsReviewCount();
+                } catch (err: any) {
+                  toast({ variant: 'destructive', title: 'Không thể thực hiện', description: err.message });
+                } finally {
+                  setIsMovingBack(false);
+                }
+              }}
+            >
+              {isMovingBack && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Assign Transport Company Dialog */}
       <Dialog open={!!assignDriver} onOpenChange={(open) => { if (!open) { setAssignDriver(null); setSelectedCompanyId(''); } }}>
@@ -1192,15 +1273,28 @@ export function DriversTable() {
             )}
             <div className="grid gap-2">
               <Label>Chọn đơn vị vận tải</Label>
-              <Combobox
-                options={transportCompanies.map((c) => ({ value: c.id, label: c.name }))}
-                selectedValue={selectedCompanyId}
-                onSelect={(v) => setSelectedCompanyId(v || '')}
-                placeholder="Chọn đơn vị..."
-                searchPlaceholder="Tìm đơn vị..."
-                noResultsText="Không tìm thấy đơn vị nào."
-                className="w-full"
-              />
+              {/* Inline Command instead of Combobox/Popover — Radix Popover inside
+                  Radix Dialog has focus/click conflicts because PopoverContent
+                  is portaled outside the Dialog. A flat search + list has no
+                  portal and no nested modal, so typing and clicking just work. */}
+              <Command className="border rounded-md">
+                <CommandInput placeholder="Tìm đơn vị..." />
+                <CommandList className="max-h-64">
+                  <CommandEmpty>Không tìm thấy đơn vị nào.</CommandEmpty>
+                  <CommandGroup>
+                    {transportCompanies.map((c) => (
+                      <CommandItem
+                        key={c.id}
+                        value={`${c.name}__${c.id}`}
+                        onSelect={() => setSelectedCompanyId(c.id)}
+                      >
+                        <CheckIcon className={cn('mr-2 h-4 w-4', selectedCompanyId === c.id ? 'opacity-100' : 'opacity-0')} />
+                        {c.name}
+                      </CommandItem>
+                    ))}
+                  </CommandGroup>
+                </CommandList>
+              </Command>
             </div>
           </div>
           <DialogFooter>

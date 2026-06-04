@@ -237,9 +237,9 @@ export async function getDrivers(params: {
   name?: string;
   phone?: string;
   plate?: string;
-  serviceType?: 'RIDE' | 'CARPOOL' | 'DELIVERY';
   transportCompanyId?: string;
   transportCompanyName?: string;
+  fixedRouteId?: string;
   needsReview?: 'true' | 'false';
   unconfirmedTransportCompany?: 'true' | 'false';
   sort?: 'name' | 'isApproved' | 'createdAt';
@@ -254,9 +254,9 @@ export async function getDrivers(params: {
   if (params.name) query.set('name', params.name);
   if (params.phone) query.set('phone', params.phone);
   if (params.plate) query.set('plate', params.plate);
-  if (params.serviceType) query.set('serviceType', params.serviceType);
   if (params.transportCompanyId) query.set('transportCompanyId', params.transportCompanyId);
   if (params.transportCompanyName) query.set('transportCompanyName', params.transportCompanyName);
+  if (params.fixedRouteId) query.set('fixedRouteId', params.fixedRouteId);
   if (params.needsReview) query.set('needsReview', params.needsReview);
   if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
   if (params.sort) query.set('sort', params.sort);
@@ -270,6 +270,14 @@ export async function approveDriver(id: string, enabledServices: string[]): Prom
   const response = await fetchWithAuth(`/drivers/admin/${id}/approve`, { 
     method: 'POST',
     body: JSON.stringify({ enabledServices }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+export async function moveDriverBackToPending(id: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/move-back-to-pending`, {
+    method: 'POST',
   });
   const data = await response.json();
   return data.data || data;

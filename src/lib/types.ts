@@ -96,7 +96,8 @@ export type Driver = {
     deposit: number;
     main: number;
   };
-  isApproved: 'true' | 'false' | 'pending' | '-' | string;
+  isApproved: 'true' | 'false' | 'pending' | '-' | boolean | string;
+  rejectionReason?: string | null;
   vehicle?: {
     id: number;
     plateNumber: string;
@@ -181,6 +182,8 @@ export type Booking = {
   shareLink?: string;
   createdAt: string;
   updatedAt?: string;
+  // Scheduled pickup time set by the customer (null/undefined = ride is "now").
+  scheduledTime?: string | null;
   customer: {
     id: string;
     fullName: string;

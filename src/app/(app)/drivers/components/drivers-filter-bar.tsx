@@ -1,37 +1,43 @@
 'use client';
 
 import * as React from 'react';
-import { User, Phone, Car, X } from 'lucide-react';
+import { User, Phone, Car, X, Building2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { TransportCompany } from '@/lib/types';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Label } from '@/components/ui/label';
+import { Combobox } from '@/components/ui/combobox';
+import { getRoutes } from '@/lib/api';
+import type { Route } from '@/lib/types';
 
 export type DriverFilters = {
   name: string;
   phone: string;
   plate: string;
-  serviceType: '' | 'RIDE' | 'CARPOOL' | 'DELIVERY';
-  transportCompanyId: string;
+  // ID of the registered route the driver signed up to drive. '' = all routes.
+  fixedRouteId: string;
+  // Free-text search against both registered transportCompany.name and the
+  // driver's self-declared customTransportCompanyName.
+  transportCompanyName: string;
+  // True = only drivers who self-declared a transport company name but have no
+  // confirmed transportCompanyId yet.
+  unconfirmedTransportCompany: boolean;
 };
 
 export const EMPTY_FILTERS: DriverFilters = {
   name: '',
   phone: '',
   plate: '',
-  serviceType: '',
-  transportCompanyId: '',
+  fixedRouteId: '',
+  transportCompanyName: '',
+  unconfirmedTransportCompany: false,
 };
 
 export function hasAnyFilter(f: DriverFilters): boolean {
-  return Boolean(f.name || f.phone || f.plate || f.serviceType || f.transportCompanyId);
+  return Boolean(f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName || f.unconfirmedTransportCompany);
 }
 
-const SERVICE_OPTIONS = [
-  { value: 'RIDE', label: 'Chở khách (Taxi)' },
-  { value: 'CARPOOL', label: 'Đi chung' },
-  { value: 'DELIVERY', label: 'Giao hàng' },
-];
+const ALL_ROUTES_VALUE = '__all__';
 
 function IconInput({
   icon: Icon,
@@ -48,15 +54,29 @@ function IconInput({
 export function DriversFilterBar({
   value,
   onChange,
-  transportCompanies,
 }: {
   value: DriverFilters;
   onChange: (next: DriverFilters) => void;
-  transportCompanies: TransportCompany[];
 }) {
+  const [routes, setRoutes] = React.useState<Route[]>([]);
+
+  React.useEffect(() => {
+    getRoutes()
+      .then(setRoutes)
+      .catch(() => { /* dropdown stays empty if it fails; user can still use other filters */ });
+  }, []);
+
   const setField = <K extends keyof DriverFilters>(key: K, v: DriverFilters[K]) => {
     onChange({ ...value, [key]: v });
   };
+
+  const routeOptions = React.useMemo(
+    () => [
+      { value: ALL_ROUTES_VALUE, label: 'Tất cả tuyến' },
+      ...routes.map((r) => ({ value: String(r.id), label: r.name })),
+    ],
+    [routes],
+  );
 
   return (
     <div className="space-y-3 pb-4">
@@ -81,39 +101,40 @@ export function DriversFilterBar({
         />
       </div>
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-3">
-        <Select
-          value={value.serviceType || 'ALL'}
-          onValueChange={(v) => setField('serviceType', v === 'ALL' ? '' : (v as DriverFilters['serviceType']))}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Dịch vụ" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Tất cả dịch vụ</SelectItem>
-            {SERVICE_OPTIONS.map((o) => (
-              <SelectItem key={o.value} value={o.value}>
-                {o.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={value.transportCompanyId || 'ALL'}
-          onValueChange={(v) => setField('transportCompanyId', v === 'ALL' ? '' : v)}
-        >
-          <SelectTrigger>
-            <SelectValue placeholder="Đơn vị vận tải" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ALL">Tất cả đơn vị</SelectItem>
-            {transportCompanies.map((c) => (
-              <SelectItem key={c.id} value={c.id}>
-                {c.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <div className="flex justify-start sm:justify-end">
+        <Combobox
+          options={routeOptions}
+          selectedValue={value.fixedRouteId || ALL_ROUTES_VALUE}
+          onSelect={(v) => setField('fixedRouteId', !v || v === ALL_ROUTES_VALUE ? '' : v)}
+          placeholder="Tất cả tuyến"
+          searchPlaceholder="Tìm tuyến..."
+          noResultsText="Không có tuyến phù hợp."
+        />
+        <IconInput
+          icon={Building2}
+          placeholder="Tên đơn vị vận tải..."
+          value={value.transportCompanyName}
+          disabled={value.unconfirmedTransportCompany}
+          onChange={(e) => setField('transportCompanyName', e.target.value)}
+        />
+        <div className="flex items-center gap-3 sm:justify-end">
+          <div className="flex items-center gap-2">
+            <Checkbox
+              id="unconfirmed-tc"
+              checked={value.unconfirmedTransportCompany}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...value,
+                  unconfirmedTransportCompany: checked === true,
+                  // When toggled on, clear the name search (the toggle filters the
+                  // full unconfirmed-HTX group regardless of typed text).
+                  transportCompanyName: checked === true ? '' : value.transportCompanyName,
+                })
+              }
+            />
+            <Label htmlFor="unconfirmed-tc" className="text-sm font-normal cursor-pointer">
+              HTX chưa xác nhận
+            </Label>
+          </div>
           {hasAnyFilter(value) && (
             <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)}>
               <X className="mr-1 h-4 w-4" />

@@ -94,7 +94,7 @@ export function Combobox({
                              {option.options.map(subOption => (
                                 <CommandItem
                                     key={subOption.value}
-                                    value={subOption.label}
+                                    value={`${subOption.label}__${subOption.value}`}
                                     onSelect={() => {
                                         onSelect(subOption.value === selectedValue ? undefined : subOption.value)
                                         setOpen(false)
@@ -115,7 +115,7 @@ export function Combobox({
                 return (
                     <CommandItem
                         key={option.value}
-                        value={option.label}
+                        value={`${option.label}__${option.value}`}
                         onSelect={() => {
                             onSelect(option.value === selectedValue ? undefined : option.value)
                             setOpen(false)
