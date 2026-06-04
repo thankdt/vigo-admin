@@ -18,10 +18,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2 } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUsers, lockUser, unlockUser, adminGetUserReferralStats, type AdminUserReferralStats } from '@/lib/api';
+import { getUsers, lockUser, unlockUser, adminGetUserReferralStats, createAdminUser, type AdminUserReferralStats } from '@/lib/api';
 import type { User } from '@/lib/types';
 import {
   Dialog,
@@ -184,77 +184,73 @@ export function UsersTable() {
   }
 
 
-  const UserForm = ({ user, onClose }: { user: User | null; onClose: () => void }) => {
-    const isEditing = !!user;
-    const [formData, setFormData] = React.useState({
-      name: user?.name || '',
-      email: user?.email || '',
-      role: user?.role || 'USER',
-      status: user?.status || 'Active',
-    });
+  const CreateAdminForm = ({ onClose }: { onClose: () => void }) => {
+    const [fullName, setFullName] = React.useState('');
+    const [phone, setPhone] = React.useState('');
+    const [password, setPassword] = React.useState('');
+    const [email, setEmail] = React.useState('');
+    const [isSubmitting, setIsSubmitting] = React.useState(false);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const { id, value } = e.target;
-      setFormData(prev => ({...prev, [id]: value}));
-    }
-
-    const handleSelectChange = (id: 'role' | 'status') => (value: string) => {
-      setFormData(prev => ({...prev, [id]: value as any}));
-    }
-
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
       e.preventDefault();
-      console.log('Form submitted', formData);
-      toast({ title: 'Thành công', description: `Người dùng đã được ${isEditing ? 'cập nhật' : 'tạo'}. (Chưa triển khai)` });
-      onClose();
-    }
+      if (phone.trim().length < 10) {
+        toast({ variant: 'destructive', title: 'SĐT không hợp lệ', description: 'Số điện thoại tối thiểu 10 ký tự.' });
+        return;
+      }
+      if (password.length < 6) {
+        toast({ variant: 'destructive', title: 'Mật khẩu quá ngắn', description: 'Mật khẩu tối thiểu 6 ký tự.' });
+        return;
+      }
+      setIsSubmitting(true);
+      try {
+        await createAdminUser({
+          phone: phone.trim(),
+          password,
+          fullName: fullName.trim() || undefined,
+          email: email.trim() || undefined,
+        });
+        toast({ title: 'Đã tạo tài khoản admin', description: fullName.trim() || phone.trim() });
+        fetchUsers(searchTerm, currentPage, pageSize);
+        onClose();
+      } catch (err: any) {
+        toast({ variant: 'destructive', title: 'Không tạo được tài khoản', description: err.message });
+      } finally {
+        setIsSubmitting(false);
+      }
+    };
 
     return (
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>{isEditing ? 'Sửa người dùng' : 'Tạo người dùng'}</DialogTitle>
+            <DialogTitle>Tạo tài khoản admin</DialogTitle>
             <DialogDescription>
-              {isEditing ? "Chỉnh sửa thông tin người dùng." : "Thêm người dùng mới vào hệ thống."}
+              Tạo một tài khoản quản trị viên mới. Tài khoản đăng nhập bằng số điện thoại + mật khẩu.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="name" className="text-right">Họ tên</Label>
-              <Input id="name" value={formData.name} onChange={handleChange} className="col-span-3" />
+            <div className="grid gap-2">
+              <Label htmlFor="fullName">Họ tên</Label>
+              <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nguyễn Văn A" />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="email" className="text-right">Email</Label>
-              <Input id="email" type="email" value={formData.email} onChange={handleChange} className="col-span-3" />
+            <div className="grid gap-2">
+              <Label htmlFor="phone">Số điện thoại <span className="text-destructive">*</span></Label>
+              <Input id="phone" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0901234567" required />
             </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="role" className="text-right">Vai trò</Label>
-               <Select onValueChange={handleSelectChange('role')} defaultValue={formData.role}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Chọn vai trò" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ADMIN">Quản trị</SelectItem>
-                  <SelectItem value="DRIVER">Tài xế</SelectItem>
-                  <SelectItem value="USER">Người dùng</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid gap-2">
+              <Label htmlFor="password">Mật khẩu <span className="text-destructive">*</span></Label>
+              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Tối thiểu 6 ký tự" required />
             </div>
-             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">Trạng thái</Label>
-              <Select onValueChange={handleSelectChange('status')} defaultValue={formData.status}>
-                <SelectTrigger className="col-span-3">
-                  <SelectValue placeholder="Chọn trạng thái" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Active">Hoạt động</SelectItem>
-                  <SelectItem value="Inactive">Không hoạt động</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid gap-2">
+              <Label htmlFor="email">Email (không bắt buộc)</Label>
+              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@vigogroup.vn" />
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose}>Hủy</Button>
-              <Button type="submit">Lưu thay đổi</Button>
+              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Hủy</Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Tạo admin
+              </Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -264,13 +260,17 @@ export function UsersTable() {
 
   return (
     <>
-      <div className="flex items-center pb-4">
+      <div className="flex items-center justify-between gap-3 pb-4">
         <Input
           placeholder="Tìm theo tên hoặc SĐT..."
           value={searchTerm}
           onChange={(e) => handleSearchChange(e.target.value)}
           className="max-w-sm"
         />
+        <Button onClick={() => { setEditingUser(null); setIsFormOpen(true); }}>
+          <Plus className="mr-2 h-4 w-4" />
+          Tạo admin
+        </Button>
       </div>
       <Card>
         <Table>
@@ -360,7 +360,6 @@ export function UsersTable() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                      <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenForm(user), 0)}>Sửa</DropdownMenuItem>
                       <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenStats(user), 0)}>
                         <Share2 className="mr-2 h-4 w-4" />
                         <span>Xem affiliate</span>
@@ -449,7 +448,7 @@ export function UsersTable() {
           </div>
         </div>
       </Card>
-      {isFormOpen && <UserForm user={editingUser} onClose={handleCloseForm} />}
+      {isFormOpen && <CreateAdminForm onClose={handleCloseForm} />}
 
       {/* Affiliate stats viewer — same data the user sees in their mobile app, scoped by userId. */}
       <Dialog open={!!statsTarget} onOpenChange={(open) => { if (!open) { setStatsTarget(null); setStats(null); } }}>
