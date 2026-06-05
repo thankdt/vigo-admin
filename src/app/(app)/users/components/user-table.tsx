@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Table,
   TableBody,
@@ -17,11 +18,21 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUsers, lockUser, unlockUser, adminGetUserReferralStats, createAdminUser, type AdminUserReferralStats } from '@/lib/api';
+import { getUsers, lockUser, unlockUser, deleteAdminUser, adminGetUserReferralStats, createAdminUser, type AdminUserReferralStats } from '@/lib/api';
 import type { User } from '@/lib/types';
 import {
   Dialog,
@@ -148,6 +159,29 @@ export function UsersTable() {
     setIsFormOpen(false);
   };
   
+  // Soft-delete the user via the new admin DELETE endpoint. Reuses the
+  // confirm-dialog state below so the dropdown can fire-and-forget.
+  const [pendingDelete, setPendingDelete] = React.useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const handleDelete = async () => {
+    if (!pendingDelete) return;
+    setIsDeleting(true);
+    try {
+      await deleteAdminUser(pendingDelete.id);
+      toast({ title: 'Đã xoá', description: `Tài khoản ${pendingDelete.phone} đã chuyển trạng thái xoá.` });
+      setPendingDelete(null);
+      // Refresh list to drop the deleted user (admin list filters soft-deleted by default).
+      fetchUsers(searchTerm, currentPage, pageSize);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không xoá được', description: err?.message ?? 'Vui lòng thử lại' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const router = useRouter();
+  const openUserDetail = (id: string) => router.push(`/users/detail?id=${id}`);
+
   const handleOpenStats = async (user: User) => {
     setStatsTarget(user);
     setStats(null);
@@ -326,7 +360,11 @@ export function UsersTable() {
                 </TableRow>
             ) : (
               sortedUsers.map((user) => (
-              <TableRow key={user.id}>
+              <TableRow
+                key={user.id}
+                className="cursor-pointer"
+                onClick={() => openUserDetail(user.id)}
+              >
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-3">
                     <Avatar>
@@ -350,7 +388,9 @@ export function UsersTable() {
                     {user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                   </span>
                 </TableCell>
-                <TableCell>
+                {/* Stop propagation so the action menu doesn't trigger the row's
+                    detail-page navigation when clicked. */}
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" className="h-8 w-8 p-0">
@@ -378,7 +418,13 @@ export function UsersTable() {
                         )}
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10">Xóa</DropdownMenuItem>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                        onSelect={() => setTimeout(() => setPendingDelete(user), 0)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        <span>Xóa</span>
+                      </DropdownMenuItem>
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>
@@ -526,6 +572,33 @@ export function UsersTable() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => { if (!open) setPendingDelete(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xoá tài khoản?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {pendingDelete && (
+                <>
+                  <span className="font-medium">{pendingDelete.name || pendingDelete.phone}</span> ({pendingDelete.phone}) sẽ
+                  chuyển trạng thái xoá (soft delete). Dữ liệu lịch sử vẫn giữ nguyên, user không đăng nhập được nữa.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Xoá
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

@@ -200,6 +200,36 @@ export async function unlockUser(id: string): Promise<void> {
   await fetchWithAuth(`/users/admin/${id}/unlock`, { method: 'POST' });
 }
 
+export type AdminUserDetail = {
+  id: string;
+  role: 'USER' | 'DRIVER' | 'ADMIN' | 'TRANSPORT_COMPANY_OWNER';
+  phone: string;
+  email?: string | null;
+  fullName?: string | null;
+  avatar?: string;
+  isActive: boolean;
+  loyaltyPoints: number;
+  loyaltyTier: 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
+  referralCode?: string | null;
+  bankInfo?: { bankName: string; accountNumber: string; accountHolder: string } | null;
+  createdAt?: string;
+  updatedAt?: string;
+  deletedAt?: string | null;
+  wallets: { type: string; balance: number; lockedBalance: number }[];
+  bookingCount: number;
+  bookingCountByStatus: Record<string, number>;
+};
+
+export async function getAdminUserDetail(id: string): Promise<AdminUserDetail> {
+  const response = await fetchWithAuth(`/users/admin/${id}`);
+  return response.json();
+}
+
+export async function deleteAdminUser(id: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetchWithAuth(`/users/admin/${id}`, { method: 'DELETE' });
+  return response.json();
+}
+
 export async function adminAdjustDriverWallet(driverId: string, body: {
   wallet: 'DRIVER_DEPOSIT' | 'DRIVER_MAIN';
   operation: 'credit' | 'debit';
