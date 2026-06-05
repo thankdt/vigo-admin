@@ -50,15 +50,15 @@ export function AdminUnitsManager() {
         const [aliasInput, setAliasInput] = React.useState('');
         const [isSaving, setIsSaving] = React.useState(false);
 
-        // Parent must be a DISTRICT for POIs (so ancestor expansion + dispatch
-        // pick them up via the surrounding huyện). For regular WARD, parent is
-        // also DISTRICT but we don't enforce it from the form yet.
+        // DISTRICT lives under PROVINCE; WARD (including POI) always lives
+        // under DISTRICT — backend enforces this and address resolver / route
+        // dispatch rely on the parent district being present in ancestors.
         const parentOptions = React.useMemo(() => {
-            const wantedLevel = level === 'WARD' && isPoi ? 'DISTRICT' : 'PROVINCE';
+            const wantedLevel = level === 'WARD' ? 'DISTRICT' : 'PROVINCE';
             return units
                 .filter(u => u.level === wantedLevel)
                 .sort((a, b) => a.name.localeCompare(b.name, 'vi'));
-        }, [level, isPoi]);
+        }, [level]);
 
         // When user switches to non-WARD, POI flag becomes meaningless.
         React.useEffect(() => {
@@ -154,14 +154,14 @@ export function AdminUnitsManager() {
                     {level !== 'PROVINCE' && (
                         <div className="space-y-2">
                             <Label htmlFor="unit-parent">
-                                {level === 'WARD' && isPoi ? 'Huyện chứa POI' : 'Đơn vị cấp trên'}
+                                {level === 'WARD' ? 'Huyện cấp trên' : 'Tỉnh/Thành phố cấp trên'}
                             </Label>
                             <Select
                                 value={parentId ? String(parentId) : undefined}
                                 onValueChange={(v: any) => setParentId(Number(v))}
                             >
                                 <SelectTrigger id="unit-parent">
-                                    <SelectValue placeholder={level === 'WARD' && isPoi ? 'Chọn huyện' : 'Chọn tỉnh/thành phố'} />
+                                    <SelectValue placeholder={level === 'WARD' ? 'Chọn huyện' : 'Chọn tỉnh/thành phố'} />
                                 </SelectTrigger>
                                 <SelectContent>
                                     {parentOptions.map(p => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}
