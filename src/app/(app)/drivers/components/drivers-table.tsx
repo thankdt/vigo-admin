@@ -324,17 +324,18 @@ export function DriversTable() {
     setCurrentPage(1);
   };
 
-  const getStatusBadge = (status: Driver['isApproved']) => {
-    switch (status) {
-      case 'true':
+  const getStatusBadge = (driver: Pick<Driver, 'isApproved' | 'rejectionReason'> | null | undefined) => {
+    // Use the same enum the action buttons rely on, so the badge can't drift
+    // from what the action area shows (and survives isApproved coming back as
+    // boolean instead of the legacy 'true' / 'false' strings).
+    switch (getDriverApprovalStatus(driver)) {
+      case 'approved':
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Đã duyệt</Badge>;
-      case 'pending':
-      case '-': // Backend seems to return '-' for pending
-        return <Badge variant="secondary">Chờ duyệt</Badge>;
-      case 'false':
+      case 'rejected':
         return <Badge variant="destructive">Từ chối</Badge>;
+      case 'pending':
       default:
-        return <Badge>{status}</Badge>;
+        return <Badge variant="secondary">Chờ duyệt</Badge>;
     }
   };
 
@@ -831,7 +832,7 @@ export function DriversTable() {
                     </div>
                   )}
                   <p className="text-sm text-muted-foreground truncate">{viewDriver.phone || viewDriver.user?.phone || 'Chưa có SĐT'}</p>
-                  <p className="text-sm font-medium mt-1">Trạng thái: {getStatusBadge(viewDriver.isApproved)}</p>
+                  <p className="text-sm font-medium mt-1">Trạng thái: {getStatusBadge(viewDriver)}</p>
                 </div>
               </div>
 
