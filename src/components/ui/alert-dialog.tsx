@@ -30,21 +30,14 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, onInteractOutside, ...props }, ref) => (
+>(({ className, ...props }, ref) => (
+  // AlertDialog (by design) doesn't expose onInteractOutside — it's a
+  // must-acknowledge dialog. The RadixPointerEventsWatchdog still cleans up
+  // body.pointer-events leaks for AlertDialogs that nest popovers.
   <AlertDialogPortal>
     <AlertDialogOverlay />
     <AlertDialogPrimitive.Content
       ref={ref}
-      onInteractOutside={(event) => {
-        // Same guard as DialogContent — clicks inside a Radix popper
-        // (Popover/Combobox/Select dropdowns) are not "outside" interactions.
-        const target = event.target as HTMLElement | null;
-        if (target?.closest('[data-radix-popper-content-wrapper]')) {
-          event.preventDefault();
-          return;
-        }
-        onInteractOutside?.(event);
-      }}
       className={cn(
         "fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-lg",
         className
