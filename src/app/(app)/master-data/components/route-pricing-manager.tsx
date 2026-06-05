@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { getRoutes, getPricingByRoute, createPricing, updatePricing, deletePricing, getAdminUnits } from '@/lib/api';
 import type { Route, RoutePricing, AdminUnit } from '@/lib/types';
-import { Loader2, PlusCircle, Trash2, Edit, Star, MapPin, Info, Building2, Sparkles, X } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Edit, Star, MapPin, Info, Building2, Sparkles, X, Plane } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
@@ -45,16 +45,18 @@ export function RoutePricingManager() {
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [editingPricing, setEditingPricing] = React.useState<RoutePricing | null>(null);
     const [deletingPricing, setDeletingPricing] = React.useState<RoutePricing | null>(null);
-    const [defaultFormLevel, setDefaultFormLevel] = React.useState<'province' | 'district'>('district');
+    const [defaultFormLevel, setDefaultFormLevel] = React.useState<'province' | 'district' | 'poi'>('district');
     const { toast } = useToast();
 
     const selectedRoute = React.useMemo(() => routes.find(r => r.id === selectedRouteId), [routes, selectedRouteId]);
 
-    // Derived: split pricing into province-level vs district-level
+    // Derived: split pricing into province / district / POI (WARD-level e.g. sân bay) buckets.
     const provincePricing = React.useMemo(() =>
         pricing.filter(p => p.adminUnit?.level === 'PROVINCE'), [pricing]);
     const districtPricing = React.useMemo(() =>
         pricing.filter(p => p.adminUnit?.level === 'DISTRICT'), [pricing]);
+    const poiPricing = React.useMemo(() =>
+        pricing.filter(p => p.adminUnit?.level === 'WARD'), [pricing]);
 
     const fetchInitialData = React.useCallback(async () => {
         setIsLoading(true);
@@ -100,7 +102,7 @@ export function RoutePricingManager() {
         label: r.name,
     })), [routes]);
 
-    const handleOpenForm = (pricingItem: RoutePricing | null, level: 'province' | 'district' = 'district') => {
+    const handleOpenForm = (pricingItem: RoutePricing | null, level: 'province' | 'district' | 'poi' = 'district') => {
         setDefaultFormLevel(level);
         setEditingPricing(pricingItem);
         setIsFormOpen(true);
@@ -318,6 +320,77 @@ export function RoutePricingManager() {
                                 )}
                             </div>
 
+                            {/* ===== SECTION 3: POI / WARD OVERRIDE PRICING ===== */}
+                            <div className="space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Plane className="h-5 w-5 text-violet-500" />
+                                        <h3 className="text-base font-semibold">Giá cho khu đặc biệt</h3>
+                                        <span className="text-xs text-muted-foreground">(sân bay / POI — ghi đè giá huyện)</span>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleOpenForm(null, 'poi')}
+                                        disabled={!selectedRouteId}
+                                    >
+                                        <PlusCircle className="mr-2 h-4 w-4" />
+                                        Thêm giá POI
+                                    </Button>
+                                </div>
+
+                                {poiPricing.length === 0 ? (
+                                    <div className="rounded-lg border border-dashed p-6 text-center">
+                                        <p className="text-sm text-muted-foreground">
+                                            Chưa có giá riêng cho POI (vd Sân bay Nội Bài). Nếu có sẽ ghi đè giá huyện chứa POI đó.
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Quận/huyện bắt đầu</TableHead>
+                                                <TableHead>POI kết thúc</TableHead>
+                                                <TableHead>Loại dịch vụ</TableHead>
+                                                <TableHead>Giá</TableHead>
+                                                <TableHead className="text-right">Thao tác</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {poiPricing.map(p => (
+                                                <TableRow key={p.id}>
+                                                    <TableCell className="font-medium">
+                                                        {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
+                                                    </TableCell>
+                                                    <TableCell className="font-medium">{p.adminUnit?.name || 'N/A'}</TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                                            <Badge variant={p.serviceType === 'RIDE' ? 'outline' : 'secondary'}>
+                                                                {SERVICE_TYPE_LABELS[p.serviceType || 'CARPOOL'] || p.serviceType}
+                                                            </Badge>
+                                                            {p.serviceType === 'RIDE' && p.vehicleType && (
+                                                                <Badge variant="outline">
+                                                                    {p.vehicleType === 'CAR_7' ? '7 chỗ' : '5 chỗ'}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>{formatCurrency(p.price)}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'poi')}>
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeletingPricing(p)}>
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </div>
+
                             {/* ===== INFO FOOTER ===== */}
                             {provincePricing.length > 0 && unconfiguredDistricts.length > 0 && (
                                 <div className="flex items-start gap-2 rounded-lg bg-muted/50 px-4 py-3 text-sm text-muted-foreground">
@@ -382,7 +455,7 @@ function PricingForm({
     allAdminUnits: AdminUnit[];
     routeDistricts: AdminUnit[];
     pricingItem: RoutePricing | null;
-    defaultLevel: 'province' | 'district';
+    defaultLevel: 'province' | 'district' | 'poi';
     onSave: () => void;
     onCancel: () => void;
 }) {
@@ -390,11 +463,15 @@ function PricingForm({
     const { toast } = useToast();
 
     // Determine initial level from existing item or default
-    const initialLevel = isEditing
-        ? (pricingItem.adminUnit?.level === 'PROVINCE' ? 'province' : 'district')
+    const initialLevel: 'province' | 'district' | 'poi' = isEditing
+        ? (pricingItem.adminUnit?.level === 'PROVINCE'
+            ? 'province'
+            : pricingItem.adminUnit?.level === 'WARD'
+                ? 'poi'
+                : 'district')
         : defaultLevel;
 
-    const [pricingLevel, setPricingLevel] = React.useState<'province' | 'district'>(initialLevel);
+    const [pricingLevel, setPricingLevel] = React.useState<'province' | 'district' | 'poi'>(initialLevel);
     const [adminUnitId, setAdminUnitId] = React.useState<number | undefined>(pricingItem?.adminUnitId);
     const [adminUnitIds, setAdminUnitIds] = React.useState<string[]>([]);
     const [startDistrictId, setStartDistrictId] = React.useState<number | undefined>(pricingItem?.startDistrictId);
@@ -470,6 +547,18 @@ function PricingForm({
         return groupedOptions;
     }, [routeDistricts, allAdminUnits]);
 
+    // POI options: WARD-level admin units whose parent district is in the route.
+    // For Sân bay Nội Bài this surfaces the airport whenever the route covers
+    // huyện Sóc Sơn. Future POIs (Cát Bi, ga tàu) appear the same way.
+    const poiOptions = React.useMemo(() => {
+        const routeDistrictIds = new Set(routeDistricts.map(d => d.id));
+        const collator = new Intl.Collator('vi');
+        return allAdminUnits
+            .filter(u => u.level === 'WARD' && u.parentId != null && routeDistrictIds.has(u.parentId))
+            .sort((a, b) => collator.compare(a.name, b.name))
+            .map(u => ({ value: String(u.id), label: u.name }));
+    }, [allAdminUnits, routeDistricts]);
+
     // IDs of inner-city districts among the route districts (name starts with "Quận ")
     const urbanDistrictIds = React.useMemo(() => {
         return routeDistricts
@@ -540,9 +629,15 @@ function PricingForm({
             return;
         }
 
-        // District creation mode: need at least one end district
-        if (!isEditing && pricingLevel === 'district' && adminUnitIds.length === 0) {
-            toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Vui lòng chọn ít nhất một quận/huyện kết thúc.' });
+        // District / POI creation mode: need at least one end unit
+        if (!isEditing && (pricingLevel === 'district' || pricingLevel === 'poi') && adminUnitIds.length === 0) {
+            toast({
+                variant: 'destructive',
+                title: 'Thiếu thông tin',
+                description: pricingLevel === 'poi'
+                    ? 'Vui lòng chọn ít nhất một POI kết thúc.'
+                    : 'Vui lòng chọn ít nhất một quận/huyện kết thúc.',
+            });
             return;
         }
 
@@ -577,7 +672,7 @@ function PricingForm({
                 return;
             }
 
-            // District-level: cross product of start × end districts
+            // District/POI-level: cross product of start × end units
             // empty startDistrictIds = single "all" entry (null)
             const startIds: (number | null)[] = startDistrictIds.length > 0
                 ? startDistrictIds.map(v => Number(v))
@@ -591,13 +686,18 @@ function PricingForm({
                 }
             }
 
+            // priority=2 for POI rows so a future reader can distinguish them
+            // even if level joins aren't loaded. Matcher itself prefers WARD by
+            // adminUnit.level regardless of this number.
+            const priorityValue = pricingLevel === 'poi' ? 2 : 1;
+
             const results = await Promise.allSettled(
                 pairs.map(({ startId, endId }) => createPricing({
                     routeId,
                     adminUnitId: endId,
                     startDistrictId: startId,
                     price: Number(price),
-                    priority: 1,
+                    priority: priorityValue,
                     serviceType,
                     vehicleType: effectiveVehicleType,
                 }))
@@ -605,13 +705,14 @@ function PricingForm({
 
             const failed = results.filter(r => r.status === 'rejected') as PromiseRejectedResult[];
             const succeeded = results.length - failed.length;
+            const unitNoun = pricingLevel === 'poi' ? 'POI' : 'huyện';
 
             if (failed.length === 0) {
                 toast({
                     title: 'Thành công',
                     description: pairs.length > 1
-                        ? `Đã tạo ${succeeded} quy tắc giá riêng huyện.`
-                        : 'Đã tạo giá riêng huyện.',
+                        ? `Đã tạo ${succeeded} quy tắc giá riêng ${unitNoun}.`
+                        : `Đã tạo giá riêng ${unitNoun}.`,
                 });
                 onSave();
             } else if (succeeded === 0) {
@@ -646,7 +747,7 @@ function PricingForm({
                 {!isEditing && (
                     <div className="space-y-2">
                         <Label>Cấp giá</Label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-3 gap-2">
                             <button
                                 type="button"
                                 onClick={() => setPricingLevel('province')}
@@ -657,7 +758,7 @@ function PricingForm({
                                 }`}
                             >
                                 <Star className={`h-4 w-4 ${pricingLevel === 'province' ? 'text-amber-500 fill-amber-500' : 'text-muted-foreground'}`} />
-                                Giá mặc định tỉnh
+                                Tỉnh
                             </button>
                             <button
                                 type="button"
@@ -669,13 +770,27 @@ function PricingForm({
                                 }`}
                             >
                                 <MapPin className={`h-4 w-4 ${pricingLevel === 'district' ? 'text-blue-500' : 'text-muted-foreground'}`} />
-                                Giá riêng huyện
+                                Huyện
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPricingLevel('poi')}
+                                className={`flex items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors ${
+                                    pricingLevel === 'poi'
+                                        ? 'border-violet-500 bg-violet-50 text-violet-900 dark:bg-violet-950/30 dark:text-violet-300'
+                                        : 'border-muted hover:border-muted-foreground/30'
+                                }`}
+                                disabled={poiOptions.length === 0}
+                                title={poiOptions.length === 0 ? 'Tuyến này chưa có POI nào (cần WARD-level admin unit thuộc các huyện của tuyến)' : undefined}
+                            >
+                                <Plane className={`h-4 w-4 ${pricingLevel === 'poi' ? 'text-violet-500' : 'text-muted-foreground'}`} />
+                                POI / Sân bay
                             </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                            {pricingLevel === 'province'
-                                ? 'Áp dụng cho tất cả huyện trong tỉnh chưa có giá riêng.'
-                                : 'Ghi đè giá tỉnh cho huyện cụ thể.'}
+                            {pricingLevel === 'province' && 'Áp dụng cho tất cả huyện trong tỉnh chưa có giá riêng.'}
+                            {pricingLevel === 'district' && 'Ghi đè giá tỉnh cho huyện cụ thể.'}
+                            {pricingLevel === 'poi' && 'Ghi đè giá huyện cho POI cụ thể (vd Sân bay Nội Bài).'}
                         </p>
                     </div>
                 )}
@@ -754,32 +869,32 @@ function PricingForm({
                         </div>
                         <div className="space-y-2">
                             <Label>
-                                Quận/huyện kết thúc{' '}
+                                {pricingLevel === 'poi' ? 'POI / Sân bay kết thúc' : 'Quận/huyện kết thúc'}{' '}
                                 {!isEditing && (
                                     <span className="text-muted-foreground font-normal">(Có thể chọn nhiều)</span>
                                 )}
                             </Label>
                             {isEditing ? (
                                 <Combobox
-                                    options={districtOptions}
+                                    options={pricingLevel === 'poi' ? poiOptions : districtOptions}
                                     selectedValue={adminUnitId ? String(adminUnitId) : undefined}
                                     onSelect={(value) => setAdminUnitId(value ? Number(value) : undefined)}
-                                    placeholder="Chọn quận/huyện kết thúc..."
-                                    searchPlaceholder="Tìm quận/huyện..."
-                                    noResultsText="Không tìm thấy quận/huyện."
+                                    placeholder={pricingLevel === 'poi' ? 'Chọn POI...' : 'Chọn quận/huyện kết thúc...'}
+                                    searchPlaceholder={pricingLevel === 'poi' ? 'Tìm POI...' : 'Tìm quận/huyện...'}
+                                    noResultsText={pricingLevel === 'poi' ? 'Không tìm thấy POI.' : 'Không tìm thấy quận/huyện.'}
                                     disabled
                                 />
                             ) : (
                                 <>
                                     <MultiSelectComboBox
-                                        options={districtOptions}
+                                        options={pricingLevel === 'poi' ? poiOptions : districtOptions}
                                         selectedValues={adminUnitIds}
                                         onSelectedValuesChange={setAdminUnitIds}
-                                        placeholder="Chọn quận/huyện kết thúc..."
-                                        searchPlaceholder="Tìm quận/huyện..."
-                                        noResultsText="Không tìm thấy quận/huyện."
+                                        placeholder={pricingLevel === 'poi' ? 'Chọn POI...' : 'Chọn quận/huyện kết thúc...'}
+                                        searchPlaceholder={pricingLevel === 'poi' ? 'Tìm POI...' : 'Tìm quận/huyện...'}
+                                        noResultsText={pricingLevel === 'poi' ? 'Không tìm thấy POI.' : 'Không tìm thấy quận/huyện.'}
                                     />
-                                    {allDistrictIds.length > 0 && (
+                                    {pricingLevel === 'district' && allDistrictIds.length > 0 && (
                                         <div className="flex flex-wrap items-center gap-2 pt-1">
                                             <button
                                                 type="button"
