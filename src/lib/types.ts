@@ -191,6 +191,12 @@ export type Booking = {
     role?: string;
     email?: string | null;
   } | null;
+  // Immutable snapshot of the booker's contact taken at booking time. Preferred
+  // over `customer` for display because it reflects the trip as it was when
+  // the customer placed it — `customer` can later have its name/phone edited
+  // or be soft-deleted (relation becomes null).
+  senderInfo?: { name?: string; phone?: string } | null;
+  receiverInfo?: { name?: string; phone?: string } | null;
   driver?: {
     id: string;
     fullName?: string;

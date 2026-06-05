@@ -286,8 +286,8 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                     <User className="h-4 w-4 text-blue-600" />
                   </div>
                   <div className="flex-1 text-sm">
-                    <div className="font-semibold">{booking.customer?.fullName ?? 'N/A'}</div>
-                    <div className="text-muted-foreground">{booking.customer?.phone ?? 'N/A'}</div>
+                    <div className="font-semibold">{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</div>
+                    <div className="text-muted-foreground">{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</div>
                   </div>
                 </div>
               </Card>
@@ -767,8 +767,8 @@ export function BookingsTable() {
                   >
                     <TableCell className="font-medium">
                       <div className="flex flex-col">
-                        <span className='font-semibold'>{booking.customer?.fullName ?? 'N/A'}</span>
-                        <span className='text-sm text-muted-foreground'>{booking.customer?.phone ?? 'N/A'}</span>
+                        <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
+                        <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
                       </div>
                     </TableCell>
                     <TableCell>
