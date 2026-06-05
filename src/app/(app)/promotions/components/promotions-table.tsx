@@ -25,7 +25,15 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Calendar } from '@/components/ui/calendar';
 import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
+
+// Optional numeric fields used to break the save button: an empty <Input
+// type="number"> sends "" to RHF; z.coerce.number()('') === 0, then
+// .positive() rejects 0 and .optional() can't rescue it because 0 isn't
+// undefined. Empty/null/undefined → undefined before coerce runs.
+const emptyToUndefined = (val: unknown) =>
+  val === '' || val === null || val === undefined ? undefined : val;
 
 const promotionSchema = z.object({
   name: z.string().min(1, { message: "Tên là bắt buộc" }),
@@ -35,15 +43,27 @@ const promotionSchema = z.object({
   minOrderValue: z.coerce.number().min(0, { message: "Giá trị đơn hàng tối thiểu không thể âm" }),
   usageLimit: z.coerce.number().positive({ message: "Giới hạn sử dụng phải là số dương" }),
   // Empty input → undefined → BE keeps it NULL = unlimited per user.
-  userUsageLimit: z.coerce.number().int().positive({ message: "Phải là số nguyên dương" }).optional(),
-  // Empty input → 0 = unlimited per day. Coerced so blank submits as undefined.
-  dailyUsageLimit: z.coerce.number().int().min(0, { message: "Không thể âm" }).optional(),
+  userUsageLimit: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().positive({ message: "Phải là số nguyên dương" }).optional(),
+  ),
+  // Empty input → undefined → BE treats as unlimited (0).
+  dailyUsageLimit: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().int().min(0, { message: "Không thể âm" }).optional(),
+  ),
   startDate: z.date({ required_error: "Ngày bắt đầu là bắt buộc" }),
   endDate: z.date({ required_error: "Ngày kết thúc là bắt buộc" }),
   pointCost: z.coerce.number().min(0, { message: "Chi phí điểm không thể âm" }).default(0),
   imageUrl: z.string().url({ message: "Vui lòng nhập URL hợp lệ" }).optional().or(z.literal('')),
   description: z.string().optional(),
-  maxDiscount: z.coerce.number().positive({ message: "Giảm tối đa phải là số dương" }).optional(),
+  // Same empty-string trap as the limits above — only required when
+  // discountType === PERCENTAGE, but always optional at the schema level.
+  maxDiscount: z.preprocess(
+    emptyToUndefined,
+    z.coerce.number().positive({ message: "Giảm tối đa phải là số dương" }).optional(),
+  ),
+  isActive: z.boolean().default(true),
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
@@ -84,9 +104,10 @@ function PromotionForm({
         endDate: new Date(initial.endDate),
         pointCost: initial.pointCost ?? 0,
         imageUrl: initial.imageUrl ?? '',
+        isActive: initial.isActive,
       };
     }
-    return { discountType: 'FIXED_AMOUNT', pointCost: 0 };
+    return { discountType: 'FIXED_AMOUNT', pointCost: 0, isActive: true };
   }, [mode, initial]);
 
   const { register, handleSubmit, control, watch, formState: { errors, isSubmitting }, reset } = useForm<PromotionFormValues>({
@@ -244,7 +265,11 @@ function PromotionForm({
             render={({ field }) => (
               <Popover modal={true}>
                 <PopoverTrigger asChild>
+                  {/* type="button" is critical here: a bare <button> inside a
+                      <form> defaults to type="submit", which made clicking the
+                      date picker submit the form mid-edit. */}
                   <Button
+                    type="button"
                     variant={"outline"}
                     className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                   >
@@ -269,6 +294,7 @@ function PromotionForm({
               <Popover modal={true}>
                 <PopoverTrigger asChild>
                   <Button
+                    type="button"
                     variant={"outline"}
                     className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
                   >
@@ -283,6 +309,29 @@ function PromotionForm({
             )}
           />
           {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
+        </div>
+        <div className="space-y-2 sm:col-span-2">
+          <div className="flex items-center justify-between rounded-md border p-3">
+            <div>
+              <Label htmlFor="isActive" className="text-sm font-medium">
+                Hoạt động
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Tắt để ẩn khỏi danh sách hiển thị cho khách hàng.
+              </p>
+            </div>
+            <Controller
+              name="isActive"
+              control={control}
+              render={({ field }) => (
+                <Switch
+                  id="isActive"
+                  checked={field.value ?? true}
+                  onCheckedChange={field.onChange}
+                />
+              )}
+            />
+          </div>
         </div>
         <div className="space-y-2">
           <Label htmlFor="pointCost">Chi phí điểm thưởng</Label>
@@ -310,6 +359,10 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
   const [promotions, setPromotions] = React.useState<Promotion[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [editing, setEditing] = React.useState<Promotion | null>(null);
+  // id of the voucher whose inline toggle is mid-flight, so we can disable
+  // the Switch while the PUT is in flight and avoid a double-click toggling
+  // back and forth.
+  const [togglingId, setTogglingId] = React.useState<number | null>(null);
   const { toast } = useToast();
 
   const fetchPromotions = React.useCallback(async () => {
@@ -333,10 +386,17 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
     fetchPromotions();
   };
 
+  // Render a time-window badge (Đã lên lịch / Hoạt động / Hết hạn) plus a
+  // muted "Đã tắt" pill when the admin has flipped isActive off. The badge
+  // alone used to lie — a voucher could read "Hoạt động" while isActive was
+  // false because the column only inspected start/end dates.
   const getStatusBadge = (promo: Promotion) => {
     const now = new Date();
     const startDate = new Date(promo.startDate);
     const endDate = new Date(promo.endDate);
+    if (!promo.isActive) {
+      return <Badge variant="outline" className="text-muted-foreground">Đã tắt</Badge>;
+    }
     if (now < startDate) {
       return <Badge variant="secondary">Đã lên lịch</Badge>;
     }
@@ -344,6 +404,35 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
       return <Badge variant="outline">Hết hạn</Badge>;
     }
     return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Hoạt động</Badge>;
+  };
+
+  // Toggle isActive directly from the row without opening the edit dialog.
+  // Optimistic update so the Switch feels instant; we revert + show a toast
+  // if the API call fails.
+  const handleToggleActive = async (promo: Promotion, next: boolean) => {
+    setTogglingId(promo.id);
+    setPromotions((prev) =>
+      prev.map((p) => (p.id === promo.id ? { ...p, isActive: next } : p)),
+    );
+    try {
+      await updateVoucher(promo.id, { isActive: next });
+      toast({
+        title: next ? 'Đã bật voucher' : 'Đã tắt voucher',
+        description: `"${promo.code}" hiện ${next ? 'hoạt động' : 'không còn hiển thị cho khách'}.`,
+      });
+    } catch (err: any) {
+      // Revert optimistic flip on failure.
+      setPromotions((prev) =>
+        prev.map((p) => (p.id === promo.id ? { ...p, isActive: !next } : p)),
+      );
+      toast({
+        variant: 'destructive',
+        title: 'Không thể cập nhật trạng thái',
+        description: err?.message ?? 'Đã xảy ra lỗi không xác định',
+      });
+    } finally {
+      setTogglingId(null);
+    }
   };
 
   return (
@@ -399,8 +488,21 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                     <TableCell>
                       {promo.usageCount} / {promo.usageLimit}
                     </TableCell>
-                    <TableCell>
-                      {getStatusBadge(promo)}
+                    <TableCell
+                      // Stop row-click from opening the edit dialog when the
+                      // admin is targeting the inline switch — they want to
+                      // flip status, not pull up the form.
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-center gap-2">
+                        {getStatusBadge(promo)}
+                        <Switch
+                          checked={promo.isActive}
+                          disabled={togglingId === promo.id}
+                          onCheckedChange={(next) => handleToggleActive(promo, next)}
+                          aria-label={`Bật/tắt voucher ${promo.code}`}
+                        />
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

@@ -299,6 +299,9 @@ export type Promotion = {
   usageLimit: number;
   usageCount: number;
   pointCost: number;
+  // Admin toggle. When false, customer-facing /promotions hides the voucher
+  // (findAllActive filters on `isActive = true`).
+  isActive: boolean;
 
   imageUrl?: string;
   description?: string;
