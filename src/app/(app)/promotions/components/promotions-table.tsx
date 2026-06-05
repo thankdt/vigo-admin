@@ -36,7 +36,6 @@ const emptyToUndefined = (val: unknown) =>
   val === '' || val === null || val === undefined ? undefined : val;
 
 const promotionSchema = z.object({
-  name: z.string().min(1, { message: "Tên là bắt buộc" }),
   code: z.string().min(1, { message: "Mã là bắt buộc" }),
   discountType: z.enum(['FIXED_AMOUNT', 'PERCENTAGE']),
   discountValue: z.coerce.number().positive({ message: "Giá trị giảm giá phải là số dương" }),
@@ -90,7 +89,6 @@ function PromotionForm({
   const defaultValues = React.useMemo<Partial<PromotionFormValues>>(() => {
     if (mode === 'edit' && initial) {
       return {
-        name: initial.name,
         code: initial.code,
         description: initial.description,
         discountType: normalizeDiscountType(initial.discountType),
@@ -168,11 +166,6 @@ function PromotionForm({
         </DialogDescription>
       </DialogHeader>
       <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto p-1 sm:grid-cols-2">
-        <div className="space-y-2">
-          <Label htmlFor="name">Tên</Label>
-          <Input id="name" {...register('name')} />
-          {errors.name && <p className="text-sm text-destructive">{errors.name.message}</p>}
-        </div>
         <div className="space-y-2">
           <Label htmlFor="code">Mã{isEdit ? ' (không sửa được)' : ''}</Label>
           <Input id="code" {...register('code')} disabled={isEdit} />
@@ -446,7 +439,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
             <TableHeader>
               <TableRow>
                 <TableHead>Mã</TableHead>
-                <TableHead>Tên</TableHead>
+                <TableHead>Mô tả</TableHead>
                 <TableHead>Giảm giá</TableHead>
                 <TableHead>Hiệu lực</TableHead>
                 <TableHead>Đã dùng</TableHead>
@@ -476,7 +469,9 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                     <TableCell>
                       <Badge variant="destructive">{promo.code}</Badge>
                     </TableCell>
-                    <TableCell className="font-medium">{promo.name}</TableCell>
+                    <TableCell className="font-medium">
+                      {promo.description ?? <span className="text-muted-foreground">—</span>}
+                    </TableCell>
                     <TableCell>
                       {promo.discountType === 'PERCENTAGE'
                         ? `${promo.discountValue}%`

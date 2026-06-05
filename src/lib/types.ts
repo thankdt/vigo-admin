@@ -290,7 +290,6 @@ export type SystemConfig = {
 export type Promotion = {
   id: number;
   code: string;
-  name: string;
   discountType: 'FIXED_AMOUNT' | 'PERCENTAGE';
   discountValue: number;
   minOrderValue: number;
