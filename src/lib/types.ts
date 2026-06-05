@@ -232,6 +232,10 @@ export type AdminUnit = {
   level: 'PROVINCE' | 'DISTRICT' | 'WARD';
   parentId?: number;
   parent?: AdminUnit;
+  aliases?: string[] | null;
+  // True for synthetic POI rows (sân bay, ga tàu, điểm du lịch…). UI uses
+  // this to keep the POI picker focused instead of listing every commune.
+  isPoi?: boolean;
 };
 
 export type Route = {

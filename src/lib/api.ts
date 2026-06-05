@@ -454,7 +454,15 @@ export async function getAdminUnits(): Promise<AdminUnit[]> {
   return result.data;
 }
 
-export async function createAdminUnit(data: { name: string; level: 'PROVINCE' | 'DISTRICT' | 'WARD'; parentId?: number }): Promise<AdminUnit> {
+export async function createAdminUnit(data: {
+  name: string;
+  level: 'PROVINCE' | 'DISTRICT' | 'WARD';
+  parentId?: number;
+  aliases?: string[];
+  // Flip true when creating a POI (sân bay / điểm du lịch …). The pricing
+  // manager filters its POI picker by this flag.
+  isPoi?: boolean;
+}): Promise<AdminUnit> {
   const response = await fetchWithAuth('/master-data/admin-units', {
     method: 'POST',
     body: JSON.stringify(data),

@@ -25,6 +25,9 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Combobox } from '@/components/ui/combobox';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Check as CheckIcon } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const formatCurrency = (value: number | string) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value));
@@ -556,14 +559,14 @@ function PricingForm({
         return groupedOptions;
     }, [routeDistricts, allAdminUnits]);
 
-    // POI options: WARD-level admin units whose parent district is in the route.
-    // For Sân bay Nội Bài this surfaces the airport whenever the route covers
-    // huyện Sóc Sơn. Future POIs (Cát Bi, ga tàu) appear the same way.
+    // POI options: WARD-level units flagged isPoi=true whose parent district
+    // is in the route. Filtering by isPoi keeps the picker focused on real
+    // POIs (sân bay / ga tàu / …) instead of dumping every commune.
     const poiOptions = React.useMemo(() => {
         const routeDistrictIds = new Set(routeDistricts.map(d => d.id));
         const collator = new Intl.Collator('vi');
         return allAdminUnits
-            .filter(u => u.level === 'WARD' && u.parentId != null && routeDistrictIds.has(u.parentId))
+            .filter(u => u.isPoi === true && u.parentId != null && routeDistrictIds.has(u.parentId))
             .sort((a, b) => collator.compare(a.name, b.name))
             .map(u => ({ value: String(u.id), label: u.name }));
     }, [allAdminUnits, routeDistricts]);
@@ -893,15 +896,47 @@ function PricingForm({
                                     noResultsText={pricingLevel === 'poi' ? 'Không tìm thấy POI.' : 'Không tìm thấy quận/huyện.'}
                                     disabled
                                 />
+                            ) : pricingLevel === 'poi' ? (
+                                // Inline Command list — Popover-in-Dialog focus
+                                // trap kills the search input for the POI use case
+                                // even with the DialogContent guard, so render
+                                // the list flat instead. Multi-select via tap.
+                                <Command className="border rounded-md">
+                                    <CommandInput placeholder="Tìm POI..." />
+                                    <CommandList className="max-h-56">
+                                        <CommandEmpty>Không có POI nào dưới các huyện của tuyến này.</CommandEmpty>
+                                        <CommandGroup>
+                                            {poiOptions.map(opt => {
+                                                const selected = adminUnitIds.includes(opt.value);
+                                                return (
+                                                    <CommandItem
+                                                        key={opt.value}
+                                                        value={`${opt.label}__${opt.value}`}
+                                                        onSelect={() => {
+                                                            setAdminUnitIds(prev =>
+                                                                prev.includes(opt.value)
+                                                                    ? prev.filter(v => v !== opt.value)
+                                                                    : [...prev, opt.value]
+                                                            );
+                                                        }}
+                                                    >
+                                                        <CheckIcon className={cn('mr-2 h-4 w-4', selected ? 'opacity-100' : 'opacity-0')} />
+                                                        {opt.label}
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
                             ) : (
                                 <>
                                     <MultiSelectComboBox
-                                        options={pricingLevel === 'poi' ? poiOptions : districtOptions}
+                                        options={districtOptions}
                                         selectedValues={adminUnitIds}
                                         onSelectedValuesChange={setAdminUnitIds}
-                                        placeholder={pricingLevel === 'poi' ? 'Chọn POI...' : 'Chọn quận/huyện kết thúc...'}
-                                        searchPlaceholder={pricingLevel === 'poi' ? 'Tìm POI...' : 'Tìm quận/huyện...'}
-                                        noResultsText={pricingLevel === 'poi' ? 'Không tìm thấy POI.' : 'Không tìm thấy quận/huyện.'}
+                                        placeholder="Chọn quận/huyện kết thúc..."
+                                        searchPlaceholder="Tìm quận/huyện..."
+                                        noResultsText="Không tìm thấy quận/huyện."
                                     />
                                     {pricingLevel === 'district' && allDistrictIds.length > 0 && (
                                         <div className="flex flex-wrap items-center gap-2 pt-1">
