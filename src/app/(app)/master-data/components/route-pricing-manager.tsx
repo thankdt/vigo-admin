@@ -219,7 +219,8 @@ export function RoutePricingManager() {
                                         {provincePricing.map(p => (
                                             <div
                                                 key={p.id}
-                                                className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20 px-4 py-3"
+                                                className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20 px-4 py-3 cursor-pointer hover:bg-amber-100/40 dark:hover:bg-amber-900/30"
+                                                onClick={() => handleOpenForm(p, 'province')}
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
@@ -235,7 +236,7 @@ export function RoutePricingManager() {
                                                         </Badge>
                                                     )}
                                                 </div>
-                                                <div className="flex items-center gap-1">
+                                                <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                                                     <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'province')}>
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
@@ -287,7 +288,11 @@ export function RoutePricingManager() {
                                         </TableHeader>
                                         <TableBody>
                                             {districtPricing.map(p => (
-                                                <TableRow key={p.id}>
+                                                <TableRow
+                                                    key={p.id}
+                                                    className="cursor-pointer hover:bg-muted/50"
+                                                    onClick={() => handleOpenForm(p, 'district')}
+                                                >
                                                     <TableCell className="font-medium">
                                                         {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
                                                     </TableCell>
@@ -305,7 +310,7 @@ export function RoutePricingManager() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>{formatCurrency(p.price)}</TableCell>
-                                                    <TableCell className="text-right">
+                                                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'district')}>
                                                             <Edit className="h-4 w-4" />
                                                         </Button>
@@ -358,7 +363,11 @@ export function RoutePricingManager() {
                                         </TableHeader>
                                         <TableBody>
                                             {poiPricing.map(p => (
-                                                <TableRow key={p.id}>
+                                                <TableRow
+                                                    key={p.id}
+                                                    className="cursor-pointer hover:bg-muted/50"
+                                                    onClick={() => handleOpenForm(p, 'poi')}
+                                                >
                                                     <TableCell className="font-medium">
                                                         {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
                                                     </TableCell>
@@ -376,7 +385,7 @@ export function RoutePricingManager() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>{formatCurrency(p.price)}</TableCell>
-                                                    <TableCell className="text-right">
+                                                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'poi')}>
                                                             <Edit className="h-4 w-4" />
                                                         </Button>

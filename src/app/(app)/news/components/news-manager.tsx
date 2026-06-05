@@ -148,7 +148,11 @@ export function NewsManager() {
                                 </TableRow>
                             ) : (
                                 news.map(item => (
-                                    <TableRow key={item.id}>
+                                    <TableRow
+                                        key={item.id}
+                                        className="cursor-pointer hover:bg-muted/50"
+                                        onClick={() => handleOpenForm(item)}
+                                    >
                                         <TableCell>
                                             <div className="w-16 h-10 relative bg-muted rounded overflow-hidden">
                                                 {item.imageUrl ? (
@@ -176,7 +180,7 @@ export function NewsManager() {
                                                 {item.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenForm(item)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>

@@ -124,7 +124,11 @@ export function RoutesManager() {
                                     </TableCell>
                                 </TableRow>
                             ) : routes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(route => (
-                                <TableRow key={route.id}>
+                                <TableRow
+                                    key={route.id}
+                                    className="cursor-pointer hover:bg-muted/50"
+                                    onClick={() => handleOpenForm(route)}
+                                >
                                     <TableCell>{route.id}</TableCell>
                                     <TableCell>
                                         <Image
@@ -144,7 +148,7 @@ export function RoutesManager() {
                                             {route.districts?.length > 5 && <Badge variant="outline">+{route.districts.length - 5} khác</Badge>}
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right">
+                                    <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                             <DropdownMenuTrigger asChild>
                                                 <Button variant="ghost" className="h-8 w-8 p-0">
@@ -154,9 +158,6 @@ export function RoutesManager() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                                                <DropdownMenuItem onSelect={() => setTimeout(() => handleOpenForm(route), 0)}>
-                                                    <Edit className="mr-2 h-4 w-4" /> Sửa
-                                                </DropdownMenuItem>
                                                 <DropdownMenuItem onSelect={() => setTimeout(() => setDeletingRoute(route), 0)} className="text-destructive focus:text-destructive">
                                                     <Trash2 className="mr-2 h-4 w-4" /> Xóa
                                                 </DropdownMenuItem>

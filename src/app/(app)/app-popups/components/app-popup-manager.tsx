@@ -196,7 +196,11 @@ export function AppPopupManager() {
                                 </TableRow>
                             ) : (
                                 popups.map((p) => (
-                                    <TableRow key={p.id}>
+                                    <TableRow
+                                        key={p.id}
+                                        className="cursor-pointer hover:bg-muted/50"
+                                        onClick={() => handleOpenForm(p)}
+                                    >
                                         <TableCell>
                                             <div className="w-24 h-12 relative bg-muted rounded overflow-hidden">
                                                 <Image
@@ -241,7 +245,7 @@ export function AppPopupManager() {
                                                 {p.isActive ? 'Hoạt động' : 'Tắt'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

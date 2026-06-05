@@ -135,7 +135,11 @@ export function BannerManager() {
                                 </TableRow>
                             ) : (
                                 banners.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(banner => (
-                                    <TableRow key={banner.id}>
+                                    <TableRow
+                                        key={banner.id}
+                                        className="cursor-pointer hover:bg-muted/50"
+                                        onClick={() => handleOpenForm(banner)}
+                                    >
                                         <TableCell>
                                             <div className="w-24 h-12 relative bg-muted rounded overflow-hidden">
                                                 <Image
@@ -153,7 +157,7 @@ export function BannerManager() {
                                                 {banner.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             <Button variant="ghost" size="icon" onClick={() => handleOpenForm(banner)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>
