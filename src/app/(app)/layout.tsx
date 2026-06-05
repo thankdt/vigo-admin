@@ -13,6 +13,7 @@ import {
   SidebarMenuButton,
   SidebarInset,
 } from '@/components/ui/sidebar';
+import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
 import {
   LayoutDashboard,
   LogOut,
@@ -123,6 +124,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
+      <RadixPointerEventsWatchdog />
       <Sidebar>
         <SidebarHeader className="p-4">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
