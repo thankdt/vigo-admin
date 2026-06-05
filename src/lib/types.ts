@@ -178,6 +178,15 @@ export type Booking = {
   requestedVehicleType?: string | null;
   paymentMethod?: string;
   cancelReason?: string | null;
+  cancelledAt?: string | null;
+  cancelledByRole?: 'CUSTOMER' | 'DRIVER' | 'ADMIN' | 'SYSTEM' | null;
+  cancelledByUserId?: string | null;
+  cancelledByUser?: {
+    id: string;
+    fullName?: string | null;
+    phone?: string | null;
+    role?: string;
+  } | null;
   note?: string | null;
   shareLink?: string;
   createdAt: string;

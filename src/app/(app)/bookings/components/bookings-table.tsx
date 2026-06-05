@@ -68,6 +68,13 @@ const paymentMethodMap: Record<string, string> = {
   WALLET: '💳 Ví điện tử',
 };
 
+const CANCELLED_BY_ROLE_LABEL: Record<string, string> = {
+  CUSTOMER: 'Khách hàng',
+  DRIVER: 'Tài xế',
+  ADMIN: 'Admin',
+  SYSTEM: 'Hệ thống',
+};
+
 function PriceBreakdownCard({ booking }: { booking: Booking }) {
   const fmtVnd = (v: number | string | null | undefined) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
@@ -367,11 +374,37 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                 </Card>
               )}
 
-              {/* Cancel Reason */}
-              {booking.cancelReason && (
-                <Card className="p-3 space-y-1 border-destructive/30 bg-destructive/5">
-                  <div className="text-xs font-semibold text-destructive uppercase tracking-wider">Lý do hủy</div>
-                  <p className="text-sm">{booking.cancelReason}</p>
+              {/* Cancellation card — covers reason, who, and when. Shown
+                  whenever any cancel metadata is present (the card title
+                  switches to "Thông tin huỷ" if there's no free-text reason
+                  but we do have role/time info). */}
+              {(booking.cancelReason || booking.cancelledByRole || booking.cancelledAt) && (
+                <Card className="p-3 space-y-2 border-destructive/30 bg-destructive/5">
+                  <div className="text-xs font-semibold text-destructive uppercase tracking-wider">
+                    {booking.cancelReason ? 'Lý do hủy' : 'Thông tin huỷ'}
+                  </div>
+                  {booking.cancelReason && (
+                    <p className="text-sm">{booking.cancelReason}</p>
+                  )}
+                  {booking.cancelledAt && (
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">Thời gian huỷ:</span>{' '}
+                      {format(new Date(booking.cancelledAt), "dd/MM/yyyy HH:mm")}
+                    </div>
+                  )}
+                  {booking.cancelledByRole && (
+                    <div className="text-xs text-muted-foreground">
+                      <span className="font-medium">Người huỷ:</span>{' '}
+                      {CANCELLED_BY_ROLE_LABEL[booking.cancelledByRole] ?? booking.cancelledByRole}
+                      {booking.cancelledByUser && (
+                        <>
+                          {' — '}
+                          {booking.cancelledByUser.fullName || 'Không tên'}
+                          {booking.cancelledByUser.phone ? ` (${booking.cancelledByUser.phone})` : ''}
+                        </>
+                      )}
+                    </div>
+                  )}
                 </Card>
               )}
 
