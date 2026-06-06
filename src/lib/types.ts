@@ -155,12 +155,35 @@ export type PriceBreakdown = {
 
 export type DriverEarnings = {
   grossPrice: number;
-  commissionRate: number;          // 0..1, e.g. 0.15 — base rate before VAT roll-in
-  commissionAmount: number;        // commission + commission VAT combined
-  grossEarnings: number;           // grossPrice - commissionAmount
+  commissionRate: number;
+  commissionAmount: number;
+  grossEarnings: number;
   personalIncomeTaxRate: number;
   personalIncomeTaxAmount: number;
-  netEarnings: number;             // grossEarnings - personalIncomeTaxAmount
+  netEarnings: number;
+  // Fields from the locked-down ops spreadsheet — drive the new
+  // "Phân bổ doanh thu" breakdown. Optional with sensible defaults
+  // because legacy bookings that completed before
+  // 1782000000000-AddBookingEarningsBreakdown don't have these.
+  grossPriceBase?: number;
+  discountAmount?: number;
+  priceAfterDiscount?: number;
+  vatAmount?: number;
+  finalPrice?: number;
+  htxCommission?: number;
+  vigoCommission?: number;
+  platformIncomeAfterKm?: number;
+  driverDiscountBonus?: number;
+  taxableEarnings?: number;
+  tripCashKept?: number;
+  driverTotalReceived?: number;
+  htxVatRemit?: number;
+  vigoVatRemit?: number;
+  htxTotalReceived?: number;
+  vigoTotalReceived?: number;
+  htxCommissionRate?: number;
+  htxShareRate?: number;
+  vigoShareRate?: number;
 };
 
 export type Booking = {
