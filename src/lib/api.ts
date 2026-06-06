@@ -222,12 +222,20 @@ export type AdminUserDetail = {
 
 export async function getAdminUserDetail(id: string): Promise<AdminUserDetail> {
   const response = await fetchWithAuth(`/users/admin/${id}`);
-  return response.json();
+  // Backend TransformInterceptor wraps every response as { success, data, ... };
+  // unwrap so callers can use the user shape directly. Fall back to the raw
+  // body if a future endpoint stops wrapping.
+  const json = await response.json();
+  return json?.data ?? json;
 }
 
 export async function deleteAdminUser(id: string): Promise<{ success: boolean; message: string }> {
   const response = await fetchWithAuth(`/users/admin/${id}`, { method: 'DELETE' });
-  return response.json();
+  const json = await response.json();
+  // softDelete returns { success, message }; TransformInterceptor sees the
+  // `message` key and re-wraps as { success: true, data: { success, message }, ... }.
+  // Either shape is fine — unwrap if present.
+  return json?.data ?? json;
 }
 
 export async function adminAdjustDriverWallet(driverId: string, body: {

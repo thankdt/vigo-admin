@@ -200,7 +200,7 @@ export default function UserDetailPage() {
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
               <AvatarImage src={user.avatar?.startsWith('http') ? user.avatar : undefined} alt={user.fullName ?? user.phone} />
-              <AvatarFallback>{(user.fullName ?? user.phone).slice(0, 2).toUpperCase()}</AvatarFallback>
+              <AvatarFallback>{String(user.fullName ?? user.phone ?? '?').slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="space-y-1">
               <CardTitle className="text-lg">{user.fullName ?? 'Không có tên'}</CardTitle>
@@ -233,8 +233,8 @@ export default function UserDetailPage() {
             <Field label="Số điện thoại" value={user.phone} />
             <Field label="Email" value={user.email ?? '—'} />
             <Field label="Mã giới thiệu" value={user.referralCode ?? '—'} />
-            <Field label="Điểm tích luỹ" value={user.loyaltyPoints.toLocaleString('vi-VN')} />
-            <Field label="Tổng chuyến đặt" value={user.bookingCount.toLocaleString('vi-VN')} />
+            <Field label="Điểm tích luỹ" value={Number(user.loyaltyPoints ?? 0).toLocaleString('vi-VN')} />
+            <Field label="Tổng chuyến đặt" value={Number(user.bookingCount ?? 0).toLocaleString('vi-VN')} />
             <Field label="Ngày tham gia" value={user.createdAt ? format(new Date(user.createdAt), 'dd/MM/yyyy HH:mm') : '—'} />
             {isDeleted && (
               <Field label="Đã xoá lúc" value={format(new Date(user.deletedAt!), 'dd/MM/yyyy HH:mm')} />
@@ -362,7 +362,7 @@ function UserBookingsCard({ customerId }: { customerId: string }) {
               ) : (
                 bookings.map((b) => (
                   <TableRow key={b.id}>
-                    <TableCell className="font-mono text-xs">{b.id.slice(0, 8)}</TableCell>
+                    <TableCell className="font-mono text-xs">{String(b.id ?? '').slice(0, 8)}</TableCell>
                     <TableCell className="text-xs">
                       <div className="line-clamp-1">{addressString(b.pickupAddress)}</div>
                       <div className="line-clamp-1 text-muted-foreground">→ {addressString(b.dropoffAddress)}</div>
