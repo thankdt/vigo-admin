@@ -570,9 +570,14 @@ export function DriversTable() {
                       {driver.transportCompany ? (
                         <span className="text-sm font-medium">{driver.transportCompany.name}</span>
                       ) : driver.customTransportCompanyName ? (
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm">{driver.customTransportCompanyName}</span>
-                          <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Chưa xác nhận</Badge>
+                        <div className="flex flex-col gap-0.5">
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-sm">{driver.customTransportCompanyName}</span>
+                            <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Chưa xác nhận</Badge>
+                          </div>
+                          {driver.customTransportCompanyPhone && (
+                            <span className="text-xs text-muted-foreground">{driver.customTransportCompanyPhone}</span>
+                          )}
                         </div>
                       ) : driver.isIndependentDriver ? (
                         <Badge variant="secondary">Tài xế độc lập</Badge>
@@ -1141,9 +1146,17 @@ export function DriversTable() {
                   </div>
                 </div>
               ) : viewDriver.customTransportCompanyName ? (
-                <div className="flex items-center gap-2">
-                  <p className="text-sm">{viewDriver.customTransportCompanyName}</p>
-                  <Badge variant="outline" className="text-amber-600 border-amber-300">Chưa xác nhận</Badge>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm">{viewDriver.customTransportCompanyName}</p>
+                    <Badge variant="outline" className="text-amber-600 border-amber-300">Chưa xác nhận</Badge>
+                  </div>
+                  {viewDriver.customTransportCompanyPhone && (
+                    <div className="flex items-center gap-1.5">
+                      <Label className="text-xs text-muted-foreground">SĐT liên hệ:</Label>
+                      <p className="text-sm">{viewDriver.customTransportCompanyPhone}</p>
+                    </div>
+                  )}
                 </div>
               ) : viewDriver.isIndependentDriver ? (
                 <Badge variant="secondary">Tài xế độc lập</Badge>

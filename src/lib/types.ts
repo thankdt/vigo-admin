@@ -147,6 +147,9 @@ export type Driver = {
   transportCompanyId?: string;
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
+  // SĐT liên hệ HTX tự nhập (chưa xác nhận). Lưu cùng row với name khi tài xế nhập tay
+  // ở app — admin xem cell HTX cần thấy cả 2 để liên hệ verify.
+  customTransportCompanyPhone?: string | null;
   isIndependentDriver?: boolean;
   issues?: string[];
 }
