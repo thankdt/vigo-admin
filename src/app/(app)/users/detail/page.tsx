@@ -45,7 +45,9 @@ import {
   lockUser,
   unlockUser,
   getBookings,
+  adminGetUserReferralStats,
   type AdminUserDetail,
+  type AdminUserReferralStats,
 } from '@/lib/api';
 import type { Booking } from '@/lib/types';
 
@@ -53,7 +55,7 @@ const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
   DRIVER: 'Tài xế',
   ADMIN: 'Admin',
-  TRANSPORT_COMPANY_OWNER: 'Chủ NXVT',
+  TRANSPORT_COMPANY_OWNER: 'Chủ HTX',
 };
 
 const WALLET_LABEL: Record<string, string> = {
@@ -106,6 +108,10 @@ export default function UserDetailPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [confirmDelete, setConfirmDelete] = React.useState(false);
+  // Affiliate stats fetched separately so a failing referral endpoint doesn't
+  // block the main user-detail view. Drivers/admins typically don't have a
+  // referral profile — null means "no data" not "loading".
+  const [referralStats, setReferralStats] = React.useState<AdminUserReferralStats | null>(null);
 
   const fetchUser = React.useCallback(async () => {
     if (!id) return;
@@ -121,9 +127,20 @@ export default function UserDetailPage() {
     }
   }, [id]);
 
+  const fetchReferral = React.useCallback(async () => {
+    if (!id) return;
+    try {
+      const data = await adminGetUserReferralStats(id);
+      setReferralStats(data);
+    } catch {
+      setReferralStats(null);
+    }
+  }, [id]);
+
   React.useEffect(() => {
     fetchUser();
-  }, [fetchUser]);
+    fetchReferral();
+  }, [fetchUser, fetchReferral]);
 
   const handleToggleLock = async () => {
     if (!user) return;
@@ -241,22 +258,81 @@ export default function UserDetailPage() {
             )}
           </div>
 
-          {user.wallets.length > 0 && (
-            <div className="mt-6 border-t pt-4">
-              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Ví</div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                {user.wallets.map((w) => (
-                  <div key={w.type} className="rounded-md border p-3">
-                    <div className="text-xs text-muted-foreground">{WALLET_LABEL[w.type] ?? w.type}</div>
-                    <div className="text-base font-semibold">{fmtVnd(w.balance)}</div>
-                    {w.lockedBalance > 0 && (
-                      <div className="text-xs text-muted-foreground mt-1">Tạm khoá: {fmtVnd(w.lockedBalance)}</div>
-                    )}
+          {/*
+            Affiliate panel: focused view for referral-related state.
+            Previously this slot showed a generic wallet loop, which double-rendered
+            "Ví khách hàng" when the user had more than one USER-type wallet row in
+            DB and didn't surface referee count anywhere.
+            We now dedupe wallets by type and bring the affiliate balance + referee
+            count to the front. Generic USER-wallet balance is still shown below
+            for drivers/users who have it.
+          */}
+          {(() => {
+            const dedupedWallets = Array.from(
+              new Map(user.wallets.map((w) => [w.type, w])).values(),
+            );
+            const userReferralWallet = dedupedWallets.find((w) => w.type === 'USER_REFERRAL');
+            const otherWallets = dedupedWallets.filter((w) => w.type !== 'USER_REFERRAL');
+            const affiliateBalance =
+              referralStats?.balance ?? userReferralWallet?.balance ?? 0;
+            const refereeCount = referralStats?.refereeCount ?? 0;
+
+            return (
+              <>
+                <div className="mt-6 border-t pt-4">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                    Ví Affiliate
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs text-muted-foreground">Số dư affiliate</div>
+                      <div className="text-base font-semibold">{fmtVnd(affiliateBalance)}</div>
+                      {userReferralWallet && userReferralWallet.lockedBalance > 0 && (
+                        <div className="text-xs text-muted-foreground mt-1">
+                          Tạm khoá: {fmtVnd(userReferralWallet.lockedBalance)}
+                        </div>
+                      )}
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs text-muted-foreground">Đã giới thiệu</div>
+                      <div className="text-base font-semibold">
+                        {refereeCount.toLocaleString('vi-VN')} người
+                      </div>
+                    </div>
+                    <div className="rounded-md border p-3">
+                      <div className="text-xs text-muted-foreground">Mã giới thiệu</div>
+                      <div className="text-base font-mono font-semibold tracking-wider">
+                        {user.referralCode ?? '—'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {otherWallets.length > 0 && (
+                  <div className="mt-6 border-t pt-4">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">
+                      Ví khác
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {otherWallets.map((w) => (
+                        <div key={w.type} className="rounded-md border p-3">
+                          <div className="text-xs text-muted-foreground">
+                            {WALLET_LABEL[w.type] ?? w.type}
+                          </div>
+                          <div className="text-base font-semibold">{fmtVnd(w.balance)}</div>
+                          {w.lockedBalance > 0 && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Tạm khoá: {fmtVnd(w.lockedBalance)}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            );
+          })()}
 
           {user.bankInfo && (
             <div className="mt-6 border-t pt-4 text-sm">
