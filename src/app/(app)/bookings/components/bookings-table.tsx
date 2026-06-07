@@ -79,24 +79,31 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
   const fmtVnd = (v: number | string | null | undefined) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
 
-  const fmtPct = (rate: number | string) => `${(Number(rate) * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
-
   const breakdown = booking.priceBreakdown;
-  const earnings = booking.driverEarnings;
 
+  // Surcharges EXCLUDES VAT now — VAT lives on its own line below "Giá thực
+  // tế" so the flow reads: base + surcharges → discounts → giá thực tế → VAT
+  // → khách trả. Matches the wording the support team uses with customers.
   const surcharges: Array<{ label: string; value: number }> = breakdown ? [
     { label: 'Phụ phí kích thước', value: Number(breakdown.sizeSurcharge ?? 0) },
     { label: 'Phụ phí trọng lượng', value: Number(breakdown.weightSurcharge ?? 0) },
     { label: 'Phụ phí cuối tuần', value: Number(breakdown.weekendSurcharge ?? 0) },
     { label: 'Phụ phí ngày lễ', value: Number(breakdown.holidaySurcharge ?? 0) },
     { label: 'Phí dịch vụ', value: Number(breakdown.serviceFee ?? 0) },
-    { label: 'Thuế VAT', value: Number(breakdown.vatAmount ?? 0) },
   ].filter(r => r.value > 0) : [];
 
   const discounts: Array<{ label: string; value: number }> = breakdown ? [
     { label: 'Khách thân thiết', value: Number(breakdown.loyaltyDiscount ?? 0) },
     { label: 'Mã khuyến mãi', value: Number(breakdown.promotionDiscount ?? 0) },
   ].filter(r => r.value > 0) : [];
+
+  const vatAmount = Number(breakdown?.vatAmount ?? 0);
+  const totalDiscount = discounts.reduce((sum, d) => sum + d.value, 0);
+  // Giá thực tế = (base + surcharges) − discounts, BEFORE VAT. Equivalent to
+  // finalPrice − vat for sanity-checking on rows where both came from the
+  // pricing engine.
+  const priceAfterDiscount = Number(booking.price ?? 0) - totalDiscount;
+  const finalPrice = booking.finalPrice ?? booking.price;
 
   return (
     <Card className="p-3 space-y-3">
@@ -121,10 +128,29 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
               <span>+{fmtVnd(s.value)}</span>
             </div>
           ))}
+
+          {discounts.length > 0 && (
+            <>
+              <div className="text-xs font-medium text-muted-foreground pt-1">Giảm giá</div>
+              {discounts.map(d => (
+                <div key={d.label} className="flex justify-between text-orange-600">
+                  <span>{d.label}</span>
+                  <span>-{fmtVnd(d.value)}</span>
+                </div>
+              ))}
+            </>
+          )}
+
           <div className="flex justify-between border-t pt-1.5 font-medium">
-            <span>Giá gốc</span>
-            <span>{fmtVnd(booking.price)}</span>
+            <span>Giá thực tế</span>
+            <span>{fmtVnd(priceAfterDiscount)}</span>
           </div>
+          {vatAmount > 0 && (
+            <div className="flex justify-between">
+              <span>Thuế VAT</span>
+              <span>+{fmtVnd(vatAmount)}</span>
+            </div>
+          )}
         </div>
       ) : (
         <div className="flex justify-between text-sm">
@@ -133,169 +159,15 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
         </div>
       )}
 
-      {discounts.length > 0 && (
-        <div className="space-y-1.5 text-sm">
-          <div className="text-xs font-medium text-muted-foreground">Giảm giá</div>
-          {discounts.map(d => (
-            <div key={d.label} className="flex justify-between text-orange-600">
-              <span>{d.label}</span>
-              <span>-{fmtVnd(d.value)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-
       <div className="flex justify-between border-t pt-2 text-sm">
         <span className="font-semibold">Khách trả</span>
-        <span className="font-semibold text-green-600">{fmtVnd(booking.finalPrice ?? booking.price)}</span>
+        <span className="font-semibold text-green-600">{fmtVnd(finalPrice)}</span>
       </div>
       {booking.paymentMethod && (
         <div className="text-xs text-muted-foreground -mt-1">
           Phương thức: {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
         </div>
       )}
-
-      {earnings && (() => {
-        // Prefer the persisted breakdown fields from the new
-        // earningsBreakdown column; fall back to derived values for legacy
-        // bookings that completed before the column existed.
-        const finalPrice = booking.finalPrice ?? booking.price ?? 0;
-        const vat = Number(earnings.vatAmount ?? breakdown?.vatAmount ?? 0);
-        const grossPriceBase = Number(earnings.grossPriceBase ?? finalPrice - vat);
-        const discount = Number(earnings.discountAmount ?? 0);
-        const priceAfterDiscount = Number(earnings.priceAfterDiscount ?? finalPrice - vat);
-        const commission = Number(earnings.commissionAmount ?? 0);
-        const pit = Number(earnings.personalIncomeTaxAmount ?? 0);
-        const bonus = Number(earnings.driverDiscountBonus ?? 0);
-        const cashKept = Number(earnings.tripCashKept ?? priceAfterDiscount - commission - pit);
-        const totalReceived = Number(earnings.driverTotalReceived ?? cashKept + bonus);
-        const htxCommission = Number(earnings.htxCommission ?? 0);
-        const vigoCommission = Number(earnings.vigoCommission ?? 0);
-        const htxVatRemit = Number(earnings.htxVatRemit ?? 0);
-        const vigoVatRemit = Number(earnings.vigoVatRemit ?? 0);
-        const htxTotalReceived = Number(earnings.htxTotalReceived ?? 0);
-        const vigoTotalReceived = Number(earnings.vigoTotalReceived ?? 0);
-        const hasNewSplit = htxCommission > 0 || vigoCommission > 0;
-        const reconciles = Math.abs(
-          totalReceived + htxTotalReceived + vigoTotalReceived - finalPrice,
-        ) < 1;
-
-        return (
-          <div className="space-y-1.5 text-sm border-t pt-2">
-            <div className="text-xs font-medium text-muted-foreground">Phân bổ doanh thu</div>
-            {/* Pricing chain → khách trả. Mirrors the driver Chi tiết
-                chuyến đi screen end-to-end so admin + driver always read
-                the same numbers from the same data. */}
-            <div className="flex justify-between">
-              <span>Giá cước</span>
-              <span>{fmtVnd(grossPriceBase)}</span>
-            </div>
-            {discount > 0 && (
-              <div className="flex justify-between text-orange-600">
-                <span>Khuyến mãi</span>
-                <span>-{fmtVnd(discount)}</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span>Giá thực tế</span>
-              <span>{fmtVnd(priceAfterDiscount)}</span>
-            </div>
-            {vat > 0 && (
-              <div className="flex justify-between">
-                <span>VAT</span>
-                <span>+{fmtVnd(vat)}</span>
-              </div>
-            )}
-            <div className="flex justify-between border-t pt-1.5 font-medium">
-              <span>Khách trả</span>
-              <span>{fmtVnd(finalPrice)}</span>
-            </div>
-
-            {hasNewSplit && (
-              <>
-                <div className="text-xs font-medium text-muted-foreground pt-2">Phân chia</div>
-                <div className="flex justify-between">
-                  <span>Tài xế giữ tay (cash)</span>
-                  <span>{fmtVnd(cashKept)}</span>
-                </div>
-                {bonus > 0 && (
-                  <div className="flex justify-between text-emerald-700">
-                    <span>Tài xế (ví thưởng KM)</span>
-                    <span>{fmtVnd(bonus)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span>HTX commission</span>
-                  <span>{fmtVnd(htxCommission)}</span>
-                </div>
-                {htxVatRemit > 0 && (
-                  <div className="flex justify-between">
-                    <span>HTX nộp VAT</span>
-                    <span>{fmtVnd(htxVatRemit)}</span>
-                  </div>
-                )}
-                {pit > 0 && (
-                  <div className="flex justify-between">
-                    <span>HTX nộp PIT</span>
-                    <span>{fmtVnd(pit)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span>Vigo commission</span>
-                  <span>{fmtVnd(vigoCommission)}</span>
-                </div>
-                {vigoVatRemit > 0 && (
-                  <div className="flex justify-between">
-                    <span>Vigo nộp VAT</span>
-                    <span>{fmtVnd(vigoVatRemit)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between border-t pt-1.5 text-xs text-muted-foreground">
-                  <span>Tổng kiểm tra</span>
-                  <span>
-                    {fmtVnd(totalReceived + htxTotalReceived + vigoTotalReceived)}{' '}
-                    {reconciles ? '✓' : '⚠'}
-                  </span>
-                </div>
-
-                <div className="text-xs font-medium text-muted-foreground pt-2">Tóm tắt</div>
-                <div className="flex justify-between">
-                  <span>HTX nhận tổng</span>
-                  <span>{fmtVnd(htxTotalReceived)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Vigo nhận tổng</span>
-                  <span>{fmtVnd(vigoTotalReceived)}</span>
-                </div>
-                <div className="flex justify-between font-medium">
-                  <span>Driver thực nhận</span>
-                  <span>{fmtVnd(totalReceived)}</span>
-                </div>
-              </>
-            )}
-
-            {!hasNewSplit && (
-              // Legacy fallback for bookings completed before the persisted
-              // breakdown migration. Same shape as the old admin display so
-              // history rows keep rendering instead of going blank.
-              <>
-                <div className="flex justify-between">
-                  <span>Hoa hồng nền tảng ({fmtPct(earnings.commissionRate)})</span>
-                  <span className="text-red-600">-{fmtVnd(commission)}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span>Thuế TNCN tài xế ({fmtPct(earnings.personalIncomeTaxRate)})</span>
-                  <span className="text-red-600">-{fmtVnd(pit)}</span>
-                </div>
-                <div className="flex justify-between border-t pt-1.5 font-medium">
-                  <span>Tài xế thực nhận</span>
-                  <span>{fmtVnd(totalReceived || earnings.netEarnings)}</span>
-                </div>
-              </>
-            )}
-          </div>
-        );
-      })()}
     </Card>
   );
 }
@@ -459,7 +331,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                   <div className="flex gap-4 border-t pt-2 text-xs text-muted-foreground">
                     {booking.requestedSeats != null && (
                       <div>
-                        <span className="font-medium">Số ghế:</span> {booking.requestedSeats}
+                        <span className="font-medium">Số người:</span> {booking.requestedSeats}
                       </div>
                     )}
                     {booking.requestedVehicleType && (
