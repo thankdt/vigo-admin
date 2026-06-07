@@ -218,6 +218,7 @@ export type AdminUserDetail = {
   wallets: { type: string; balance: number; lockedBalance: number }[];
   bookingCount: number;
   bookingCountByStatus: Record<string, number>;
+  totalWithdrawn?: number;
 };
 
 export async function getAdminUserDetail(id: string): Promise<AdminUserDetail> {
