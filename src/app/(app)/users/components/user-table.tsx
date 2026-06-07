@@ -58,6 +58,7 @@ export function UsersTable() {
 
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
+  const [roleFilter, setRoleFilter] = React.useState<'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER'>('ALL');
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
 
@@ -74,25 +75,32 @@ export function UsersTable() {
   const [totalItems, setTotalItems] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(20);
 
-  const fetchUsers = React.useCallback(async (search: string, page: number, limit: number) => {
+  const fetchUsers = React.useCallback(async (search: string, page: number, limit: number, role: 'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER') => {
     setIsLoading(true);
     setError(null);
     try {
-      const response = await getUsers({ search, page, limit });
+      const response = await getUsers({
+        search,
+        page,
+        limit,
+        ...(role !== 'ALL' && { role }),
+      });
       const mappedUsers: User[] = response.data.map((apiUser: any) => ({
         id: apiUser.id,
-        name: apiUser.fullName, // FIX: Use fullName from the API
+        name: apiUser.fullName,
         email: apiUser.email || 'N/A',
         role: apiUser.role,
-        status: apiUser.isLocked ? 'Inactive' : 'Active', 
+        status: apiUser.isLocked ? 'Inactive' : 'Active',
         avatarUrl: `https://picsum.photos/seed/${apiUser.id}/40/40`,
         lastLogin: 'N/A',
         phone: apiUser.phone,
         isLocked: apiUser.isLocked,
         createdAt: apiUser.createdAt,
+        loyaltyTier: apiUser.loyaltyTier,
+        currentBalance: Number(apiUser.currentBalance ?? 0),
+        totalWithdrawn: Number(apiUser.totalWithdrawn ?? 0),
       }));
       setUsers(mappedUsers);
-      // Parse pagination meta from response
       const total = response.meta?.total ?? 0;
       const apiLimit = response.meta?.limit ?? limit;
       setTotalItems(total);
@@ -108,14 +116,14 @@ export function UsersTable() {
       setIsLoading(false);
     }
   }, [toast]);
-  
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
-        fetchUsers(searchTerm, currentPage, pageSize);
+        fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchUsers, searchTerm, currentPage, pageSize]);
+  }, [fetchUsers, searchTerm, currentPage, pageSize, roleFilter]);
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
@@ -171,7 +179,7 @@ export function UsersTable() {
       toast({ title: 'Đã xoá', description: `Tài khoản ${pendingDelete.phone} đã chuyển trạng thái xoá.` });
       setPendingDelete(null);
       // Refresh list to drop the deleted user (admin list filters soft-deleted by default).
-      fetchUsers(searchTerm, currentPage, pageSize);
+      fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không xoá được', description: err?.message ?? 'Vui lòng thử lại' });
     } finally {
@@ -207,7 +215,7 @@ export function UsersTable() {
         toast({ title: 'Đã khóa', description: `${user.name} đã bị khóa.` });
       }
       // Refresh user list
-      fetchUsers(searchTerm, currentPage, pageSize);
+      fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -244,7 +252,7 @@ export function UsersTable() {
           email: email.trim() || undefined,
         });
         toast({ title: 'Đã tạo tài khoản admin', description: fullName.trim() || phone.trim() });
-        fetchUsers(searchTerm, currentPage, pageSize);
+        fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
         onClose();
       } catch (err: any) {
         toast({ variant: 'destructive', title: 'Không tạo được tài khoản', description: err.message });
@@ -295,12 +303,27 @@ export function UsersTable() {
   return (
     <>
       <div className="flex items-center justify-between gap-3 pb-4">
-        <Input
-          placeholder="Tìm theo tên hoặc SĐT..."
-          value={searchTerm}
-          onChange={(e) => handleSearchChange(e.target.value)}
-          className="max-w-sm"
-        />
+        <div className="flex items-center gap-3 flex-1">
+          <Input
+            placeholder="Tìm theo tên hoặc SĐT..."
+            value={searchTerm}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="max-w-sm"
+          />
+          <Select
+            value={roleFilter}
+            onValueChange={(val) => { setRoleFilter(val as typeof roleFilter); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Loại tài khoản" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Tất cả</SelectItem>
+              <SelectItem value="USER">Khách</SelectItem>
+              <SelectItem value="TRANSPORT_COMPANY_OWNER">Chủ HTX</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
         <Button onClick={() => { setEditingUser(null); setIsFormOpen(true); }}>
           <Plus className="mr-2 h-4 w-4" />
           Tạo admin
@@ -322,6 +345,10 @@ export function UsersTable() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
+              <TableHead>Loại</TableHead>
+              <TableHead>Hạng</TableHead>
+              <TableHead className="text-right">Số dư</TableHead>
+              <TableHead className="text-right">Đã rút</TableHead>
               <TableHead>
                 <Button variant="ghost" onClick={() => requestSort('status')}>
                   Trạng thái
@@ -342,19 +369,19 @@ export function UsersTable() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5} className="h-24 text-center">
+                <TableCell colSpan={9} className="h-24 text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : error ? (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-destructive">
+                <TableCell colSpan={9} className="text-center text-destructive">
                   {error}
                 </TableCell>
               </TableRow>
             ) : sortedUsers.length === 0 ? (
                 <TableRow>
-                    <TableCell colSpan={5} className="h-24 text-center">
+                    <TableCell colSpan={9} className="h-24 text-center">
                     Không tìm thấy người dùng.
                     </TableCell>
                 </TableRow>
@@ -378,6 +405,34 @@ export function UsersTable() {
                   </div>
                 </TableCell>
                 <TableCell>{user.phone}</TableCell>
+                <TableCell>
+                  {user.role === 'TRANSPORT_COMPANY_OWNER' ? (
+                    <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 hover:bg-purple-100">
+                      Chủ HTX
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">Khách</Badge>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {(() => {
+                    const tier = user.loyaltyTier ?? 'MEMBER';
+                    const tierStyles: Record<string, { label: string; className: string }> = {
+                      MEMBER: { label: 'Member', className: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300' },
+                      SILVER: { label: 'Silver', className: 'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-100' },
+                      GOLD: { label: 'Gold', className: 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' },
+                      DIAMOND: { label: 'Diamond', className: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900/40 dark:text-cyan-300' },
+                    };
+                    const t = tierStyles[tier] ?? tierStyles.MEMBER;
+                    return <Badge className={`${t.className} hover:${t.className}`}>{t.label}</Badge>;
+                  })()}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(user.currentBalance ?? 0)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(user.totalWithdrawn ?? 0)}
+                </TableCell>
                 <TableCell>
                    <Badge variant={user.status === 'Active' ? 'default' : 'secondary'} className={user.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' : ''}>
                     {user.status === 'Active' ? 'Hoạt động' : 'Bị khóa'}

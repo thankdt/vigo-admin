@@ -1,15 +1,20 @@
 
+export type LoyaltyTier = 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
+
 export type User = {
   id: string;
   name: string;
   email: string;
-  role: 'Admin' | 'Editor' | 'Viewer' | 'USER' | 'DRIVER'; // Added USER and DRIVER from API
+  role: 'Admin' | 'Editor' | 'Viewer' | 'USER' | 'DRIVER' | 'TRANSPORT_COMPANY_OWNER';
   status: 'Active' | 'Inactive';
   avatarUrl: string;
   lastLogin: string;
-  phone?: string; // From API response
-  isLocked: boolean; // From API response
+  phone?: string;
+  isLocked: boolean;
   createdAt?: string;
+  loyaltyTier?: LoyaltyTier;
+  currentBalance?: number;
+  totalWithdrawn?: number;
 };
 
 export type Article = {
