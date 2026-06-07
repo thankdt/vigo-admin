@@ -617,7 +617,11 @@ export function DriversTable() {
                           </DropdownMenuItem>
                           {(() => {
                             const ds = getDriverApprovalStatus(driver);
-                            if (ds === 'approved') return null;
+                            // Approved drivers also need a way back to rejected
+                            // (compliance / re-review). Show reject directly;
+                            // approve stays hidden since they're already
+                            // approved. Pending drivers see both. Rejected sees
+                            // "move back to pending" + approve shortcut.
                             return (
                               <>
                                 <DropdownMenuSeparator />
@@ -626,14 +630,16 @@ export function DriversTable() {
                                     <RotateCcw className="mr-2 h-4 w-4" /> Đưa lại Chờ duyệt
                                   </DropdownMenuItem>
                                 )}
-                                {ds === 'pending' && (
+                                {ds !== 'rejected' && (
                                   <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'reject'), 0)} className="text-destructive focus:text-destructive">
                                     <XCircle className="mr-2 h-4 w-4" /> Từ chối
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'approve'), 0)}>
-                                  <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
-                                </DropdownMenuItem>
+                                {ds !== 'approved' && (
+                                  <DropdownMenuItem onSelect={() => setTimeout(() => openConfirmationDialog(driver, 'approve'), 0)}>
+                                    <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
+                                  </DropdownMenuItem>
+                                )}
                               </>
                             );
                           })()}
@@ -1135,7 +1141,9 @@ export function DriversTable() {
 
           {(() => {
             const status = getDriverApprovalStatus(viewDriver);
-            if (status === 'approved') return null;
+            // Always render the action footer so an approved driver can be
+            // sent back to "rejected" (compliance / re-review). The buttons
+            // inside reshape by status — see comments below.
             return (
             <div className="border-t pt-4">
               {detailAction === null && (
@@ -1156,14 +1164,16 @@ export function DriversTable() {
                       <RotateCcw className="mr-2 h-4 w-4" /> Đưa lại Chờ duyệt
                     </Button>
                   )}
-                  {status === 'pending' && (
+                  {status !== 'rejected' && (
                     <Button variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDetailAction('reject')}>
                       <XCircle className="mr-2 h-4 w-4" /> Từ chối
                     </Button>
                   )}
-                  <Button className="bg-green-600 hover:bg-green-700" onClick={() => setDetailAction('approve')}>
-                    <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
-                  </Button>
+                  {status !== 'approved' && (
+                    <Button className="bg-green-600 hover:bg-green-700" onClick={() => setDetailAction('approve')}>
+                      <CheckCircle className="mr-2 h-4 w-4" /> Duyệt
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -1197,7 +1207,7 @@ export function DriversTable() {
                 </div>
               )}
 
-              {detailAction === 'reject' && status === 'pending' && (
+              {detailAction === 'reject' && status !== 'rejected' && (
                 <div className="space-y-3">
                   <RejectReasonPicker
                     selectedValues={detailReasonValues}
