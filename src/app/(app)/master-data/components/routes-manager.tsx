@@ -4,7 +4,7 @@ import * as React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { getRoutes, createRoute, getAdminUnits, updateRoute, deleteRoute, getPresignedUrl, uploadToS3 } from '@/lib/api';
+import { getRoutes, createRoute, getAdminUnits, updateRoute, deleteRoute, restoreRoute, getRouteUsage, getPresignedUrl, uploadToS3, type RouteUsage } from '@/lib/api';
 import type { Route, AdminUnit } from '@/lib/types';
 import { Loader2, PlusCircle, MoreHorizontal, Edit, Trash2, Upload } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -26,6 +26,10 @@ export function RoutesManager() {
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [editingRoute, setEditingRoute] = React.useState<Route | null>(null);
     const [deletingRoute, setDeletingRoute] = React.useState<Route | null>(null);
+    const [deletingRouteUsage, setDeletingRouteUsage] =
+        React.useState<RouteUsage | null>(null);
+    const [isLoadingUsage, setIsLoadingUsage] = React.useState(false);
+    const [showDeleted, setShowDeleted] = React.useState(false);
     const [currentPage, setCurrentPage] = React.useState(1);
     const itemsPerPage = 50;
     const { toast } = useToast();
@@ -34,7 +38,10 @@ export function RoutesManager() {
         // We do NOT set setIsLoading(true) here to avoid wiping the table content during refresh.
         // This keeps the DOM nodes (triggers) alive, preventing Radix UI focus issues and "UI Freeze".
         try {
-            const [routesData, unitsData] = await Promise.all([getRoutes(), getAdminUnits()]);
+            const [routesData, unitsData] = await Promise.all([
+                getRoutes(showDeleted),
+                getAdminUnits(),
+            ]);
             setRoutes(routesData);
             setAdminUnits(unitsData);
         } catch (err: any) {
@@ -42,7 +49,7 @@ export function RoutesManager() {
         } finally {
             setIsLoading(false);
         }
-    }, [toast]);
+    }, [toast, showDeleted]);
 
     React.useEffect(() => {
         fetchData();
@@ -63,15 +70,62 @@ export function RoutesManager() {
         fetchData();
     };
 
+    // Hard delete is gone — backend soft-deletes and notifies every driver
+    // on the route. We fetch usage stats first so the admin sees exactly
+    // how many drivers + pricing rows are about to get the notification
+    // before they confirm. Keeping the dialog open while usage loads stops
+    // an impatient double-click from triggering the destructive action
+    // before the preview shows up.
+    const openDeleteDialog = async (route: Route) => {
+        setDeletingRoute(route);
+        setDeletingRouteUsage(null);
+        setIsLoadingUsage(true);
+        try {
+            const usage = await getRouteUsage(route.id);
+            setDeletingRouteUsage(usage);
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Không tải được thông tin tuyến',
+                description: err.message,
+            });
+        } finally {
+            setIsLoadingUsage(false);
+        }
+    };
+
     const handleDeleteConfirm = async () => {
         if (!deletingRoute) return;
         try {
-            await deleteRoute(deletingRoute.id);
-            toast({ title: 'Thành công', description: 'Đã xóa tuyến đường.' });
+            const result = await deleteRoute(deletingRoute.id);
+            toast({
+                title: 'Đã ngừng hoạt động',
+                description: result.affectedDrivers
+                    ? `Đã thông báo ${result.affectedDrivers} tài xế. Bảng giá và lịch sử vẫn được giữ lại.`
+                    : 'Tuyến đường đã được chuyển sang trạng thái ngừng hoạt động.',
+            });
             setDeletingRoute(null);
+            setDeletingRouteUsage(null);
             fetchData();
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Không thể xóa tuyến đường', description: err.message });
+        }
+    };
+
+    const handleRestore = async (route: Route) => {
+        try {
+            await restoreRoute(route.id);
+            toast({
+                title: 'Đã khôi phục',
+                description: `Tuyến "${route.name}" đã hoạt động trở lại.`,
+            });
+            fetchData();
+        } catch (err: any) {
+            toast({
+                variant: 'destructive',
+                title: 'Không thể khôi phục',
+                description: err.message,
+            });
         }
     };
 
@@ -83,9 +137,18 @@ export function RoutesManager() {
                     <CardDescription>Tất cả tuyến đường đã được thiết lập trong hệ thống.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="mb-4 flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">
-                            Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, routes.length)}-{Math.min(currentPage * itemsPerPage, routes.length)} / {routes.length} tuyến đường
+                    <div className="mb-4 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-4">
+                            <div className="text-sm text-muted-foreground">
+                                Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, routes.length)}-{Math.min(currentPage * itemsPerPage, routes.length)} / {routes.length} tuyến đường
+                            </div>
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <Checkbox
+                                    checked={showDeleted}
+                                    onCheckedChange={(v) => { setShowDeleted(v === true); setCurrentPage(1); }}
+                                />
+                                Hiện tuyến đã ngừng
+                            </label>
                         </div>
                         <div className="space-x-2">
                             <Button
@@ -141,7 +204,18 @@ export function RoutesManager() {
                                             unoptimized // Use original S3 URL to avoid Next.js optimization issues with signed URLs
                                         />
                                     </TableCell>
-                                    <TableCell className="font-medium">{route.name}</TableCell>
+                                    <TableCell className="font-medium">
+                                        <div className="flex items-center gap-2">
+                                            <span className={route.deletedAt ? 'text-muted-foreground line-through' : undefined}>
+                                                {route.name}
+                                            </span>
+                                            {route.deletedAt && (
+                                                <Badge variant="outline" className="border-orange-300 text-orange-700">
+                                                    Đã ngừng
+                                                </Badge>
+                                            )}
+                                        </div>
+                                    </TableCell>
                                     <TableCell>
                                         <div className="flex flex-wrap gap-1">
                                             {route.districts?.slice(0, 5).map(d => <Badge key={d.id} variant="secondary">{d.name}</Badge>)}
@@ -158,9 +232,18 @@ export function RoutesManager() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
-                                                <DropdownMenuItem onSelect={() => setTimeout(() => setDeletingRoute(route), 0)} className="text-destructive focus:text-destructive">
-                                                    <Trash2 className="mr-2 h-4 w-4" /> Xóa
-                                                </DropdownMenuItem>
+                                                {route.deletedAt ? (
+                                                    <DropdownMenuItem onSelect={() => setTimeout(() => handleRestore(route), 0)}>
+                                                        <Upload className="mr-2 h-4 w-4" /> Khôi phục
+                                                    </DropdownMenuItem>
+                                                ) : (
+                                                    <DropdownMenuItem
+                                                        onSelect={() => setTimeout(() => openDeleteDialog(route), 0)}
+                                                        className="text-destructive focus:text-destructive"
+                                                    >
+                                                        <Trash2 className="mr-2 h-4 w-4" /> Ngừng hoạt động
+                                                    </DropdownMenuItem>
+                                                )}
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -190,17 +273,41 @@ export function RoutesManager() {
                 />
             </Dialog>
 
-            <AlertDialog open={!!deletingRoute} onOpenChange={() => setDeletingRoute(null)}>
+            <AlertDialog open={!!deletingRoute} onOpenChange={() => { setDeletingRoute(null); setDeletingRouteUsage(null); }}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
-                        <AlertDialogTitle>Bạn có chắc chắn không?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Hành động này không thể hoàn tác. Tuyến đường "{deletingRoute?.name}" và tất cả bảng giá liên quan sẽ bị xóa vĩnh viễn.
+                        <AlertDialogTitle>Ngừng hoạt động tuyến đường?</AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-2 text-sm">
+                                <p>
+                                    Tuyến <span className="font-medium text-foreground">"{deletingRoute?.name}"</span> sẽ
+                                    chuyển sang trạng thái ngừng hoạt động. Dữ liệu (bảng giá, lịch sử)
+                                    được giữ lại; có thể khôi phục bất cứ lúc nào.
+                                </p>
+                                {isLoadingUsage ? (
+                                    <div className="flex items-center gap-2 text-muted-foreground">
+                                        <Loader2 className="h-4 w-4 animate-spin" /> Đang tải...
+                                    </div>
+                                ) : deletingRouteUsage ? (
+                                    <ul className="list-disc pl-5 space-y-0.5 text-foreground">
+                                        <li>
+                                            <span className="font-medium">{deletingRouteUsage.driverCount}</span> tài xế
+                                            đang đăng ký — sẽ nhận thông báo và phải chọn tuyến khác.
+                                        </li>
+                                        <li>
+                                            <span className="font-medium">{deletingRouteUsage.pricingCount}</span> dòng bảng
+                                            giá sẽ tạm ẩn (giữ nguyên trong DB).
+                                        </li>
+                                    </ul>
+                                ) : null}
+                            </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Hủy</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
+                        <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
+                            <Trash2 className="mr-2 h-4 w-4" /> Ngừng hoạt động
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

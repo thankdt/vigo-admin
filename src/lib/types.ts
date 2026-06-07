@@ -137,6 +137,13 @@ export type Driver = {
     id: number;
     name: string;
   };
+  // Multi-route: backend started returning the M2M `routes` collection
+  // alongside the legacy `fixedRoute`. Old admin code only reads
+  // `fixedRoute`; new components prefer `routes` and fall back when empty.
+  routes?: {
+    id: number;
+    name: string;
+  }[];
   transportCompanyId?: string;
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
@@ -287,6 +294,9 @@ export type Route = {
   districts: AdminUnit[];
   imageUrl?: string;
   imageKey?: string;
+  // Populated only when admin requested `includeDeleted=true`. Active routes
+  // come back with `deletedAt = null/undefined`.
+  deletedAt?: string | null;
 }
 
 // Vehicle classes used by RIDE (private/charter) pricing — 5-seater vs 7-seater have separate

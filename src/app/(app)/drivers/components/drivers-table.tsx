@@ -587,7 +587,21 @@ export function DriversTable() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {driver.fixedRoute?.name ? (
+                      {/* Multi-route: prefer the M2M `routes` collection;
+                          fall back to legacy `fixedRoute` for drivers who
+                          haven't been re-saved since the migration. */}
+                      {driver.routes && driver.routes.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {driver.routes.map((r) => (
+                            <span
+                              key={r.id}
+                              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium"
+                            >
+                              {r.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : driver.fixedRoute?.name ? (
                         <span className="text-sm font-medium">{driver.fixedRoute.name}</span>
                       ) : (
                         <span className="text-sm text-muted-foreground">Chưa đăng ký</span>

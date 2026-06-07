@@ -512,8 +512,11 @@ export async function createAdminUnit(data: {
   return response.json();
 }
 
-export async function getRoutes(): Promise<Route[]> {
-  const response = await fetchWithAuth('/master-data/routes');
+export async function getRoutes(includeDeleted = false): Promise<Route[]> {
+  const url = includeDeleted
+    ? '/master-data/routes?includeDeleted=true'
+    : '/master-data/routes';
+  const response = await fetchWithAuth(url);
   const result = await response.json();
   return result.data;
 }
@@ -534,10 +537,34 @@ export async function updateRoute(id: number, data: { name: string, districtIds:
   return response.json();
 }
 
-export async function deleteRoute(id: number): Promise<void> {
-  await fetchWithAuth(`/master-data/routes/${id}/delete`, {
+export async function deleteRoute(id: number): Promise<{ success: boolean; affectedDrivers: number }> {
+  const response = await fetchWithAuth(`/master-data/routes/${id}/delete`, {
     method: 'POST',
   });
+  const json = await response.json();
+  return json?.data ?? json;
+}
+
+export async function restoreRoute(id: number): Promise<Route> {
+  const response = await fetchWithAuth(`/master-data/routes/${id}/restore`, {
+    method: 'POST',
+  });
+  const json = await response.json();
+  return json?.data ?? json;
+}
+
+export type RouteUsage = {
+  routeId: number;
+  routeName: string;
+  isDeleted: boolean;
+  driverCount: number;
+  pricingCount: number;
+};
+
+export async function getRouteUsage(id: number): Promise<RouteUsage> {
+  const response = await fetchWithAuth(`/master-data/routes/${id}/usage`);
+  const json = await response.json();
+  return json?.data ?? json;
 }
 
 
