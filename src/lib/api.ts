@@ -468,6 +468,9 @@ export async function createAdminBooking(data: {
   serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
   note?: string;
   driverId?: string;
+  // ISO 8601 timestamp (e.g. new Date(...).toISOString()). Omit for an
+  // immediate (SEARCHING) booking; set for a SCHEDULED trip.
+  scheduledTime?: string;
 }): Promise<Booking> {
   const response = await fetchWithAuth('/bookings/admin/create', {
     method: 'POST',

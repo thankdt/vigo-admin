@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, MapPin, Car, FileText } from 'lucide-react';
+import { Loader2, Plus, Phone, User, MapPin, Car, FileText, Clock } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { createAdminBooking, getAvailableDrivers } from '@/lib/api';
 import type { Driver } from '@/lib/types';
@@ -39,6 +40,12 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const [dropoff, setDropoff] = React.useState<AddressData | null>(null);
   const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('RIDE');
   const [note, setNote] = React.useState('');
+
+  // Scheduled-trip state. `scheduledAt` is the raw <input type="datetime-local">
+  // value (no timezone suffix). We convert to ISO at submit time. Default to
+  // 30 min from now so the picker isn't empty when the operator toggles on.
+  const [isScheduled, setIsScheduled] = React.useState(false);
+  const [scheduledAt, setScheduledAt] = React.useState('');
 
   // Driver selection
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
@@ -71,7 +78,33 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setNote('');
     setSelectedDriverId(null);
     setDriverSearch('');
+    setIsScheduled(false);
+    setScheduledAt('');
   };
+
+  // Build a `YYYY-MM-DDTHH:mm` string in *local* time. The native
+  // <input type="datetime-local"> rejects ISO strings with timezone suffixes,
+  // and toISOString().slice(0,16) would drift by the UTC offset (so VN ops
+  // would see -7h at minimum).
+  const formatLocal = (d: Date) => {
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  };
+
+  // Min-attr for the datetime input — block "in the past" choices at the
+  // browser level so the user gets immediate feedback instead of a backend
+  // error toast.
+  const minScheduledAt = React.useMemo(() => formatLocal(new Date()), [open, isScheduled]);
+
+  // Default the picker to +30 minutes when the operator first toggles
+  // scheduling on, so they only have to bump it forward.
+  React.useEffect(() => {
+    if (isScheduled && !scheduledAt) {
+      const d = new Date();
+      d.setMinutes(d.getMinutes() + 30);
+      setScheduledAt(formatLocal(d));
+    }
+  }, [isScheduled, scheduledAt]);
 
   const handleSubmit = async () => {
     // Validation
@@ -86,6 +119,23 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     if (!dropoff) {
       toast({ variant: 'destructive', title: 'Lỗi', description: 'Vui lòng chọn địa chỉ trả.' });
       return;
+    }
+    let scheduledIso: string | undefined;
+    if (isScheduled) {
+      if (!scheduledAt) {
+        toast({ variant: 'destructive', title: 'Lỗi', description: 'Vui lòng chọn thời gian hẹn.' });
+        return;
+      }
+      const parsed = new Date(scheduledAt);
+      if (Number.isNaN(parsed.getTime())) {
+        toast({ variant: 'destructive', title: 'Lỗi', description: 'Thời gian hẹn không hợp lệ.' });
+        return;
+      }
+      if (parsed.getTime() < Date.now() - 60_000) {
+        toast({ variant: 'destructive', title: 'Lỗi', description: 'Thời gian hẹn phải ở tương lai.' });
+        return;
+      }
+      scheduledIso = parsed.toISOString();
     }
 
     setIsSubmitting(true);
@@ -106,6 +156,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         serviceType,
         note: note || undefined,
         driverId: selectedDriverId || undefined,
+        scheduledTime: scheduledIso,
       });
       toast({ title: 'Thành công', description: 'Đã tạo chuyến mới.' });
       resetForm();
@@ -255,6 +306,38 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                 className="min-h-[36px] resize-none"
               />
             </div>
+          </div>
+
+          {/* Scheduled Trip */}
+          <div className="space-y-3 rounded-lg border p-3">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="cb-scheduled-toggle" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground cursor-pointer">
+                  <Clock className="h-4 w-4" />
+                  Hẹn giờ
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Bật để tạo chuyến hẹn giờ. Tài xế sẽ nhận thông báo trước 10 phút.
+                </p>
+              </div>
+              <Switch
+                id="cb-scheduled-toggle"
+                checked={isScheduled}
+                onCheckedChange={setIsScheduled}
+              />
+            </div>
+            {isScheduled && (
+              <div className="space-y-1.5">
+                <Label htmlFor="cb-scheduled-at">Thời gian khách muốn đi <span className="text-destructive">*</span></Label>
+                <Input
+                  id="cb-scheduled-at"
+                  type="datetime-local"
+                  value={scheduledAt}
+                  min={minScheduledAt}
+                  onChange={(e) => setScheduledAt(e.target.value)}
+                />
+              </div>
+            )}
           </div>
 
           {/* Driver Selection */}
