@@ -424,12 +424,15 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   const [isLoading, setIsLoading] = React.useState(true);
   const [isReassigning, setIsReassigning] = React.useState(false);
   const [selectedDriverId, setSelectedDriverId] = React.useState<string | null>(null);
+  const [query, setQuery] = React.useState('');
   const { toast } = useToast();
 
   React.useEffect(() => {
     const fetchDrivers = async () => {
       if (!open) return;
       setIsLoading(true);
+      setQuery('');
+      setSelectedDriverId(null);
       try {
         const response = await getAvailableDrivers();
         setDrivers(response);
@@ -472,20 +475,51 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   const getDriverPlate = (driver: Driver) =>
     driver.vehicle?.plateNumber || driver.vehicleRegistration?.plateNumber || null;
 
+  // Operators paste a phone (with or without leading 0/+84) to find a known
+  // driver quickly; fall back to matching by name/plate so the same input box
+  // covers the other lookups they used to scroll for.
+  const normalizedQuery = query.trim().toLowerCase();
+  const queryDigits = normalizedQuery.replace(/\D/g, '');
+  const filteredDrivers = normalizedQuery
+    ? drivers.filter((driver) => {
+        const phone = (driver.phone || driver.user?.phone || '').toLowerCase();
+        const phoneDigits = phone.replace(/\D/g, '');
+        const name = getDriverName(driver).toLowerCase();
+        const plate = (getDriverPlate(driver) || '').toLowerCase();
+        if (queryDigits && phoneDigits.includes(queryDigits)) return true;
+        if (phone.includes(normalizedQuery)) return true;
+        if (name.includes(normalizedQuery)) return true;
+        if (plate.includes(normalizedQuery)) return true;
+        return false;
+      })
+    : drivers;
+
   return (
     <DialogContent className="sm:max-w-lg" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
       <DialogHeader>
         <DialogTitle>Chuyển quốc chuyến #{booking?.id?.slice(0, 8)}...</DialogTitle>
         <DialogDescription>Chọn tài xế mới cho chuyến này. Chỉ hiển thị tài xế đang online.</DialogDescription>
       </DialogHeader>
+      <div className="relative mt-1">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Tìm theo SĐT, tên hoặc biển số…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          className="pl-9"
+          autoFocus
+        />
+      </div>
       <div className="max-h-[60vh] overflow-y-auto p-1">
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
         ) : drivers.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">Không tìm thấy tài xế khả dụng.</p>
+        ) : filteredDrivers.length === 0 ? (
+          <p className="text-center text-muted-foreground py-8">Không có tài xế khớp với "{query}".</p>
         ) : (
           <div className="space-y-2">
-            {drivers.map(driver => {
+            {filteredDrivers.map(driver => {
               const name = getDriverName(driver);
               const id = getDriverId(driver);
               const avatar = getDriverAvatar(driver);
