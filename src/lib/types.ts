@@ -258,6 +258,16 @@ export type Booking = {
   driverEarnings?: DriverEarnings;
   finalPriceVAT?: number;
   distanceKm?: number;
+  // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
+  // the booking is in any other status, or when it's PROCESSING but no admin
+  // has clicked "Nhận xử lý" yet.
+  adminClaimedAt?: string | null;
+  adminClaimedById?: string | null;
+  adminClaimedBy?: {
+    id: string;
+    fullName?: string | null;
+    phone?: string | null;
+  } | null;
 }
 
 export type Permission =

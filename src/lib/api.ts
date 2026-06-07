@@ -407,13 +407,14 @@ export async function getAdminInvoices(params: {
   return unwrap<AdminInvoiceListResponse>(response);
 }
 
-export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
+export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string, processingState?: 'unclaimed' | 'claimed' } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
     ...(params.status && { status: params.status }),
     ...(params.customerId && { customerId: params.customerId }),
     ...(params.driverId && { driverId: params.driverId }),
+    ...(params.processingState && { processingState: params.processingState }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -425,6 +426,16 @@ export async function getBookings(params: { page?: number; limit?: number; statu
     limit: result.meta?.limit ?? result.limit ?? 20,
     totalPages: result.meta?.totalPages ?? result.totalPages ?? 1,
   };
+}
+
+// Admin clicks "Nhận xử lý" on a PROCESSING booking — backend stamps
+// adminClaimedAt/By, scheduler stops the 5-min auto-cancel + Telegram nags.
+export async function claimProcessingBooking(id: string): Promise<Booking> {
+  const response = await fetchWithAuth(`/bookings/admin/${id}/claim`, {
+    method: 'POST',
+  });
+  const result = await response.json();
+  return result.data || result;
 }
 
 export async function getBookingDetails(id: string): Promise<Booking> {

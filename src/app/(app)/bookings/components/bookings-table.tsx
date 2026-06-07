@@ -36,7 +36,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking } from '@/lib/api';
+import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking } from '@/lib/api';
 import { CreateBookingDialog } from './create-booking-dialog';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -50,12 +50,31 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 
 type SortKey = keyof Booking;
-const allStatuses: BookingStatus[] = ['SEARCHING', 'PROCESSING', 'SCHEDULED', 'ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
+// PROCESSING is shown as two virtual tabs in the admin UI even though it's a
+// single DB status. NEEDS_ADMIN = unclaimed (5-min auto-cancel + Telegram nags);
+// ADMIN_HANDLING = an admin claimed it and owns the resolution indefinitely.
+// Both are mapped to `status=PROCESSING&processingState=…` on the server.
+type TabKey = BookingStatus | 'NEEDS_ADMIN' | 'ADMIN_HANDLING' | 'ALL';
+
+const tabKeys: TabKey[] = [
+  'SEARCHING',
+  'NEEDS_ADMIN',
+  'ADMIN_HANDLING',
+  'SCHEDULED',
+  'ACCEPTED',
+  'PICKED_UP',
+  'COMPLETED',
+  'CANCELLED',
+];
 
 const statusLabelMap: Record<string, string> = {
   ALL: 'Tất cả',
   SEARCHING: 'Đang tìm',
+  // Raw PROCESSING fallback label — used when a row sneaks past the tab
+  // filter (e.g. legacy data or a search hit). New tabs below are preferred.
   PROCESSING: 'Đang xử lý',
+  NEEDS_ADMIN: 'Cần xử lý',
+  ADMIN_HANDLING: 'Admin đang xử lý',
   SCHEDULED: 'Đặt lịch',
   ACCEPTED: 'Đã nhận',
   PICKED_UP: 'Đã đón',
@@ -237,7 +256,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
               {/* Status & Service */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {getStatusBadge(booking.status)}
+                  {getStatusBadge(booking)}
                   {booking.serviceType && (
                     <Badge variant="outline" className="text-xs">
                       {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
@@ -574,7 +593,25 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
 }
 
 
-function getStatusBadge(status: Booking['status']) {
+function getStatusBadge(booking: Pick<Booking, 'status' | 'adminClaimedAt'>) {
+  const { status, adminClaimedAt } = booking;
+  // PROCESSING splits into two visual badges based on whether an admin
+  // claimed the booking — orange = "Cần xử lý" (still on the auto-cancel
+  // clock), purple = "Admin đang xử lý" (claimed, no timeout).
+  if (status === 'PROCESSING') {
+    if (adminClaimedAt) {
+      return (
+        <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
+          {statusLabelMap.ADMIN_HANDLING}
+        </Badge>
+      );
+    }
+    return (
+      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+        {statusLabelMap.NEEDS_ADMIN}
+      </Badge>
+    );
+  }
   const label = statusLabelMap[status] ?? status;
   switch (status) {
     case 'COMPLETED':
@@ -584,8 +621,6 @@ function getStatusBadge(status: Booking['status']) {
       return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400">{label}</Badge>;
     case 'SEARCHING':
       return <Badge variant="secondary">{label}</Badge>;
-    case 'PROCESSING':
-      return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">{label}</Badge>;
     case 'CANCELLED':
       return <Badge variant="destructive">{label}</Badge>;
     default:
@@ -620,11 +655,24 @@ export function BookingsTable() {
   const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async (status: string, search: string, page: number, limit: number) => {
+  const fetchBookings = React.useCallback(async (tab: string, search: string, page: number, limit: number) => {
     setIsLoading(true);
     setError(null);
     try {
-      const params: any = { page, limit, status: status === 'ALL' ? undefined : status };
+      // Translate the two virtual PROCESSING tabs into the real query —
+      // status=PROCESSING + processingState=unclaimed|claimed. Backend sees
+      // a single enum so the customer/driver apps stay unchanged.
+      let status: string | undefined = tab === 'ALL' ? undefined : tab;
+      let processingState: 'unclaimed' | 'claimed' | undefined;
+      if (tab === 'NEEDS_ADMIN') {
+        status = 'PROCESSING';
+        processingState = 'unclaimed';
+      } else if (tab === 'ADMIN_HANDLING') {
+        status = 'PROCESSING';
+        processingState = 'claimed';
+      }
+
+      const params: any = { page, limit, status, processingState };
       if (search) {
         params.customerId = search;
       }
@@ -705,6 +753,16 @@ export function BookingsTable() {
     }
   }
 
+  const handleClaimBooking = async (booking: Booking) => {
+    try {
+      await claimProcessingBooking(booking.id);
+      toast({ title: 'Đã nhận xử lý', description: 'Chuyến không còn bị tự huỷ sau 5 phút. Bạn cần đẩy chuyến cho tài xế hoặc huỷ thủ công.' });
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Nhận xử lý thất bại', description: err.message });
+    }
+  }
+
   const sortedBookings = React.useMemo(() => {
     let sortableBookings = [...bookings];
     if (sortConfig !== null) {
@@ -739,8 +797,8 @@ export function BookingsTable() {
         <div className="flex items-center pb-4">
           <TabsList className='flex-wrap h-auto'>
             <TabsTrigger value="ALL">{statusLabelMap['ALL']}</TabsTrigger>
-            {allStatuses.map(status => (
-              <TabsTrigger key={status} value={status}>{statusLabelMap[status] ?? status}</TabsTrigger>
+            {tabKeys.map(key => (
+              <TabsTrigger key={key} value={key}>{statusLabelMap[key] ?? key}</TabsTrigger>
             ))}
           </TabsList>
           <div className='ml-auto flex items-center gap-2'>
@@ -851,7 +909,14 @@ export function BookingsTable() {
                       {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
                     </TableCell>
                     <TableCell>
-                      {getStatusBadge(booking.status)}
+                      <div className="flex flex-col gap-1">
+                        {getStatusBadge(booking)}
+                        {booking.status === 'PROCESSING' && booking.adminClaimedAt && booking.adminClaimedBy && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {booking.adminClaimedBy.fullName || booking.adminClaimedBy.phone || 'Admin'}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     {activeTab === 'CANCELLED' && (
                       <>
@@ -897,6 +962,11 @@ export function BookingsTable() {
                           {(booking.status === 'SEARCHING' || booking.status === 'SCHEDULED') && (
                             <DropdownMenuItem onSelect={() => setAcceptingBookingId(booking.id)}>
                               ⭐ Nhận chuyến
+                            </DropdownMenuItem>
+                          )}
+                          {booking.status === 'PROCESSING' && !booking.adminClaimedAt && (
+                            <DropdownMenuItem onSelect={() => handleClaimBooking(booking)}>
+                              🛎️ Nhận xử lý
                             </DropdownMenuItem>
                           )}
                           <DropdownMenuItem onSelect={() => setReassigningBooking(booking)} disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}>
