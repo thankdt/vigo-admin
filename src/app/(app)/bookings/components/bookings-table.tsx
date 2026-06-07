@@ -875,6 +875,16 @@ export function BookingsTable() {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
+                {/* CANCELLED tab gets 3 extra columns so admin can read who
+                    cancelled and why without opening each detail dialog. Other
+                    tabs keep the original 7-column layout. */}
+                {activeTab === 'CANCELLED' && (
+                  <>
+                    <TableHead>Thời gian huỷ</TableHead>
+                    <TableHead>Người huỷ</TableHead>
+                    <TableHead>Lý do huỷ</TableHead>
+                  </>
+                )}
                 <TableHead>
                   <span className="sr-only">Thao tác</span>
                 </TableHead>
@@ -883,19 +893,19 @@ export function BookingsTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : 7} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-destructive">
+                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : 7} className="text-center text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
               ) : sortedBookings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : 7} className="h-24 text-center">
                     Không tìm thấy chuyến nào.
                   </TableCell>
                 </TableRow>
@@ -937,6 +947,37 @@ export function BookingsTable() {
                     <TableCell>
                       {getStatusBadge(booking.status)}
                     </TableCell>
+                    {activeTab === 'CANCELLED' && (
+                      <>
+                        <TableCell className="text-xs">
+                          {booking.cancelledAt
+                            ? format(new Date(booking.cancelledAt), 'dd/MM/yyyy HH:mm')
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-xs">
+                          {booking.cancelledByRole ? (
+                            <div className="flex flex-col">
+                              <span className="font-medium">
+                                {CANCELLED_BY_ROLE_LABEL[booking.cancelledByRole] ?? booking.cancelledByRole}
+                              </span>
+                              {booking.cancelledByUser && (
+                                <span className="text-muted-foreground">
+                                  {booking.cancelledByUser.fullName || 'Không tên'}
+                                  {booking.cancelledByUser.phone ? ` (${booking.cancelledByUser.phone})` : ''}
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="max-w-[220px] text-xs">
+                          {booking.cancelReason
+                            ? <span className="line-clamp-2">{booking.cancelReason}</span>
+                            : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                      </>
+                    )}
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
