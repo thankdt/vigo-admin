@@ -166,6 +166,11 @@ export type PriceBreakdown = {
   vatAmount: number;
   loyaltyDiscount: number;
   promotionDiscount: number;
+  // VAT-inclusive total before any discount — backend ships this so the
+  // customer app can render a tidy strikethrough. Optional because legacy
+  // bookings don't have it (admin breakdown doesn't render the strikethrough
+  // anyway, so the missing field is harmless here).
+  priceBeforeDiscount?: number;
 };
 
 export type DriverEarnings = {
