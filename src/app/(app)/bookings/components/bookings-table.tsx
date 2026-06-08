@@ -421,34 +421,31 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
           {error && <p className="text-destructive text-center py-4">{error}</p>}
           {booking && (
             <>
-              {/* Status & Service */}
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 flex-wrap">
-                  {getStatusBadge(booking)}
-                  {booking.serviceType && (
-                    <Badge variant="outline" className="text-xs">
-                      {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
-                    </Badge>
-                  )}
-                  {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}
-                  {/* Trip shape moved up here from the Tuyến đường card so the
-                      first row tells the whole story at a glance: status,
-                      service, passengers + vehicle, payment. */}
-                  {booking.requestedSeats != null && (
-                    <Badge variant="outline" className="text-xs">
-                      Số người: {booking.requestedSeats}
-                    </Badge>
-                  )}
-                  {booking.requestedVehicleType && (
-                    <Badge variant="outline" className="text-xs">
-                      Loại xe: {booking.requestedVehicleType}
-                    </Badge>
-                  )}
-                </div>
+              {/* Status & Service. All meta lives in one left-aligned badge
+                  row now — status, service, trip shape, payment — so admin
+                  scans a single line for the booking's at-a-glance summary. */}
+              <div className="flex items-center gap-2 flex-wrap">
+                {getStatusBadge(booking)}
+                {booking.serviceType && (
+                  <Badge variant="outline" className="text-xs">
+                    {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
+                  </Badge>
+                )}
+                {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}
+                {booking.requestedSeats != null && (
+                  <Badge variant="outline" className="text-xs">
+                    Số người: {booking.requestedSeats}
+                  </Badge>
+                )}
+                {booking.requestedVehicleType && (
+                  <Badge variant="outline" className="text-xs">
+                    Loại xe: {booking.requestedVehicleType}
+                  </Badge>
+                )}
                 {booking.paymentMethod && (
-                  <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
+                  <Badge variant="outline" className="text-xs">
                     {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
-                  </span>
+                  </Badge>
                 )}
               </div>
 
