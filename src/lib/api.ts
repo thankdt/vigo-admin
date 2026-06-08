@@ -331,6 +331,32 @@ export async function rejectDriver(id: string, reason: string): Promise<Driver> 
   return data.data || data;
 }
 
+export type DriverApprovalAction =
+  | 'APPROVED'
+  | 'REJECTED'
+  | 'SUBMITTED'
+  | 'MOVED_BACK_TO_PENDING';
+
+export type DriverApprovalEvent = {
+  id: string;
+  driverId: string;
+  action: DriverApprovalAction;
+  reason: string | null;
+  byAdminUserId: string | null;
+  byAdmin?: {
+    id: string;
+    fullName?: string | null;
+    phone?: string | null;
+  } | null;
+  createdAt: string;
+};
+
+export async function getDriverApprovalHistory(id: string): Promise<DriverApprovalEvent[]> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/approval-history`);
+  const data = await response.json();
+  return data.data || data;
+}
+
 export async function updateDriverServices(id: string, enabledServices: string[]): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/services`, {
     method: 'PATCH',
