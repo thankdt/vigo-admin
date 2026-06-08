@@ -99,10 +99,11 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
 
   const breakdown = booking.priceBreakdown;
+  const earnings = booking.driverEarnings;
 
-  // Surcharges EXCLUDES VAT now — VAT lives on its own line below "Giá thực
-  // tế" so the flow reads: base + surcharges → discounts → giá thực tế → VAT
-  // → khách trả. Matches the wording the support team uses with customers.
+  // Surcharges EXCLUDES VAT — VAT lives on its own line below "Giá thực tế"
+  // so the flow reads: base + surcharges → discounts → giá thực tế → VAT →
+  // khách trả.
   const surcharges: Array<{ label: string; value: number }> = breakdown ? [
     { label: 'Phụ phí kích thước', value: Number(breakdown.sizeSurcharge ?? 0) },
     { label: 'Phụ phí trọng lượng', value: Number(breakdown.weightSurcharge ?? 0) },
@@ -118,15 +119,180 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
 
   const vatAmount = Number(breakdown?.vatAmount ?? 0);
   const totalDiscount = discounts.reduce((sum, d) => sum + d.value, 0);
-  // Giá thực tế = (base + surcharges) − discounts, BEFORE VAT. Equivalent to
-  // finalPrice − vat for sanity-checking on rows where both came from the
-  // pricing engine.
-  const priceAfterDiscount = Number(booking.price ?? 0) - totalDiscount;
-  const finalPrice = booking.finalPrice ?? booking.price;
+  const priceAfterDiscountUi = Number(booking.price ?? 0) - totalDiscount;
+  const finalPrice = Number(booking.finalPrice ?? booking.price ?? 0);
+
+  // Driver / HTX / Vigo allocation rebuild. Restored after f93e369 cut the
+  // entire section as a "duplicate" — the pricing-chain repeat was the
+  // duplicate, but the split itself is what support / accounting actually
+  // needed for receipt review. We keep the chain consolidated above and only
+  // show the allocation below.
+  let allocation: React.ReactNode = null;
+  if (earnings) {
+    const earnPriceAfterDiscount = Number(
+      earnings.priceAfterDiscount ?? priceAfterDiscountUi,
+    );
+    const pit = Number(earnings.personalIncomeTaxAmount ?? 0);
+    const htxCommission = Number(earnings.htxCommission ?? 0);
+    const vigoCommission = Number(earnings.vigoCommission ?? 0);
+    const htxVatRemit = Number(earnings.htxVatRemit ?? 0);
+    const vigoVatRemit = Number(earnings.vigoVatRemit ?? 0);
+    const htxTotalReceived = Number(earnings.htxTotalReceived ?? 0);
+    const vigoTotalReceived = Number(earnings.vigoTotalReceived ?? 0);
+    const platformFee = htxCommission + vigoCommission;
+    const cashKept = Number(
+      earnings.tripCashKept ?? earnPriceAfterDiscount - platformFee - pit,
+    );
+    const bonus = Number(earnings.driverDiscountBonus ?? 0);
+    const totalReceived = Number(
+      earnings.driverTotalReceived ?? cashKept + bonus,
+    );
+    const hasNewSplit = htxCommission > 0 || vigoCommission > 0;
+
+    if (hasNewSplit) {
+      // Tổng kiểm tra: TX + HTX + Vigo must reconcile to Khách trả within
+      // 1đ (rounding noise). Anything bigger means the booking's persisted
+      // earnings breakdown drifted — admin sees ⚠ and can investigate.
+      const sumCheck = totalReceived + htxTotalReceived + vigoTotalReceived;
+      const reconciles = Math.abs(sumCheck - finalPrice) < 1;
+
+      allocation = (
+        <div className="space-y-3 border-t pt-3">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Phân bổ doanh thu
+          </div>
+
+          {/* Tài xế */}
+          <div className="border-l-2 border-blue-500 pl-3 space-y-1.5 text-sm">
+            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Tài xế</div>
+            <div className="flex justify-between">
+              <span>Giá cước</span>
+              <span>{fmtVnd(earnPriceAfterDiscount)}</span>
+            </div>
+            <div className="flex justify-between text-red-600">
+              <span>− Phí nền tảng</span>
+              <span>-{fmtVnd(platformFee)}</span>
+            </div>
+            {pit > 0 && (
+              <div className="flex justify-between text-red-600">
+                <span>− Thuế TNCN</span>
+                <span>-{fmtVnd(pit)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-1 font-medium">
+              <span>= Tiền mặt</span>
+              <span>{fmtVnd(cashKept)}</span>
+            </div>
+            {bonus > 0 && (
+              <div className="flex justify-between text-emerald-700">
+                <span>+ Cộng vào ví thưởng KM</span>
+                <span>+{fmtVnd(bonus)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-1 font-semibold">
+              <span>= Tổng tài xế thực nhận</span>
+              <span className="text-blue-700">{fmtVnd(totalReceived)}</span>
+            </div>
+          </div>
+
+          {/* HTX */}
+          <div className="border-l-2 border-purple-500 pl-3 space-y-1.5 text-sm">
+            <div className="text-xs font-semibold text-purple-700 uppercase tracking-wide">HTX</div>
+            <div className="flex justify-between">
+              <span>Doanh thu HTX (hoa hồng)</span>
+              <span>{fmtVnd(htxCommission)}</span>
+            </div>
+            {htxVatRemit > 0 && (
+              <div className="flex justify-between">
+                <span>VAT HTX phải nộp</span>
+                <span>{fmtVnd(htxVatRemit)}</span>
+              </div>
+            )}
+            {pit > 0 && (
+              <div className="flex justify-between">
+                <span>Thuế TNCN nộp hộ tài xế</span>
+                <span>{fmtVnd(pit)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-1 font-semibold">
+              <span>= Tổng HTX</span>
+              <span className="text-purple-700">{fmtVnd(htxTotalReceived)}</span>
+            </div>
+          </div>
+
+          {/* Vigo */}
+          <div className="border-l-2 border-red-500 pl-3 space-y-1.5 text-sm">
+            <div className="text-xs font-semibold text-red-700 uppercase tracking-wide">Vigo</div>
+            <div className="flex justify-between">
+              <span>Doanh thu Vigo (hoa hồng)</span>
+              <span>{fmtVnd(vigoCommission)}</span>
+            </div>
+            {vigoVatRemit > 0 && (
+              <div className="flex justify-between">
+                <span>VAT Vigo phải nộp</span>
+                <span>{fmtVnd(vigoVatRemit)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-1 font-semibold">
+              <span>= Tổng Vigo</span>
+              <span className="text-red-700">{fmtVnd(vigoTotalReceived)}</span>
+            </div>
+          </div>
+
+          <div className={`flex justify-between border-t pt-2 text-xs ${reconciles ? 'text-muted-foreground' : 'text-amber-600 font-medium'}`}>
+            <span>Tổng kiểm tra (TX + HTX + Vigo)</span>
+            <span>
+              {fmtVnd(sumCheck)} {reconciles ? '✓' : '⚠'}
+            </span>
+          </div>
+        </div>
+      );
+    } else {
+      // Legacy fallback for bookings completed before
+      // 1782000000000-AddBookingEarningsBreakdown. Pre-migration rows have no
+      // HTX/Vigo split persisted; show driver math with a single platform
+      // commission line so old history rows still render meaningfully.
+      const commission = Number(earnings.commissionAmount ?? 0);
+      const legacyTotalReceived = Number(
+        earnings.netEarnings ?? earnPriceAfterDiscount - commission - pit,
+      );
+      allocation = (
+        <div className="space-y-3 border-t pt-3">
+          <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            Phân bổ doanh thu
+          </div>
+          <div className="border-l-2 border-blue-500 pl-3 space-y-1.5 text-sm">
+            <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Tài xế</div>
+            <div className="flex justify-between">
+              <span>Giá cước</span>
+              <span>{fmtVnd(earnPriceAfterDiscount)}</span>
+            </div>
+            <div className="flex justify-between text-red-600">
+              <span>− Hoa hồng nền tảng</span>
+              <span>-{fmtVnd(commission)}</span>
+            </div>
+            {pit > 0 && (
+              <div className="flex justify-between text-red-600">
+                <span>− Thuế TNCN</span>
+                <span>-{fmtVnd(pit)}</span>
+              </div>
+            )}
+            <div className="flex justify-between border-t pt-1 font-semibold">
+              <span>= Tài xế thực nhận</span>
+              <span className="text-blue-700">{fmtVnd(legacyTotalReceived)}</span>
+            </div>
+          </div>
+          <div className="text-xs text-muted-foreground italic">
+            Chuyến cũ trước khi tách HTX / Vigo — chỉ hiển thị hoa hồng gộp.
+          </div>
+        </div>
+      );
+    }
+  }
 
   return (
     <Card className="p-3 space-y-3">
-      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Chi phí</div>
+      <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tài chính</div>
 
       {booking.distanceKm != null && (
         <div className="text-sm text-muted-foreground">
@@ -136,7 +302,7 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
 
       {breakdown ? (
         <div className="space-y-1.5 text-sm">
-          <div className="text-xs font-medium text-muted-foreground">Tạm tính</div>
+          <div className="text-xs font-medium text-muted-foreground">Giá cước</div>
           <div className="flex justify-between">
             <span>Giá vận chuyển</span>
             <span>{fmtVnd(breakdown.transportPrice)}</span>
@@ -162,7 +328,7 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
 
           <div className="flex justify-between border-t pt-1.5 font-medium">
             <span>Giá thực tế</span>
-            <span>{fmtVnd(priceAfterDiscount)}</span>
+            <span>{fmtVnd(priceAfterDiscountUi)}</span>
           </div>
           {vatAmount > 0 && (
             <div className="flex justify-between">
@@ -187,6 +353,8 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
           Phương thức: {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
         </div>
       )}
+
+      {allocation}
     </Card>
   );
 }
