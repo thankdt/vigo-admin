@@ -266,6 +266,11 @@ export type Booking = {
   driverEarnings?: DriverEarnings;
   finalPriceVAT?: number;
   distanceKm?: number;
+  // Defined route this trip priced against. null = legacy booking from
+  // before the routeId column existed, or runtime fell through to km-based
+  // pricing because nothing in defined_routes matched.
+  routeId?: number | null;
+  route?: { id: number; name: string } | null;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.

@@ -36,7 +36,8 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking } from '@/lib/api';
+import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking, getRoutes } from '@/lib/api';
+import type { Route } from '@/lib/types';
 import { CreateBookingDialog } from './create-booking-dialog';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -810,6 +811,12 @@ export function BookingsTable() {
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
+  // 'ALL' = no route filter; 'none' = trips with no route stamped (debug
+  // bucket: legacy + routing-miss); numeric string = exact match. UI keeps
+  // it as string so the Select's value/onValueChange contract is clean —
+  // we cast back to number | 'none' when calling the API.
+  const [selectedRouteId, setSelectedRouteId] = React.useState<string>('ALL');
+  const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -828,7 +835,7 @@ export function BookingsTable() {
   const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async (tab: string, search: string, page: number, limit: number) => {
+  const fetchBookings = React.useCallback(async (tab: string, search: string, page: number, limit: number, routeFilter: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -849,6 +856,14 @@ export function BookingsTable() {
       if (search) {
         params.customerId = search;
       }
+      // 'ALL' = unset → no filter; 'none' passes through as the sentinel the
+      // backend understands; everything else parses to numeric routeId.
+      if (routeFilter === 'none') {
+        params.routeId = 'none';
+      } else if (routeFilter !== 'ALL') {
+        const parsed = Number(routeFilter);
+        if (Number.isFinite(parsed)) params.routeId = parsed;
+      }
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -868,11 +883,28 @@ export function BookingsTable() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, currentPage, pageSize]);
+  }, [fetchBookings, activeTab, searchTerm, currentPage, pageSize, selectedRouteId]);
+
+  // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
+  // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
+  // if routes don't load.
+  React.useEffect(() => {
+    let cancelled = false;
+    getRoutes()
+      .then((data) => {
+        if (!cancelled) setRoutes(data ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setRoutes([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
@@ -897,7 +929,7 @@ export function BookingsTable() {
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
       toast({ title: 'Đã cập nhật trạng thái', description: `Chuyến #${dialogState.booking.id} đã được chuyển sang ${statusLabelMap[dialogState.newStatus] ?? dialogState.newStatus}.` });
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
       setDialogState({ open: false, booking: null, newStatus: null });
       setStatusNote('');
     } catch (err: any) {
@@ -917,7 +949,7 @@ export function BookingsTable() {
     try {
       await adminAcceptBooking(acceptingBookingId);
       toast({ title: 'Thành công', description: 'Đã nhận chuyến thành công.' });
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
       setAcceptingBookingId(null);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận chuyến thất bại', description: err.message });
@@ -930,7 +962,7 @@ export function BookingsTable() {
     try {
       await claimProcessingBooking(booking.id);
       toast({ title: 'Đã nhận xử lý', description: 'Chuyến không còn bị tự huỷ sau 5 phút. Bạn cần đẩy chuyến cho tài xế hoặc huỷ thủ công.' });
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận xử lý thất bại', description: err.message });
     }
@@ -975,7 +1007,22 @@ export function BookingsTable() {
             ))}
           </TabsList>
           <div className='ml-auto flex items-center gap-2'>
-            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, currentPage, pageSize)} />
+            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId)} />
+            <Select
+              value={selectedRouteId}
+              onValueChange={(val) => { setSelectedRouteId(val); setCurrentPage(1); }}
+            >
+              <SelectTrigger className="w-[200px]">
+                <SelectValue placeholder="Lọc theo tuyến" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Tất cả tuyến</SelectItem>
+                <SelectItem value="none">Chưa có tuyến</SelectItem>
+                {routes.map((r) => (
+                  <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className='relative'>
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -1265,7 +1312,7 @@ export function BookingsTable() {
           onOpenChange={(open) => !open && setReassigningBooking(null)}
           onReassignSuccess={() => {
             setReassigningBooking(null);
-            fetchBookings(activeTab, searchTerm, currentPage, pageSize);
+            fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
           }}
         />
       </Dialog>

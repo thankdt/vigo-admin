@@ -433,7 +433,17 @@ export async function getAdminInvoices(params: {
   return unwrap<AdminInvoiceListResponse>(response);
 }
 
-export async function getBookings(params: { page?: number; limit?: number; status?: string, customerId?: string, driverId?: string, processingState?: 'unclaimed' | 'claimed' } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
+export async function getBookings(params: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  customerId?: string;
+  driverId?: string;
+  processingState?: 'unclaimed' | 'claimed';
+  // Numeric route id → exact match; 'none' → bookings with no route stamped
+  // (legacy + routing-miss). Caller passes the raw value through.
+  routeId?: number | 'none';
+} = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
@@ -441,6 +451,7 @@ export async function getBookings(params: { page?: number; limit?: number; statu
     ...(params.customerId && { customerId: params.customerId }),
     ...(params.driverId && { driverId: params.driverId }),
     ...(params.processingState && { processingState: params.processingState }),
+    ...(params.routeId !== undefined && { routeId: String(params.routeId) }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
