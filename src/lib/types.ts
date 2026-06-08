@@ -271,6 +271,11 @@ export type Booking = {
   // pricing because nothing in defined_routes matched.
   routeId?: number | null;
   route?: { id: number; name: string } | null;
+  // Vi-now: customer shows a 6-digit code to a nearby driver to claim the
+  // trip directly, bypassing dispatch. Admin needs to spot these at a
+  // glance because the customer journey + UI flow differ from a normal
+  // dispatched booking.
+  isVinow?: boolean;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.

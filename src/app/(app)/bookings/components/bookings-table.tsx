@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking, getRoutes } from '@/lib/api';
@@ -454,6 +454,22 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                   </Badge>
                 )}
               </div>
+
+              {/* Vi-now — customer used the 6-digit code flow instead of
+                  going through dispatch. The journey differs enough that
+                  admin needs a banner-sized callout, not just a small badge
+                  in the crowded status row. */}
+              {booking.isVinow && (
+                <Card className="p-3 flex items-center gap-3 border-orange-300 bg-orange-50 dark:border-orange-900/60 dark:bg-orange-950/30">
+                  <div className="h-9 w-9 rounded-full bg-orange-100 dark:bg-orange-900/50 flex items-center justify-center">
+                    <Zap className="h-4 w-4 text-orange-700 dark:text-orange-300" />
+                  </div>
+                  <div className="flex-1 text-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-orange-700 dark:text-orange-300">Vi-now</div>
+                    <div className="font-semibold">Khách đặt qua mã, bỏ qua dispatch</div>
+                  </div>
+                </Card>
+              )}
 
               {/* Scheduled pickup time — only when the customer booked ahead. */}
               {booking.scheduledTime && (
@@ -1129,8 +1145,21 @@ export function BookingsTable() {
                       {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
                     </TableCell>
                     <TableCell>
-                      <div className="flex flex-col gap-1">
+                      <div className="flex flex-col gap-1 items-start">
                         {getStatusBadge(booking)}
+                        {/* Trip-shape badges live under the status badge so the
+                            "Trạng thái" column tells admin at a glance how
+                            this trip was placed, not just where it's at. */}
+                        {booking.isVinow && (
+                          <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-100 text-[10px] px-1.5 py-0">
+                            ⚡ Vi-now
+                          </Badge>
+                        )}
+                        {booking.scheduledTime && (
+                          <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300 hover:bg-amber-100 text-[10px] px-1.5 py-0">
+                            🕐 Hẹn giờ
+                          </Badge>
+                        )}
                         {booking.status === 'PROCESSING' && booking.adminClaimedAt && booking.adminClaimedBy && (
                           <span className="text-[11px] text-muted-foreground">
                             {booking.adminClaimedBy.fullName || booking.adminClaimedBy.phone || 'Admin'}
