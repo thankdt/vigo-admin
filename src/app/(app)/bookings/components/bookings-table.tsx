@@ -87,6 +87,11 @@ const paymentMethodMap: Record<string, string> = {
   WALLET: '💳 Ví điện tử',
 };
 
+const vehicleTypeMap: Record<string, string> = {
+  CAR_4: 'Xe 4 chỗ',
+  CAR_7: 'Xe 7 chỗ',
+};
+
 const CANCELLED_BY_ROLE_LABEL: Record<string, string> = {
   CUSTOMER: 'Khách hàng',
   DRIVER: 'Tài xế',
@@ -434,12 +439,12 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                 {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}
                 {booking.requestedSeats != null && (
                   <Badge variant="outline" className="text-xs">
-                    Số người: {booking.requestedSeats}
+                    {booking.requestedSeats} người
                   </Badge>
                 )}
                 {booking.requestedVehicleType && (
                   <Badge variant="outline" className="text-xs">
-                    Loại xe: {booking.requestedVehicleType}
+                    {vehicleTypeMap[booking.requestedVehicleType] ?? booking.requestedVehicleType}
                   </Badge>
                 )}
                 {booking.paymentMethod && (
