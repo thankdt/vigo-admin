@@ -466,7 +466,7 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                   </div>
                   <div className="flex-1 text-sm">
                     <div className="text-xs font-semibold uppercase tracking-wider text-orange-700 dark:text-orange-300">Vi-now</div>
-                    <div className="font-semibold">Khách đặt qua mã, bỏ qua dispatch</div>
+                    <div className="font-semibold">Khách đặt qua Vinow</div>
                   </div>
                 </Card>
               )}
