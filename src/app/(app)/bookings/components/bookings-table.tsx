@@ -422,8 +422,8 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
           {booking && (
             <>
               {/* Status & Service */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   {getStatusBadge(booking)}
                   {booking.serviceType && (
                     <Badge variant="outline" className="text-xs">
@@ -431,9 +431,22 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                     </Badge>
                   )}
                   {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}
+                  {/* Trip shape moved up here from the Tuyến đường card so the
+                      first row tells the whole story at a glance: status,
+                      service, passengers + vehicle, payment. */}
+                  {booking.requestedSeats != null && (
+                    <Badge variant="outline" className="text-xs">
+                      Số người: {booking.requestedSeats}
+                    </Badge>
+                  )}
+                  {booking.requestedVehicleType && (
+                    <Badge variant="outline" className="text-xs">
+                      Loại xe: {booking.requestedVehicleType}
+                    </Badge>
+                  )}
                 </div>
                 {booking.paymentMethod && (
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">
                     {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
                   </span>
                 )}
@@ -514,20 +527,10 @@ function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () 
                     </div>
                   </div>
                 </div>
-                {(booking.requestedSeats != null || booking.requestedVehicleType) && (
-                  <div className="flex gap-4 border-t pt-2 text-xs text-muted-foreground">
-                    {booking.requestedSeats != null && (
-                      <div>
-                        <span className="font-medium">Số người:</span> {booking.requestedSeats}
-                      </div>
-                    )}
-                    {booking.requestedVehicleType && (
-                      <div>
-                        <span className="font-medium">Loại xe:</span> {booking.requestedVehicleType}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {/* Số người / Loại xe used to live here as a footer row, but
+                    they're now badges in the top status row alongside Đã hủy /
+                    Đi chung so admin doesn't have to scroll past addresses to
+                    read trip shape. */}
               </Card>
 
               {/* Pricing */}
