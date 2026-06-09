@@ -71,10 +71,13 @@ export default function ReferralsPage() {
   // Drill-down filters (client-side over the loaded referees) + paging — the list
   // had no paging/filter and was unusable for referrers with many referees.
   const DRILL_PAGE_SIZE = 10;
+  const EVENT_PAGE_SIZE = 10;
   const [drillSearch, setDrillSearch] = React.useState('');
   const [drillFrom, setDrillFrom] = React.useState('');
   const [drillTo, setDrillTo] = React.useState('');
   const [drillPage, setDrillPage] = React.useState(1);
+  const [eventPage, setEventPage] = React.useState(1);
+  React.useEffect(() => { setEventPage(1); }, [detail]);
 
   const filteredReferrals = React.useMemo(() => {
     const q = drillSearch.trim().toLowerCase();
@@ -229,6 +232,7 @@ export default function ReferralsPage() {
           <TableHeader>
             <TableRow>
               <TableHead>Chủ link</TableHead>
+              <TableHead>Mã</TableHead>
               <TableHead className="text-right">Số người mời</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
               <TableHead className="text-right">Tổng tiền</TableHead>
@@ -237,9 +241,9 @@ export default function ReferralsPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
             ) : referrers.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
             ) : (
               referrers.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openReferrerDrilldown(r)}>
@@ -253,6 +257,11 @@ export default function ReferralsPage() {
                         <div className="text-xs text-muted-foreground">{r.phone ?? '—'}</div>
                       </div>
                     </div>
+                  </TableCell>
+                  <TableCell>
+                    {r.referralCode
+                      ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.referralCode}</code>
+                      : <span className="text-muted-foreground">—</span>}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{r.refereeCount}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.tripCount}</TableCell>
@@ -311,7 +320,6 @@ export default function ReferralsPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Người được mời</TableHead>
-                    <TableHead>Mã</TableHead>
                     <TableHead className="text-right">Chuyến</TableHead>
                     <TableHead className="text-right">Tiền</TableHead>
                     <TableHead>Bonus</TableHead>
@@ -321,14 +329,13 @@ export default function ReferralsPage() {
                 </TableHeader>
                 <TableBody>
                   {filteredReferrals.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={6} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
                   ) : pagedReferrals.map((r) => (
                     <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(r)}>
                       <TableCell>
                         <div className="font-medium">{r.referee.fullName ?? '—'}</div>
                         <div className="text-xs text-muted-foreground">{r.referee.phone}</div>
                       </TableCell>
-                      <TableCell><code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.codeUsed}</code></TableCell>
                       <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
                       <TableCell className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
                       <TableCell>
@@ -338,7 +345,7 @@ export default function ReferralsPage() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Sự kiện</Button>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Chuyến đi</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -394,7 +401,7 @@ export default function ReferralsPage() {
                 <TableBody>
                   {detail.events.length === 0 ? (
                     <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Chưa có giao dịch.</TableCell></TableRow>
-                  ) : detail.events.map((e) => (
+                  ) : detail.events.slice((eventPage - 1) * EVENT_PAGE_SIZE, eventPage * EVENT_PAGE_SIZE).map((e) => (
                     <TableRow key={e.id}>
                       <TableCell><Badge variant={e.type === 'CLAWBACK' ? 'destructive' : 'secondary'}>{e.type}</Badge></TableCell>
                       <TableCell className={`text-right tabular-nums font-medium ${e.amount < 0 ? 'text-red-600' : ''}`}>{formatVND(e.amount)}</TableCell>
@@ -411,6 +418,17 @@ export default function ReferralsPage() {
                   ))}
                 </TableBody>
               </Table>
+              {detail.events.length > EVENT_PAGE_SIZE && (
+                <div className="flex items-center justify-between border-t pt-2">
+                  <span className="text-sm text-muted-foreground">
+                    Trang {eventPage}/{Math.ceil(detail.events.length / EVENT_PAGE_SIZE)} · {detail.events.length} giao dịch
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Button variant="outline" size="icon" className="h-8 w-8" disabled={eventPage <= 1} onClick={() => setEventPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                    <Button variant="outline" size="icon" className="h-8 w-8" disabled={eventPage >= Math.ceil(detail.events.length / EVENT_PAGE_SIZE)} onClick={() => setEventPage((p) => p + 1)}><ChevronRight className="h-4 w-4" /></Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

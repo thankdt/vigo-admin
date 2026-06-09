@@ -1153,6 +1153,7 @@ export type AdminReferrerSummary = {
   id: string;
   phone?: string;
   fullName?: string;
+  referralCode?: string | null;
   refereeCount: number;
   tripCount: number;
   totalReward: number;
