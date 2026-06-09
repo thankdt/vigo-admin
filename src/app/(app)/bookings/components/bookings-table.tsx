@@ -173,7 +173,7 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
           <div className="border-l-2 border-blue-500 pl-3 space-y-1.5 text-sm">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Tài xế</div>
             <div className="flex justify-between">
-              <span>Giá cước</span>
+              <span>Chi phí</span>
               <span>{fmtVnd(earnPriceAfterDiscount)}</span>
             </div>
             <div className="flex justify-between text-red-600">
@@ -271,7 +271,7 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
           <div className="border-l-2 border-blue-500 pl-3 space-y-1.5 text-sm">
             <div className="text-xs font-semibold text-blue-700 uppercase tracking-wide">Tài xế</div>
             <div className="flex justify-between">
-              <span>Giá cước</span>
+              <span>Chi phí</span>
               <span>{fmtVnd(earnPriceAfterDiscount)}</span>
             </div>
             <div className="flex justify-between text-red-600">

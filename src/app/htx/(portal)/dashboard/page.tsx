@@ -160,7 +160,7 @@ export default function HtxDashboardPage() {
             hint={`Tổng chuyến (thành công + hủy) trong khoảng đã chọn`}
             highlight
           />
-          <StatCard icon={<Car className="h-5 w-5" />} label="Số xe" value={String(data.vehicleCount ?? 0)} hint="Tài xế thuộc HTX" />
+          <StatCard icon={<Car className="h-5 w-5" />} label="Số tài xế" value={String(data.vehicleCount ?? 0)} hint="Tài xế thuộc HTX đã đăng ký với ViGo" />
           <StatCard icon={<Wifi className="h-5 w-5" />} label="Xe đã online trong ngày" value={String(data.onlineVehicleCount ?? 0)} hint="Tài xế có chuyến trong khoảng đã chọn" />
           <StatCard icon={<Ticket className="h-5 w-5" />} label="Chuyến thành công" value={String(data.ticketCount ?? 0)} hint="Hoàn thành trong khoảng đã chọn" />
           <StatCard icon={<XCircle className="h-5 w-5" />} label="Chuyến hủy" value={String(data.cancelledTripCount ?? 0)} hint="Bị hủy trong khoảng đã chọn" />
