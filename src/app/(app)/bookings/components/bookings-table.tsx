@@ -958,7 +958,7 @@ export function BookingsTable() {
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
       toast({ title: 'Đã cập nhật trạng thái', description: `Chuyến #${dialogState.booking.id} đã được chuyển sang ${statusLabelMap[dialogState.newStatus] ?? dialogState.newStatus}.` });
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
       setDialogState({ open: false, booking: null, newStatus: null });
       setStatusNote('');
     } catch (err: any) {
@@ -978,7 +978,7 @@ export function BookingsTable() {
     try {
       await adminAcceptBooking(acceptingBookingId);
       toast({ title: 'Thành công', description: 'Đã nhận chuyến thành công.' });
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
       setAcceptingBookingId(null);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận chuyến thất bại', description: err.message });
@@ -991,7 +991,7 @@ export function BookingsTable() {
     try {
       await claimProcessingBooking(booking.id);
       toast({ title: 'Đã nhận xử lý', description: 'Chuyến không còn bị tự huỷ sau 5 phút. Bạn cần đẩy chuyến cho tài xế hoặc huỷ thủ công.' });
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận xử lý thất bại', description: err.message });
     }
@@ -1036,7 +1036,7 @@ export function BookingsTable() {
             ))}
           </TabsList>
           <div className='ml-auto flex items-center gap-2'>
-            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId)} />
+            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId)} />
             <Select
               value={selectedRouteId}
               onValueChange={(val) => { setSelectedRouteId(val); setCurrentPage(1); }}
@@ -1374,7 +1374,7 @@ export function BookingsTable() {
           onOpenChange={(open) => !open && setReassigningBooking(null)}
           onReassignSuccess={() => {
             setReassigningBooking(null);
-            fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
+            fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
           }}
         />
       </Dialog>
@@ -1382,7 +1382,7 @@ export function BookingsTable() {
         bookingId={voidBookingId}
         open={!!voidBookingId}
         onOpenChange={(o) => { if (!o) setVoidBookingId(null); }}
-        onDone={() => fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId)}
+        onDone={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId)}
       />
       {/* Accept Booking Confirmation */}
       <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>
