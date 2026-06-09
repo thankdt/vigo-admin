@@ -962,6 +962,19 @@ export async function assignTransportCompanyOwner(
   return response.json();
 }
 
+// Persist a rotated image: backend rotates + recompresses the S3 object in place
+// (key must be under uploads/). degrees = CSS clockwise (0/90/180/270).
+export async function rotateUploadImage(key: string, degrees: number): Promise<void> {
+  const response = await fetchWithAuth('/uploads/rotate', {
+    method: 'POST',
+    body: JSON.stringify({ key, degrees }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || `Lưu ảnh thất bại (${response.status})`);
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // HTX portal — endpoints for the cooperative owner (htx.vigogroup.vn).
 // All require an access token belonging to a TRANSPORT_COMPANY_OWNER.
