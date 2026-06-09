@@ -68,6 +68,34 @@ export default function ReferralsPage() {
   const [clawbackReason, setClawbackReason] = React.useState('');
   const [isClawingBack, setIsClawingBack] = React.useState(false);
 
+  // Drill-down filters (client-side over the loaded referees) + paging — the list
+  // had no paging/filter and was unusable for referrers with many referees.
+  const DRILL_PAGE_SIZE = 10;
+  const [drillSearch, setDrillSearch] = React.useState('');
+  const [drillFrom, setDrillFrom] = React.useState('');
+  const [drillTo, setDrillTo] = React.useState('');
+  const [drillPage, setDrillPage] = React.useState(1);
+
+  const filteredReferrals = React.useMemo(() => {
+    const q = drillSearch.trim().toLowerCase();
+    const fromT = drillFrom ? new Date(`${drillFrom}T00:00:00`).getTime() : -Infinity;
+    const toT = drillTo ? new Date(`${drillTo}T23:59:59`).getTime() : Infinity;
+    return referrals.filter((r) => {
+      const name = (r.referee.fullName ?? '').toLowerCase();
+      const phone = (r.referee.phone ?? '').toLowerCase();
+      const matchQ = !q || name.includes(q) || phone.includes(q);
+      const t = new Date(r.createdAt).getTime();
+      return matchQ && t >= fromT && t <= toT;
+    });
+  }, [referrals, drillSearch, drillFrom, drillTo]);
+
+  const drillTotalPages = Math.max(1, Math.ceil(filteredReferrals.length / DRILL_PAGE_SIZE));
+  const pagedReferrals = React.useMemo(
+    () => filteredReferrals.slice((drillPage - 1) * DRILL_PAGE_SIZE, drillPage * DRILL_PAGE_SIZE),
+    [filteredReferrals, drillPage],
+  );
+  React.useEffect(() => { setDrillPage(1); }, [drillSearch, drillFrom, drillTo, selectedReferrer]);
+
   const loadReferrers = React.useCallback(async () => {
     setIsLoading(true);
     try {
@@ -89,6 +117,9 @@ export default function ReferralsPage() {
 
   const openReferrerDrilldown = async (r: AdminReferrerSummary) => {
     setSelectedReferrer(r);
+    setDrillSearch('');
+    setDrillFrom('');
+    setDrillTo('');
     setReferralsLoading(true);
     try {
       const result = await adminListReferrals({ referrerId: r.id, page: 1, limit: 100 });
@@ -248,7 +279,7 @@ export default function ReferralsPage() {
 
       {/* Drill-down: referees of a specific referrer */}
       <Dialog open={!!selectedReferrer} onOpenChange={(open) => { if (!open) closeReferrerDrilldown(); }}>
-        <DialogContent className="sm:max-w-4xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={closeReferrerDrilldown}>
@@ -266,7 +297,16 @@ export default function ReferralsPage() {
           {referralsLoading ? (
             <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
           ) : (
-            <div className="max-h-[60vh] overflow-y-auto">
+            <>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end pb-2">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input className="pl-9" placeholder="Lọc theo tên / SĐT khách..." value={drillSearch} onChange={(e) => setDrillSearch(e.target.value)} />
+              </div>
+              <Input type="date" className="sm:w-[150px]" value={drillFrom} onChange={(e) => setDrillFrom(e.target.value)} />
+              <Input type="date" className="sm:w-[150px]" value={drillTo} onChange={(e) => setDrillTo(e.target.value)} />
+            </div>
+            <div className="max-h-[55vh] overflow-y-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -280,9 +320,9 @@ export default function ReferralsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {referrals.length === 0 ? (
-                    <TableRow><TableCell colSpan={7} className="h-16 text-center text-muted-foreground">Chưa có giới thiệu nào.</TableCell></TableRow>
-                  ) : referrals.map((r) => (
+                  {filteredReferrals.length === 0 ? (
+                    <TableRow><TableCell colSpan={7} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
+                  ) : pagedReferrals.map((r) => (
                     <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(r)}>
                       <TableCell>
                         <div className="font-medium">{r.referee.fullName ?? '—'}</div>
@@ -305,13 +345,23 @@ export default function ReferralsPage() {
                 </TableBody>
               </Table>
             </div>
+            {drillTotalPages > 1 && (
+              <div className="flex items-center justify-between border-t pt-2 mt-1">
+                <span className="text-sm text-muted-foreground">Trang {drillPage}/{drillTotalPages} · {filteredReferrals.length} khách</span>
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={drillPage <= 1} onClick={() => setDrillPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={drillPage >= drillTotalPages} onClick={() => setDrillPage((p) => Math.min(drillTotalPages, p + 1))}><ChevronRight className="h-4 w-4" /></Button>
+                </div>
+              </div>
+            )}
+            </>
           )}
         </DialogContent>
       </Dialog>
 
       {/* Event log + clawback dialog (per referee relationship) */}
       <Dialog open={!!detail || detailLoading} onOpenChange={(open) => { if (!open) setDetail(null); }}>
-        <DialogContent className="sm:max-w-2xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Lịch sử giao dịch</DialogTitle>
             {detail && (
@@ -368,7 +418,7 @@ export default function ReferralsPage() {
 
       {/* Clawback confirm dialog */}
       <Dialog open={!!clawbackTarget} onOpenChange={(open) => { if (!open && !isClawingBack) { setClawbackTarget(null); setClawbackReason(''); } }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Clawback giao dịch</DialogTitle>
             <DialogDescription>
