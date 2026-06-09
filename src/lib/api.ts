@@ -439,12 +439,18 @@ export async function getBookings(params: {
   page?: number;
   limit?: number;
   status?: string;
+  // UUID — used by UserBookingsCard for direct customer-detail drill-down.
+  // BE validates UUID format; invalid input is silently dropped.
   customerId?: string;
   driverId?: string;
   processingState?: 'unclaimed' | 'claimed';
   // Numeric route id → exact match; 'none' → bookings with no route stamped
   // (legacy + routing-miss). Caller passes the raw value through.
   routeId?: number | 'none';
+  // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone.
+  q?: string;
+  // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
+  bookingId?: string;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -454,6 +460,8 @@ export async function getBookings(params: {
     ...(params.driverId && { driverId: params.driverId }),
     ...(params.processingState && { processingState: params.processingState }),
     ...(params.routeId !== undefined && { routeId: String(params.routeId) }),
+    ...(params.q && { q: params.q }),
+    ...(params.bookingId && { bookingId: params.bookingId }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);

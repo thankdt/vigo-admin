@@ -826,7 +826,10 @@ export function BookingsTable() {
   const { toast } = useToast();
 
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
+  // Tìm theo tên/SĐT của khách HOẶC tài xế (BE LIKE %term%).
   const [searchTerm, setSearchTerm] = React.useState('');
+  // Tìm theo ID chuyến — BE prefix-match nên admin paste full UUID hay 8 ký tự đầu đều ra.
+  const [bookingIdTerm, setBookingIdTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
   // 'ALL' = no route filter; 'none' = trips with no route stamped (debug
   // bucket: legacy + routing-miss); numeric string = exact match. UI keeps
@@ -853,7 +856,7 @@ export function BookingsTable() {
   const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async (tab: string, search: string, page: number, limit: number, routeFilter: string) => {
+  const fetchBookings = React.useCallback(async (tab: string, search: string, bookingId: string, page: number, limit: number, routeFilter: string) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -872,7 +875,10 @@ export function BookingsTable() {
 
       const params: any = { page, limit, status, processingState };
       if (search) {
-        params.customerId = search;
+        params.q = search;
+      }
+      if (bookingId) {
+        params.bookingId = bookingId;
       }
       // 'ALL' = unset → no filter; 'none' passes through as the sentinel the
       // backend understands; everything else parses to numeric routeId.
@@ -901,11 +907,11 @@ export function BookingsTable() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, currentPage, pageSize, selectedRouteId]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -932,6 +938,11 @@ export function BookingsTable() {
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
     setCurrentPage(1); // Reset to page 1 on search
+  }
+
+  const handleBookingIdChange = (value: string) => {
+    setBookingIdTerm(value);
+    setCurrentPage(1);
   }
 
   const openDetails = (bookingId: string) => {
@@ -1044,9 +1055,18 @@ export function BookingsTable() {
             <div className='relative'>
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Tìm theo ID khách/tài xế"
+                placeholder="Tìm tên/SĐT khách hoặc tài xế"
                 value={searchTerm}
                 onChange={(e) => handleSearchChange(e.target.value)}
+                className="max-w-sm pl-8"
+              />
+            </div>
+            <div className='relative'>
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm ID chuyến (8 ký tự đầu OK)"
+                value={bookingIdTerm}
+                onChange={(e) => handleBookingIdChange(e.target.value)}
                 className="max-w-sm pl-8"
               />
             </div>
