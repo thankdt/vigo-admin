@@ -1347,3 +1347,16 @@ export async function getFinanceDashboard(from: string, to: string): Promise<Fin
   const result = await response.json();
   return result.data;
 }
+
+export type FinanceSeries = {
+  metric: string;
+  granularity: 'hour' | 'day' | 'month';
+  points: Array<{ label: string; value: number }>;
+};
+
+export async function getFinanceSeries(metric: string, from: string, to: string): Promise<FinanceSeries> {
+  const qs = new URLSearchParams({ metric, from, to });
+  const response = await fetchWithAuth(`/admin/finance/series?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
+}

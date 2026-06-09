@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getFinanceDashboard, type FinanceDashboard } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from './components/finance-filter';
 import { FinanceStatCards } from './components/finance-stat-cards';
+import { FinanceDrilldownChart } from './components/finance-drilldown-chart';
 import { FinanceTopTables } from './components/finance-top-tables';
 
 export default function FinancePage() {
@@ -13,6 +14,8 @@ export default function FinancePage() {
   const [range, setRange] = React.useState<DateRange>(PRESETS[0].range());
   const [data, setData] = React.useState<FinanceDashboard | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  // Drill-down: which card's time series is expanded below the grid.
+  const [drill, setDrill] = React.useState<{ metric: string; label: string } | null>(null);
 
   const load = React.useCallback(async (r: DateRange) => {
     setIsLoading(true);
@@ -45,7 +48,21 @@ export default function FinancePage() {
         </div>
       ) : data ? (
         <>
-          <FinanceStatCards data={data} />
+          <FinanceStatCards
+            data={data}
+            selected={drill?.metric ?? null}
+            onSelect={(metric, label) =>
+              setDrill((d) => (d?.metric === metric ? null : { metric, label }))
+            }
+          />
+          {drill && (
+            <FinanceDrilldownChart
+              metric={drill.metric}
+              label={drill.label}
+              range={range}
+              onClose={() => setDrill(null)}
+            />
+          )}
           <FinanceTopTables data={data} />
         </>
       ) : null}
