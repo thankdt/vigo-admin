@@ -1380,3 +1380,20 @@ export async function getFinanceSeries(metric: string, from: string, to: string)
   const result = await response.json();
   return result.data;
 }
+
+export type AdminOverview = {
+  range: { from: string; to: string };
+  realtime: { activeTrips: number; waitingCustomers: number; onlineDrivers: number; busyDrivers: number };
+  today: { created: number; completed: number; cancelled: number; completionRate: number };
+  queues: { awaitingClaim: number; processing: number; driversPendingApproval: number; withdrawalsPending: number };
+  business: { completedTripsInPeriod: number };
+  supply: { totalDrivers: number; onlineDrivers: number; pendingApproval: number; newDriversInPeriod: number };
+  demand: { totalCustomers: number; newCustomersInPeriod: number; activeCustomersInPeriod: number };
+};
+
+export async function getAdminOverview(from: string, to: string): Promise<AdminOverview> {
+  const qs = new URLSearchParams({ from, to });
+  const response = await fetchWithAuth(`/admin/overview?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
+}
