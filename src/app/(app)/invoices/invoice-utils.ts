@@ -98,13 +98,12 @@ export const buildInvoiceServiceText = (trip: InvoiceTrip) =>
   `ngày ${formatInvoiceTripDate(trip.tripDate)} ` +
   `Biển số xe: ${trip.vehiclePlate}`;
 
-function escapeExcelCell(value: string | number) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+// CSV cell: quote when the value contains a comma, double-quote or newline;
+// escape embedded quotes by doubling. Keeps numbers raw (no formatting) so the
+// data stays clean and re-importable.
+function csvCell(value: string | number): string {
+  const s = String(value ?? '');
+  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
 export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[] {
@@ -118,52 +117,31 @@ export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[]
   }));
 }
 
-export function buildInvoiceExcelDocument(trips: InvoiceTrip[]) {
+// Plain CSV (data only). The previous HTML-as-.xls trick rendered raw HTML tags
+// in some Excel versions — CSV is universally readable.
+export function buildInvoiceCsv(trips: InvoiceTrip[]): string {
   const rows = buildInvoiceExportRows(trips);
-  const headerHtml = INVOICE_EXPORT_HEADERS.map((header) => `<th>${escapeExcelCell(header)}</th>`).join('');
-  const bodyHtml = rows
-    .map(
-      (row) => `
-        <tr>
-          <td class="text">${escapeExcelCell(row.tripDate)}</td>
-          <td class="text">${escapeExcelCell(row.service)}</td>
-          <td class="number">${row.totalWithVat}</td>
-          <td class="number">${row.vat}</td>
-          <td class="text">${escapeExcelCell(row.vehiclePlate)}</td>
-          <td class="text">${escapeExcelCell(row.transportCompanyName)}</td>
-        </tr>
-      `,
-    )
-    .join('');
-
-  return `
-    <!doctype html>
-    <html>
-      <head>
-        <meta charset="UTF-8" />
-        <style>
-          table { border-collapse: collapse; }
-          th, td { border: 1px solid #d9d9d9; padding: 6px 8px; }
-          th { background: #f2f2f2; font-weight: 700; }
-          .text { mso-number-format: "\\@"; }
-          .number { mso-number-format: "0"; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <thead>
-            <tr>${headerHtml}</tr>
-          </thead>
-          <tbody>${bodyHtml}</tbody>
-        </table>
-      </body>
-    </html>
-  `.trim();
+  const lines = [
+    INVOICE_EXPORT_HEADERS.map(csvCell).join(','),
+    ...rows.map((row) =>
+      [
+        row.tripDate,
+        row.service,
+        row.totalWithVat,
+        row.vat,
+        row.vehiclePlate,
+        row.transportCompanyName,
+      ]
+        .map(csvCell)
+        .join(','),
+    ),
+  ];
+  return lines.join('\r\n');
 }
 
 export function getInvoiceExportFileName(range: InvoiceDateRange) {
   const from = range.from || 'tu-dau';
   const to = range.to || 'den-nay';
 
-  return `hoa-don-${from}-${to}.xls`;
+  return `hoa-don-${from}-${to}.csv`;
 }

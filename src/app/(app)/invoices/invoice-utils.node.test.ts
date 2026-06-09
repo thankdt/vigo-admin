@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  buildInvoiceExcelDocument,
+  buildInvoiceCsv,
   buildInvoiceExportRows,
   buildInvoiceServiceText,
   filterInvoiceTrips,
@@ -102,25 +102,28 @@ describe('invoice utils', () => {
     ]);
   });
 
-  it('builds an Excel-compatible document and escapes cell content', () => {
-    const html = buildInvoiceExcelDocument([
-      {
-        ...trips[0],
-        pickupAddress: 'A & B <C>',
-      },
-    ]);
+  it('builds CSV (data only): header + quoted service + raw numbers', () => {
+    const csv = buildInvoiceCsv([trips[0]]);
+    const [header, row] = csv.split('\r\n');
+    assert.equal(header, 'Ngày đặt xe,Dịch vụ,Thành tiền (gồm VAT),VAT,Biển số xe,Tên DVVT');
+    // Raw numbers (not currency-formatted) so the data re-imports cleanly.
+    assert.ok(row.includes(',100000,8000,'));
+    // The "Dịch vụ" string has commas → must be quoted.
+    assert.ok(row.includes('"Cước dịch vụ'));
+    // Last column is the transport company.
+    assert.ok(row.endsWith('HTX A'));
+  });
 
-    assert.match(html, /<th>Ngày đặt xe<\/th>/);
-    assert.match(html, /<th>Tên DVVT<\/th>/);
-    // pickup is now folded into the "Dịch vụ" string, still HTML-escaped.
-    assert.match(html, /A &amp; B &lt;C&gt;/);
-    assert.match(html, /<td class="number">100000<\/td>/);
+  it('quotes + escapes embedded double-quotes in CSV', () => {
+    const csv = buildInvoiceCsv([{ ...trips[0], transportCompanyName: 'HTX "X", Y' }]);
+    // Doubled quotes + wrapped because it contains a comma and quotes.
+    assert.ok(csv.includes('"HTX ""X"", Y"'));
   });
 
   it('builds an export file name from the active date range', () => {
     assert.equal(
       getInvoiceExportFileName({ from: '2026-05-01', to: '2026-05-31' }),
-      'hoa-don-2026-05-01-2026-05-31.xls',
+      'hoa-don-2026-05-01-2026-05-31.csv',
     );
   });
 });

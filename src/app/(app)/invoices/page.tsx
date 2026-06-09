@@ -27,7 +27,7 @@ import {
 } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
 import {
-  buildInvoiceExcelDocument,
+  buildInvoiceCsv,
   buildInvoiceServiceText,
   formatInvoiceCurrency,
   formatInvoiceDateOnly,
@@ -117,8 +117,8 @@ export default function InvoicesPage() {
         exportRows.push(...response.data);
       }
 
-      const blob = new Blob(['\ufeff', buildInvoiceExcelDocument(exportRows)], {
-        type: 'application/vnd.ms-excel;charset=utf-8',
+      const blob = new Blob(['\ufeff', buildInvoiceCsv(exportRows)], {
+        type: 'text/csv;charset=utf-8',
       });
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -131,11 +131,11 @@ export default function InvoicesPage() {
       window.URL.revokeObjectURL(url);
 
       toast({
-        title: 'Đã xuất Excel',
+        title: 'Đã xuất CSV',
         description: `Đã xuất ${exportRows.length} hoá đơn theo bộ lọc hiện tại.`,
       });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không xuất được Excel', description: err.message });
+      toast({ variant: 'destructive', title: 'Không xuất được CSV', description: err.message });
     } finally {
       setIsExporting(false);
     }
@@ -209,7 +209,7 @@ export default function InvoicesPage() {
             )}
             <Button onClick={exportInvoices} disabled={isLoading || isExporting || total === 0} className="w-full sm:w-auto">
               {isExporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
-              Xuất Excel
+              Xuất CSV
             </Button>
           </div>
         </div>
