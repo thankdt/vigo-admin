@@ -1290,23 +1290,20 @@ export async function getTransportCompanyList(): Promise<TransportCompany[]> {
 export type FinanceDashboard = {
   range: { from: string; to: string };
   cashFlow: {
-    totalIn: number;
-    totalOut: number;
-    net: number;
-    operationalRevenue: number;
     driverTopUp: number;
     driverDeducted: number;
     totalTripIncludingTax: number;
   };
   breakdown: {
-    htxNetIncome: number;
-    htxVatCollected: number;
-    htxPitCollected: number;
-    driverNetEarnings: number;
+    vigoRevenue: number;
+    totalVat: number;
+    vigoVatRemit: number;
+    htxTotalReceived: number;
+    driverTotalReceived: number;
+    totalPit: number;
     affiliateCredited: number;
-    customerRefund: number;
+    affiliateWithdrawn: number;
   };
-  trend: Array<{ date: string; in: number; out: number }>;
   topHtx: Array<{
     id: string;
     name: string;

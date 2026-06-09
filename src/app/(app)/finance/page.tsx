@@ -6,7 +6,6 @@ import { useToast } from '@/hooks/use-toast';
 import { getFinanceDashboard, type FinanceDashboard } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from './components/finance-filter';
 import { FinanceStatCards } from './components/finance-stat-cards';
-import { FinanceTrendChart } from './components/finance-trend-chart';
 import { FinanceTopTables } from './components/finance-top-tables';
 
 export default function FinancePage() {
@@ -47,7 +46,6 @@ export default function FinancePage() {
       ) : data ? (
         <>
           <FinanceStatCards data={data} />
-          <FinanceTrendChart data={data} />
           <FinanceTopTables data={data} />
         </>
       ) : null}
