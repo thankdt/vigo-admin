@@ -1437,5 +1437,18 @@ export async function getPayosTopUps(params: {
   if (params.search?.trim()) qs.set('search', params.search.trim());
   const response = await fetchWithAuth(`/admin/finance/payos-topups?${qs.toString()}`);
   const result = await response.json();
-  return result.data;
+  // TransformInterceptor hoists a paginated {data, meta} to { success, data: [...],
+  // meta: {...} } — so the rows live on result.data and meta at the top level (same
+  // shape getBookings reads). Returning result.data alone (the array) made the page
+  // read res.data/res.meta = undefined → "Cannot read properties of undefined".
+  return {
+    data: result.data ?? [],
+    meta: result.meta ?? {
+      page: params.page ?? 1,
+      limit: params.limit ?? 20,
+      total: 0,
+      totalPages: 1,
+      totalAmount: 0,
+    },
+  };
 }
