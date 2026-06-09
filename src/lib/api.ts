@@ -492,6 +492,25 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
   return result.data;
 }
 
+// Void a COMPLETED booking (reverse commission + affiliate clawback + CANCELLED).
+// Requires the "password cấp 2" (same as wallet adjustments).
+export async function voidCompletedBooking(
+  id: string,
+  secondaryPassword: string,
+  reason?: string,
+): Promise<{ success: boolean; affiliateClawedBack: number }> {
+  const response = await fetchWithAuth(`/bookings/admin/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ secondaryPassword, ...(reason && { reason }) }),
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.message || `Huỷ chuyến thất bại (${response.status})`);
+  }
+  const result = await response.json();
+  return result.data ?? result;
+}
+
 export async function getAvailableDrivers(lat?: number, long?: number): Promise<Driver[]> {
   const query = new URLSearchParams();
   if (lat) query.set('lat', String(lat));

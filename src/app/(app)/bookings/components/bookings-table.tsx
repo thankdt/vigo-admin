@@ -37,6 +37,7 @@ import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking, getRoutes } from '@/lib/api';
+import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import { CreateBookingDialog } from './create-booking-dialog';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
@@ -843,6 +844,7 @@ export function BookingsTable() {
   const [selectedBookingId, setSelectedBookingId] = React.useState<string | null>(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [reassigningBooking, setReassigningBooking] = React.useState<Booking | null>(null);
+  const [voidBookingId, setVoidBookingId] = React.useState<string | null>(null);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; booking: Booking | null; newStatus: BookingStatus | null }>({ open: false, booking: null, newStatus: null });
   const [statusNote, setStatusNote] = React.useState('');
@@ -1236,6 +1238,17 @@ export function BookingsTable() {
                               ))}
                             </DropdownMenuSubContent>
                           </DropdownMenuSub>
+                          {booking.status === 'COMPLETED' && (
+                            <>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                className="text-destructive focus:text-destructive"
+                                onSelect={() => setVoidBookingId(booking.id)}
+                              >
+                                Huỷ chuyến (đã hoàn thành)
+                              </DropdownMenuItem>
+                            </>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </TableCell>
@@ -1345,6 +1358,12 @@ export function BookingsTable() {
           }}
         />
       </Dialog>
+      <VoidBookingDialog
+        bookingId={voidBookingId}
+        open={!!voidBookingId}
+        onOpenChange={(o) => { if (!o) setVoidBookingId(null); }}
+        onDone={() => fetchBookings(activeTab, searchTerm, currentPage, pageSize, selectedRouteId)}
+      />
       {/* Accept Booking Confirmation */}
       <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
