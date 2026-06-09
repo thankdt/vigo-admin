@@ -1069,6 +1069,30 @@ export async function htxGetDashboard(range: HtxDashboardRange): Promise<HtxDash
   return unwrap<HtxDashboard>(response);
 }
 
+// Admin view of a company's stats (same numbers the HTX owner dashboard shows)
+// plus the driver approval-state breakdown. Reuses the HTX dashboard shape +
+// range model so the two stay in sync.
+export type CompanyStats = HtxDashboard & {
+  totalTripCount: number;
+  driverCounts: { total: number; approved: number; pending: number; rejected: number };
+};
+
+export async function getTransportCompanyStats(
+  id: string,
+  range: HtxDashboardRange,
+): Promise<CompanyStats> {
+  const query = new URLSearchParams();
+  if (range.mode === 'period') {
+    query.set('period', range.period);
+    if (range.dateISO) query.set('date', range.dateISO);
+  } else {
+    query.set('from', range.from);
+    query.set('to', range.to);
+  }
+  const response = await fetchWithAuth(`/transport-companies/${id}/stats?${query.toString()}`);
+  return unwrap<CompanyStats>(response);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Affiliate / referrals (admin)
 // ─────────────────────────────────────────────────────────────────────

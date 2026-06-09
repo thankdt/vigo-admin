@@ -41,6 +41,9 @@ import {
   deleteTransportCompany,
   assignTransportCompanyOwner,
   getDrivers,
+  getTransportCompanyStats,
+  type CompanyStats,
+  type HtxDashboardRange,
 } from '@/lib/api';
 import type { TransportCompany, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -93,6 +96,15 @@ const emptyForm: FormData = {
   htxHotline: '',
   accountingHotline: '',
 };
+
+function StatCell({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-md bg-muted/50 px-2.5 py-2">
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+      <div className="text-sm font-semibold tabular-nums">{value ?? '—'}</div>
+    </div>
+  );
+}
 
 export function TransportCompaniesTable() {
   const [companies, setCompanies] = React.useState<TransportCompany[]>([]);
@@ -149,11 +161,50 @@ export function TransportCompaniesTable() {
     }
   }, [toast]);
 
+  // --- Company stats (detail dialog) ---
+  const [companyStats, setCompanyStats] = React.useState<CompanyStats | null>(null);
+  const [statsLoading, setStatsLoading] = React.useState(false);
+  const [statsPreset, setStatsPreset] = React.useState<'day' | 'month' | 'year' | 'custom'>('month');
+  const [statsFrom, setStatsFrom] = React.useState('');
+  const [statsTo, setStatsTo] = React.useState('');
+
+  const fetchStats = React.useCallback(async (companyId: string, range: HtxDashboardRange) => {
+    setStatsLoading(true);
+    try {
+      setCompanyStats(await getTransportCompanyStats(companyId, range));
+    } catch {
+      setCompanyStats(null);
+    } finally {
+      setStatsLoading(false);
+    }
+  }, []);
+
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+
   const openViewDrivers = (company: TransportCompany) => {
     setViewDriversCompany(company);
     setDriversPage(1);
     fetchCompanyDriversPage(company.id, 1);
+    // Default stats window: this month.
+    setStatsPreset('month');
+    setCompanyStats(null);
+    fetchStats(company.id, { mode: 'period', period: 'month', dateISO: todayISO() });
   };
+
+  const handleStatsPreset = (value: 'day' | 'month' | 'year' | 'custom') => {
+    setStatsPreset(value);
+    if (value !== 'custom' && viewDriversCompany) {
+      fetchStats(viewDriversCompany.id, { mode: 'period', period: value, dateISO: todayISO() });
+    }
+  };
+
+  const applyCustomRange = () => {
+    if (viewDriversCompany && statsFrom && statsTo) {
+      fetchStats(viewDriversCompany.id, { mode: 'range', from: statsFrom, to: statsTo });
+    }
+  };
+
+  const fmtVnd = (n: number | undefined) => new Intl.NumberFormat('vi-VN').format(n ?? 0);
 
   React.useEffect(() => {
     if (viewDriversCompany && driversPage > 1) {
@@ -674,15 +725,76 @@ export function TransportCompaniesTable() {
       </Dialog>
 
       {/* Drivers-of-company dialog — click TC row to see who's in it */}
-      <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); setDriversPage(1); } }}>
+      <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); setDriversPage(1); setCompanyStats(null); } }}>
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
-            <DialogTitle>Tài xế của {viewDriversCompany?.name}</DialogTitle>
-            <p className="text-sm text-muted-foreground">
-              {companyDriversLoading && companyDrivers.length === 0 ? 'Đang tải...' : `${driversTotal} tài xế thuộc đơn vị này.`}
-            </p>
+            <DialogTitle>Chi tiết đơn vị: {viewDriversCompany?.name}</DialogTitle>
           </DialogHeader>
-          <div className="max-h-[60vh] overflow-y-auto">
+
+          {/* Stats dashboard — driver counts (point-in-time) + trips/money (filtered) */}
+          <div className="rounded-lg border p-3 space-y-3">
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5">Tài xế</div>
+              <div className="grid grid-cols-4 gap-2">
+                <StatCell label="Tổng" value={companyStats?.driverCounts.total} />
+                <StatCell label="Đã duyệt" value={companyStats?.driverCounts.approved} />
+                <StatCell label="Chờ duyệt" value={companyStats?.driverCounts.pending} />
+                <StatCell label="Từ chối" value={companyStats?.driverCounts.rejected} />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-end gap-2 border-t pt-3">
+              <div className="grid gap-1">
+                <Label className="text-xs">Khoảng thời gian</Label>
+                <Select value={statsPreset} onValueChange={(v) => handleStatsPreset(v as 'day' | 'month' | 'year' | 'custom')}>
+                  <SelectTrigger className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="day">Hôm nay</SelectItem>
+                    <SelectItem value="month">Tháng này</SelectItem>
+                    <SelectItem value="year">Năm nay</SelectItem>
+                    <SelectItem value="custom">Tùy chọn</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {statsPreset === 'custom' && (
+                <>
+                  <Input type="date" className="h-8 w-[150px]" value={statsFrom} onChange={(e) => setStatsFrom(e.target.value)} />
+                  <span className="pb-2 text-muted-foreground">→</span>
+                  <Input type="date" className="h-8 w-[150px]" value={statsTo} onChange={(e) => setStatsTo(e.target.value)} />
+                  <Button size="sm" className="h-8" onClick={applyCustomRange} disabled={!statsFrom || !statsTo || statsLoading}>Áp dụng</Button>
+                </>
+              )}
+              {statsLoading && <Loader2 className="mb-1.5 h-4 w-4 animate-spin text-muted-foreground" />}
+            </div>
+
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5">Chuyến xe</div>
+              <div className="grid grid-cols-3 gap-2">
+                <StatCell label="Tổng cuốc" value={companyStats?.totalTripCount} />
+                <StatCell label="Thành công" value={companyStats?.ticketCount} />
+                <StatCell label="Hủy" value={companyStats?.cancelledTripCount} />
+              </div>
+            </div>
+
+            <div>
+              <div className="text-xs font-medium text-muted-foreground mb-1.5">Doanh thu</div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                <StatCell label="Tổng cuốc xe" value={companyStats ? `${fmtVnd(companyStats.grossRevenue)} đ` : undefined} />
+                <StatCell label="Hoa hồng (HH)" value={companyStats ? `${fmtVnd(companyStats.commissionAmount)} đ` : undefined} />
+                <StatCell label="PIT" value={companyStats ? `${fmtVnd(companyStats.pitAmount)} đ` : undefined} />
+                <StatCell label="VAT" value={companyStats ? `${fmtVnd(companyStats.vatAmount)} đ` : undefined} />
+                <StatCell label="HH nhận" value={companyStats ? `${fmtVnd(companyStats.htxCommissionAmount)} đ` : undefined} />
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-1 text-sm font-medium">
+            Danh sách tài xế{' '}
+            <span className="text-muted-foreground font-normal">
+              ({companyDriversLoading && companyDrivers.length === 0 ? 'đang tải…' : `${driversTotal}`})
+            </span>
+          </div>
+          <div className="max-h-[40vh] overflow-y-auto">
             {companyDriversLoading && companyDrivers.length === 0 ? (
               <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
             ) : companyDrivers.length === 0 ? (
