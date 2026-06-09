@@ -3,9 +3,10 @@ import { describe, it } from 'node:test';
 import {
   buildInvoiceExcelDocument,
   buildInvoiceExportRows,
+  buildInvoiceServiceText,
   filterInvoiceTrips,
   formatInvoiceCurrency,
-  formatInvoiceTripDate,
+  formatInvoiceDateOnly,
   getInvoiceExportFileName,
   getInvoiceTotalAmount,
   getInvoiceTotalPages,
@@ -22,7 +23,9 @@ const trips: InvoiceTrip[] = [
     pickupAddress: 'A',
     dropoffAddress: 'B',
     totalWithVat: 100000,
+    vat: 8000,
     vehiclePlate: '29A-111.11',
+    transportCompanyName: 'HTX A',
   },
   {
     id: 'middle',
@@ -32,7 +35,9 @@ const trips: InvoiceTrip[] = [
     pickupAddress: 'C',
     dropoffAddress: 'D',
     totalWithVat: 200000,
+    vat: 16000,
     vehiclePlate: '30A-222.22',
+    transportCompanyName: 'HTX B',
   },
   {
     id: 'newer',
@@ -42,7 +47,9 @@ const trips: InvoiceTrip[] = [
     pickupAddress: 'E',
     dropoffAddress: 'F',
     totalWithVat: 300000,
+    vat: 24000,
     vehiclePlate: '31A-333.33',
+    transportCompanyName: 'HTX C',
   },
 ];
 
@@ -82,16 +89,15 @@ describe('invoice utils', () => {
     assert.equal(formatInvoiceCurrency(600000), '600.000 ₫');
   });
 
-  it('builds export rows with the same invoice columns', () => {
+  it('builds export rows with the new invoice columns', () => {
     assert.deepEqual(buildInvoiceExportRows([trips[1]]), [
       {
-        tripDate: formatInvoiceTripDate(trips[1].tripDate),
-        bookingCode: 'VGO-260515-001',
-        contractNo: 'HD-2026-0515-001',
-        pickupAddress: 'C',
-        dropoffAddress: 'D',
+        tripDate: formatInvoiceDateOnly(trips[1].tripDate),
+        service: buildInvoiceServiceText(trips[1]),
         totalWithVat: 200000,
+        vat: 16000,
         vehiclePlate: '30A-222.22',
+        transportCompanyName: 'HTX B',
       },
     ]);
   });
@@ -104,7 +110,9 @@ describe('invoice utils', () => {
       },
     ]);
 
-    assert.match(html, /<th>Ngày tháng<\/th>/);
+    assert.match(html, /<th>Ngày đặt xe<\/th>/);
+    assert.match(html, /<th>Tên DVVT<\/th>/);
+    // pickup is now folded into the "Dịch vụ" string, still HTML-escaped.
     assert.match(html, /A &amp; B &lt;C&gt;/);
     assert.match(html, /<td class="number">100000<\/td>/);
   });

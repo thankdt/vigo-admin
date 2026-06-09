@@ -394,7 +394,9 @@ export type AdminInvoiceRow = {
   pickupAddress: string;
   dropoffAddress: string;
   totalWithVat: number;
+  vat: number;
   vehiclePlate: string;
+  transportCompanyName: string;
 };
 
 export type AdminInvoiceListResponse = {

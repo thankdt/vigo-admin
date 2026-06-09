@@ -6,7 +6,9 @@ export type InvoiceTrip = {
   pickupAddress: string;
   dropoffAddress: string;
   totalWithVat: number;
+  vat: number;
   vehiclePlate: string;
+  transportCompanyName: string;
 };
 
 export type InvoiceDateRange = {
@@ -16,22 +18,20 @@ export type InvoiceDateRange = {
 
 export type InvoiceExportRow = {
   tripDate: string;
-  bookingCode: string;
-  contractNo: string;
-  pickupAddress: string;
-  dropoffAddress: string;
+  service: string;
   totalWithVat: number;
+  vat: number;
   vehiclePlate: string;
+  transportCompanyName: string;
 };
 
 const INVOICE_EXPORT_HEADERS = [
-  'Ngày tháng',
-  'Mã chuyến đi',
-  'Số hợp đồng',
-  'Điểm đi',
-  'Điểm đến',
-  'Tổng tiền gồm VAT',
+  'Ngày đặt xe',
+  'Dịch vụ',
+  'Thành tiền (gồm VAT)',
+  'VAT',
   'Biển số xe',
+  'Tên DVVT',
 ];
 
 export function isTripWithinDateRange(tripDate: string, range: InvoiceDateRange) {
@@ -82,6 +82,22 @@ export const formatInvoiceTripDate = (value: string) =>
     minute: '2-digit',
   }).format(new Date(value));
 
+// "Ngày đặt xe" column — date only (no time).
+export const formatInvoiceDateOnly = (value: string) =>
+  new Intl.DateTimeFormat('vi-VN', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(new Date(value));
+
+// The VAT-invoice "Dịch vụ" line. Shared by the table and the Excel export so
+// they never diverge.
+export const buildInvoiceServiceText = (trip: InvoiceTrip) =>
+  `Cước dịch vụ vận chuyển hành khách theo hợp đồng số ${trip.contractNo}, ` +
+  `hành trình: ${trip.pickupAddress} - ${trip.dropoffAddress} ` +
+  `ngày ${formatInvoiceTripDate(trip.tripDate)} ` +
+  `Biển số xe: ${trip.vehiclePlate}`;
+
 function escapeExcelCell(value: string | number) {
   return String(value)
     .replace(/&/g, '&amp;')
@@ -93,13 +109,12 @@ function escapeExcelCell(value: string | number) {
 
 export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[] {
   return trips.map((trip) => ({
-    tripDate: formatInvoiceTripDate(trip.tripDate),
-    bookingCode: trip.bookingCode,
-    contractNo: trip.contractNo,
-    pickupAddress: trip.pickupAddress,
-    dropoffAddress: trip.dropoffAddress,
+    tripDate: formatInvoiceDateOnly(trip.tripDate),
+    service: buildInvoiceServiceText(trip),
     totalWithVat: trip.totalWithVat,
+    vat: trip.vat,
     vehiclePlate: trip.vehiclePlate,
+    transportCompanyName: trip.transportCompanyName,
   }));
 }
 
@@ -111,12 +126,11 @@ export function buildInvoiceExcelDocument(trips: InvoiceTrip[]) {
       (row) => `
         <tr>
           <td class="text">${escapeExcelCell(row.tripDate)}</td>
-          <td class="text">${escapeExcelCell(row.bookingCode)}</td>
-          <td class="text">${escapeExcelCell(row.contractNo)}</td>
-          <td class="text">${escapeExcelCell(row.pickupAddress)}</td>
-          <td class="text">${escapeExcelCell(row.dropoffAddress)}</td>
+          <td class="text">${escapeExcelCell(row.service)}</td>
           <td class="number">${row.totalWithVat}</td>
+          <td class="number">${row.vat}</td>
           <td class="text">${escapeExcelCell(row.vehiclePlate)}</td>
+          <td class="text">${escapeExcelCell(row.transportCompanyName)}</td>
         </tr>
       `,
     )

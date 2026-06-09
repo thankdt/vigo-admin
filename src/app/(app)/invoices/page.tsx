@@ -23,14 +23,14 @@ import { useToast } from '@/hooks/use-toast';
 import {
   getAdminInvoices,
   getTransportCompanyList,
-  downloadAdminContractPdf,
   type AdminInvoiceRow,
 } from '@/lib/api';
 import type { TransportCompany } from '@/lib/types';
 import {
   buildInvoiceExcelDocument,
+  buildInvoiceServiceText,
   formatInvoiceCurrency,
-  formatInvoiceTripDate,
+  formatInvoiceDateOnly,
   getInvoiceExportFileName,
 } from './invoice-utils';
 
@@ -53,26 +53,6 @@ export default function InvoicesPage() {
   const [isExporting, setIsExporting] = React.useState(false);
 
   const [companies, setCompanies] = React.useState<TransportCompany[]>([]);
-  const [downloadingId, setDownloadingId] = React.useState<string | null>(null);
-
-  const handleDownloadContract = async (trip: AdminInvoiceRow) => {
-    setDownloadingId(trip.id);
-    try {
-      const blob = await downloadAdminContractPdf(trip.id);
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `${trip.contractNo || `contract-${trip.id}`}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Tải hợp đồng thất bại', description: err.message });
-    } finally {
-      setDownloadingId(null);
-    }
-  };
 
   // Load transport-company options once for the dropdown.
   React.useEffect(() => {
@@ -239,57 +219,40 @@ export default function InvoicesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Ngày tháng</TableHead>
-              <TableHead>Mã chuyến đi</TableHead>
-              <TableHead>Số hợp đồng</TableHead>
-              <TableHead>Điểm đi</TableHead>
-              <TableHead>Điểm đến</TableHead>
-              <TableHead className="text-right">Tổng tiền gồm VAT</TableHead>
+              <TableHead className="whitespace-nowrap">Ngày đặt xe</TableHead>
+              <TableHead>Dịch vụ</TableHead>
+              <TableHead className="text-right">Thành tiền (gồm VAT)</TableHead>
+              <TableHead className="text-right">VAT</TableHead>
               <TableHead>Biển số xe</TableHead>
-              <TableHead className="text-right">Hợp đồng</TableHead>
+              <TableHead>Tên DVVT</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={6} className="h-24 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
                   Không có chuyến đi nào khớp bộ lọc.
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((trip) => (
                 <TableRow key={trip.id}>
-                  <TableCell className="whitespace-nowrap">{formatInvoiceTripDate(trip.tripDate)}</TableCell>
-                  <TableCell>
-                    <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{trip.bookingCode}</code>
-                  </TableCell>
-                  <TableCell className="font-medium">{trip.contractNo}</TableCell>
-                  <TableCell className="max-w-[220px] truncate">{trip.pickupAddress}</TableCell>
-                  <TableCell className="max-w-[220px] truncate">{trip.dropoffAddress}</TableCell>
+                  <TableCell className="whitespace-nowrap">{formatInvoiceDateOnly(trip.tripDate)}</TableCell>
+                  <TableCell className="max-w-[480px] text-sm">{buildInvoiceServiceText(trip)}</TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">
                     {formatInvoiceCurrency(trip.totalWithVat)}
                   </TableCell>
-                  <TableCell className="font-mono">{trip.vehiclePlate}</TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={downloadingId === trip.id}
-                      onClick={() => handleDownloadContract(trip)}
-                    >
-                      {downloadingId === trip.id ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <><Download className="mr-1 h-4 w-4" /> PDF</>
-                      )}
-                    </Button>
+                  <TableCell className="text-right tabular-nums">
+                    {formatInvoiceCurrency(trip.vat)}
                   </TableCell>
+                  <TableCell className="font-mono">{trip.vehiclePlate}</TableCell>
+                  <TableCell>{trip.transportCompanyName}</TableCell>
                 </TableRow>
               ))
             )}
