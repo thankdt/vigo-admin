@@ -322,14 +322,13 @@ export default function ReferralsPage() {
                     <TableHead>Người được mời</TableHead>
                     <TableHead className="text-right">Chuyến</TableHead>
                     <TableHead className="text-right">Tiền</TableHead>
-                    <TableHead>Bonus</TableHead>
                     <TableHead>Ngày</TableHead>
                     <TableHead />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredReferrals.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
                   ) : pagedReferrals.map((r) => (
                     <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(r)}>
                       <TableCell>
@@ -338,14 +337,9 @@ export default function ReferralsPage() {
                       </TableCell>
                       <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
                       <TableCell className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
-                      <TableCell>
-                        {r.signupRewardCredited
-                          ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã trả</Badge>
-                          : <Badge variant="secondary">Chưa</Badge>}
-                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Chuyến đi</Button>
+                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Chi tiết</Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -383,10 +377,9 @@ export default function ReferralsPage() {
             <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="bg-muted/50 rounded p-2"><div className="text-muted-foreground text-xs">Số chuyến</div><div className="font-bold">{detail.tripCountUsed}</div></div>
                 <div className="bg-muted/50 rounded p-2"><div className="text-muted-foreground text-xs">Tiền trip</div><div className="font-bold">{formatVND(detail.tripRewardTotal)}</div></div>
-                <div className="bg-muted/50 rounded p-2"><div className="text-muted-foreground text-xs">Bonus signup</div><div className="font-bold">{detail.signupRewardCredited ? 'Đã trả' : 'Chưa'}</div></div>
               </div>
               <Table>
                 <TableHeader>
