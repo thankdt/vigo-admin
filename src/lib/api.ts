@@ -1415,6 +1415,8 @@ export type PayosTopUp = {
   driverUserId: string;
   driverName: string;
   driverPhone: string;
+  htxName: string;
+  plate: string;
 };
 export type PayosTopUpResponse = {
   data: PayosTopUp[];

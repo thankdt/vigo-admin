@@ -19,23 +19,25 @@ const fmtVnTime = (iso: string) =>
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date(iso));
 
-const PAGE_SIZE = 20;
+const PAGE_SIZES = [10, 20, 50, 100];
+const COL_COUNT = 6;
 
 export default function PayosTopUpsPage() {
   const { toast } = useToast();
-  const [range, setRange] = React.useState<DateRange>(PRESETS[2].range()); // default: this month
+  const [range, setRange] = React.useState<DateRange>(PRESETS[0].range()); // default: today (matches filter highlight)
   const [search, setSearch] = React.useState('');
+  const [pageSize, setPageSize] = React.useState(20);
   const [page, setPage] = React.useState(1);
   const [rows, setRows] = React.useState<PayosTopUp[]>([]);
   const [meta, setMeta] = React.useState<{ total: number; totalPages: number; totalAmount: number }>({ total: 0, totalPages: 1, totalAmount: 0 });
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => { setPage(1); }, [range, search]);
+  React.useEffect(() => { setPage(1); }, [range, search, pageSize]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getPayosTopUps({ from: range.from, to: range.to, page, limit: PAGE_SIZE, search: search || undefined });
+      const res = await getPayosTopUps({ from: range.from, to: range.to, page, limit: pageSize, search: search || undefined });
       setRows(res.data);
       setMeta({ total: res.meta.total, totalPages: res.meta.totalPages, totalAmount: res.meta.totalAmount });
     } catch (err: any) {
@@ -43,7 +45,7 @@ export default function PayosTopUpsPage() {
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, page, search, toast]);
+  }, [range.from, range.to, page, pageSize, search, toast]);
 
   React.useEffect(() => {
     const t = setTimeout(load, 300);
@@ -58,7 +60,7 @@ export default function PayosTopUpsPage() {
             <ArrowDownCircle className="h-6 w-6" /> Nạp ví qua PayOS
           </h1>
           <p className="text-sm text-muted-foreground">
-            Tiền nạp thật qua cổng thanh toán, map với từng tài xế. Lọc theo thời gian / tên / SĐT.
+            Tiền nạp thật qua cổng thanh toán, map với từng tài xế. Lọc theo thời gian; tìm theo tên / SĐT / HTX / biển số.
           </p>
         </div>
         <Badge variant="secondary" className="w-fit">
@@ -70,7 +72,7 @@ export default function PayosTopUpsPage() {
         <FinanceFilter value={range} onChange={setRange} isLoading={loading} />
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input className="pl-9 max-w-md" placeholder="Tìm theo tên / SĐT tài xế..." value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Input className="pl-9 max-w-md" placeholder="Tìm theo tên / SĐT tài xế / HTX / biển số..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
       </Card>
 
@@ -80,15 +82,17 @@ export default function PayosTopUpsPage() {
             <TableRow>
               <TableHead className="whitespace-nowrap">Thời gian (VN)</TableHead>
               <TableHead>Tài xế</TableHead>
+              <TableHead>HTX</TableHead>
+              <TableHead>Biển số</TableHead>
               <TableHead>Mã giao dịch</TableHead>
               <TableHead className="text-right">Số tiền</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={4} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={COL_COUNT} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="h-24 text-center text-muted-foreground">Không có lượt nạp PayOS nào khớp bộ lọc.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={COL_COUNT} className="h-24 text-center text-muted-foreground">Không có lượt nạp PayOS nào khớp bộ lọc.</TableCell></TableRow>
             ) : (
               rows.map((r) => (
                 <TableRow key={r.id}>
@@ -97,6 +101,8 @@ export default function PayosTopUpsPage() {
                     <div className="font-medium">{r.driverName || '—'}</div>
                     <div className="text-xs text-muted-foreground">{r.driverPhone || '—'}</div>
                   </TableCell>
+                  <TableCell className="text-sm">{r.htxName || '—'}</TableCell>
+                  <TableCell className="font-mono text-xs uppercase">{r.plate || '—'}</TableCell>
                   <TableCell className="font-mono text-xs">{r.refCode}</TableCell>
                   <TableCell className="text-right tabular-nums font-semibold text-green-600 dark:text-green-400">
                     <span className="inline-flex items-center gap-1"><Banknote className="h-3.5 w-3.5" />{fmtVnd(r.amount)}</span>
@@ -107,8 +113,23 @@ export default function PayosTopUpsPage() {
           </TableBody>
         </Table>
 
-        <div className="flex items-center justify-between border-t px-4 py-3">
-          <span className="text-sm text-muted-foreground">Trang {page} / {meta.totalPages} · {meta.total} lượt</span>
+        <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Trang {page} / {meta.totalPages} · {meta.total} lượt</span>
+            <span className="mx-1">·</span>
+            <label className="flex items-center gap-1">
+              Hiện
+              <select
+                className="h-8 rounded-md border bg-background px-2 text-sm"
+                value={pageSize}
+                disabled={loading}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+              >
+                {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
+              </select>
+              / trang
+            </label>
+          </div>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1 || loading} onClick={() => setPage(1)}><ChevronsLeft className="h-4 w-4" /></Button>
             <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1 || loading} onClick={() => setPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>

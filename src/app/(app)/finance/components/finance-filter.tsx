@@ -70,9 +70,11 @@ export function FinanceFilter({
   };
 
   const handleCustom = (key: 'from' | 'to', v: string) => {
-    setActivePreset(null);
+    setActivePreset('custom');
     onChange({ ...value, [key]: v });
   };
+
+  const showCustom = activePreset === 'custom';
 
   return (
     <div className="space-y-3">
@@ -88,29 +90,39 @@ export function FinanceFilter({
             {p.label}
           </Button>
         ))}
+        <Button
+          variant={showCustom ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setActivePreset('custom')}
+          disabled={isLoading}
+        >
+          Tùy chỉnh
+        </Button>
       </div>
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Từ</Label>
-          <Input
-            type="date"
-            value={value.from}
-            onChange={(e) => handleCustom('from', e.target.value)}
-            className="w-44"
-            disabled={isLoading}
-          />
+      {showCustom && (
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Từ</Label>
+            <Input
+              type="date"
+              value={value.from}
+              onChange={(e) => handleCustom('from', e.target.value)}
+              className="w-44"
+              disabled={isLoading}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Đến</Label>
+            <Input
+              type="date"
+              value={value.to}
+              onChange={(e) => handleCustom('to', e.target.value)}
+              className="w-44"
+              disabled={isLoading}
+            />
+          </div>
         </div>
-        <div className="space-y-1.5">
-          <Label className="text-xs text-muted-foreground">Đến</Label>
-          <Input
-            type="date"
-            value={value.to}
-            onChange={(e) => handleCustom('to', e.target.value)}
-            className="w-44"
-            disabled={isLoading}
-          />
-        </div>
-      </div>
+      )}
     </div>
   );
 }
