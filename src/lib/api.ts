@@ -1323,7 +1323,8 @@ export async function getTransportCompanyList(): Promise<TransportCompany[]> {
 export type FinanceDashboard = {
   range: { from: string; to: string };
   cashFlow: {
-    driverTopUp: number;
+    driverPayosTopUp: number;
+    driverAdminPromoCredit: number;
     driverDeducted: number;
     totalTripIncludingTax: number;
   };

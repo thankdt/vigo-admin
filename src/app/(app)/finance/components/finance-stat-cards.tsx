@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowDownCircle, Banknote, Building2, Car, DollarSign, Landmark, Percent, Share2, Wallet, MinusCircle } from 'lucide-react';
+import { ArrowDownCircle, Banknote, Building2, Car, DollarSign, Gift, Landmark, Percent, Share2, Wallet, MinusCircle } from 'lucide-react';
 import type { FinanceDashboard } from '@/lib/api';
 
 const fmtVnd = (v: number) =>
@@ -28,7 +28,8 @@ export function FinanceStatCards({
 }) {
   const b = data.breakdown;
   const cards: CardConfig[] = [
-    { metric: 'driverTopUp', label: 'Tài xế nạp vào ví', value: data.cashFlow.driverTopUp, icon: <ArrowDownCircle className="h-5 w-5" />, hint: 'Tổng top-up vào ví tài xế trong kỳ' },
+    { metric: 'driverPayosTopUp', label: 'Nạp ví qua PayOS', value: data.cashFlow.driverPayosTopUp, icon: <ArrowDownCircle className="h-5 w-5" />, hint: 'Top-up thật qua cổng thanh toán (khớp PayOS)' },
+    { metric: 'driverAdminPromoCredit', label: 'Admin / Promo nạp', value: data.cashFlow.driverAdminPromoCredit, icon: <Gift className="h-5 w-5" />, hint: 'Admin nạp tay + credit khuyến mãi (không qua PayOS)' },
     { metric: 'driverDeducted', label: 'Trừ từ ví tài xế', value: data.cashFlow.driverDeducted, icon: <MinusCircle className="h-5 w-5" />, hint: 'Commission + chuyển đi từ ví tài xế' },
     { metric: 'totalTripIncludingTax', label: 'Tổng tiền chuyến đi (kèm thuế)', value: data.cashFlow.totalTripIncludingTax, icon: <Banknote className="h-5 w-5" />, hint: 'SUM(finalPrice) chuyến hoàn thành — gồm VAT + phụ phí' },
     { metric: 'vigoRevenue', label: 'Doanh thu VIGO', value: b.vigoRevenue, icon: <DollarSign className="h-5 w-5" />, hint: 'Hoa hồng VIGO giữ (KHÔNG gồm VAT VIGO phải nộp)', green: true },
