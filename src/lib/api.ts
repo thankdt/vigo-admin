@@ -1398,3 +1398,36 @@ export async function getAdminOverview(from: string, to: string): Promise<AdminO
   const result = await response.json();
   return result.data;
 }
+
+export type PayosTopUp = {
+  id: string;
+  amount: number;
+  createdAt: string;
+  refCode: string;
+  driverUserId: string;
+  driverName: string;
+  driverPhone: string;
+};
+export type PayosTopUpResponse = {
+  data: PayosTopUp[];
+  meta: { page: number; limit: number; total: number; totalPages: number; totalAmount: number };
+};
+
+export async function getPayosTopUps(params: {
+  from: string;
+  to: string;
+  page?: number;
+  limit?: number;
+  search?: string;
+}): Promise<PayosTopUpResponse> {
+  const qs = new URLSearchParams({
+    from: params.from,
+    to: params.to,
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 20),
+  });
+  if (params.search?.trim()) qs.set('search', params.search.trim());
+  const response = await fetchWithAuth(`/admin/finance/payos-topups?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
+}
