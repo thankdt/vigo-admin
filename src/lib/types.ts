@@ -102,6 +102,9 @@ export type Driver = {
     main: number;
   };
   isApproved: 'true' | 'false' | 'pending' | '-' | boolean | string;
+  // Live operational state (from driver.status). Surfaced in the admin table's
+  // "Đã duyệt" tab so ops can see who's online right now.
+  status?: 'ONLINE' | 'OFFLINE' | 'BUSY' | string;
   rejectionReason?: string | null;
   vehicle?: {
     id: number;

@@ -339,6 +339,24 @@ export function DriversTable() {
     }
   };
 
+  // Live operational state (driver.status). Shown in the "Đã duyệt" tab where
+  // approval status is uniform and ops care about who's online right now.
+  const getOnlineBadge = (driver: Pick<Driver, 'status'> | null | undefined) => {
+    switch (driver?.status) {
+      case 'ONLINE':
+        return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Online</Badge>;
+      case 'BUSY':
+        return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400">Bận</Badge>;
+      default:
+        return <Badge variant="outline" className="text-muted-foreground">Offline</Badge>;
+    }
+  };
+
+  // Extra column: approval status on the "Tất cả" tab (mixed states), live
+  // online status on the "Đã duyệt" tab (all approved).
+  const showStatusCol = activeTab === 'all' || activeTab === 'true';
+  const colCount = showStatusCol ? 8 : 7;
+
   const openConfirmationDialog = (driver: Driver, action: 'approve' | 'reject') => {
     setDialogState({ open: true, driver, action });
   };
@@ -505,6 +523,9 @@ export function DriversTable() {
                 <TableHead>Đơn vị vận tải</TableHead>
                 <TableHead className="text-right">Số dư ví</TableHead>
                 <TableHead>Tuyến đường</TableHead>
+                {showStatusCol && (
+                  <TableHead>{activeTab === 'all' ? 'Trạng thái' : 'Online'}</TableHead>
+                )}
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('createdAt')}>
                     Ngày tạo
@@ -519,19 +540,19 @@ export function DriversTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={colCount} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-destructive">
+                  <TableCell colSpan={colCount} className="text-center text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
               ) : sortedDrivers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-24 text-center">
+                  <TableCell colSpan={colCount} className="h-24 text-center">
                     {activeTab === 'needsReview' && !hasAnyFilter(filters)
                       ? '✅ Tất cả tài xế đều có thông tin đầy đủ.'
                       : 'Không tìm thấy tài xế nào.'}
@@ -612,6 +633,11 @@ export function DriversTable() {
                         <span className="text-sm text-muted-foreground">Chưa đăng ký</span>
                       )}
                     </TableCell>
+                    {showStatusCol && (
+                      <TableCell>
+                        {activeTab === 'all' ? getStatusBadge(driver) : getOnlineBadge(driver)}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <span className="text-sm text-muted-foreground">
                         {driver.createdAt ? new Date(driver.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
