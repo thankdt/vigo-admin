@@ -3,9 +3,7 @@
 import * as React from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { RotateCcw, RotateCw, Save, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { rotateUploadImage } from '@/lib/api';
+import { RotateCcw, RotateCw } from 'lucide-react';
 
 // Append query params to an image URL (resize ?w=, cache-bust ?v=). Falls back to
 // the raw url if URL parsing isn't available (e.g. during SSR).
@@ -35,9 +33,8 @@ function deriveUploadKey(url: string): string | null {
 /**
  * Horizontal scrolling list of image thumbnails. Clicking a thumb opens a
  * full-screen lightbox dialog so the admin can review images without losing
- * context. Supports 90° rotation; "Lưu lại" persists the new orientation back to
- * S3 (rotated + recompressed) so the image opens upright next time. Thumbnails
- * are served resized (?w=400) for fast grid loads.
+ * context. Supports 90° view-only rotation (CSS transform) for the current review
+ * — not persisted, since admins rarely re-open an image after approving it.
  */
 export function ImageThumbList({
   urls,
@@ -48,13 +45,8 @@ export function ImageThumbList({
   altPrefix?: string;
   thumbClassName?: string;
 }) {
-  const { toast } = useToast();
   const [viewer, setViewer] = React.useState<string | null>(null);
   const [rotation, setRotation] = React.useState(0);
-  const [saving, setSaving] = React.useState(false);
-  // Per-URL cache-bust counter, bumped after a save so the new (rotated) image is
-  // re-fetched instead of the browser-cached old one.
-  const [bust, setBust] = React.useState<Record<string, number>>({});
 
   // Reset rotation whenever the lightbox opens or switches to a new image.
   React.useEffect(() => {
@@ -64,22 +56,6 @@ export function ImageThumbList({
   if (urls.length === 0) return null;
 
   const isSideways = rotation % 180 !== 0;
-  const viewerKey = viewer ? deriveUploadKey(viewer) : null;
-
-  const handleSave = async () => {
-    if (!viewer || !viewerKey || rotation === 0) return;
-    setSaving(true);
-    try {
-      await rotateUploadImage(viewerKey, rotation);
-      setBust((b) => ({ ...b, [viewer]: (b[viewer] ?? 0) + 1 }));
-      setRotation(0);
-      toast({ title: 'Đã lưu ảnh theo hướng mới' });
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Lưu ảnh thất bại', description: e?.message });
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <>
@@ -96,7 +72,7 @@ export function ImageThumbList({
               className="shrink-0 cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-ring rounded-md"
             >
               <img
-                src={withParams(url, { w: isUpload ? 400 : undefined, v: bust[url] })}
+                src={withParams(url, { w: isUpload ? 400 : undefined })}
                 alt={`${altPrefix} ${idx + 1}`}
                 className={thumbClassName}
                 loading="lazy"
@@ -118,7 +94,7 @@ export function ImageThumbList({
                 style={{ height: '70vh' }}
               >
                 <img
-                  src={withParams(viewer, { v: bust[viewer] })}
+                  src={viewer}
                   alt="Xem ảnh"
                   className="rounded transition-transform duration-200 ease-out"
                   style={{
@@ -135,7 +111,6 @@ export function ImageThumbList({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={saving}
                   onClick={() => setRotation((r) => (r - 90 + 360) % 360)}
                   aria-label="Xoay trái 90°"
                 >
@@ -145,31 +120,13 @@ export function ImageThumbList({
                   type="button"
                   variant="outline"
                   size="sm"
-                  disabled={saving}
                   onClick={() => setRotation((r) => (r + 90) % 360)}
                   aria-label="Xoay phải 90°"
                 >
                   <RotateCw className="h-4 w-4 mr-1" /> Xoay phải
                 </Button>
-                {rotation !== 0 && viewerKey && (
-                  <Button
-                    type="button"
-                    variant="default"
-                    size="sm"
-                    disabled={saving}
-                    onClick={handleSave}
-                    aria-label="Lưu ảnh theo hướng mới"
-                  >
-                    {saving ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                    Lưu lại
-                  </Button>
-                )}
               </div>
-              {rotation !== 0 && !viewerKey && (
-                <p className="text-xs text-muted-foreground">
-                  Ảnh ngoài hệ thống — không lưu được hướng mới.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">Xoay chỉ để xem khi duyệt — không lưu lại.</p>
             </div>
           )}
         </DialogContent>
