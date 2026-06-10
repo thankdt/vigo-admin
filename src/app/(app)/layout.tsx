@@ -54,7 +54,7 @@ const navItems = [
   { href: '/referrals', label: 'Affiliate', icon: Share2 },
   { href: '/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
   { href: '/finance', label: 'Tài chính', icon: DollarSign },
-  { href: '/payos-topups', label: 'Nạp PayOS', icon: ArrowDownCircle },
+  { href: '/payos-topups', label: 'Dòng tiền tài xế', icon: ArrowDownCircle },
   { href: '/master-data', label: 'Dữ liệu chung', icon: Map },
   { href: '/promotions', label: 'Khuyến mãi', icon: Ticket },
   { href: '/reports', label: 'Báo cáo', icon: Bot },

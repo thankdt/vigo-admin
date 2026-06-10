@@ -1430,10 +1430,16 @@ export async function getAdminOverview(from: string, to: string): Promise<AdminO
   return result.data;
 }
 
-export type PayosTopUp = {
+export type CashflowCategory =
+  | 'payos' | 'km' | 'earnings' | 'admin_credit' | 'refund'
+  | 'admin_debit' | 'tax' | 'commission' | 'other';
+export type DriverCashflowRow = {
   id: string;
   amount: number;
+  direction: 'in' | 'out';
+  category: CashflowCategory;
   createdAt: string;
+  description: string;
   refCode: string;
   driverUserId: string;
   driverName: string;
@@ -1441,18 +1447,19 @@ export type PayosTopUp = {
   htxName: string;
   plate: string;
 };
-export type PayosTopUpResponse = {
-  data: PayosTopUp[];
-  meta: { page: number; limit: number; total: number; totalPages: number; totalAmount: number };
+export type DriverCashflowResponse = {
+  data: DriverCashflowRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number; totalIn: number; totalOut: number };
 };
 
-export async function getPayosTopUps(params: {
+export async function getDriverCashflow(params: {
   from: string;
   to: string;
   page?: number;
   limit?: number;
   search?: string;
-}): Promise<PayosTopUpResponse> {
+  category?: string;
+}): Promise<DriverCashflowResponse> {
   const qs = new URLSearchParams({
     from: params.from,
     to: params.to,
@@ -1460,7 +1467,8 @@ export async function getPayosTopUps(params: {
     limit: String(params.limit ?? 20),
   });
   if (params.search?.trim()) qs.set('search', params.search.trim());
-  const response = await fetchWithAuth(`/admin/finance/payos-topups?${qs.toString()}`);
+  if (params.category) qs.set('category', params.category);
+  const response = await fetchWithAuth(`/admin/finance/driver-cashflow?${qs.toString()}`);
   const result = await response.json();
   // TransformInterceptor hoists a paginated {data, meta} to { success, data: [...],
   // meta: {...} } — so the rows live on result.data and meta at the top level (same
@@ -1473,7 +1481,8 @@ export async function getPayosTopUps(params: {
       limit: params.limit ?? 20,
       total: 0,
       totalPages: 1,
-      totalAmount: 0,
+      totalIn: 0,
+      totalOut: 0,
     },
   };
 }

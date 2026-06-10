@@ -1,51 +1,66 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Search, Banknote, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ArrowDownCircle } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { getPayosTopUps, type PayosTopUp } from '@/lib/api';
+import { getDriverCashflow, type DriverCashflowRow } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 
 const fmtVnd = (v: number) => new Intl.NumberFormat('vi-VN').format(v) + ' đ';
-// Always render in VN time regardless of the admin's browser timezone.
 const fmtVnTime = (iso: string) =>
   new Intl.DateTimeFormat('vi-VN', {
     timeZone: 'Asia/Ho_Chi_Minh',
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
   }).format(new Date(iso));
 
+// key '' = tất cả. Order = how they appear in the filter dropdown.
+const CATEGORIES: Array<{ key: string; label: string }> = [
+  { key: '', label: 'Tất cả' },
+  { key: 'payos', label: 'Nạp PayOS' },
+  { key: 'admin_credit', label: 'Admin cộng tay' },
+  { key: 'km', label: 'Thưởng KM' },
+  { key: 'earnings', label: 'Earnings chuyến' },
+  { key: 'refund', label: 'Hoàn tiền' },
+  { key: 'admin_debit', label: 'Admin trừ tay' },
+  { key: 'commission', label: 'Trừ hoa hồng' },
+  { key: 'tax', label: 'Trừ VAT/PIT' },
+  { key: 'other', label: 'Khác' },
+];
+const CAT_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.filter((c) => c.key).map((c) => [c.key, c.label]));
+
 const PAGE_SIZES = [10, 20, 50, 100];
 const COL_COUNT = 6;
 
-export default function PayosTopUpsPage() {
+export default function DriverCashflowPage() {
   const { toast } = useToast();
-  const [range, setRange] = React.useState<DateRange>(PRESETS[0].range()); // default: today (matches filter highlight)
+  const [range, setRange] = React.useState<DateRange>(PRESETS[0].range());
   const [search, setSearch] = React.useState('');
+  const [category, setCategory] = React.useState('');
   const [pageSize, setPageSize] = React.useState(20);
   const [page, setPage] = React.useState(1);
-  const [rows, setRows] = React.useState<PayosTopUp[]>([]);
-  const [meta, setMeta] = React.useState<{ total: number; totalPages: number; totalAmount: number }>({ total: 0, totalPages: 1, totalAmount: 0 });
+  const [rows, setRows] = React.useState<DriverCashflowRow[]>([]);
+  const [meta, setMeta] = React.useState<{ total: number; totalPages: number; totalIn: number; totalOut: number }>({ total: 0, totalPages: 1, totalIn: 0, totalOut: 0 });
   const [loading, setLoading] = React.useState(true);
 
-  React.useEffect(() => { setPage(1); }, [range, search, pageSize]);
+  React.useEffect(() => { setPage(1); }, [range, search, category, pageSize]);
 
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      const res = await getPayosTopUps({ from: range.from, to: range.to, page, limit: pageSize, search: search || undefined });
+      const res = await getDriverCashflow({ from: range.from, to: range.to, page, limit: pageSize, search: search || undefined, category: category || undefined });
       setRows(res.data);
-      setMeta({ total: res.meta.total, totalPages: res.meta.totalPages, totalAmount: res.meta.totalAmount });
+      setMeta({ total: res.meta.total, totalPages: res.meta.totalPages, totalIn: res.meta.totalIn, totalOut: res.meta.totalOut });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không tải được dữ liệu nạp PayOS', description: err.message });
+      toast({ variant: 'destructive', title: 'Không tải được dòng tiền tài xế', description: err.message });
     } finally {
       setLoading(false);
     }
-  }, [range.from, range.to, page, pageSize, search, toast]);
+  }, [range.from, range.to, page, pageSize, search, category, toast]);
 
   React.useEffect(() => {
     const t = setTimeout(load, 300);
@@ -57,19 +72,27 @@ export default function PayosTopUpsPage() {
       <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <ArrowDownCircle className="h-6 w-6" /> Nạp ví qua PayOS
+            <Wallet className="h-6 w-6" /> Dòng tiền tài xế
           </h1>
           <p className="text-sm text-muted-foreground">
-            Tiền nạp thật qua cổng thanh toán, map với từng tài xế. Lọc theo thời gian; tìm theo tên / SĐT / HTX / biển số.
+            Mọi khoản tiền vào/ra ví tài xế: nạp PayOS, thưởng KM, earnings, admin cộng/trừ, hoàn, hoa hồng, VAT/PIT.
           </p>
         </div>
-        <Badge variant="secondary" className="w-fit">
-          {meta.total} lượt · {fmtVnd(meta.totalAmount)} (toàn kỳ)
-        </Badge>
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="secondary" className="gap-1 text-green-700 dark:text-green-400"><ArrowDownLeft className="h-3.5 w-3.5" /> Vào {fmtVnd(meta.totalIn)}</Badge>
+          <Badge variant="secondary" className="gap-1 text-red-600"><ArrowUpRight className="h-3.5 w-3.5" /> Ra {fmtVnd(meta.totalOut)}</Badge>
+        </div>
       </div>
 
       <Card className="p-4 space-y-3">
         <FinanceFilter value={range} onChange={setRange} isLoading={loading} />
+        <div className="flex flex-wrap gap-1.5">
+          {CATEGORIES.map((c) => (
+            <Button key={c.key} variant={category === c.key ? 'default' : 'outline'} size="sm" disabled={loading} onClick={() => setCategory(c.key)}>
+              {c.label}
+            </Button>
+          ))}
+        </div>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input className="pl-9 max-w-md" placeholder="Tìm theo tên / SĐT tài xế / HTX / biển số..." value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -84,7 +107,7 @@ export default function PayosTopUpsPage() {
               <TableHead>Tài xế</TableHead>
               <TableHead>HTX</TableHead>
               <TableHead>Biển số</TableHead>
-              <TableHead>Mã giao dịch</TableHead>
+              <TableHead>Loại</TableHead>
               <TableHead className="text-right">Số tiền</TableHead>
             </TableRow>
           </TableHeader>
@@ -92,39 +115,42 @@ export default function PayosTopUpsPage() {
             {loading ? (
               <TableRow><TableCell colSpan={COL_COUNT} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
             ) : rows.length === 0 ? (
-              <TableRow><TableCell colSpan={COL_COUNT} className="h-24 text-center text-muted-foreground">Không có lượt nạp PayOS nào khớp bộ lọc.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={COL_COUNT} className="h-24 text-center text-muted-foreground">Không có giao dịch nào khớp bộ lọc.</TableCell></TableRow>
             ) : (
-              rows.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="whitespace-nowrap">{fmtVnTime(r.createdAt)}</TableCell>
-                  <TableCell>
-                    <div className="font-medium">{r.driverName || '—'}</div>
-                    <div className="text-xs text-muted-foreground">{r.driverPhone || '—'}</div>
-                  </TableCell>
-                  <TableCell className="text-sm">{r.htxName || '—'}</TableCell>
-                  <TableCell className="font-mono text-xs uppercase">{r.plate || '—'}</TableCell>
-                  <TableCell className="font-mono text-xs">{r.refCode}</TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold text-green-600 dark:text-green-400">
-                    <span className="inline-flex items-center gap-1"><Banknote className="h-3.5 w-3.5" />{fmtVnd(r.amount)}</span>
-                  </TableCell>
-                </TableRow>
-              ))
+              rows.map((r) => {
+                const isIn = r.direction === 'in';
+                return (
+                  <TableRow key={r.id}>
+                    <TableCell className="whitespace-nowrap">{fmtVnTime(r.createdAt)}</TableCell>
+                    <TableCell>
+                      <div className="font-medium">{r.driverName || '—'}</div>
+                      <div className="text-xs text-muted-foreground">{r.driverPhone || '—'}</div>
+                    </TableCell>
+                    <TableCell className="text-sm">{r.htxName || '—'}</TableCell>
+                    <TableCell className="font-mono text-xs uppercase">{r.plate || '—'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={isIn ? 'border-green-300 text-green-700 dark:text-green-400' : 'border-red-300 text-red-600'}>
+                        {CAT_LABEL[r.category] ?? 'Khác'}
+                      </Badge>
+                      {r.description && <div className="mt-0.5 max-w-[220px] truncate text-xs text-muted-foreground" title={r.description}>{r.description}</div>}
+                    </TableCell>
+                    <TableCell className={`text-right tabular-nums font-semibold ${isIn ? 'text-green-600 dark:text-green-400' : 'text-red-600'}`}>
+                      {isIn ? '+' : '−'}{fmtVnd(r.amount)}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
 
         <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <span>Trang {page} / {meta.totalPages} · {meta.total} lượt</span>
+            <span>Trang {page} / {meta.totalPages} · {meta.total} giao dịch</span>
             <span className="mx-1">·</span>
             <label className="flex items-center gap-1">
               Hiện
-              <select
-                className="h-8 rounded-md border bg-background px-2 text-sm"
-                value={pageSize}
-                disabled={loading}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-              >
+              <select className="h-8 rounded-md border bg-background px-2 text-sm" value={pageSize} disabled={loading} onChange={(e) => setPageSize(Number(e.target.value))}>
                 {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
               / trang
