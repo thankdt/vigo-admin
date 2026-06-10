@@ -401,3 +401,28 @@ export type GetApiResponse<T> = {
   totalPages: number;
 }
 
+export type FeedbackCategory =
+  | 'APP_BUG'
+  | 'FEATURE_REQUEST'
+  | 'PAYMENT'
+  | 'CUSTOMER_ISSUE'
+  | 'DISPATCH'
+  | 'OTHER';
+
+export type DriverFeedback = {
+  id: string;
+  driverId: string;
+  category: FeedbackCategory;
+  content: string;
+  createdAt: string;
+  driver?: {
+    id: string;
+    userId: string;
+    user?: {
+      id: string;
+      fullName: string | null;
+      phone: string;
+    };
+  };
+};
+

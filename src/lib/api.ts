@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback } from '@/lib/types';
 
 export const API_BASE_URL = 'https://api.vigogroup.vn';
 
@@ -1526,5 +1526,33 @@ export async function getDriverCashflow(params: {
       totalIn: 0,
       totalOut: 0,
     },
+  };
+}
+
+export async function getFeedback(params: {
+  page?: number;
+  limit?: number;
+  category?: string;
+  from?: string;
+  to?: string;
+  phone?: string;
+} = {}): Promise<{ data: DriverFeedback[]; total: number; page: number; limit: number; totalPages: number }> {
+  const query = new URLSearchParams({
+    page: params.page?.toString() || '1',
+    limit: params.limit?.toString() || '20',
+    ...(params.category && { category: params.category }),
+    ...(params.from && { from: params.from }),
+    ...(params.to && { to: params.to }),
+    ...(params.phone && { phone: params.phone }),
+  });
+
+  const response = await fetchWithAuth(`/feedback/admin?${query.toString()}`);
+  const result = await response.json();
+  return {
+    data: result.data || [],
+    total: result.meta?.total ?? 0,
+    page: result.meta?.page ?? 1,
+    limit: result.meta?.limit ?? 20,
+    totalPages: result.meta?.totalPages ?? 1,
   };
 }
