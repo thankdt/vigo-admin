@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Wallet, ArrowUpRight, ArrowDownLeft } from 'lucide-react';
+import { Loader2, Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Wallet, ArrowUpRight, ArrowDownLeft, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,20 @@ const CATEGORIES: Array<{ key: string; label: string }> = [
 const CAT_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.filter((c) => c.key).map((c) => [c.key, c.label]));
 
 const PAGE_SIZES = [10, 20, 50, 100];
-const COL_COUNT = 6;
+const COL_COUNT = 7;
+
+// CSV: quote every field, escape embedded quotes, prefix BOM so Excel reads UTF-8.
+const csvCell = (v: string | number) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+function downloadCsv(filename: string, header: string[], rows: Array<Array<string | number>>) {
+  const lines = [header, ...rows].map((r) => r.map(csvCell).join(','));
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 export default function DriverCashflowPage() {
   const { toast } = useToast();
@@ -46,8 +59,43 @@ export default function DriverCashflowPage() {
   const [rows, setRows] = React.useState<DriverCashflowRow[]>([]);
   const [meta, setMeta] = React.useState<{ total: number; totalPages: number; totalIn: number; totalOut: number }>({ total: 0, totalPages: 1, totalIn: 0, totalOut: 0 });
   const [loading, setLoading] = React.useState(true);
+  const [exporting, setExporting] = React.useState(false);
 
   React.useEffect(() => { setPage(1); }, [range, search, category, pageSize]);
+
+  // Export ALL rows matching the current filters (not just the page on screen):
+  // page through the API (200/req) until everything is collected, then build CSV.
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const all: DriverCashflowRow[] = [];
+      const LIMIT = 200;
+      for (let p = 1; p <= 1000; p++) {
+        const res = await getDriverCashflow({ from: range.from, to: range.to, page: p, limit: LIMIT, search: search || undefined, category: category || undefined });
+        all.push(...res.data);
+        if (all.length >= res.meta.total || res.data.length < LIMIT) break;
+      }
+      if (all.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
+      downloadCsv(
+        `dong-tien-tai-xe_${range.from}_${range.to}.csv`,
+        ['Thời gian (VN)', 'Tài xế', 'SĐT', 'HTX', 'Biển số', 'Loại', 'Chiều', 'Số tiền (đ)', 'Mã GD', 'Diễn giải'],
+        all.map((r) => [
+          fmtVnTime(r.createdAt),
+          r.driverName, r.driverPhone, r.htxName, r.plate,
+          CAT_LABEL[r.category] ?? 'Khác',
+          r.direction === 'in' ? 'Vào' : 'Ra',
+          r.amount,
+          r.category === 'payos' ? r.refCode : '',
+          r.description,
+        ]),
+      );
+      toast({ title: `Đã xuất ${all.length} dòng` });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Xuất CSV thất bại', description: err.message });
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -78,9 +126,13 @@ export default function DriverCashflowPage() {
             Mọi khoản tiền vào/ra ví tài xế: nạp PayOS, thưởng KM, earnings, admin cộng/trừ, hoàn, hoa hồng, VAT/PIT.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary" className="gap-1 text-green-700 dark:text-green-400"><ArrowDownLeft className="h-3.5 w-3.5" /> Vào {fmtVnd(meta.totalIn)}</Badge>
           <Badge variant="secondary" className="gap-1 text-red-600"><ArrowUpRight className="h-3.5 w-3.5" /> Ra {fmtVnd(meta.totalOut)}</Badge>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting || loading}>
+            {exporting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+            Xuất CSV (tất cả)
+          </Button>
         </div>
       </div>
 
@@ -108,6 +160,7 @@ export default function DriverCashflowPage() {
               <TableHead>HTX</TableHead>
               <TableHead>Biển số</TableHead>
               <TableHead>Loại</TableHead>
+              <TableHead>Mã GD</TableHead>
               <TableHead className="text-right">Số tiền</TableHead>
             </TableRow>
           </TableHeader>
@@ -134,6 +187,7 @@ export default function DriverCashflowPage() {
                       </Badge>
                       {r.description && <div className="mt-0.5 max-w-[220px] truncate text-xs text-muted-foreground" title={r.description}>{r.description}</div>}
                     </TableCell>
+                    <TableCell className="font-mono text-xs">{r.category === 'payos' ? (r.refCode || '—') : '—'}</TableCell>
                     <TableCell className={`text-right tabular-nums font-semibold ${isIn ? 'text-green-600 dark:text-green-400' : 'text-red-600'}`}>
                       {isIn ? '+' : '−'}{fmtVnd(r.amount)}
                     </TableCell>
