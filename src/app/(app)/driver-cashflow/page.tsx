@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getDriverCashflow, type DriverCashflowRow } from '@/lib/api';
+import { downloadCsv } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 
 const fmtVnd = (v: number) => new Intl.NumberFormat('vi-VN').format(v) + ' đ';
@@ -35,19 +36,6 @@ const CAT_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.filter((
 
 const PAGE_SIZES = [10, 20, 50, 100];
 const COL_COUNT = 7;
-
-// CSV: quote every field, escape embedded quotes, prefix BOM so Excel reads UTF-8.
-const csvCell = (v: string | number) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-function downloadCsv(filename: string, header: string[], rows: Array<Array<string | number>>) {
-  const lines = [header, ...rows].map((r) => r.map(csvCell).join(','));
-  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function DriverCashflowPage() {
   const { toast } = useToast();

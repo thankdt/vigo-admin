@@ -2,12 +2,14 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Building2, Search, ChevronRight } from 'lucide-react';
+import { Loader2, Building2, Search, ChevronRight, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxReconciliation, type HtxReconRow, type HtxReconTotals } from '@/lib/api';
+import { downloadCsv } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 
 const fmt = (v: number) => new Intl.NumberFormat('vi-VN').format(v ?? 0);
@@ -51,15 +53,27 @@ export default function HtxReconciliationPage() {
     { key: 'vigoVatRemit', label: 'VAT VIGO' },
   ];
 
+  const handleExport = () => {
+    if (filtered.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
+    const body = filtered.map((r) => [r.name, r.bookingCount, ...cols.map((c) => r[c.key] as number)]);
+    if (totals) body.push(['TỔNG', totals.bookingCount, ...cols.map((c) => totals[c.key as keyof HtxReconTotals] as number)]);
+    downloadCsv(`doi-soat-htx_${range.from}_${range.to}.csv`, ['HTX', 'Số chuyến', ...cols.map((c) => c.label)], body);
+  };
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-          <Building2 className="h-6 w-6" /> Đối soát HTX
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Doanh thu &amp; chia tiền theo từng HTX trong kỳ. Bấm 1 HTX để xem chi tiết từng chuyến.
-        </p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
+            <Building2 className="h-6 w-6" /> Đối soát HTX
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Doanh thu &amp; chia tiền theo từng HTX trong kỳ. Bấm 1 HTX để xem chi tiết từng chuyến.
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
+          <Download className="mr-1.5 h-4 w-4" /> Xuất CSV
+        </Button>
       </div>
 
       <Card className="p-4 space-y-3">

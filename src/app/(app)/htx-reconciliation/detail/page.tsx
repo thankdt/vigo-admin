@@ -2,13 +2,14 @@
 
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Building2 } from 'lucide-react';
+import { Loader2, ArrowLeft, Building2, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxTrips, type HtxTripRow, type HtxReconTotals } from '@/lib/api';
+import { downloadCsv } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../../finance/components/finance-filter';
 
 const fmt = (v: number) => new Intl.NumberFormat('vi-VN').format(v ?? 0);
@@ -53,6 +54,17 @@ export default function HtxDetailPage() {
     { key: 'vigoVatRemit', label: 'VAT VIGO' },
   ];
 
+  const handleExport = () => {
+    if (trips.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
+    const body: Array<Array<string | number>> = trips.map((t) => [
+      fmtVnTime(t.createdAt), t.driverName, t.driverPhone, t.plate,
+      ...cols.map((c) => t[c.key] as number),
+    ]);
+    if (totals) body.push(['TỔNG', '', '', '', ...cols.map((c) => totals[c.key as keyof HtxReconTotals] as number)]);
+    const safeName = (name || 'htx').replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase();
+    downloadCsv(`doi-soat-${safeName}_${range.from}_${range.to}.csv`, ['Thời gian (VN)', 'Tài xế', 'SĐT', 'Biển số', ...cols.map((c) => c.label)], body);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -65,7 +77,12 @@ export default function HtxDetailPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Chi tiết từng chuyến của HTX trong kỳ.</p>
         </div>
-        <Badge variant="secondary" className="ml-auto">{trips.length} chuyến</Badge>
+        <div className="ml-auto flex items-center gap-2">
+          <Badge variant="secondary">{trips.length} chuyến</Badge>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || trips.length === 0}>
+            <Download className="mr-1.5 h-4 w-4" /> Xuất CSV
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4">
