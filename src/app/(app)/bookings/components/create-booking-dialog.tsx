@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, MapPin, Car, FileText, Clock } from 'lucide-react';
+import { Loader2, Plus, Phone, User, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { createAdminBooking, getAvailableDrivers } from '@/lib/api';
+import { createAdminBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice } from '@/lib/api';
 import type { Driver } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -36,10 +36,60 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   // Form state
   const [customerPhone, setCustomerPhone] = React.useState('');
   const [customerName, setCustomerName] = React.useState('');
+  // Phone-first flow: name stays locked until the phone is checked.
+  //   idle → chưa kiểm tra | checking | existing (khách cũ, khoá tên) | new (khách mới, bắt nhập tên)
+  const [customerStatus, setCustomerStatus] = React.useState<'idle' | 'checking' | 'existing' | 'new'>('idle');
   const [pickup, setPickup] = React.useState<AddressData | null>(null);
   const [dropoff, setDropoff] = React.useState<AddressData | null>(null);
   const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('RIDE');
+  const [vehicleType, setVehicleType] = React.useState<'CAR_4' | 'CAR_7'>('CAR_4');
   const [note, setNote] = React.useState('');
+
+  // Price estimate (manual — "Tính giá" button, to avoid spamming BE).
+  const [priceEstimate, setPriceEstimate] = React.useState<number | null>(null);
+  const [estimating, setEstimating] = React.useState(false);
+
+  const checkCustomer = async () => {
+    if (!customerPhone || customerPhone.length < 10) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Nhập SĐT hợp lệ (≥10 số) trước khi kiểm tra.' });
+      return;
+    }
+    setCustomerStatus('checking');
+    try {
+      const res = await lookupCustomerByPhone(customerPhone);
+      if (res.exists) {
+        setCustomerName(res.fullName ?? '');
+        setCustomerStatus('existing');
+      } else {
+        setCustomerName('');
+        setCustomerStatus('new');
+      }
+    } catch (err: any) {
+      setCustomerStatus('idle');
+      toast({ variant: 'destructive', title: 'Không kiểm tra được SĐT', description: err.message });
+    }
+  };
+
+  const handleEstimate = async () => {
+    if (!pickup || !dropoff) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Chọn điểm đón và điểm trả trước khi tính giá.' });
+      return;
+    }
+    setEstimating(true);
+    try {
+      const res = await estimateTripPrice({
+        pickup: { address: pickup.address, lat: pickup.lat, long: pickup.long },
+        dropoff: { address: dropoff.address, lat: dropoff.lat, long: dropoff.long },
+        serviceType,
+        requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
+      });
+      setPriceEstimate(res.finalPrice ?? res.price);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Tính giá thất bại', description: err.message });
+    } finally {
+      setEstimating(false);
+    }
+  };
 
   // Scheduled-trip state. `scheduledAt` is the raw <input type="datetime-local">
   // value (no timezone suffix). We convert to ISO at submit time. Default to
@@ -72,14 +122,26 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const resetForm = () => {
     setCustomerPhone('');
     setCustomerName('');
+    setCustomerStatus('idle');
     setPickup(null);
     setDropoff(null);
     setServiceType('RIDE');
+    setVehicleType('CAR_4');
+    setPriceEstimate(null);
     setNote('');
     setSelectedDriverId(null);
     setDriverSearch('');
     setIsScheduled(false);
     setScheduledAt('');
+  };
+
+  // Editing the phone after a check invalidates the customer lookup → re-check.
+  const onPhoneChange = (v: string) => {
+    setCustomerPhone(v);
+    if (customerStatus !== 'idle') {
+      setCustomerStatus('idle');
+      setCustomerName('');
+    }
   };
 
   // Build a `YYYY-MM-DDTHH:mm` string in *local* time. The native
@@ -110,6 +172,14 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     // Validation
     if (!customerPhone || customerPhone.length < 10) {
       toast({ variant: 'destructive', title: 'Lỗi', description: 'SĐT khách phải có ít nhất 10 ký tự.' });
+      return;
+    }
+    if (customerStatus === 'idle' || customerStatus === 'checking') {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Bấm "Kiểm tra" SĐT trước khi tạo chuyến.' });
+      return;
+    }
+    if (customerStatus === 'new' && !customerName.trim()) {
+      toast({ variant: 'destructive', title: 'Lỗi', description: 'Khách mới — vui lòng nhập tên khách.' });
       return;
     }
     if (!pickup) {
@@ -154,6 +224,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
           long: dropoff.long,
         },
         serviceType,
+        requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
         note: note || undefined,
         driverId: selectedDriverId || undefined,
         scheduledTime: scheduledIso,
@@ -219,27 +290,50 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cb-phone">SĐT khách <span className="text-destructive">*</span></Label>
-                <div className="relative">
-                  <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="cb-phone"
-                    placeholder="0909123456"
-                    value={customerPhone}
-                    onChange={(e) => setCustomerPhone(e.target.value)}
-                    className="pl-8"
-                  />
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="cb-phone"
+                      placeholder="0909123456"
+                      value={customerPhone}
+                      onChange={(e) => onPhoneChange(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkCustomer(); } }}
+                      className="pl-8"
+                    />
+                  </div>
+                  <Button type="button" variant="outline" onClick={checkCustomer} disabled={customerStatus === 'checking' || customerPhone.length < 10}>
+                    {customerStatus === 'checking' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                    <span className="ml-1.5">Kiểm tra</span>
+                  </Button>
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cb-name">Tên khách</Label>
+                <Label htmlFor="cb-name">
+                  Tên khách {customerStatus === 'new' && <span className="text-destructive">*</span>}
+                </Label>
                 <Input
                   id="cb-name"
-                  placeholder="Nguyễn Văn A"
+                  placeholder={customerStatus === 'new' ? 'Nhập tên khách mới' : 'Kiểm tra SĐT trước'}
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
+                  disabled={customerStatus !== 'new'}
                 />
               </div>
             </div>
+            {customerStatus === 'existing' && (
+              <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                <CheckCircle2 className="h-3.5 w-3.5" /> Khách đã có tài khoản — dùng thông tin cũ ({customerName || 'không tên'}).
+              </p>
+            )}
+            {customerStatus === 'new' && (
+              <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                <UserPlus className="h-3.5 w-3.5" /> Khách mới — nhập tên để tạo tài khoản + lưu lại.
+              </p>
+            )}
+            {customerStatus === 'idle' && (
+              <p className="text-xs text-muted-foreground">Nhập SĐT rồi bấm "Kiểm tra" để xác định khách cũ / mới.</p>
+            )}
           </div>
 
           {/* Address Section */}
@@ -254,8 +348,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               <AddressAutocomplete
                 value={pickup?.address ?? ''}
                 placeholder="Tìm kiếm điểm đón..."
-                onSelect={(data) => setPickup(data)}
-                onClear={() => setPickup(null)}
+                onSelect={(data) => { setPickup(data); setPriceEstimate(null); }}
+                onClear={() => { setPickup(null); setPriceEstimate(null); }}
               />
               {pickup && (
                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -269,8 +363,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               <AddressAutocomplete
                 value={dropoff?.address ?? ''}
                 placeholder="Tìm kiếm điểm trả..."
-                onSelect={(data) => setDropoff(data)}
-                onClear={() => setDropoff(null)}
+                onSelect={(data) => { setDropoff(data); setPriceEstimate(null); }}
+                onClear={() => { setDropoff(null); setPriceEstimate(null); }}
               />
               {dropoff && (
                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -280,11 +374,11 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             </div>
           </div>
 
-          {/* Service & Note */}
+          {/* Service & Vehicle */}
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Loại dịch vụ</Label>
-              <Select value={serviceType} onValueChange={(v) => setServiceType(v as any)}>
+              <Select value={serviceType} onValueChange={(v) => { setServiceType(v as any); setPriceEstimate(null); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -295,17 +389,50 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                 </SelectContent>
               </Select>
             </div>
+            {serviceType === 'RIDE' ? (
+              <div className="space-y-1.5">
+                <Label>Loại xe <span className="text-destructive">*</span></Label>
+                <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v as any); setPriceEstimate(null); }}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CAR_4">🚗 5 chỗ</SelectItem>
+                    <SelectItem value="CAR_7">🚙 7 chỗ</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label htmlFor="cb-note">Ghi chú</Label>
+                <Textarea id="cb-note" placeholder="Ghi chú..." value={note} onChange={(e) => setNote(e.target.value)} rows={1} className="min-h-[36px] resize-none" />
+              </div>
+            )}
+          </div>
+
+          {serviceType === 'RIDE' && (
             <div className="space-y-1.5">
               <Label htmlFor="cb-note">Ghi chú</Label>
-              <Textarea
-                id="cb-note"
-                placeholder="VD: Khách VIP, cần xe 7 chỗ"
-                value={note}
-                onChange={(e) => setNote(e.target.value)}
-                rows={1}
-                className="min-h-[36px] resize-none"
-              />
+              <Textarea id="cb-note" placeholder="VD: Khách VIP, hành lý cồng kềnh..." value={note} onChange={(e) => setNote(e.target.value)} rows={1} className="min-h-[36px] resize-none" />
             </div>
+          )}
+
+          {/* Price estimate */}
+          <div className="flex items-center justify-between rounded-lg border p-3">
+            <div>
+              <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                <Calculator className="h-4 w-4" /> Giá dự kiến
+              </div>
+              {priceEstimate != null ? (
+                <div className="text-lg font-bold text-primary">{new Intl.NumberFormat('vi-VN').format(priceEstimate)} đ</div>
+              ) : (
+                <p className="text-xs text-muted-foreground">Chọn điểm đón/trả{serviceType === 'RIDE' ? ' + loại xe' : ''} rồi bấm Tính giá.</p>
+              )}
+            </div>
+            <Button type="button" variant="outline" onClick={handleEstimate} disabled={estimating || !pickup || !dropoff}>
+              {estimating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Calculator className="mr-1.5 h-4 w-4" />}
+              Tính giá
+            </Button>
           </div>
 
           {/* Scheduled Trip */}

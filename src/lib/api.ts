@@ -537,12 +537,35 @@ export async function reassignBooking(bookingId: string, driverId: string): Prom
   return result.data;
 }
 
+// Look up a customer by exact phone (create-booking form "Kiểm tra" button).
+export async function lookupCustomerByPhone(phone: string): Promise<{ exists: boolean; fullName: string | null }> {
+  const response = await fetchWithAuth(`/users/admin/by-phone?phone=${encodeURIComponent(phone)}`);
+  const result = await response.json();
+  return result.data ?? { exists: false, fullName: null };
+}
+
+// Price estimate for the create-booking form "Tính giá" button.
+export async function estimateTripPrice(body: {
+  pickup: { address: string; lat: number; long: number };
+  dropoff: { address: string; lat: number; long: number };
+  serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
+  requestedVehicleType?: 'CAR_4' | 'CAR_7';
+}): Promise<{ price: number; finalPrice: number; distanceKm?: number }> {
+  const response = await fetchWithAuth('/pricing/calculate', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
 export async function createAdminBooking(data: {
   customerPhone: string;
   customerName?: string;
   pickupAddress: { address: string; lat: number; long: number };
   dropoffAddress: { address: string; lat: number; long: number };
   serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
+  requestedVehicleType?: 'CAR_4' | 'CAR_7';
   note?: string;
   driverId?: string;
   // ISO 8601 timestamp (e.g. new Date(...).toISOString()). Omit for an
