@@ -1452,6 +1452,48 @@ export type DriverCashflowResponse = {
   meta: { page: number; limit: number; total: number; totalPages: number; totalIn: number; totalOut: number };
 };
 
+export type HtxReconRow = {
+  id: string;
+  name: string;
+  bookingCount: number;
+  grossRevenue: number;
+  totalVat: number;
+  htxCommission: number;
+  htxVatRemit: number;
+  htxTotalReceived: number;
+  vigoCommission: number;
+  vigoVatRemit: number;
+};
+export type HtxReconTotals = Omit<HtxReconRow, 'id' | 'name'>;
+export type HtxTripRow = {
+  bookingId: string;
+  createdAt: string;
+  driverName: string;
+  driverPhone: string;
+  plate: string;
+  grossRevenue: number;
+  totalVat: number;
+  htxCommission: number;
+  htxVatRemit: number;
+  htxTotalReceived: number;
+  vigoCommission: number;
+  vigoVatRemit: number;
+};
+
+export async function getHtxReconciliation(from: string, to: string): Promise<{ data: HtxReconRow[]; totals: HtxReconTotals }> {
+  const qs = new URLSearchParams({ from, to });
+  const response = await fetchWithAuth(`/admin/finance/htx-reconciliation?${qs.toString()}`);
+  const result = await response.json();
+  return result.data ?? { data: [], totals: {} as HtxReconTotals };
+}
+
+export async function getHtxTrips(id: string, from: string, to: string): Promise<{ htx: { id: string; name: string }; bookingCount: number; trips: HtxTripRow[]; totals: HtxReconTotals }> {
+  const qs = new URLSearchParams({ from, to });
+  const response = await fetchWithAuth(`/admin/finance/htx-reconciliation/${encodeURIComponent(id)}?${qs.toString()}`);
+  const result = await response.json();
+  return result.data ?? { htx: { id, name: '' }, bookingCount: 0, trips: [], totals: {} as HtxReconTotals };
+}
+
 export async function getDriverCashflow(params: {
   from: string;
   to: string;
