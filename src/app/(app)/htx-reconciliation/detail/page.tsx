@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxTrips, type HtxTripRow, type HtxReconTotals } from '@/lib/api';
-import { downloadCsv } from '@/lib/csv';
+import { downloadXlsx } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../../finance/components/finance-filter';
 
 const fmt = (v: number) => new Intl.NumberFormat('vi-VN').format(v ?? 0);
@@ -54,7 +54,7 @@ export default function HtxDetailPage() {
     { key: 'vigoVatRemit', label: 'VAT VIGO' },
   ];
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (trips.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
     const body: Array<Array<string | number>> = trips.map((t) => [
       fmtVnTime(t.createdAt), t.driverName, t.driverPhone, t.plate,
@@ -62,7 +62,7 @@ export default function HtxDetailPage() {
     ]);
     if (totals) body.push(['TỔNG', '', '', '', ...cols.map((c) => totals[c.key as keyof HtxReconTotals] as number)]);
     const safeName = (name || 'htx').replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase();
-    downloadCsv(`doi-soat-${safeName}_${range.from}_${range.to}.csv`, ['Thời gian (VN)', 'Tài xế', 'SĐT', 'Biển số', ...cols.map((c) => c.label)], body);
+    await downloadXlsx(`doi-soat-${safeName}_${range.from}_${range.to}.xlsx`, ['Thời gian (VN)', 'Tài xế', 'SĐT', 'Biển số', ...cols.map((c) => c.label)], body, 'Đối soát HTX');
   };
 
   return (
@@ -80,7 +80,7 @@ export default function HtxDetailPage() {
         <div className="ml-auto flex items-center gap-2">
           <Badge variant="secondary">{trips.length} chuyến</Badge>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || trips.length === 0}>
-            <Download className="mr-1.5 h-4 w-4" /> Xuất CSV
+            <Download className="mr-1.5 h-4 w-4" /> Xuất Excel
           </Button>
         </div>
       </div>

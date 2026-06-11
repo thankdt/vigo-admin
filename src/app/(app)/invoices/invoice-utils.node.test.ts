@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import {
-  buildInvoiceCsv,
+  INVOICE_EXPORT_HEADERS,
+  buildInvoiceExportAoa,
   buildInvoiceExportRows,
   buildInvoiceServiceText,
   filterInvoiceTrips,
@@ -102,28 +103,27 @@ describe('invoice utils', () => {
     ]);
   });
 
-  it('builds CSV (data only): header + quoted service + raw numbers', () => {
-    const csv = buildInvoiceCsv([trips[0]]);
-    const [header, row] = csv.split('\r\n');
-    assert.equal(header, 'Ngày đặt xe,Dịch vụ,Thành tiền (gồm VAT),VAT,Biển số xe,Tên DVVT');
-    // Raw numbers (not currency-formatted) so the data re-imports cleanly.
-    assert.ok(row.includes(',100000,8000,'));
-    // The "Dịch vụ" string has commas → must be quoted.
-    assert.ok(row.includes('"Cước dịch vụ'));
-    // Last column is the transport company.
-    assert.ok(row.endsWith('HTX A'));
+  it('builds the .xlsx matrix: column order + raw numeric money columns', () => {
+    const aoa = buildInvoiceExportAoa([trips[0]]);
+    assert.equal(aoa.length, 1);
+    const [row] = aoa;
+    // One cell per header, in order.
+    assert.equal(row.length, INVOICE_EXPORT_HEADERS.length);
+    assert.equal(row[0], formatInvoiceDateOnly(trips[0].tripDate));
+    assert.equal(row[1], buildInvoiceServiceText(trips[0]));
+    // Money stays a real number (not a formatted string) so Excel can sum/sort it.
+    assert.equal(row[2], 100000);
+    assert.equal(typeof row[2], 'number');
+    assert.equal(row[3], 8000);
+    assert.equal(typeof row[3], 'number');
+    assert.equal(row[4], '29A-111.11');
+    assert.equal(row[5], 'HTX A');
   });
 
-  it('quotes + escapes embedded double-quotes in CSV', () => {
-    const csv = buildInvoiceCsv([{ ...trips[0], transportCompanyName: 'HTX "X", Y' }]);
-    // Doubled quotes + wrapped because it contains a comma and quotes.
-    assert.ok(csv.includes('"HTX ""X"", Y"'));
-  });
-
-  it('builds an export file name from the active date range', () => {
+  it('builds an .xlsx export file name from the active date range', () => {
     assert.equal(
       getInvoiceExportFileName({ from: '2026-05-01', to: '2026-05-31' }),
-      'hoa-don-2026-05-01-2026-05-31.csv',
+      'hoa-don-2026-05-01-2026-05-31.xlsx',
     );
   });
 });

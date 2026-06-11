@@ -25,7 +25,7 @@ export type InvoiceExportRow = {
   transportCompanyName: string;
 };
 
-const INVOICE_EXPORT_HEADERS = [
+export const INVOICE_EXPORT_HEADERS = [
   'Ngày đặt xe',
   'Dịch vụ',
   'Thành tiền (gồm VAT)',
@@ -98,14 +98,6 @@ export const buildInvoiceServiceText = (trip: InvoiceTrip) =>
   `ngày ${formatInvoiceTripDate(trip.tripDate)} ` +
   `Biển số xe: ${trip.vehiclePlate}`;
 
-// CSV cell: quote when the value contains a comma, double-quote or newline;
-// escape embedded quotes by doubling. Keeps numbers raw (no formatting) so the
-// data stays clean and re-importable.
-function csvCell(value: string | number): string {
-  const s = String(value ?? '');
-  return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
-}
-
 export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[] {
   return trips.map((trip) => ({
     tripDate: formatInvoiceDateOnly(trip.tripDate),
@@ -117,31 +109,22 @@ export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[]
   }));
 }
 
-// Plain CSV (data only). The previous HTML-as-.xls trick rendered raw HTML tags
-// in some Excel versions — CSV is universally readable.
-export function buildInvoiceCsv(trips: InvoiceTrip[]): string {
-  const rows = buildInvoiceExportRows(trips);
-  const lines = [
-    INVOICE_EXPORT_HEADERS.map(csvCell).join(','),
-    ...rows.map((row) =>
-      [
-        row.tripDate,
-        row.service,
-        row.totalWithVat,
-        row.vat,
-        row.vehiclePlate,
-        row.transportCompanyName,
-      ]
-        .map(csvCell)
-        .join(','),
-    ),
-  ];
-  return lines.join('\r\n');
+// Header + rows matrix for the .xlsx export. Numbers stay numeric (no currency
+// formatting) so Excel can sum/sort them; column order matches INVOICE_EXPORT_HEADERS.
+export function buildInvoiceExportAoa(trips: InvoiceTrip[]): Array<Array<string | number>> {
+  return buildInvoiceExportRows(trips).map((row) => [
+    row.tripDate,
+    row.service,
+    row.totalWithVat,
+    row.vat,
+    row.vehiclePlate,
+    row.transportCompanyName,
+  ]);
 }
 
 export function getInvoiceExportFileName(range: InvoiceDateRange) {
   const from = range.from || 'tu-dau';
   const to = range.to || 'den-nay';
 
-  return `hoa-don-${from}-${to}.csv`;
+  return `hoa-don-${from}-${to}.xlsx`;
 }

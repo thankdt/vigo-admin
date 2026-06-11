@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxReconciliation, type HtxReconRow, type HtxReconTotals } from '@/lib/api';
-import { downloadCsv } from '@/lib/csv';
+import { downloadXlsx } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 
 const fmt = (v: number) => new Intl.NumberFormat('vi-VN').format(v ?? 0);
@@ -53,11 +53,11 @@ export default function HtxReconciliationPage() {
     { key: 'vigoVatRemit', label: 'VAT VIGO' },
   ];
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (filtered.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
     const body = filtered.map((r) => [r.name, r.bookingCount, ...cols.map((c) => r[c.key] as number)]);
     if (totals) body.push(['TỔNG', totals.bookingCount, ...cols.map((c) => totals[c.key as keyof HtxReconTotals] as number)]);
-    downloadCsv(`doi-soat-htx_${range.from}_${range.to}.csv`, ['HTX', 'Số chuyến', ...cols.map((c) => c.label)], body);
+    await downloadXlsx(`doi-soat-htx_${range.from}_${range.to}.xlsx`, ['HTX', 'Số chuyến', ...cols.map((c) => c.label)], body, 'Đối soát HTX');
   };
 
   return (
@@ -72,7 +72,7 @@ export default function HtxReconciliationPage() {
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
-          <Download className="mr-1.5 h-4 w-4" /> Xuất CSV
+          <Download className="mr-1.5 h-4 w-4" /> Xuất Excel
         </Button>
       </div>
 

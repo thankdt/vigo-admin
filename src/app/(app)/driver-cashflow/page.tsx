@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getDriverCashflow, type DriverCashflowRow } from '@/lib/api';
-import { downloadCsv } from '@/lib/csv';
+import { downloadXlsx } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 
 const fmtVnd = (v: number) => new Intl.NumberFormat('vi-VN').format(v) + ' đ';
@@ -64,8 +64,8 @@ export default function DriverCashflowPage() {
         if (all.length >= res.meta.total || res.data.length < LIMIT) break;
       }
       if (all.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
-      downloadCsv(
-        `dong-tien-tai-xe_${range.from}_${range.to}.csv`,
+      await downloadXlsx(
+        `dong-tien-tai-xe_${range.from}_${range.to}.xlsx`,
         ['Thời gian (VN)', 'Tài xế', 'SĐT', 'HTX', 'Biển số', 'Loại', 'Chiều', 'Số tiền (đ)', 'Mã GD', 'Diễn giải'],
         all.map((r) => [
           fmtVnTime(r.createdAt),
@@ -79,7 +79,7 @@ export default function DriverCashflowPage() {
       );
       toast({ title: `Đã xuất ${all.length} dòng` });
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Xuất CSV thất bại', description: err.message });
+      toast({ variant: 'destructive', title: 'Xuất Excel thất bại', description: err.message });
     } finally {
       setExporting(false);
     }
@@ -119,7 +119,7 @@ export default function DriverCashflowPage() {
           <Badge variant="secondary" className="gap-1 text-red-600"><ArrowUpRight className="h-3.5 w-3.5" /> Ra {fmtVnd(meta.totalOut)}</Badge>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting || loading}>
             {exporting ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
-            Xuất CSV (tất cả)
+            Xuất Excel (tất cả)
           </Button>
         </div>
       </div>
