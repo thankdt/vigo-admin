@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { createAdminBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice } from '@/lib/api';
 import type { Driver } from '@/lib/types';
+import { getImageUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
@@ -257,7 +258,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     (driver as any).driverId || driver.user?.id || driver.id;
 
   const getDriverAvatar = (driver: Driver) =>
-    driver.user?.avatarUrl || driver.user?.avatar || (driver as any).avatar || '';
+    getImageUrl(driver.user?.avatarUrl || driver.user?.avatar || (driver as any).avatar);
 
   const selectedDriver = React.useMemo(() => {
     if (!selectedDriverId) return null;

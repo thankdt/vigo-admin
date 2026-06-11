@@ -148,7 +148,7 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
           <div className="space-y-6">
             <div className="flex items-center space-x-4">
               <Avatar className="h-16 w-16">
-                <AvatarImage src={driver.user?.avatarUrl || driver.user?.avatar} alt={driver.name || driver.user?.fullName} />
+                <AvatarImage src={getImageUrl(driver.user?.avatarUrl || driver.user?.avatar)} alt={driver.name || driver.user?.fullName} />
                 <AvatarFallback>{(driver.name || driver.user?.fullName || 'D').charAt(0)}</AvatarFallback>
               </Avatar>
               <div>

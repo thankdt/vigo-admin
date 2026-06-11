@@ -571,7 +571,7 @@ export function DriversTable() {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-3">
                         <Avatar>
-                          <AvatarImage src={driver.user?.avatarUrl || driver.user?.avatar} alt={driverName} data-ai-hint="person portrait" />
+                          <AvatarImage src={getImageUrl(driver.user?.avatarUrl || driver.user?.avatar)} alt={driverName} data-ai-hint="person portrait" />
                           <AvatarFallback>{driverName.charAt(0)}</AvatarFallback>
                         </Avatar>
                         <div className="grid">
@@ -827,7 +827,7 @@ export function DriversTable() {
             <div className="space-y-6">
               <div className="flex items-center space-x-4">
                 <Avatar className="h-16 w-16">
-                  <AvatarImage src={viewDriver.user?.avatarUrl || viewDriver.user?.avatar} alt={viewDriver.name || viewDriver.user?.fullName} />
+                  <AvatarImage src={getImageUrl(viewDriver.user?.avatarUrl || viewDriver.user?.avatar)} alt={viewDriver.name || viewDriver.user?.fullName} />
                   <AvatarFallback>{(viewDriver.name || viewDriver.user?.fullName || 'Driver').charAt(0)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">

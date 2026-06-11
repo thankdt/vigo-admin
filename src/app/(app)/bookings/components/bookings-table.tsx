@@ -39,6 +39,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking, getRoutes } from '@/lib/api';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
+import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -677,7 +678,7 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
     (driver as any).driverId || driver.user?.id || driver.id;
 
   const getDriverAvatar = (driver: Driver) =>
-    driver.user?.avatarUrl || driver.user?.avatar || (driver as any).avatar || '';
+    getImageUrl(driver.user?.avatarUrl || driver.user?.avatar || (driver as any).avatar);
 
   const getDriverRoute = (driver: Driver) =>
     driver.fixedRoute?.name || null;

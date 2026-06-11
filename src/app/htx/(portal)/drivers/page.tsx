@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxListDrivers, htxToggleDriverActive, type HtxDriverRow } from '@/lib/api';
+import { getImageUrl } from '@/lib/utils';
 
 type ApprovalTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false';
 type StatusFilter = '' | 'ONLINE' | 'OFFLINE' | 'BUSY';
@@ -201,7 +202,7 @@ export default function HtxDriversPage() {
                 <TableRow key={d.id}>
                   <TableCell className="flex items-center gap-3">
                     <Avatar className="h-8 w-8">
-                      {d.avatar && d.avatar !== 'default_avatar.png' ? <AvatarImage src={d.avatar} /> : null}
+                      {d.avatar ? <AvatarImage src={getImageUrl(d.avatar)} /> : null}
                       <AvatarFallback>{(d.fullName ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
                     </Avatar>
                     <div>

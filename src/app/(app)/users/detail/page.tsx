@@ -50,6 +50,7 @@ import {
   type AdminUserReferralStats,
 } from '@/lib/api';
 import type { Booking } from '@/lib/types';
+import { getImageUrl } from '@/lib/utils';
 
 const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
@@ -216,7 +217,7 @@ export default function UserDetailPage() {
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarImage src={user.avatar?.startsWith('http') ? user.avatar : undefined} alt={user.fullName ?? user.phone} />
+              <AvatarImage src={getImageUrl(user.avatar)} alt={user.fullName ?? user.phone} />
               <AvatarFallback>{String(user.fullName ?? user.phone ?? '?').slice(0, 2).toUpperCase()}</AvatarFallback>
             </Avatar>
             <div className="space-y-1">
