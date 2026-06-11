@@ -435,6 +435,18 @@ export async function getAdminInvoices(params: {
   return unwrap<AdminInvoiceListResponse>(response);
 }
 
+// Download the e-contract PDF for a booking. Hits the admin endpoint backed by
+// the SAME ContractService as the customer/driver apps, so the document is
+// byte-for-byte identical across all three. Returns the raw PDF blob; the caller
+// triggers the browser download.
+export async function getAdminContractPdfBlob(bookingId: string): Promise<Blob> {
+  const response = await fetchWithAuth(`/bookings/admin/${bookingId}/contract.pdf`);
+  if (!response.ok) {
+    throw new Error('Không tải được hợp đồng. Vui lòng thử lại.');
+  }
+  return response.blob();
+}
+
 export async function getBookings(params: {
   page?: number;
   limit?: number;
