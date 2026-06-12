@@ -53,6 +53,7 @@ import {
 } from '@/components/ui/dialog';
 import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
+import { Textarea } from '@/components/ui/textarea';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
@@ -117,6 +118,10 @@ export function DriversTable() {
   const [rejectionValues, setRejectionValues] = React.useState<string[]>([]);
   const [rejectionNote, setRejectionNote] = React.useState('');
   const [enabledServices, setEnabledServices] = React.useState<string[]>(['RIDE', 'CARPOOL', 'DELIVERY']);
+  // Admin-internal note (optional) — saved on the approval event, NOT shown to the driver.
+  const [adminNote, setAdminNote] = React.useState('');
+  const [detailAdminNote, setDetailAdminNote] = React.useState('');
+  const [moveBackNote, setMoveBackNote] = React.useState('');
 
   const [viewDriver, setViewDriver] = React.useState<Driver | null>(null);
 
@@ -365,6 +370,7 @@ export function DriversTable() {
     setDialogState({ open: false, driver: null, action: 'approve' });
     setRejectionValues([]);
     setRejectionNote('');
+    setAdminNote('');
     setEnabledServices(['RIDE', 'CARPOOL', 'DELIVERY']);
   }
 
@@ -379,14 +385,14 @@ export function DriversTable() {
           toast({ title: "Yêu cầu dịch vụ", description: "Vui lòng chọn ít nhất một dịch vụ.", variant: "destructive" });
           return;
         }
-        await approveDriver(dialogState.driver.id, enabledServices);
+        await approveDriver(dialogState.driver.id, enabledServices, adminNote);
         toast({ title: "Đã duyệt tài xế", description: `${driverName} đã được duyệt.` });
       } else {
         if (rejectionValues.length === 0) {
           toast({ title: "Yêu cầu lý do", description: "Vui lòng chọn ít nhất một lý do từ chối.", variant: "destructive" });
           return;
         }
-        await rejectDriver(dialogState.driver.id, combineRejectReason(rejectionValues, rejectionNote));
+        await rejectDriver(dialogState.driver.id, combineRejectReason(rejectionValues, rejectionNote), adminNote);
         toast({ title: "Đã từ chối tài xế", description: `${driverName} đã bị từ chối.` });
       }
       fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
@@ -406,6 +412,7 @@ export function DriversTable() {
     setDetailServices(['RIDE', 'CARPOOL', 'DELIVERY']);
     setDetailReasonValues([]);
     setDetailReasonNote('');
+    setDetailAdminNote('');
   };
 
   const handleDetailAction = async () => {
@@ -424,10 +431,10 @@ export function DriversTable() {
     setIsSubmittingDetail(true);
     try {
       if (detailAction === 'approve') {
-        await approveDriver(viewDriver.id, detailServices);
+        await approveDriver(viewDriver.id, detailServices, detailAdminNote);
         toast({ title: 'Đã duyệt tài xế', description: `${driverName} đã được duyệt.` });
       } else {
-        await rejectDriver(viewDriver.id, combineRejectReason(detailReasonValues, detailReasonNote));
+        await rejectDriver(viewDriver.id, combineRejectReason(detailReasonValues, detailReasonNote), detailAdminNote);
         toast({ title: 'Đã từ chối tài xế', description: `${driverName} đã bị từ chối.` });
       }
       setViewDriver(null);
@@ -809,6 +816,10 @@ export function DriversTable() {
               />
             </div>
           )}
+          <div className="space-y-1.5 pt-2">
+            <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn — không hiện cho tài xế)</label>
+            <Textarea value={adminNote} onChange={(e) => setAdminNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel onClick={closeConfirmationDialog}>Hủy</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmAction}>
@@ -1250,6 +1261,10 @@ export function DriversTable() {
                       </div>
                     ))}
                   </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn — không hiện cho tài xế)</label>
+                    <Textarea value={detailAdminNote} onChange={(e) => setDetailAdminNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} disabled={isSubmittingDetail} />
+                  </div>
                   <div className="flex justify-end gap-2 pt-1">
                     <Button variant="ghost" disabled={isSubmittingDetail} onClick={resetDetailAction}>Huỷ</Button>
                     <Button className="bg-green-600 hover:bg-green-700" disabled={isSubmittingDetail || detailServices.length === 0} onClick={handleDetailAction}>
@@ -1269,6 +1284,10 @@ export function DriversTable() {
                     onNoteChange={setDetailReasonNote}
                     disabled={isSubmittingDetail}
                   />
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn — không hiện cho tài xế)</label>
+                    <Textarea value={detailAdminNote} onChange={(e) => setDetailAdminNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} disabled={isSubmittingDetail} />
+                  </div>
                   <div className="flex justify-end gap-2 pt-1">
                     <Button variant="ghost" disabled={isSubmittingDetail} onClick={resetDetailAction}>Huỷ</Button>
                     <Button variant="destructive" disabled={isSubmittingDetail || detailReasonValues.length === 0} onClick={handleDetailAction}>
@@ -1291,7 +1310,7 @@ export function DriversTable() {
       />
 
       {/* Move-back-to-pending confirm */}
-      <AlertDialog open={!!moveBackTarget} onOpenChange={(open) => { if (!open && !isMovingBack) setMoveBackTarget(null); }}>
+      <AlertDialog open={!!moveBackTarget} onOpenChange={(open) => { if (!open && !isMovingBack) { setMoveBackTarget(null); setMoveBackNote(''); } }}>
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
             <AlertDialogTitle>Đưa lại Chờ duyệt</AlertDialogTitle>
@@ -1299,6 +1318,10 @@ export function DriversTable() {
               Tài xế <span className="font-semibold text-foreground">{moveBackTarget?.name || moveBackTarget?.user?.fullName || 'N/A'}</span> sẽ chuyển từ "Từ chối" về "Chờ duyệt". Lý do từ chối cũ sẽ bị xoá.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn — không hiện cho tài xế)</label>
+            <Textarea value={moveBackNote} onChange={(e) => setMoveBackNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} disabled={isMovingBack} />
+          </div>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={isMovingBack}>Hủy</AlertDialogCancel>
             <AlertDialogAction
@@ -1308,9 +1331,10 @@ export function DriversTable() {
                 if (!moveBackTarget) return;
                 setIsMovingBack(true);
                 try {
-                  await moveDriverBackToPending(moveBackTarget.id);
+                  await moveDriverBackToPending(moveBackTarget.id, moveBackNote);
                   toast({ title: 'Đã đưa về Chờ duyệt', description: moveBackTarget.name || moveBackTarget.user?.fullName || '' });
                   setMoveBackTarget(null);
+                  setMoveBackNote('');
                   if (viewDriver?.id === moveBackTarget.id) setViewDriver(null);
                   fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
                   refreshNeedsReviewCount();

@@ -130,6 +130,11 @@ function ApprovalTimeline({ driverId }: { driverId: string }) {
             {e.reason && (
               <p className="text-sm text-foreground/90 italic">&ldquo;{e.reason}&rdquo;</p>
             )}
+            {e.note && (
+              <p className="rounded bg-muted/60 px-2 py-1 text-xs text-muted-foreground">
+                <span className="font-medium">Ghi chú admin:</span> {e.note}
+              </p>
+            )}
           </li>
         );
       })}

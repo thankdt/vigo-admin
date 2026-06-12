@@ -305,27 +305,28 @@ export async function getDrivers(params: {
   return response.json();
 }
 
-export async function approveDriver(id: string, enabledServices: string[]): Promise<Driver> {
-  const response = await fetchWithAuth(`/drivers/admin/${id}/approve`, { 
+export async function approveDriver(id: string, enabledServices: string[], note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/approve`, {
     method: 'POST',
-    body: JSON.stringify({ enabledServices }),
+    body: JSON.stringify({ enabledServices, note: note?.trim() || undefined }),
   });
   const data = await response.json();
   return data.data || data;
 }
 
-export async function moveDriverBackToPending(id: string): Promise<Driver> {
+export async function moveDriverBackToPending(id: string, note?: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/move-back-to-pending`, {
     method: 'POST',
+    body: JSON.stringify({ note: note?.trim() || undefined }),
   });
   const data = await response.json();
   return data.data || data;
 }
 
-export async function rejectDriver(id: string, reason: string): Promise<Driver> {
+export async function rejectDriver(id: string, reason: string, note?: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/reject`, {
     method: 'POST',
-    body: JSON.stringify({ reason }),
+    body: JSON.stringify({ reason, note: note?.trim() || undefined }),
   });
   const data = await response.json();
   return data.data || data;
@@ -342,6 +343,7 @@ export type DriverApprovalEvent = {
   driverId: string;
   action: DriverApprovalAction;
   reason: string | null;
+  note?: string | null;
   byAdminUserId: string | null;
   byAdmin?: {
     id: string;
