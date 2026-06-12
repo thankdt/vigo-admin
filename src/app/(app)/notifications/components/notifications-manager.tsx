@@ -389,6 +389,7 @@ export function NotificationsManager() {
     const [isLoading, setIsLoading] = React.useState(true);
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [deletingId, setDeletingId] = React.useState<number | null>(null);
+    const [detailNotif, setDetailNotif] = React.useState<ScheduledNotification | null>(null);
     const { toast } = useToast();
 
     const fetchData = React.useCallback(async () => {
@@ -481,7 +482,11 @@ export function NotificationsManager() {
                                 </TableRow>
                             ) : (
                                 notifications.map(notif => (
-                                    <TableRow key={notif.id}>
+                                    <TableRow
+                                        key={notif.id}
+                                        className="cursor-pointer"
+                                        onClick={() => setDetailNotif(notif)}
+                                    >
                                         <TableCell className="font-medium">
                                             <div className="flex flex-col">
                                                 <span>{notif.title}</span>
@@ -504,7 +509,7 @@ export function NotificationsManager() {
                                         <TableCell className="text-xs text-muted-foreground">
                                             {format(new Date(notif.createdAt), 'dd/MM/yy HH:mm')}
                                         </TableCell>
-                                        <TableCell className="text-right">
+                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                             {notif.status === 'ACTIVE' && (
                                                 <Button
                                                     variant="ghost"
@@ -531,6 +536,88 @@ export function NotificationsManager() {
                         onCancel={() => setIsFormOpen(false)}
                         onSaveSuccess={() => { setIsFormOpen(false); fetchData(); }}
                     />
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!detailNotif} onOpenChange={(open) => { if (!open) setDetailNotif(null); }}>
+                <DialogContent className="sm:max-w-lg">
+                    {detailNotif && (
+                        <>
+                            <DialogHeader>
+                                <DialogTitle className="flex items-center gap-2">
+                                    <Bell className="h-5 w-5" /> {detailNotif.title}
+                                </DialogTitle>
+                                <DialogDescription>Chi tiết thông báo đã lên lịch</DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-4">
+                                {detailNotif.imageUrl && (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        src={detailNotif.imageUrl}
+                                        alt={detailNotif.title}
+                                        className="max-h-48 w-full rounded-md border bg-muted object-contain"
+                                    />
+                                )}
+                                <div>
+                                    <Label className="text-xs text-muted-foreground">Nội dung</Label>
+                                    <p className="mt-1 whitespace-pre-wrap text-sm">{detailNotif.body}</p>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Trạng thái</Label>
+                                        <div className="mt-1">{getStatusBadge(detailNotif.status)}</div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Loại</Label>
+                                        <div className="mt-1 flex items-center text-muted-foreground">
+                                            {detailNotif.cronExpression
+                                                ? (<><Repeat className="mr-1 h-3 w-3" /> Lặp lại</>)
+                                                : (<><Clock className="mr-1 h-3 w-3" /> Một lần</>)}
+                                        </div>
+                                    </div>
+                                    <div className="col-span-2">
+                                        <Label className="text-xs text-muted-foreground">
+                                            {detailNotif.cronExpression ? 'Biểu thức Cron' : 'Thời gian gửi'}
+                                        </Label>
+                                        <div className="mt-1">
+                                            <code className="rounded bg-muted p-1 text-xs">
+                                                {detailNotif.cronExpression
+                                                    || (detailNotif.scheduleTime ? format(new Date(detailNotif.scheduleTime), 'PP p') : 'N/A')}
+                                            </code>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Ngày tạo</Label>
+                                        <div className="mt-1 text-muted-foreground">
+                                            {format(new Date(detailNotif.createdAt), 'dd/MM/yyyy HH:mm')}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">ID</Label>
+                                        <div className="mt-1 text-muted-foreground">#{detailNotif.id}</div>
+                                    </div>
+                                </div>
+                                {detailNotif.scheduleArn && (
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Schedule ARN</Label>
+                                        <p className="mt-1 break-all text-xs text-muted-foreground">{detailNotif.scheduleArn}</p>
+                                    </div>
+                                )}
+                            </div>
+                            <DialogFooter>
+                                {detailNotif.status === 'ACTIVE' && (
+                                    <Button
+                                        variant="destructive"
+                                        disabled={deletingId === detailNotif.id}
+                                        onClick={() => { handleCancel(detailNotif.id); setDetailNotif(null); }}
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" /> Hủy lịch
+                                    </Button>
+                                )}
+                                <Button variant="outline" onClick={() => setDetailNotif(null)}>Đóng</Button>
+                            </DialogFooter>
+                        </>
+                    )}
                 </DialogContent>
             </Dialog>
         </>
