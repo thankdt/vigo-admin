@@ -54,6 +54,7 @@ import {
 import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { Textarea } from '@/components/ui/textarea';
+import { ApprovalTimeline } from './driver-detail-dialog';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
@@ -1200,6 +1201,13 @@ export function DriversTable() {
               ) : (
                 <p className="text-sm text-muted-foreground">Chưa cung cấp</p>
               )}
+            </div>
+          )}
+
+          {viewDriver && (
+            <div className="border-t pt-4 space-y-2">
+              <h4 className="font-semibold">Lịch sử duyệt</h4>
+              <ApprovalTimeline driverId={viewDriver.id} />
             </div>
           )}
 

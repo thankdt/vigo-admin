@@ -62,7 +62,7 @@ const APPROVAL_ACTION_META: Record<
   },
 };
 
-function ApprovalTimeline({ driverId }: { driverId: string }) {
+export function ApprovalTimeline({ driverId }: { driverId: string }) {
   // Driver approval history. Lazily fetched when the dialog mounts so we don't
   // pay the round-trip on every driver row hover. Soft-fail to empty list —
   // the dialog is still useful even if history doesn't load.
