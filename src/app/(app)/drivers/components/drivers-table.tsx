@@ -1207,7 +1207,7 @@ export function DriversTable() {
           {viewDriver && (
             <div className="border-t pt-4 space-y-2">
               <h4 className="font-semibold">Lịch sử duyệt</h4>
-              <ApprovalTimeline driverId={viewDriver.id} />
+              <ApprovalTimeline driverId={viewDriver.id} showAdminNote />
             </div>
           )}
 

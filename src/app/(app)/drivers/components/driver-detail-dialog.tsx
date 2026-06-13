@@ -62,7 +62,10 @@ const APPROVAL_ACTION_META: Record<
   },
 };
 
-export function ApprovalTimeline({ driverId }: { driverId: string }) {
+// showAdminNote: render the admin-internal note. ONLY the admin Quản lý tài xế
+// dialog passes true. The HTX (transport-companies) dialog leaves it false so
+// cooperative owners see the approval/rejection history but NOT internal notes.
+export function ApprovalTimeline({ driverId, showAdminNote = false }: { driverId: string; showAdminNote?: boolean }) {
   // Driver approval history. Lazily fetched when the dialog mounts so we don't
   // pay the round-trip on every driver row hover. Soft-fail to empty list —
   // the dialog is still useful even if history doesn't load.
@@ -130,7 +133,7 @@ export function ApprovalTimeline({ driverId }: { driverId: string }) {
             {e.reason && (
               <p className="text-sm text-foreground/90 italic">&ldquo;{e.reason}&rdquo;</p>
             )}
-            {e.note && (
+            {showAdminNote && e.note && (
               <p className="rounded bg-muted/60 px-2 py-1 text-xs text-muted-foreground">
                 <span className="font-medium">Ghi chú admin:</span> {e.note}
               </p>
