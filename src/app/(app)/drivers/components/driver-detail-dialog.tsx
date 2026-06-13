@@ -261,7 +261,9 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
 
             <div className="space-y-3 border-t pt-4">
               <h4 className="font-semibold">Lịch sử duyệt / từ chối</h4>
-              <ApprovalTimeline driverId={driver.id} />
+              {/* Đơn vị vận tải là trang ADMIN → hiện ghi chú nội bộ. Cổng HTX
+                  chủ đơn vị không dùng dialog này nên note không lộ ra ngoài. */}
+              <ApprovalTimeline driverId={driver.id} showAdminNote />
             </div>
 
             <div className="space-y-2 border-t pt-4">
