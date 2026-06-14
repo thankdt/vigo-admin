@@ -32,6 +32,7 @@ export type InvoiceExportRow = {
   invoiceCompanyName: string;
   invoiceTaxCode: string;
   invoiceCompanyAddress: string;
+  invoiceEmail: string;
 };
 
 export const INVOICE_EXPORT_HEADERS = [
@@ -44,6 +45,7 @@ export const INVOICE_EXPORT_HEADERS = [
   'Tên đơn vị',
   'MST',
   'Địa chỉ',
+  'Email nhận hoá đơn',
 ];
 
 export function isTripWithinDateRange(tripDate: string, range: InvoiceDateRange) {
@@ -124,6 +126,9 @@ export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[]
     invoiceCompanyAddress: trip.vatInfo?.companyName
       ? trip.vatInfo?.companyAddress || ''
       : '',
+    invoiceEmail: trip.vatInfo?.companyName
+      ? trip.vatInfo?.invoiceEmail || ''
+      : '',
   }));
 }
 
@@ -140,6 +145,7 @@ export function buildInvoiceExportAoa(trips: InvoiceTrip[]): Array<Array<string 
     row.invoiceCompanyName,
     row.invoiceTaxCode,
     row.invoiceCompanyAddress,
+    row.invoiceEmail,
   ]);
 }
 

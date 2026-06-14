@@ -280,14 +280,24 @@ export default function InvoicesPage() {
                   </TableCell>
                   <TableCell className="font-mono">{trip.vehiclePlate}</TableCell>
                   <TableCell>{trip.transportCompanyName}</TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="text-sm align-top">
                     {trip.vatInfo?.companyName ? (
-                      <span>
-                        {trip.vatInfo.companyName}
-                        <span className="text-muted-foreground">
-                          {" "}(MST: {trip.vatInfo.taxCode ?? "—"})
-                        </span>
-                      </span>
+                      <div className="space-y-0.5 min-w-[200px]">
+                        <div className="font-medium">{trip.vatInfo.companyName}</div>
+                        <div className="text-muted-foreground text-xs">
+                          MST: {trip.vatInfo.taxCode ?? "—"}
+                        </div>
+                        {trip.vatInfo.companyAddress ? (
+                          <div className="text-muted-foreground text-xs">
+                            {trip.vatInfo.companyAddress}
+                          </div>
+                        ) : null}
+                        {trip.vatInfo.invoiceEmail ? (
+                          <div className="text-muted-foreground text-xs">
+                            {trip.vatInfo.invoiceEmail}
+                          </div>
+                        ) : null}
+                      </div>
                     ) : (
                       <span className="text-muted-foreground">Khách lẻ</span>
                     )}

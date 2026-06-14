@@ -102,23 +102,26 @@ describe('invoice utils', () => {
         invoiceCompanyName: 'Khách lẻ',
         invoiceTaxCode: '',
         invoiceCompanyAddress: '',
+        invoiceEmail: '',
       },
     ]);
   });
 
-  it('export row uses VAT company/MST/address when present', () => {
+  it('export row uses VAT company/MST/address/email when present', () => {
     const withVat: InvoiceTrip = {
       ...trips[1],
       vatInfo: {
         companyName: 'CTY ABC',
         taxCode: '0101234567',
         companyAddress: 'Hà Nội',
+        invoiceEmail: 'ketoan@abc.vn',
       },
     };
     const [row] = buildInvoiceExportRows([withVat]);
     assert.equal(row.invoiceCompanyName, 'CTY ABC');
     assert.equal(row.invoiceTaxCode, '0101234567');
     assert.equal(row.invoiceCompanyAddress, 'Hà Nội');
+    assert.equal(row.invoiceEmail, 'ketoan@abc.vn');
   });
 
   it('builds the .xlsx matrix: column order + raw numeric money columns', () => {
@@ -140,6 +143,7 @@ describe('invoice utils', () => {
     assert.equal(row[6], 'Khách lẻ');
     assert.equal(row[7], '');
     assert.equal(row[8], '');
+    assert.equal(row[9], '');
   });
 
   it('builds an .xlsx export file name from the active date range', () => {
