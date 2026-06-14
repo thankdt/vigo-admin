@@ -393,6 +393,17 @@ export async function updateDriverProfile(
   return json.data || json;
 }
 
+// Admin sets a driver's dispatch routes (multi-route). Pass [] to clear all
+// (driver becomes undispatchable until re-assigned).
+export async function updateDriverRoutes(id: string, routeIds: number[]): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/routes`, {
+    method: 'PUT',
+    body: JSON.stringify({ routeIds }),
+  });
+  const json = await response.json();
+  return json.data || json;
+}
+
 export type AdminInvoiceRow = {
   id: string;
   tripDate: string;

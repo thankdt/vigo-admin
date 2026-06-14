@@ -24,10 +24,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes } from '@/lib/api';
+import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
-import type { Driver, TransportCompany } from '@/lib/types';
+import type { Driver, TransportCompany, Route } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -164,6 +165,69 @@ export function DriversTable() {
     color: string;
   }>({ plateNumber: '', brand: '', model: '', color: '' });
   const [savingVehicle, setSavingVehicle] = React.useState(false);
+
+  // Edit-routes state (multi-route). null = not editing; number[] = staged route ids.
+  const [editingRoutes, setEditingRoutes] = React.useState<number[] | null>(null);
+  const [savingRoutes, setSavingRoutes] = React.useState(false);
+  const [allRoutes, setAllRoutes] = React.useState<Route[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = React.useState(false);
+
+  // Enter route-edit mode: seed from the driver's current routes (M2M, else
+  // legacy fixedRoute) and lazy-load the full route list for the picker.
+  const startEditRoutes = async () => {
+    if (!viewDriver) return;
+    const current =
+      viewDriver.routes && viewDriver.routes.length > 0
+        ? viewDriver.routes.map((r) => r.id)
+        : viewDriver.fixedRouteId
+          ? [viewDriver.fixedRouteId]
+          : [];
+    setEditingRoutes(current);
+    if (allRoutes.length === 0) {
+      setLoadingRoutes(true);
+      try {
+        setAllRoutes(await getRoutes());
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Không tải được danh sách tuyến', description: e?.message });
+      } finally {
+        setLoadingRoutes(false);
+      }
+    }
+  };
+
+  const handleSaveRoutes = async () => {
+    if (!viewDriver || editingRoutes === null) return;
+    // Clearing all routes parks the driver off dispatch — warn explicitly.
+    if (editingRoutes.length === 0) {
+      const ok = window.confirm(
+        'Gỡ hết tuyến sẽ khiến tài xế KHÔNG nhận được chuyến nào cho tới khi gán lại. Tiếp tục?',
+      );
+      if (!ok) return;
+    }
+    setSavingRoutes(true);
+    try {
+      await updateDriverRoutes(viewDriver.id, editingRoutes);
+      // Reflect the new routes locally from the picked ids + loaded names so the
+      // dialog updates instantly without depending on the response shape.
+      const picked = allRoutes
+        .filter((r) => editingRoutes.includes(r.id))
+        .map((r) => ({ id: r.id, name: r.name }));
+      setViewDriver({
+        ...viewDriver,
+        routes: picked,
+        fixedRouteId: editingRoutes[0] ?? undefined,
+        fixedRoute: picked[0] ? { id: picked[0].id, name: picked[0].name } : undefined,
+      });
+      setEditingRoutes(null);
+      toast({ title: 'Đã cập nhật tuyến' });
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+      refreshNeedsReviewCount();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Không cập nhật được tuyến', description: e?.message });
+    } finally {
+      setSavingRoutes(false);
+    }
+  };
 
   const handleSaveVehicle = async () => {
     if (!viewDriver) return;
@@ -625,8 +689,10 @@ export function DriversTable() {
                           fall back to legacy `fixedRoute` for drivers who
                           haven't been re-saved since the migration. */}
                       {driver.routes && driver.routes.length > 0 ? (
+                        // Cap at 2 badges + "+N" (full list on hover) so a driver
+                        // with many routes doesn't blow up the row height.
                         <div className="flex flex-wrap gap-1">
-                          {driver.routes.map((r) => (
+                          {driver.routes.slice(0, 2).map((r) => (
                             <span
                               key={r.id}
                               className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium"
@@ -634,6 +700,14 @@ export function DriversTable() {
                               {r.name}
                             </span>
                           ))}
+                          {driver.routes.length > 2 && (
+                            <span
+                              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                              title={driver.routes.map((r) => r.name).join(', ')}
+                            >
+                              +{driver.routes.length - 2}
+                            </span>
+                          )}
                         </div>
                       ) : driver.fixedRoute?.name ? (
                         <span className="text-sm font-medium">{driver.fixedRoute.name}</span>
@@ -1161,6 +1235,58 @@ export function DriversTable() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Routes (multi-route) in detail dialog */}
+          {viewDriver && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold">Tuyến đường</h4>
+                {editingRoutes === null ? (
+                  <Button variant="ghost" size="sm" onClick={startEditRoutes}>Sửa</Button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" disabled={savingRoutes} onClick={() => setEditingRoutes(null)}>Hủy</Button>
+                    <Button size="sm" disabled={savingRoutes || loadingRoutes} onClick={handleSaveRoutes}>
+                      {savingRoutes && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                      Lưu
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {editingRoutes === null ? (
+                <div className="flex flex-wrap gap-2">
+                  {viewDriver.routes && viewDriver.routes.length > 0 ? (
+                    viewDriver.routes.map((r) => <Badge key={r.id} variant="outline">{r.name}</Badge>)
+                  ) : viewDriver.fixedRoute?.name ? (
+                    <Badge variant="outline">{viewDriver.fixedRoute.name}</Badge>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Chưa đăng ký tuyến nào.</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {loadingRoutes ? (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Đang tải tuyến…</p>
+                  ) : (
+                    <MultiSelectComboBox
+                      options={allRoutes.map((r) => ({ value: String(r.id), label: r.name }))}
+                      selectedValues={editingRoutes.map(String)}
+                      onSelectedValuesChange={(vals) => setEditingRoutes(vals.map(Number))}
+                      placeholder="Chọn tuyến…"
+                      searchPlaceholder="Tìm tuyến…"
+                      noResultsText="Không có tuyến phù hợp"
+                    />
+                  )}
+                  {editingRoutes.length === 0 && (
+                    <p className="text-sm text-destructive flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Gỡ hết tuyến: tài xế sẽ KHÔNG nhận được chuyến nào cho tới khi gán lại.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
