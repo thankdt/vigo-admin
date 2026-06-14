@@ -90,7 +90,7 @@ describe('invoice utils', () => {
     assert.equal(formatInvoiceCurrency(600000), '600.000 ₫');
   });
 
-  it('builds export rows with the new invoice columns', () => {
+  it('builds export rows with the new invoice columns (Khách lẻ when no VAT)', () => {
     assert.deepEqual(buildInvoiceExportRows([trips[1]]), [
       {
         tripDate: formatInvoiceDateOnly(trips[1].tripDate),
@@ -99,8 +99,26 @@ describe('invoice utils', () => {
         vat: 16000,
         vehiclePlate: '30A-222.22',
         transportCompanyName: 'HTX B',
+        invoiceCompanyName: 'Khách lẻ',
+        invoiceTaxCode: '',
+        invoiceCompanyAddress: '',
       },
     ]);
+  });
+
+  it('export row uses VAT company/MST/address when present', () => {
+    const withVat: InvoiceTrip = {
+      ...trips[1],
+      vatInfo: {
+        companyName: 'CTY ABC',
+        taxCode: '0101234567',
+        companyAddress: 'Hà Nội',
+      },
+    };
+    const [row] = buildInvoiceExportRows([withVat]);
+    assert.equal(row.invoiceCompanyName, 'CTY ABC');
+    assert.equal(row.invoiceTaxCode, '0101234567');
+    assert.equal(row.invoiceCompanyAddress, 'Hà Nội');
   });
 
   it('builds the .xlsx matrix: column order + raw numeric money columns', () => {
@@ -118,6 +136,10 @@ describe('invoice utils', () => {
     assert.equal(typeof row[3], 'number');
     assert.equal(row[4], '29A-111.11');
     assert.equal(row[5], 'HTX A');
+    // VAT columns — Khách lẻ khi không có thông tin xuất hoá đơn.
+    assert.equal(row[6], 'Khách lẻ');
+    assert.equal(row[7], '');
+    assert.equal(row[8], '');
   });
 
   it('builds an .xlsx export file name from the active date range', () => {
