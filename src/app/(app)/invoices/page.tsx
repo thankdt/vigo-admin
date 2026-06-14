@@ -250,19 +250,20 @@ export default function InvoicesPage() {
               <TableHead className="text-right">VAT</TableHead>
               <TableHead>Biển số xe</TableHead>
               <TableHead>Tên DVVT</TableHead>
+              <TableHead>Xuất hoá đơn</TableHead>
               <TableHead className="text-center whitespace-nowrap">Hợp đồng</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                   Không có chuyến đi nào khớp bộ lọc.
                 </TableCell>
               </TableRow>
@@ -279,6 +280,18 @@ export default function InvoicesPage() {
                   </TableCell>
                   <TableCell className="font-mono">{trip.vehiclePlate}</TableCell>
                   <TableCell>{trip.transportCompanyName}</TableCell>
+                  <TableCell className="text-sm">
+                    {trip.vatInfo?.companyName ? (
+                      <span>
+                        {trip.vatInfo.companyName}
+                        <span className="text-muted-foreground">
+                          {" "}(MST: {trip.vatInfo.taxCode ?? "—"})
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">Khách lẻ</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-center">
                     <Button
                       variant="ghost"

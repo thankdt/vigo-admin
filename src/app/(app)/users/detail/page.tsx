@@ -317,6 +317,20 @@ export default function UserDetailPage() {
               </div>
             </div>
           )}
+
+          <div className="mt-6 border-t pt-4 text-sm">
+            <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Thông tin xuất hoá đơn</div>
+            {user.companyName || user.taxCode || user.companyAddress || user.invoiceEmail ? (
+              <div className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                <Field label="Tên đơn vị" value={user.companyName ?? "—"} />
+                <Field label="Mã số thuế" value={user.taxCode ?? "—"} />
+                <Field label="Địa chỉ" value={user.companyAddress ?? "—"} />
+                <Field label="Email nhận hoá đơn" value={user.invoiceEmail ?? "—"} />
+              </div>
+            ) : (
+              <div className="text-muted-foreground">Chưa nhập — xuất hoá đơn dạng Khách lẻ</div>
+            )}
+          </div>
         </CardContent>
       </Card>
 

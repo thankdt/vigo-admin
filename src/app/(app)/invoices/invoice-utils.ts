@@ -9,6 +9,12 @@ export type InvoiceTrip = {
   vat: number;
   vehiclePlate: string;
   transportCompanyName: string;
+  vatInfo?: {
+    companyName?: string | null;
+    taxCode?: string | null;
+    companyAddress?: string | null;
+    invoiceEmail?: string | null;
+  } | null;
 };
 
 export type InvoiceDateRange = {
@@ -23,6 +29,9 @@ export type InvoiceExportRow = {
   vat: number;
   vehiclePlate: string;
   transportCompanyName: string;
+  invoiceCompanyName: string;
+  invoiceTaxCode: string;
+  invoiceCompanyAddress: string;
 };
 
 export const INVOICE_EXPORT_HEADERS = [
@@ -32,6 +41,9 @@ export const INVOICE_EXPORT_HEADERS = [
   'VAT',
   'Biển số xe',
   'Tên DVVT',
+  'Tên đơn vị',
+  'MST',
+  'Địa chỉ',
 ];
 
 export function isTripWithinDateRange(tripDate: string, range: InvoiceDateRange) {
@@ -106,6 +118,12 @@ export function buildInvoiceExportRows(trips: InvoiceTrip[]): InvoiceExportRow[]
     vat: trip.vat,
     vehiclePlate: trip.vehiclePlate,
     transportCompanyName: trip.transportCompanyName,
+    // Không có thông tin VAT → "Khách lẻ" ở cột Tên đơn vị, MST/Địa chỉ để trống.
+    invoiceCompanyName: trip.vatInfo?.companyName || 'Khách lẻ',
+    invoiceTaxCode: trip.vatInfo?.companyName ? trip.vatInfo?.taxCode || '' : '',
+    invoiceCompanyAddress: trip.vatInfo?.companyName
+      ? trip.vatInfo?.companyAddress || ''
+      : '',
   }));
 }
 
@@ -119,6 +137,9 @@ export function buildInvoiceExportAoa(trips: InvoiceTrip[]): Array<Array<string 
     row.vat,
     row.vehiclePlate,
     row.transportCompanyName,
+    row.invoiceCompanyName,
+    row.invoiceTaxCode,
+    row.invoiceCompanyAddress,
   ]);
 }
 

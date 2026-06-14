@@ -212,6 +212,11 @@ export type AdminUserDetail = {
   loyaltyTier: 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
   referralCode?: string | null;
   bankInfo?: { bankName: string; accountNumber: string; accountHolder: string } | null;
+  // Thông tin xuất hoá đơn VAT khách nhập ở hồ sơ.
+  companyName?: string | null;
+  taxCode?: string | null;
+  companyAddress?: string | null;
+  invoiceEmail?: string | null;
   createdAt?: string;
   updatedAt?: string;
   deletedAt?: string | null;
@@ -399,6 +404,14 @@ export type AdminInvoiceRow = {
   vat: number;
   vehiclePlate: string;
   transportCompanyName: string;
+  // Thông tin xuất hoá đơn VAT (snapshot lúc complete). null ⇒ "Khách lẻ".
+  customerName?: string | null;
+  vatInfo?: {
+    companyName?: string | null;
+    taxCode?: string | null;
+    companyAddress?: string | null;
+    invoiceEmail?: string | null;
+  } | null;
 };
 
 export type AdminInvoiceListResponse = {
