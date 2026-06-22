@@ -45,26 +45,32 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('RIDE');
   const [vehicleType, setVehicleType] = React.useState<'CAR_4' | 'CAR_7'>('CAR_4');
   const [note, setNote] = React.useState('');
-  // Passenger info (RIDE/CARPOOL only). requestedSeats default 1; for CARPOOL it
-  // scales the price on the backend. passengerNames = co-passenger names, optional.
-  const [requestedSeats, setRequestedSeats] = React.useState(1);
-  const [passengerNames, setPassengerNames] = React.useState<string[]>([]);
+  // Co-passengers (khách đi cùng) — passenger #2 onward. Passenger #1 is the
+  // booking customer captured above from the phone lookup (customerName), so we
+  // do NOT repeat them here. The seat count is DERIVED (1 + co-passengers), no
+  // manual number box — mirrors the customer app. On submit we send
+  // passengerNames = [customerName, ...coPassengers] (index 0 = primary, the
+  // convention the customer app + contract/booking-detail screens rely on).
+  const [coPassengers, setCoPassengers] = React.useState<string[]>([]);
 
-  // Passenger fields don't apply to DELIVERY. Seat cap is a soft guard rail:
-  // RIDE → vehicle capacity; CARPOOL → reasonable upper bound.
+  // Passenger fields don't apply to DELIVERY. Total-seat cap matches the
+  // customer app: CAR_4 → 4, CAR_7 → 6, CARPOOL → 6. maxExtras excludes the
+  // primary customer.
   const showPassengerFields = serviceType === 'RIDE' || serviceType === 'CARPOOL';
-  const maxSeats = serviceType === 'RIDE' ? (vehicleType === 'CAR_7' ? 7 : 4) : serviceType === 'CARPOOL' ? 7 : 1;
+  const maxTotal = serviceType === 'RIDE' ? (vehicleType === 'CAR_7' ? 6 : 4) : 6;
+  const maxExtras = maxTotal - 1;
+  const totalPassengers = 1 + coPassengers.length;
 
-  // Keep the seat count within the current cap (e.g. switching CAR_7 → CAR_4).
+  // Trim extra rows if the cap shrinks (e.g. switching CAR_7 → CAR_4).
   React.useEffect(() => {
-    setRequestedSeats((s) => Math.min(Math.max(1, s), maxSeats));
-  }, [maxSeats]);
+    setCoPassengers((p) => (p.length > maxExtras ? p.slice(0, maxExtras) : p));
+  }, [maxExtras]);
 
-  const addPassenger = () => setPassengerNames((p) => [...p, '']);
+  const addPassenger = () => setCoPassengers((p) => [...p, '']);
   const updatePassenger = (i: number, v: string) =>
-    setPassengerNames((p) => p.map((n, idx) => (idx === i ? v : n)));
+    setCoPassengers((p) => p.map((n, idx) => (idx === i ? v : n)));
   const removePassenger = (i: number) =>
-    setPassengerNames((p) => p.filter((_, idx) => idx !== i));
+    setCoPassengers((p) => p.filter((_, idx) => idx !== i));
 
   // Price estimate (manual — "Tính giá" button, to avoid spamming BE).
   const [priceEstimate, setPriceEstimate] = React.useState<number | null>(null);
@@ -103,7 +109,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         dropoff: { address: dropoff.address, lat: dropoff.lat, long: dropoff.long },
         serviceType,
         requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
-        requestedSeats: showPassengerFields ? requestedSeats : undefined,
+        requestedSeats: showPassengerFields ? totalPassengers : undefined,
       });
       setPriceEstimate(res.finalPrice ?? res.price);
     } catch (err: any) {
@@ -149,8 +155,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setDropoff(null);
     setServiceType('RIDE');
     setVehicleType('CAR_4');
-    setRequestedSeats(1);
-    setPassengerNames([]);
+    setCoPassengers([]);
     setPriceEstimate(null);
     setNote('');
     setSelectedDriverId(null);
@@ -249,13 +254,14 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         },
         serviceType,
         requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
-        requestedSeats: showPassengerFields ? requestedSeats : undefined,
-        passengerNames: showPassengerFields
-          ? (() => {
-              const names = passengerNames.map((n) => n.trim()).filter(Boolean);
-              return names.length > 0 ? names : undefined;
-            })()
-          : undefined,
+        requestedSeats: showPassengerFields ? totalPassengers : undefined,
+        // [primary, ...co-passengers] — primary is the booking customer. Only
+        // sent when there's at least one co-passenger; a solo ride needs no list.
+        passengerNames: (() => {
+          if (!showPassengerFields) return undefined;
+          const extras = coPassengers.map((n) => n.trim()).filter(Boolean);
+          return extras.length > 0 ? [customerName.trim(), ...extras] : undefined;
+        })(),
         note: note || undefined,
         driverId: selectedDriverId || undefined,
         scheduledTime: scheduledIso,
@@ -448,53 +454,57 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             </div>
           )}
 
-          {/* Passenger info — RIDE/CARPOOL only */}
+          {/* Passenger info — RIDE/CARPOOL only. Seat count is derived from the
+              passenger list (customer #1 + co-passengers), no manual box. */}
           {showPassengerFields && (
             <div className="space-y-3 rounded-lg border p-3">
-              <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-                <Users className="h-4 w-4" />
-                Hành khách
-              </h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="cb-seats">Số lượng hành khách</Label>
-                  <Input
-                    id="cb-seats"
-                    type="number"
-                    min={1}
-                    max={maxSeats}
-                    value={requestedSeats}
-                    onChange={(e) => {
-                      const n = parseInt(e.target.value, 10);
-                      setRequestedSeats(Number.isNaN(n) ? 1 : Math.min(Math.max(1, n), maxSeats));
-                      setPriceEstimate(null);
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Tối đa {maxSeats} khách{serviceType === 'CARPOOL' ? ' • đi chung tính giá theo số ghế' : ''}.
-                  </p>
-                </div>
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                  <Users className="h-4 w-4" />
+                  Hành khách
+                </h4>
+                <Badge variant="secondary">{totalPassengers} người</Badge>
               </div>
-              <div className="space-y-2">
-                <Label>Tên hành khách <span className="font-normal text-muted-foreground">(nếu có thêm)</span></Label>
-                {passengerNames.length === 0 && (
-                  <p className="text-xs text-muted-foreground">Không bắt buộc. Thêm tên nếu cần in lên hợp đồng/hoá đơn.</p>
-                )}
-                {passengerNames.map((name, i) => (
-                  <div key={i} className="flex gap-2">
-                    <Input
-                      placeholder={`Hành khách ${i + 1}`}
-                      value={name}
-                      onChange={(e) => updatePassenger(i, e.target.value)}
-                    />
-                    <Button type="button" variant="ghost" size="icon" onClick={() => removePassenger(i)} aria-label="Xoá hành khách">
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
-                ))}
-                <Button type="button" variant="outline" size="sm" onClick={addPassenger}>
-                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Thêm hành khách
+
+              {/* Passenger #1 — the booking customer (from the phone lookup above). */}
+              <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2">
+                <Badge variant="outline" className="shrink-0 text-xs">Khách 1</Badge>
+                <span className={cn('text-sm', !customerName && 'text-muted-foreground italic')}>
+                  {customerName || 'Nhập & kiểm tra SĐT ở trên'}
+                </span>
+              </div>
+
+              {/* Co-passengers (khách đi cùng) — passenger #2 onward. */}
+              {coPassengers.map((name, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    placeholder={`Tên khách ${i + 2} (đi cùng)`}
+                    value={name}
+                    onChange={(e) => { updatePassenger(i, e.target.value); setPriceEstimate(null); }}
+                  />
+                  <Button type="button" variant="ghost" size="icon" onClick={() => { removePassenger(i); setPriceEstimate(null); }} aria-label="Xoá khách">
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+
+              <div className="flex items-center justify-between">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { addPassenger(); setPriceEstimate(null); }}
+                  disabled={coPassengers.length >= maxExtras}
+                >
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Thêm khách đi cùng
                 </Button>
+                <span className="text-xs text-muted-foreground">
+                  {coPassengers.length >= maxExtras
+                    ? `Tối đa ${maxTotal} khách cho loại xe này`
+                    : serviceType === 'CARPOOL'
+                      ? 'Đi chung tính giá theo số khách'
+                      : `Tối đa ${maxTotal} khách`}
+                </span>
               </div>
             </div>
           )}
