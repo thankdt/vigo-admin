@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Read",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(rg:*)",
+      "Bash(find:*)",
+      "Bash(git log:*)",
+      "Bash(git show:*)",
+      "Bash(git diff:*)",
+      "Bash(git blame:*)",
+      "Bash(git status)",
+      "Bash(aws logs describe-log-groups:*)",
+      "Bash(aws logs describe-log-streams:*)",
+      "Bash(aws logs filter-log-events:*)",
+      "Bash(aws logs get-log-events:*)",
+      "Bash(aws logs tail:*)",
+      "Bash(aws cloudwatch get-metric-statistics:*)",
+      "Bash(aws cloudwatch get-metric-data:*)",
+      "Edit(.claude/skills/**)",
+      "mcp__postgres-readonly__query"
+    ],
+    "ask": [
+      "Bash(psql:*)",
+      "Bash(mysql:*)",
+      "Bash(redis-cli:*)",
+      "Bash(aws:*)"
+    ],
+    "defaultMode": "default",
+    "additionalDirectories": [
+      "../vigo",
+      "../vigo-driver",
+      "../vigo-admin",
+      "../vigo-backend"
+    ]
+  },
+  "sandbox": {
+    "filesystem": {
+      "denyRead": [
+        "~/.aws/credentials",
+        "~/.ssh/"
+      ]
+    }
+  }
+}
