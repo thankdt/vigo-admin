@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search } from 'lucide-react';
+import { Loader2, Plus, Phone, User, Users, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search, X } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -45,6 +45,26 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('RIDE');
   const [vehicleType, setVehicleType] = React.useState<'CAR_4' | 'CAR_7'>('CAR_4');
   const [note, setNote] = React.useState('');
+  // Passenger info (RIDE/CARPOOL only). requestedSeats default 1; for CARPOOL it
+  // scales the price on the backend. passengerNames = co-passenger names, optional.
+  const [requestedSeats, setRequestedSeats] = React.useState(1);
+  const [passengerNames, setPassengerNames] = React.useState<string[]>([]);
+
+  // Passenger fields don't apply to DELIVERY. Seat cap is a soft guard rail:
+  // RIDE → vehicle capacity; CARPOOL → reasonable upper bound.
+  const showPassengerFields = serviceType === 'RIDE' || serviceType === 'CARPOOL';
+  const maxSeats = serviceType === 'RIDE' ? (vehicleType === 'CAR_7' ? 7 : 4) : serviceType === 'CARPOOL' ? 7 : 1;
+
+  // Keep the seat count within the current cap (e.g. switching CAR_7 → CAR_4).
+  React.useEffect(() => {
+    setRequestedSeats((s) => Math.min(Math.max(1, s), maxSeats));
+  }, [maxSeats]);
+
+  const addPassenger = () => setPassengerNames((p) => [...p, '']);
+  const updatePassenger = (i: number, v: string) =>
+    setPassengerNames((p) => p.map((n, idx) => (idx === i ? v : n)));
+  const removePassenger = (i: number) =>
+    setPassengerNames((p) => p.filter((_, idx) => idx !== i));
 
   // Price estimate (manual — "Tính giá" button, to avoid spamming BE).
   const [priceEstimate, setPriceEstimate] = React.useState<number | null>(null);
@@ -83,6 +103,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         dropoff: { address: dropoff.address, lat: dropoff.lat, long: dropoff.long },
         serviceType,
         requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
+        requestedSeats: showPassengerFields ? requestedSeats : undefined,
       });
       setPriceEstimate(res.finalPrice ?? res.price);
     } catch (err: any) {
@@ -128,6 +149,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setDropoff(null);
     setServiceType('RIDE');
     setVehicleType('CAR_4');
+    setRequestedSeats(1);
+    setPassengerNames([]);
     setPriceEstimate(null);
     setNote('');
     setSelectedDriverId(null);
@@ -226,6 +249,13 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         },
         serviceType,
         requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
+        requestedSeats: showPassengerFields ? requestedSeats : undefined,
+        passengerNames: showPassengerFields
+          ? (() => {
+              const names = passengerNames.map((n) => n.trim()).filter(Boolean);
+              return names.length > 0 ? names : undefined;
+            })()
+          : undefined,
         note: note || undefined,
         driverId: selectedDriverId || undefined,
         scheduledTime: scheduledIso,
@@ -415,6 +445,57 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             <div className="space-y-1.5">
               <Label htmlFor="cb-note">Ghi chú</Label>
               <Textarea id="cb-note" placeholder="VD: Khách VIP, hành lý cồng kềnh..." value={note} onChange={(e) => setNote(e.target.value)} rows={1} className="min-h-[36px] resize-none" />
+            </div>
+          )}
+
+          {/* Passenger info — RIDE/CARPOOL only */}
+          {showPassengerFields && (
+            <div className="space-y-3 rounded-lg border p-3">
+              <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+                <Users className="h-4 w-4" />
+                Hành khách
+              </h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cb-seats">Số lượng hành khách</Label>
+                  <Input
+                    id="cb-seats"
+                    type="number"
+                    min={1}
+                    max={maxSeats}
+                    value={requestedSeats}
+                    onChange={(e) => {
+                      const n = parseInt(e.target.value, 10);
+                      setRequestedSeats(Number.isNaN(n) ? 1 : Math.min(Math.max(1, n), maxSeats));
+                      setPriceEstimate(null);
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Tối đa {maxSeats} khách{serviceType === 'CARPOOL' ? ' • đi chung tính giá theo số ghế' : ''}.
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Tên hành khách <span className="font-normal text-muted-foreground">(nếu có thêm)</span></Label>
+                {passengerNames.length === 0 && (
+                  <p className="text-xs text-muted-foreground">Không bắt buộc. Thêm tên nếu cần in lên hợp đồng/hoá đơn.</p>
+                )}
+                {passengerNames.map((name, i) => (
+                  <div key={i} className="flex gap-2">
+                    <Input
+                      placeholder={`Hành khách ${i + 1}`}
+                      value={name}
+                      onChange={(e) => updatePassenger(i, e.target.value)}
+                    />
+                    <Button type="button" variant="ghost" size="icon" onClick={() => removePassenger(i)} aria-label="Xoá hành khách">
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+                <Button type="button" variant="outline" size="sm" onClick={addPassenger}>
+                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Thêm hành khách
+                </Button>
+              </div>
             </div>
           )}
 

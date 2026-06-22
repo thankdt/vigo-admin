@@ -588,6 +588,8 @@ export async function estimateTripPrice(body: {
   dropoff: { address: string; lat: number; long: number };
   serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
   requestedVehicleType?: 'CAR_4' | 'CAR_7';
+  // CARPOOL nhân giá theo số ghế — truyền vào để ước tính khớp giá tạo chuyến.
+  requestedSeats?: number;
 }): Promise<{ price: number; finalPrice: number; distanceKm?: number }> {
   const response = await fetchWithAuth('/pricing/calculate', {
     method: 'POST',
@@ -604,6 +606,10 @@ export async function createAdminBooking(data: {
   dropoffAddress: { address: string; lat: number; long: number };
   serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
   requestedVehicleType?: 'CAR_4' | 'CAR_7';
+  // Số lượng hành khách (default 1). Với CARPOOL nó nhân giá ở backend.
+  requestedSeats?: number;
+  // Tên các hành khách đi cùng (nếu có) — in lên hợp đồng/hoá đơn.
+  passengerNames?: string[];
   note?: string;
   driverId?: string;
   // ISO 8601 timestamp (e.g. new Date(...).toISOString()). Omit for an
