@@ -1,7 +1,12 @@
 'use client';
 import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback } from '@/lib/types';
 
-export const API_BASE_URL = 'https://api.vigogroup.vn';
+// Overridable per-environment. Dev (docker/next dev) sets
+// NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.site; prod builds fall back to
+// the production API. NEXT_PUBLIC_* is read at runtime in `next dev` and inlined
+// at build time for `next build`.
+export const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.vigogroup.vn';
 
 let isRefreshing = false;
 let failedQueue: Array<{

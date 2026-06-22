@@ -7,6 +7,11 @@ const nextConfig: NextConfig = {
   trailingSlash: true, // Required for S3 to serve index.html for directories
   // assetPrefix is NOT needed when hosting the entire site on S3
 
+  // Allow the dev server (next dev) to accept requests proxied from the
+  // Cloudflare tunnel host. Next 15.5 blocks cross-origin dev requests
+  // otherwise. No effect on `next build` / static export.
+  allowedDevOrigins: ['admin.vigodev.site'],
+
   images: {
     unoptimized: true, // Required for static export
     remotePatterns: [

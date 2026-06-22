@@ -1,0 +1,35 @@
+services:
+  admin:
+    build:
+      context: .
+      target: development
+    ports:
+      - "9002:9002"
+    environment:
+      # Admin (browser) → dev backend. next dev reads this at runtime; prod
+      # builds fall back to the hardcoded prod URL in src/lib/api.ts.
+      - NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.site
+    volumes:
+      - .:/app
+      - /app/node_modules   # keep image's installed deps
+      - /app/.next          # keep dev build cache out of the bind mount
+    restart: unless-stopped
+    networks:
+      - vigo-admin-network
+
+  # Cloudflare named tunnel for the admin dev site. Create a SEPARATE tunnel
+  # (e.g. "vigo-admin-dev") in the Zero Trust dashboard, set its public hostname
+  # admin.vigodev.site → service http://admin:9002, put the token in .env.tunnel.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+    depends_on:
+      - admin
+    restart: unless-stopped
+    networks:
+      - vigo-admin-network
+
+networks:
+  vigo-admin-network:
