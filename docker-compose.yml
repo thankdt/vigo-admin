@@ -15,21 +15,12 @@ services:
       - /app/.next          # keep dev build cache out of the bind mount
     restart: unless-stopped
     networks:
-      - vigo-admin-network
+      - vigo-shared
 
-  # Cloudflare named tunnel for the admin dev site. Create a SEPARATE tunnel
-  # (e.g. "vigo-admin-dev") in the Zero Trust dashboard, set its public hostname
-  # admin.vigodev.site → service http://admin:9002, put the token in .env.tunnel.
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    command: tunnel --no-autoupdate run
-    environment:
-      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
-    depends_on:
-      - admin
-    restart: unless-stopped
-    networks:
-      - vigo-admin-network
-
+# Reuse the backend stack's network so its EXISTING cloudflared can reach this
+# container. The route admin.vigodev.site → http://admin:9002 lives on the same
+# tunnel as api.vigodev.site (no separate tunnel/cloudflared needed here).
 networks:
-  vigo-admin-network:
+  vigo-shared:
+    external: true
+    name: vigo-backend_vigo-network

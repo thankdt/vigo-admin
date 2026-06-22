@@ -45,10 +45,10 @@ pipeline {
             if [ "$OLD" = "none" ] || git diff --name-only "$OLD" "$NEW" \
                  | grep -qE '^(package-lock\\.json|package\\.json|Dockerfile|docker-compose\\.yml)$'; then
               echo ">> deps/build config changed — rebuilding admin image"
-              docker compose --env-file .env.tunnel up -d --build admin
+              docker compose up -d --build admin
             else
               echo ">> source-only change — recreating admin"
-              docker compose --env-file .env.tunnel up -d admin
+              docker compose up -d admin
             fi
 
             docker compose ps
