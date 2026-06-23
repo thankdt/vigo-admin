@@ -4,14 +4,14 @@ import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Loader2, ArrowLeft, Building2, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxTrips, type HtxTripRow, type HtxReconTotals } from '@/lib/api';
-import { downloadXlsx } from '@/lib/csv';
+import { downloadXlsxGrouped } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../../finance/components/finance-filter';
-import { expandHtxRow, HTX_LEAF_COLS, leafExportLabel, HTX_PAYMENT_LABEL } from '../htx-recon-shared';
+import { expandHtxRow, HTX_LEAF_COLS, buildHtxExportHeader, HTX_PAYMENT_LABEL } from '../htx-recon-shared';
 import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from '../htx-recon-table';
 
 const fmtVnTime = (iso: string) =>
@@ -51,7 +51,7 @@ export default function HtxDetailPage() {
 
   const handleExport = async () => {
     if (trips.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
-    const header = ['STT', 'Mã chuyến', 'Ngày giờ', 'Tài xế', 'SĐT', 'Biển số xe', 'TÊN HTX/ĐVCCX', 'Hình thức TT', ...HTX_LEAF_COLS.map(leafExportLabel)];
+    const { headerRows, merges } = buildHtxExportHeader(['STT', 'Mã chuyến', 'Ngày giờ', 'Tài xế', 'SĐT', 'Biển số xe', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
     const body: Array<Array<string | number>> = trips.map((t, i) => {
       const ex = expandHtxRow(t);
       return [i + 1, t.bookingId, fmtVnTime(t.createdAt), t.driverName, t.driverPhone, t.plate, name, HTX_PAYMENT_LABEL, ...HTX_LEAF_COLS.map((c) => ex[c.key])];
@@ -61,7 +61,7 @@ export default function HtxDetailPage() {
       body.push(['', 'TỔNG', '', '', '', '', '', '', ...HTX_LEAF_COLS.map((c) => ex[c.key])]);
     }
     const safeName = (name || 'htx').replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase();
-    await downloadXlsx(`doi-soat-${safeName}_${range.from}_${range.to}.xlsx`, header, body, 'Đối soát HTX');
+    await downloadXlsxGrouped(`doi-soat-${safeName}_${range.from}_${range.to}.xlsx`, headerRows, merges, body, 'Đối soát HTX');
   };
 
   return (
