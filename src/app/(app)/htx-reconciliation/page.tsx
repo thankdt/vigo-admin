@@ -2,17 +2,21 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Building2, Search, ChevronRight, Download } from 'lucide-react';
+import { Loader2, Building2, Search, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxReconciliation, type HtxReconRow, type HtxReconTotals } from '@/lib/api';
 import { downloadXlsx } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
+import { expandHtxRow, HTX_LEAF_COLS, leafExportLabel, HTX_PAYMENT_LABEL } from './htx-recon-shared';
+import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from './htx-recon-table';
 
-const fmt = (v: number) => new Intl.NumberFormat('vi-VN').format(v ?? 0);
+// Leading (non-financial) columns before the shared 15 financial leaf columns.
+const LEADING = 3; // STT, TÊN HTX/ĐVCCX, Hình thức TT
+const TOTAL_COLS = LEADING + HTX_LEAF_COLS.length;
 
 export default function HtxReconciliationPage() {
   const router = useRouter();
@@ -43,21 +47,18 @@ export default function HtxReconciliationPage() {
     return q ? rows.filter((r) => r.name.toLowerCase().includes(q)) : rows;
   }, [rows, search]);
 
-  const cols: Array<{ key: keyof HtxReconRow; label: string; className?: string }> = [
-    { key: 'grossRevenue', label: 'Doanh thu gộp' },
-    { key: 'totalVat', label: 'VAT tổng' },
-    { key: 'htxCommission', label: 'HH HTX' },
-    { key: 'htxVatRemit', label: 'VAT HTX' },
-    { key: 'htxTotalReceived', label: 'Tổng HTX nhận', className: 'text-purple-700 dark:text-purple-400 font-semibold' },
-    { key: 'vigoCommission', label: 'HH VIGO' },
-    { key: 'vigoVatRemit', label: 'VAT VIGO' },
-  ];
-
   const handleExport = async () => {
     if (filtered.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
-    const body = filtered.map((r) => [r.name, r.bookingCount, ...cols.map((c) => r[c.key] as number)]);
-    if (totals) body.push(['TỔNG', totals.bookingCount, ...cols.map((c) => totals[c.key as keyof HtxReconTotals] as number)]);
-    await downloadXlsx(`doi-soat-htx_${range.from}_${range.to}.xlsx`, ['HTX', 'Số chuyến', ...cols.map((c) => c.label)], body, 'Đối soát HTX');
+    const header = ['STT', 'TÊN HTX/ĐVCCX', 'Hình thức TT', ...HTX_LEAF_COLS.map(leafExportLabel)];
+    const body: Array<Array<string | number>> = filtered.map((r, i) => {
+      const ex = expandHtxRow(r);
+      return [i + 1, r.name, HTX_PAYMENT_LABEL, ...HTX_LEAF_COLS.map((c) => ex[c.key])];
+    });
+    if (totals) {
+      const ex = expandHtxRow(totals);
+      body.push(['', 'TỔNG', '', ...HTX_LEAF_COLS.map((c) => ex[c.key])]);
+    }
+    await downloadXlsx(`doi-soat-htx_${range.from}_${range.to}.xlsx`, header, body, 'Đối soát HTX');
   };
 
   return (
@@ -89,24 +90,25 @@ export default function HtxReconciliationPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="whitespace-nowrap">HTX</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Số chuyến</TableHead>
-                {cols.map((c) => <TableHead key={c.key} className="text-right whitespace-nowrap">{c.label}</TableHead>)}
-                <TableHead />
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">STT</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">TÊN HTX/ĐVCCX</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Hình thức TT</TableHead>
+                <HtxHeadTailRow1 />
               </TableRow>
+              <HtxHeadLowerRows />
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={cols.length + 3} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={TOTAL_COLS} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
               ) : filtered.length === 0 ? (
-                <TableRow><TableCell colSpan={cols.length + 3} className="h-24 text-center text-muted-foreground">Không có HTX nào khớp.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={TOTAL_COLS} className="h-24 text-center text-muted-foreground">Không có HTX nào khớp.</TableCell></TableRow>
               ) : (
-                filtered.map((r) => (
+                filtered.map((r, i) => (
                   <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => router.push(`/htx-reconciliation/detail?id=${encodeURIComponent(r.id)}`)}>
+                    <TableCell className="tabular-nums">{i + 1}</TableCell>
                     <TableCell className="font-medium whitespace-nowrap">{r.name}</TableCell>
-                    <TableCell className="text-right tabular-nums">{r.bookingCount}</TableCell>
-                    {cols.map((c) => <TableCell key={c.key} className={`text-right tabular-nums whitespace-nowrap ${c.className ?? ''}`}>{fmt(r[c.key] as number)}</TableCell>)}
-                    <TableCell className="text-right"><ChevronRight className="h-4 w-4 text-muted-foreground" /></TableCell>
+                    <TableCell className="whitespace-nowrap">{HTX_PAYMENT_LABEL}</TableCell>
+                    <HtxLeafCells row={expandHtxRow(r)} />
                   </TableRow>
                 ))
               )}
@@ -114,17 +116,17 @@ export default function HtxReconciliationPage() {
             {totals && !loading && filtered.length > 0 && (
               <TableFooter>
                 <TableRow className="font-semibold">
-                  <TableCell className="whitespace-nowrap">TỔNG</TableCell>
-                  <TableCell className="text-right tabular-nums">{totals.bookingCount}</TableCell>
-                  {cols.map((c) => <TableCell key={c.key} className="text-right tabular-nums whitespace-nowrap">{fmt(totals[c.key as keyof HtxReconTotals] as number)}</TableCell>)}
-                  <TableCell />
+                  <TableCell colSpan={LEADING} className="whitespace-nowrap">TỔNG</TableCell>
+                  <HtxLeafCells row={expandHtxRow(totals)} />
                 </TableRow>
               </TableFooter>
             )}
           </Table>
         </div>
       </Card>
-      <p className="text-xs text-muted-foreground">Đơn vị: đồng (đ). Doanh thu gộp = tổng tiền khách trả (gồm VAT). Tổng HTX nhận = HH HTX + VAT HTX + PIT giữ hộ.</p>
+      <p className="text-xs text-muted-foreground">
+        Đơn vị: đồng (đ). Tổng khách trả = Giá cước trước VAT + VAT, và luôn bằng (Tài xế thực nhận + HTX, ĐVCCX nhận + VIGO nhận).
+      </p>
     </div>
   );
 }
