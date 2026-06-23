@@ -28,6 +28,7 @@ import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Check as CheckIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { InlinePriceCell } from './inline-price-cell';
 
 const formatCurrency = (value: number | string) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(value));
@@ -115,6 +116,20 @@ export function RoutePricingManager() {
         setIsFormOpen(false);
         setEditingPricing(null);
         fetchPricing();
+    };
+
+    // Inline quick price edit: update one rule's price without opening the dialog.
+    // Throws on failure so InlinePriceCell reverts its draft; patches local state
+    // on success (no full refetch) for a snappy edit.
+    const handleInlinePriceSave = async (id: number, price: number) => {
+        try {
+            await updatePricing(id, { price });
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Cập nhật giá thất bại', description: err.message });
+            throw err;
+        }
+        setPricing(prev => prev.map(p => (p.id === id ? { ...p, price } : p)));
+        toast({ title: 'Đã cập nhật giá', description: formatCurrency(price) });
     };
 
     const handleDeleteConfirm = async () => {
@@ -222,14 +237,13 @@ export function RoutePricingManager() {
                                         {provincePricing.map(p => (
                                             <div
                                                 key={p.id}
-                                                className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20 px-4 py-3 cursor-pointer hover:bg-amber-100/40 dark:hover:bg-amber-900/30"
-                                                onClick={() => handleOpenForm(p, 'province')}
+                                                className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20 px-4 py-3"
                                             >
                                                 <div className="flex items-center gap-3">
                                                     <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
                                                         {p.adminUnit?.name || 'N/A'}
                                                     </Badge>
-                                                    <span className="text-lg font-semibold">{formatCurrency(p.price)}</span>
+                                                    <InlinePriceCell value={Number(p.price)} onSave={(price) => handleInlinePriceSave(p.id, price)} />
                                                     <Badge variant={p.serviceType === 'RIDE' ? 'outline' : 'secondary'}>
                                                         {SERVICE_TYPE_LABELS[p.serviceType || 'CARPOOL'] || p.serviceType}
                                                     </Badge>
@@ -291,11 +305,7 @@ export function RoutePricingManager() {
                                         </TableHeader>
                                         <TableBody>
                                             {districtPricing.map(p => (
-                                                <TableRow
-                                                    key={p.id}
-                                                    className="cursor-pointer hover:bg-muted/50"
-                                                    onClick={() => handleOpenForm(p, 'district')}
-                                                >
+                                                <TableRow key={p.id}>
                                                     <TableCell className="font-medium">
                                                         {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
                                                     </TableCell>
@@ -312,7 +322,9 @@ export function RoutePricingManager() {
                                                             )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{formatCurrency(p.price)}</TableCell>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <InlinePriceCell value={Number(p.price)} onSave={(price) => handleInlinePriceSave(p.id, price)} />
+                                                    </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'district')}>
                                                             <Edit className="h-4 w-4" />
@@ -366,11 +378,7 @@ export function RoutePricingManager() {
                                         </TableHeader>
                                         <TableBody>
                                             {poiPricing.map(p => (
-                                                <TableRow
-                                                    key={p.id}
-                                                    className="cursor-pointer hover:bg-muted/50"
-                                                    onClick={() => handleOpenForm(p, 'poi')}
-                                                >
+                                                <TableRow key={p.id}>
                                                     <TableCell className="font-medium">
                                                         {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
                                                     </TableCell>
@@ -387,7 +395,9 @@ export function RoutePricingManager() {
                                                             )}
                                                         </div>
                                                     </TableCell>
-                                                    <TableCell>{formatCurrency(p.price)}</TableCell>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <InlinePriceCell value={Number(p.price)} onSave={(price) => handleInlinePriceSave(p.id, price)} />
+                                                    </TableCell>
                                                     <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
                                                         <Button variant="ghost" size="icon" onClick={() => handleOpenForm(p, 'poi')}>
                                                             <Edit className="h-4 w-4" />
