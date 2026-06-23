@@ -4,14 +4,14 @@ import * as React from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2, Building2, Search, Download } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxReconciliation, type HtxReconRow, type HtxReconTotals } from '@/lib/api';
-import { downloadXlsx } from '@/lib/csv';
+import { downloadXlsxGrouped } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
-import { expandHtxRow, HTX_LEAF_COLS, leafExportLabel, HTX_PAYMENT_LABEL } from './htx-recon-shared';
+import { expandHtxRow, HTX_LEAF_COLS, buildHtxExportHeader, HTX_PAYMENT_LABEL } from './htx-recon-shared';
 import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from './htx-recon-table';
 
 // Leading (non-financial) columns before the shared 15 financial leaf columns.
@@ -49,7 +49,7 @@ export default function HtxReconciliationPage() {
 
   const handleExport = async () => {
     if (filtered.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
-    const header = ['STT', 'TÊN HTX/ĐVCCX', 'Hình thức TT', ...HTX_LEAF_COLS.map(leafExportLabel)];
+    const { headerRows, merges } = buildHtxExportHeader(['STT', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
     const body: Array<Array<string | number>> = filtered.map((r, i) => {
       const ex = expandHtxRow(r);
       return [i + 1, r.name, HTX_PAYMENT_LABEL, ...HTX_LEAF_COLS.map((c) => ex[c.key])];
@@ -58,7 +58,7 @@ export default function HtxReconciliationPage() {
       const ex = expandHtxRow(totals);
       body.push(['', 'TỔNG', '', ...HTX_LEAF_COLS.map((c) => ex[c.key])]);
     }
-    await downloadXlsx(`doi-soat-htx_${range.from}_${range.to}.xlsx`, header, body, 'Đối soát HTX');
+    await downloadXlsxGrouped(`doi-soat-htx_${range.from}_${range.to}.xlsx`, headerRows, merges, body, 'Đối soát HTX');
   };
 
   return (
