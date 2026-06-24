@@ -13,6 +13,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     AlertDialog,
     AlertDialogAction,
@@ -50,6 +51,11 @@ export function RoutePricingManager() {
     const [editingPricing, setEditingPricing] = React.useState<RoutePricing | null>(null);
     const [deletingPricing, setDeletingPricing] = React.useState<RoutePricing | null>(null);
     const [defaultFormLevel, setDefaultFormLevel] = React.useState<'province' | 'district' | 'poi'>('district');
+    // Bulk HARD-delete of pricing rules (pricing has no soft-delete — irreversible).
+    const [selectedPricingIds, setSelectedPricingIds] = React.useState<Set<number>>(new Set());
+    const [bulkConfirm, setBulkConfirm] = React.useState<{ ids: number[]; scope: 'selected' | 'all' } | null>(null);
+    const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
+    const [deleteAllText, setDeleteAllText] = React.useState('');
     const { toast } = useToast();
 
     const selectedRoute = React.useMemo(() => routes.find(r => r.id === selectedRouteId), [routes, selectedRouteId]);
@@ -85,6 +91,7 @@ export function RoutePricingManager() {
             const filterValue = serviceTypeFilter && serviceTypeFilter !== 'ALL' ? serviceTypeFilter : undefined;
             const pricingData = await getPricingByRoute(selectedRouteId, filterValue);
             setPricing(pricingData);
+            setSelectedPricingIds(new Set()); // drop stale selection on route/filter change
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Không thể tải bảng giá', description: err.message });
             setPricing([]);
@@ -164,6 +171,37 @@ export function RoutePricingManager() {
         return selectedRoute.districts.filter(d => !configuredDistrictIds.has(d.id));
     }, [selectedRoute, districtPricing]);
 
+    // ── Bulk-delete helpers (all 3 sections share one selection Set) ──
+    const allPricingIds = React.useMemo(() => pricing.map(p => p.id), [pricing]);
+    const allPricingSelected = allPricingIds.length > 0 && allPricingIds.every(id => selectedPricingIds.has(id));
+    const togglePricingSel = (id: number) => setSelectedPricingIds(prev => {
+        const n = new Set(prev);
+        if (n.has(id)) n.delete(id); else n.add(id);
+        return n;
+    });
+    const toggleSelectAllPricing = () =>
+        setSelectedPricingIds(allPricingSelected ? new Set() : new Set(allPricingIds));
+
+    // "XÓA" (accept with/without diacritics) gate for the irreversible delete-all.
+    const deleteAllReady = ['XÓA', 'XOA'].includes(deleteAllText.trim().toUpperCase());
+
+    const runBulkDeletePricing = async (ids: number[]) => {
+        setIsBulkDeleting(true);
+        const results = await Promise.allSettled(ids.map(id => deletePricing(id)));
+        const ok = results.filter(r => r.status === 'fulfilled').length;
+        const fail = results.length - ok;
+        setIsBulkDeleting(false);
+        setBulkConfirm(null);
+        setDeleteAllText('');
+        setSelectedPricingIds(new Set());
+        toast({
+            title: fail === 0 ? `Đã xóa ${ok} quy tắc giá` : `Xóa ${ok} quy tắc, lỗi ${fail}`,
+            description: fail === 0 ? undefined : 'Một số quy tắc không xóa được — thử lại.',
+            variant: fail === 0 ? undefined : 'destructive',
+        });
+        fetchPricing();
+    };
+
     return (
         <>
             <Card>
@@ -201,6 +239,33 @@ export function RoutePricingManager() {
                             </Select>
                         </div>
                     </div>
+
+                    {!isPricingLoading && pricing.length > 0 && (
+                        <div className="flex items-center gap-3 flex-wrap border-y py-2">
+                            <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                                <Checkbox checked={allPricingSelected} onCheckedChange={toggleSelectAllPricing} />
+                                Chọn tất cả ({pricing.length})
+                            </label>
+                            {selectedPricingIds.size > 0 && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                                    onClick={() => setBulkConfirm({ ids: [...selectedPricingIds], scope: 'selected' })}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Xóa đã chọn ({selectedPricingIds.size})
+                                </Button>
+                            )}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                                onClick={() => { setDeleteAllText(''); setBulkConfirm({ ids: allPricingIds, scope: 'all' }); }}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa tất cả giá tuyến này
+                            </Button>
+                        </div>
+                    )}
 
                     {isPricingLoading ? (
                         <div className="h-48 flex items-center justify-center">
@@ -240,6 +305,11 @@ export function RoutePricingManager() {
                                                 className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50/30 dark:border-amber-800 dark:bg-amber-950/20 px-4 py-3"
                                             >
                                                 <div className="flex items-center gap-3">
+                                                    <Checkbox
+                                                        checked={selectedPricingIds.has(p.id)}
+                                                        onCheckedChange={() => togglePricingSel(p.id)}
+                                                        aria-label="Chọn quy tắc giá"
+                                                    />
                                                     <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
                                                         {p.adminUnit?.name || 'N/A'}
                                                     </Badge>
@@ -296,6 +366,7 @@ export function RoutePricingManager() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
+                                                <TableHead className="w-10"></TableHead>
                                                 <TableHead>Quận/huyện bắt đầu</TableHead>
                                                 <TableHead>Quận/huyện kết thúc</TableHead>
                                                 <TableHead>Loại dịch vụ</TableHead>
@@ -306,6 +377,13 @@ export function RoutePricingManager() {
                                         <TableBody>
                                             {districtPricing.map(p => (
                                                 <TableRow key={p.id}>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <Checkbox
+                                                            checked={selectedPricingIds.has(p.id)}
+                                                            onCheckedChange={() => togglePricingSel(p.id)}
+                                                            aria-label="Chọn quy tắc giá"
+                                                        />
+                                                    </TableCell>
                                                     <TableCell className="font-medium">
                                                         {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
                                                     </TableCell>
@@ -369,6 +447,7 @@ export function RoutePricingManager() {
                                     <Table>
                                         <TableHeader>
                                             <TableRow>
+                                                <TableHead className="w-10"></TableHead>
                                                 <TableHead>Quận/huyện bắt đầu</TableHead>
                                                 <TableHead>POI kết thúc</TableHead>
                                                 <TableHead>Loại dịch vụ</TableHead>
@@ -379,6 +458,13 @@ export function RoutePricingManager() {
                                         <TableBody>
                                             {poiPricing.map(p => (
                                                 <TableRow key={p.id}>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <Checkbox
+                                                            checked={selectedPricingIds.has(p.id)}
+                                                            onCheckedChange={() => togglePricingSel(p.id)}
+                                                            aria-label="Chọn quy tắc giá"
+                                                        />
+                                                    </TableCell>
                                                     <TableCell className="font-medium">
                                                         {p.startDistrict ? p.startDistrict.name : <span className="text-muted-foreground italic">Tất cả</span>}
                                                     </TableCell>
@@ -457,6 +543,58 @@ export function RoutePricingManager() {
                     <AlertDialogFooter>
                         <AlertDialogCancel>Hủy</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">Xóa</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* ===== BULK DELETE CONFIRMATION (hard, irreversible) ===== */}
+            <AlertDialog open={!!bulkConfirm} onOpenChange={() => { if (!isBulkDeleting) { setBulkConfirm(null); setDeleteAllText(''); } }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {bulkConfirm?.scope === 'all'
+                                ? 'Xóa TẤT CẢ giá của tuyến này?'
+                                : `Xóa ${bulkConfirm?.ids.length ?? 0} quy tắc giá đã chọn?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-2 text-sm">
+                                <p className="font-medium text-destructive">
+                                    {bulkConfirm?.ids.length ?? 0} quy tắc giá sẽ bị XÓA VĨNH VIỄN — KHÔNG THỂ KHÔI PHỤC.
+                                </p>
+                                <p>
+                                    {bulkConfirm?.scope === 'all'
+                                        ? 'Tuyến này sẽ không còn quy tắc giá nào (chuyến rơi về tính theo km) cho tới khi cấu hình lại.'
+                                        : 'Các quy tắc giá đã chọn sẽ bị xóa khỏi hệ thống.'}
+                                </p>
+                                {bulkConfirm?.scope === 'all' && (
+                                    <div className="pt-1 space-y-1">
+                                        <Label htmlFor="confirm-delete-all" className="text-xs text-foreground">
+                                            Gõ <span className="font-mono font-bold">XÓA</span> để xác nhận:
+                                        </Label>
+                                        <Input
+                                            id="confirm-delete-all"
+                                            value={deleteAllText}
+                                            onChange={(e) => setDeleteAllText(e.target.value)}
+                                            placeholder="XÓA"
+                                            autoComplete="off"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isBulkDeleting}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => { e.preventDefault(); if (bulkConfirm) runBulkDeletePricing(bulkConfirm.ids); }}
+                            disabled={isBulkDeleting || (bulkConfirm?.scope === 'all' && !deleteAllReady)}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isBulkDeleting
+                                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                : <Trash2 className="mr-2 h-4 w-4" />}
+                            Xóa {bulkConfirm?.ids.length ?? 0} quy tắc
+                        </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
