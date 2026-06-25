@@ -1507,6 +1507,8 @@ export type HtxReconRow = {
   htxTotalReceived: number;
   vigoCommission: number;
   vigoVatRemit: number;
+  platformFeeGross: number;
+  km: number;
 };
 export type HtxReconTotals = Omit<HtxReconRow, 'id' | 'name'>;
 export type HtxTripRow = {
@@ -1522,6 +1524,8 @@ export type HtxTripRow = {
   htxTotalReceived: number;
   vigoCommission: number;
   vigoVatRemit: number;
+  platformFeeGross: number;
+  km: number;
 };
 
 export async function getHtxReconciliation(from: string, to: string): Promise<{ data: HtxReconRow[]; totals: HtxReconTotals }> {

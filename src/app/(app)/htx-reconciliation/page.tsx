@@ -14,7 +14,7 @@ import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/fi
 import { expandHtxRow, HTX_LEAF_COLS, buildHtxExportHeader, HTX_PAYMENT_LABEL } from './htx-recon-shared';
 import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from './htx-recon-table';
 
-// Leading (non-financial) columns before the shared 15 financial leaf columns.
+// Leading (non-financial) columns before the shared 17 financial leaf columns.
 const LEADING = 3; // STT, TÊN HTX/ĐVCCX, Hình thức TT
 const TOTAL_COLS = LEADING + HTX_LEAF_COLS.length;
 
