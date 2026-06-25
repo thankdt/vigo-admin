@@ -11,6 +11,8 @@ const SAMPLE: HtxFinancials = {
   htxTotalReceived: 31500,
   vigoCommission: 37500,
   vigoVatRemit: 4000,
+  platformFeeGross: 60000,
+  km: 10000,
 };
 
 // Renders the shared header + body fragments inside a real table. This is the
@@ -45,12 +47,17 @@ describe('HTX reconciliation table fragments', () => {
     expect(screen.getByText('VIGO')).toBeInTheDocument();
     expect(screen.getByText('Các khoản thu tài xế')).toBeInTheDocument();
     expect(screen.getByText('Tổng tiền tài xế thực nhận')).toBeInTheDocument();
+    expect(screen.getByText('Phí nền tảng (gộp)')).toBeInTheDocument();
+    expect(screen.getByText('Khuyến mãi (nền tảng tài trợ)')).toBeInTheDocument();
+    expect(screen.getByText('Phí nền tảng (thực thu)')).toBeInTheDocument();
   });
 
-  it('renders the 15 formatted financial body cells', () => {
+  it('renders the 17 formatted financial body cells', () => {
     renderTable();
     expect(screen.getByText('250.000')).toBeInTheDocument(); // priceBeforeVat
     expect(screen.getByText('200.000')).toBeInTheDocument(); // driverIncome
+    expect(screen.getByText('60.000')).toBeInTheDocument(); // platformFeeGross
+    expect(screen.getByText('10.000')).toBeInTheDocument(); // km
     expect(screen.getByText('197.000')).toBeInTheDocument(); // driverNet
     expect(screen.getByText('31.500')).toBeInTheDocument(); // htxTotal
     expect(screen.getByText('41.500')).toBeInTheDocument(); // vigoTotal

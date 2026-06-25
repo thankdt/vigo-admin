@@ -8,7 +8,7 @@
 // 20%/5%/1.5%/8% case). Used identically for per-trip rows, per-HTX summary
 // rows, and the TOTAL row (the identities are linear, so sums tie out).
 
-/** The 7 financial fields the API returns on every recon row (trip or HTX). */
+/** The financial fields the API returns on every recon row (trip or HTX). */
 export type HtxFinancials = {
   grossRevenue: number; // what the customer paid (incl. VAT)
   totalVat: number;
@@ -17,6 +17,8 @@ export type HtxFinancials = {
   htxTotalReceived: number;
   vigoCommission: number;
   vigoVatRemit: number;
+  platformFeeGross: number; // hoa hồng nền tảng TRƯỚC khi trừ khuyến mãi
+  km: number; // khuyến mãi nền tảng tài trợ (platformFeeGross − km = phí thực thu)
 };
 
 export type ExpandedHtx = {
@@ -24,7 +26,9 @@ export type ExpandedHtx = {
   vat: number; // 9
   customerTotal: number; // 10 = 8+9
   driverIncome: number; // 11 = 8 − platformFee
-  platformFee: number; // 12 = htxCommission + vigoCommission
+  platformFeeGross: number; // hoa hồng nền tảng trước KM
+  km: number; // khuyến mãi nền tảng tài trợ
+  platformFee: number; // 12 = htxCommission + vigoCommission = platformFeeGross − km
   driverPit: number; // 13 = htxTotalReceived − htxCommission − htxVatRemit
   driverDeductTotal: number; // 14 = platformFee + driverPit
   driverNet: number; // 15 = 8 − 14
@@ -47,6 +51,8 @@ export function expandHtxRow(f: HtxFinancials): ExpandedHtx {
     vat: f.totalVat,
     customerTotal: f.grossRevenue,
     driverIncome: priceBeforeVat - platformFee,
+    platformFeeGross: f.platformFeeGross,
+    km: f.km,
     platformFee,
     driverPit,
     driverDeductTotal,
@@ -70,13 +76,15 @@ export type HtxLeafCol = {
   highlight?: boolean; // the "tổng … nhận" totals get emphasised
 };
 
-/** The 15 leaf columns, in spec order. Drives table bodies + xlsx export. */
+/** The 17 leaf columns, in spec order. Drives table bodies + xlsx export. */
 export const HTX_LEAF_COLS: HtxLeafCol[] = [
   { key: 'priceBeforeVat', label: 'Giá cước trước VAT', group: null },
   { key: 'vat', label: 'VAT', group: null },
   { key: 'customerTotal', label: 'Tổng khách trả cho tài xế', group: null },
   { key: 'driverIncome', label: 'Thu nhập tài xế', group: 'Tài xế' },
-  { key: 'platformFee', label: 'Phí nền tảng', group: 'Tài xế' },
+  { key: 'platformFeeGross', label: 'Phí nền tảng (gộp)', group: 'Tài xế' },
+  { key: 'km', label: 'Khuyến mãi (nền tảng tài trợ)', group: 'Tài xế' },
+  { key: 'platformFee', label: 'Phí nền tảng (thực thu)', group: 'Tài xế' },
   { key: 'driverPit', label: 'Thuế TNCN', group: 'Tài xế' },
   { key: 'driverDeductTotal', label: 'Tổng thu tài xế', group: 'Tài xế' },
   { key: 'driverNet', label: 'Tổng tiền tài xế thực nhận', group: 'Tài xế', highlight: true },
@@ -101,10 +109,10 @@ type XlsxMerge = { s: { r: number; c: number }; e: { r: number; c: number } };
  * Build the MULTI-ROW xlsx header (matrix + merge ranges) that mirrors the
  * on-screen grouped header, so the export carries the same layers instead of a
  * single flat row. Layout (4 header rows):
- *   r0: [entity… | base… spanning all 4 rows] + "Phân bổ…" over the 12 grouped cols
- *   r1: Tài xế (5) | HTX, ĐVCCX (4) | VIGO (3)
- *   r2: Thu nhập tài xế | "Các khoản thu tài xế" (3) | Tổng tiền tài xế thực nhận | HTX leaves | VIGO leaves
- *   r3: Phí nền tảng | Thuế TNCN | Tổng thu tài xế   (under "Các khoản thu tài xế")
+ *   r0: [entity… | base… spanning all 4 rows] + "Phân bổ…" over the 14 grouped cols
+ *   r1: Tài xế (7) | HTX, ĐVCCX (4) | VIGO (3)
+ *   r2: Thu nhập tài xế | "Các khoản thu tài xế" (5) | Tổng tiền tài xế thực nhận | HTX leaves | VIGO leaves
+ *   r3: Phí nền tảng (gộp) | Khuyến mãi | Phí nền tảng (thực thu) | Thuế TNCN | Tổng thu tài xế   (under "Các khoản thu tài xế")
  *
  * `entityLabels` are the non-financial leading columns (STT, HTX name, …). The
  * 3 base financial columns (Giá cước trước VAT / VAT / Tổng khách trả) are
@@ -130,35 +138,40 @@ export function buildHtxExportHeader(entityLabels: string[]): {
   standalone.forEach((l, i) => (r0[i] = l));
   r0[S] = 'Phân bổ doanh, VAT, Thuế TNCN và các khoản phí';
 
+  // Grouped leaf layout (offsets into the grouped section, from S):
+  //   Tài xế (7): 0 Thu nhập | 1-5 "Các khoản thu tài xế" | 6 Tổng tiền thực nhận
+  //   HTX (4): 7-10 · VIGO (3): 11-13
   r1[S] = 'Tài xế';
-  r1[S + 5] = 'HTX, ĐVCCX';
-  r1[S + 9] = 'VIGO';
+  r1[S + 7] = 'HTX, ĐVCCX';
+  r1[S + 11] = 'VIGO';
 
-  // Tài xế: leaf0 standalone, leaves 1-3 under "Các khoản thu tài xế", leaf4 standalone
+  // Tài xế: leaf0 standalone, leaves 1-5 under "Các khoản thu tài xế", leaf6 standalone
   r2[S + 0] = grouped[0].label; // Thu nhập tài xế
   r2[S + 1] = 'Các khoản thu tài xế';
-  r2[S + 4] = grouped[4].label; // Tổng tiền tài xế thực nhận
-  r3[S + 1] = grouped[1].label; // Phí nền tảng
-  r3[S + 2] = grouped[2].label; // Thuế TNCN
-  r3[S + 3] = grouped[3].label; // Tổng thu tài xế
-  // HTX (5-8) + VIGO (9-11): each leaf is a single column titled on r2
-  for (let i = 5; i < 12; i++) r2[S + i] = grouped[i].label;
+  r2[S + 6] = grouped[6].label; // Tổng tiền tài xế thực nhận
+  r3[S + 1] = grouped[1].label; // Phí nền tảng (gộp)
+  r3[S + 2] = grouped[2].label; // Khuyến mãi (nền tảng tài trợ)
+  r3[S + 3] = grouped[3].label; // Phí nền tảng (thực thu)
+  r3[S + 4] = grouped[4].label; // Thuế TNCN
+  r3[S + 5] = grouped[5].label; // Tổng thu tài xế
+  // HTX (7-10) + VIGO (11-13): each leaf is a single column titled on r2
+  for (let i = 7; i < 14; i++) r2[S + i] = grouped[i].label;
 
   const merges: XlsxMerge[] = [];
   // Standalone columns span all 4 header rows.
   for (let c = 0; c < S; c++) merges.push({ s: { r: 0, c }, e: { r: 3, c } });
-  // "Phân bổ…" over the 12 grouped cols.
+  // "Phân bổ…" over the 14 grouped cols.
   merges.push({ s: { r: 0, c: S }, e: { r: 0, c: total - 1 } });
   // Group bands on r1.
-  merges.push({ s: { r: 1, c: S }, e: { r: 1, c: S + 4 } }); // Tài xế
-  merges.push({ s: { r: 1, c: S + 5 }, e: { r: 1, c: S + 8 } }); // HTX
-  merges.push({ s: { r: 1, c: S + 9 }, e: { r: 1, c: S + 11 } }); // VIGO
+  merges.push({ s: { r: 1, c: S }, e: { r: 1, c: S + 6 } }); // Tài xế (7)
+  merges.push({ s: { r: 1, c: S + 7 }, e: { r: 1, c: S + 10 } }); // HTX (4)
+  merges.push({ s: { r: 1, c: S + 11 }, e: { r: 1, c: S + 13 } }); // VIGO (3)
   // Tài xế sub-row.
   merges.push({ s: { r: 2, c: S + 0 }, e: { r: 3, c: S + 0 } }); // Thu nhập (full height)
-  merges.push({ s: { r: 2, c: S + 1 }, e: { r: 2, c: S + 3 } }); // Các khoản thu (3 wide)
-  merges.push({ s: { r: 2, c: S + 4 }, e: { r: 3, c: S + 4 } }); // Tổng tiền tài xế thực nhận
+  merges.push({ s: { r: 2, c: S + 1 }, e: { r: 2, c: S + 5 } }); // Các khoản thu (5 wide)
+  merges.push({ s: { r: 2, c: S + 6 }, e: { r: 3, c: S + 6 } }); // Tổng tiền tài xế thực nhận
   // HTX + VIGO leaves span r2:r3.
-  for (let i = 5; i < 12; i++) merges.push({ s: { r: 2, c: S + i }, e: { r: 3, c: S + i } });
+  for (let i = 7; i < 14; i++) merges.push({ s: { r: 2, c: S + i }, e: { r: 3, c: S + i } });
 
   return { headerRows: [r0, r1, r2, r3], merges };
 }

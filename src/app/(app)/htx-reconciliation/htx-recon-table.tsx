@@ -24,7 +24,7 @@ export function HtxHeadTailRow1() {
       <TableHead rowSpan={4} className={`${thNum} border-l`}>Giá cước trước VAT</TableHead>
       <TableHead rowSpan={4} className={thNum}>VAT</TableHead>
       <TableHead rowSpan={4} className={thNum}>Tổng khách trả cho tài xế</TableHead>
-      <TableHead colSpan={12} className={`${thGrp} border-l`}>
+      <TableHead colSpan={14} className={`${thGrp} border-l`}>
         Phân bổ doanh, VAT, Thuế TNCN và các khoản phí
       </TableHead>
     </>
@@ -36,13 +36,13 @@ export function HtxHeadLowerRows() {
   return (
     <>
       <TableRow>
-        <TableHead colSpan={5} className={`${thGrp} border-l`}>Tài xế</TableHead>
+        <TableHead colSpan={7} className={`${thGrp} border-l`}>Tài xế</TableHead>
         <TableHead colSpan={4} className={`${thGrp} border-l`}>HTX, ĐVCCX</TableHead>
         <TableHead colSpan={3} className={`${thGrp} border-l`}>VIGO</TableHead>
       </TableRow>
       <TableRow>
         <TableHead rowSpan={2} className={`${thNum} border-l`}>Thu nhập tài xế</TableHead>
-        <TableHead colSpan={3} className={thGrp}>Các khoản thu tài xế</TableHead>
+        <TableHead colSpan={5} className={thGrp}>Các khoản thu tài xế</TableHead>
         <TableHead rowSpan={2} className={thNum}>Tổng tiền tài xế thực nhận</TableHead>
         <TableHead rowSpan={2} className={`${thNum} border-l`}>Phí Hỗ trợ phát triển kinh doanh</TableHead>
         <TableHead rowSpan={2} className={thNum}>VAT thu hộ HTX, ĐVCCX</TableHead>
@@ -53,7 +53,9 @@ export function HtxHeadLowerRows() {
         <TableHead rowSpan={2} className={thNum}>Tổng tiền VIGO nhận</TableHead>
       </TableRow>
       <TableRow>
-        <TableHead className={thNum}>Phí nền tảng</TableHead>
+        <TableHead className={thNum}>Phí nền tảng (gộp)</TableHead>
+        <TableHead className={thNum}>Khuyến mãi (nền tảng tài trợ)</TableHead>
+        <TableHead className={thNum}>Phí nền tảng (thực thu)</TableHead>
         <TableHead className={thNum}>Thuế TNCN</TableHead>
         <TableHead className={thNum}>Tổng thu tài xế</TableHead>
       </TableRow>
@@ -61,7 +63,7 @@ export function HtxHeadLowerRows() {
   );
 }
 
-/** The 15 financial body cells for one expanded row (trip / HTX / TOTAL). */
+/** The 17 financial body cells for one expanded row (trip / HTX / TOTAL). */
 export function HtxLeafCells({ row }: { row: ExpandedHtx }) {
   return (
     <>
