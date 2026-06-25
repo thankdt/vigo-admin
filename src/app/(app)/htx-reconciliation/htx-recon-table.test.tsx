@@ -52,10 +52,13 @@ describe('HTX reconciliation table fragments', () => {
     expect(screen.getByText('Phí nền tảng (thực thu)')).toBeInTheDocument();
   });
 
-  it('renders the 17 formatted financial body cells', () => {
+  it('renders the 19 formatted financial body cells', () => {
     renderTable();
     expect(screen.getByText('250.000')).toBeInTheDocument(); // priceBeforeVat
-    expect(screen.getByText('200.000')).toBeInTheDocument(); // driverIncome
+    // commission nền tảng (50.000 = platformFee) + giá cước DVVT (200.000 = driverIncome)
+    // each appear twice: once in the split, once in the original column.
+    expect(screen.getAllByText('50.000')).toHaveLength(2); // platformCommission + platformFee
+    expect(screen.getAllByText('200.000')).toHaveLength(2); // dvvtFare + driverIncome
     expect(screen.getByText('60.000')).toBeInTheDocument(); // platformFeeGross
     expect(screen.getByText('10.000')).toBeInTheDocument(); // km
     expect(screen.getByText('197.000')).toBeInTheDocument(); // driverNet

@@ -22,7 +22,9 @@ export type HtxFinancials = {
 };
 
 export type ExpandedHtx = {
-  priceBeforeVat: number; // 8
+  priceBeforeVat: number; // 8 = platformCommission + dvvtFare
+  platformCommission: number; // hoa hồng nền tảng thực thu (= platformFee)
+  dvvtFare: number; // giá cước dịch vụ vận tải = 8 − platformCommission (= driverIncome)
   vat: number; // 9
   customerTotal: number; // 10 = 8+9
   driverIncome: number; // 11 = 8 − platformFee
@@ -48,6 +50,8 @@ export function expandHtxRow(f: HtxFinancials): ExpandedHtx {
   const driverDeductTotal = platformFee + driverPit;
   return {
     priceBeforeVat,
+    platformCommission: platformFee,
+    dvvtFare: priceBeforeVat - platformFee,
     vat: f.totalVat,
     customerTotal: f.grossRevenue,
     driverIncome: priceBeforeVat - platformFee,
@@ -76,9 +80,11 @@ export type HtxLeafCol = {
   highlight?: boolean; // the "tổng … nhận" totals get emphasised
 };
 
-/** The 17 leaf columns, in spec order. Drives table bodies + xlsx export. */
+/** The 19 leaf columns, in spec order. Drives table bodies + xlsx export. */
 export const HTX_LEAF_COLS: HtxLeafCol[] = [
   { key: 'priceBeforeVat', label: 'Giá cước trước VAT', group: null },
+  { key: 'platformCommission', label: 'Commission nền tảng', group: null },
+  { key: 'dvvtFare', label: 'Giá cước DVVT', group: null },
   { key: 'vat', label: 'VAT', group: null },
   { key: 'customerTotal', label: 'Tổng khách trả cho tài xế', group: null },
   { key: 'driverIncome', label: 'Thu nhập tài xế', group: 'Tài xế' },
@@ -115,16 +121,17 @@ type XlsxMerge = { s: { r: number; c: number }; e: { r: number; c: number } };
  *   r3: Phí nền tảng (gộp) | Khuyến mãi | Phí nền tảng (thực thu) | Thuế TNCN | Tổng thu tài xế   (under "Các khoản thu tài xế")
  *
  * `entityLabels` are the non-financial leading columns (STT, HTX name, …). The
- * 3 base financial columns (Giá cước trước VAT / VAT / Tổng khách trả) are
- * appended automatically; together they form the full-height standalone block.
- * Body rows must be: [...entity values, ...all 15 HTX_LEAF_COLS values].
+ * ungrouped base financial columns (Giá cước trước VAT / Commission nền tảng /
+ * Giá cước DVVT / VAT / Tổng khách trả) are appended automatically; together
+ * they form the full-height standalone block.
+ * Body rows must be: [...entity values, ...all HTX_LEAF_COLS values].
  */
 export function buildHtxExportHeader(entityLabels: string[]): {
   headerRows: string[][];
   merges: XlsxMerge[];
 } {
-  const base = HTX_LEAF_COLS.slice(0, 3); // priceBeforeVat, vat, customerTotal
-  const grouped = HTX_LEAF_COLS.slice(3); // 12 grouped leaves
+  const base = HTX_LEAF_COLS.filter((c) => c.group === null); // ungrouped leading financial cols
+  const grouped = HTX_LEAF_COLS.filter((c) => c.group !== null); // 14 grouped leaves
   const standalone = [...entityLabels, ...base.map((c) => c.label)];
   const S = standalone.length; // grouped section starts at this column
   const total = S + grouped.length;
