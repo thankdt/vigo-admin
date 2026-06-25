@@ -13,18 +13,24 @@ const thGrp = 'text-center whitespace-nowrap';
 // grouped header so body cells line up under their group).
 const LEFT_BORDER = new Set<keyof ExpandedHtx>(['priceBeforeVat', 'driverIncome', 'htxFee', 'vigoFee']);
 
+const BASE_COLS = HTX_LEAF_COLS.filter((c) => c.group === null);
+const GROUPED_COUNT = HTX_LEAF_COLS.length - BASE_COLS.length;
+
 /**
- * Row-1 TAIL of the 4-row reconciliation header: the 3 ungrouped financial
- * columns (rowSpan 4) + the wide "Phân bổ…" group cell (colSpan 12). Place it
- * right after each page's own leading <TableHead rowSpan={4}> cells.
+ * Row-1 TAIL of the 4-row reconciliation header: the ungrouped financial
+ * columns (rowSpan 4) + the wide "Phân bổ…" group cell spanning the grouped
+ * leaves. Place it right after each page's own leading <TableHead rowSpan={4}>
+ * cells.
  */
 export function HtxHeadTailRow1() {
   return (
     <>
-      <TableHead rowSpan={4} className={`${thNum} border-l`}>Giá cước trước VAT</TableHead>
-      <TableHead rowSpan={4} className={thNum}>VAT</TableHead>
-      <TableHead rowSpan={4} className={thNum}>Tổng khách trả cho tài xế</TableHead>
-      <TableHead colSpan={14} className={`${thGrp} border-l`}>
+      {BASE_COLS.map((c, i) => (
+        <TableHead key={c.key} rowSpan={4} className={`${thNum}${i === 0 ? ' border-l' : ''}`}>
+          {c.label}
+        </TableHead>
+      ))}
+      <TableHead colSpan={GROUPED_COUNT} className={`${thGrp} border-l`}>
         Phân bổ doanh, VAT, Thuế TNCN và các khoản phí
       </TableHead>
     </>

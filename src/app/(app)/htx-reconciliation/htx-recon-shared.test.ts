@@ -20,6 +20,9 @@ describe('expandHtxRow', () => {
   it('derives every reconciliation column from the 7 API fields (matches the spec sample)', () => {
     const r = expandHtxRow(SAMPLE);
     expect(r.priceBeforeVat).toBe(250000); // 8
+    expect(r.platformCommission).toBe(50000); // hoa hồng nền tảng thực thu = platformFee
+    expect(r.dvvtFare).toBe(200000); // giá cước DVVT = 8 − commission
+    expect(r.platformCommission + r.dvvtFare).toBe(r.priceBeforeVat); // tách khớp lại
     expect(r.vat).toBe(20000); // 9
     expect(r.customerTotal).toBe(270000); // 10
     expect(r.driverIncome).toBe(200000); // 11 = 8×80%
@@ -65,15 +68,15 @@ describe('expandHtxRow', () => {
 });
 
 describe('HTX_LEAF_COLS', () => {
-  it('lists the 17 leaf columns in spec order with the right groups', () => {
+  it('lists the 19 leaf columns in spec order with the right groups', () => {
     expect(HTX_LEAF_COLS.map((c) => c.key)).toEqual([
-      'priceBeforeVat', 'vat', 'customerTotal',
+      'priceBeforeVat', 'platformCommission', 'dvvtFare', 'vat', 'customerTotal',
       'driverIncome', 'platformFeeGross', 'km', 'platformFee', 'driverPit', 'driverDeductTotal', 'driverNet',
       'htxFee', 'htxVat', 'htxPit', 'htxTotal',
       'vigoFee', 'vigoVat', 'vigoTotal',
     ]);
-    // First three are ungrouped; the rest carry their section group.
-    expect(HTX_LEAF_COLS.slice(0, 3).every((c) => !c.group)).toBe(true);
+    // First five are ungrouped; the rest carry their section group.
+    expect(HTX_LEAF_COLS.filter((c) => !c.group)).toHaveLength(5);
     expect(HTX_LEAF_COLS.filter((c) => c.group === 'Tài xế')).toHaveLength(7);
     expect(HTX_LEAF_COLS.filter((c) => c.group === 'HTX, ĐVCCX')).toHaveLength(4);
     expect(HTX_LEAF_COLS.filter((c) => c.group === 'VIGO')).toHaveLength(3);
@@ -81,48 +84,50 @@ describe('HTX_LEAF_COLS', () => {
 });
 
 describe('buildHtxExportHeader', () => {
-  // Summary: 3 entity cols + 3 base cols → grouped section starts at col 6, total 20.
+  // Summary: 3 entity cols + 5 base cols → grouped section starts at col 8, total 22.
   const { headerRows, merges } = buildHtxExportHeader(['STT', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
 
   it('produces a 4-row header of consistent width', () => {
     expect(headerRows).toHaveLength(4);
-    for (const row of headerRows) expect(row).toHaveLength(20);
+    for (const row of headerRows) expect(row).toHaveLength(22);
   });
 
-  it('places the group labels at the right offsets (S=6)', () => {
+  it('places the group labels at the right offsets (S=8)', () => {
     const [r0, r1, r2, r3] = headerRows;
     expect(r0[0]).toBe('STT');
     expect(r0[3]).toBe('Giá cước trước VAT');
-    expect(r0[5]).toBe('Tổng khách trả cho tài xế');
-    expect(r0[6]).toBe('Phân bổ doanh, VAT, Thuế TNCN và các khoản phí');
-    expect(r1[6]).toBe('Tài xế');
-    expect(r1[13]).toBe('HTX, ĐVCCX');
-    expect(r1[17]).toBe('VIGO');
-    expect(r2[6]).toBe('Thu nhập tài xế');
-    expect(r2[7]).toBe('Các khoản thu tài xế');
-    expect(r2[12]).toBe('Tổng tiền tài xế thực nhận');
-    expect(r3[7]).toBe('Phí nền tảng (gộp)');
-    expect(r3[8]).toBe('Khuyến mãi (nền tảng tài trợ)');
-    expect(r3[9]).toBe('Phí nền tảng (thực thu)');
-    expect(r3[10]).toBe('Thuế TNCN');
-    expect(r3[11]).toBe('Tổng thu tài xế');
+    expect(r0[4]).toBe('Commission nền tảng');
+    expect(r0[5]).toBe('Giá cước DVVT');
+    expect(r0[7]).toBe('Tổng khách trả cho tài xế');
+    expect(r0[8]).toBe('Phân bổ doanh, VAT, Thuế TNCN và các khoản phí');
+    expect(r1[8]).toBe('Tài xế');
+    expect(r1[15]).toBe('HTX, ĐVCCX');
+    expect(r1[19]).toBe('VIGO');
+    expect(r2[8]).toBe('Thu nhập tài xế');
+    expect(r2[9]).toBe('Các khoản thu tài xế');
+    expect(r2[14]).toBe('Tổng tiền tài xế thực nhận');
+    expect(r3[9]).toBe('Phí nền tảng (gộp)');
+    expect(r3[10]).toBe('Khuyến mãi (nền tảng tài trợ)');
+    expect(r3[11]).toBe('Phí nền tảng (thực thu)');
+    expect(r3[12]).toBe('Thuế TNCN');
+    expect(r3[13]).toBe('Tổng thu tài xế');
   });
 
   it('merges the parent group + sub-group bands', () => {
     const has = (s: [number, number], e: [number, number]) =>
       merges.some((m) => m.s.r === s[0] && m.s.c === s[1] && m.e.r === e[0] && m.e.c === e[1]);
-    expect(has([0, 6], [0, 19])).toBe(true); // Phân bổ over 14 cols
-    expect(has([1, 6], [1, 12])).toBe(true); // Tài xế (7)
-    expect(has([1, 13], [1, 16])).toBe(true); // HTX (4)
-    expect(has([1, 17], [1, 19])).toBe(true); // VIGO (3)
-    expect(has([2, 7], [2, 11])).toBe(true); // Các khoản thu tài xế (5)
+    expect(has([0, 8], [0, 21])).toBe(true); // Phân bổ over 14 cols
+    expect(has([1, 8], [1, 14])).toBe(true); // Tài xế (7)
+    expect(has([1, 15], [1, 18])).toBe(true); // HTX (4)
+    expect(has([1, 19], [1, 21])).toBe(true); // VIGO (3)
+    expect(has([2, 9], [2, 13])).toBe(true); // Các khoản thu tài xế (5)
     expect(has([0, 0], [3, 0])).toBe(true); // STT spans all 4 header rows
   });
 
   it('shifts the grouped section when there are more leading columns (detail = 8 entity)', () => {
     const { headerRows: hr } = buildHtxExportHeader(['STT', 'Mã chuyến', 'Ngày giờ', 'Tài xế', 'SĐT', 'Biển số xe', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
-    expect(hr[0]).toHaveLength(25); // 8 entity + 3 base + 14 grouped
-    expect(hr[0][11]).toBe('Phân bổ doanh, VAT, Thuế TNCN và các khoản phí'); // S = 11
-    expect(hr[1][11]).toBe('Tài xế');
+    expect(hr[0]).toHaveLength(27); // 8 entity + 5 base + 14 grouped
+    expect(hr[0][13]).toBe('Phân bổ doanh, VAT, Thuế TNCN và các khoản phí'); // S = 13
+    expect(hr[1][13]).toBe('Tài xế');
   });
 });
