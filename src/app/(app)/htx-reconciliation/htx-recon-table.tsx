@@ -11,7 +11,7 @@ const thGrp = 'text-center whitespace-nowrap';
 
 // Columns that start a new visual section get a left border (mirrors the
 // grouped header so body cells line up under their group).
-const LEFT_BORDER = new Set<keyof ExpandedHtx>(['priceBeforeVat', 'driverIncome', 'htxFee', 'vigoFee']);
+const LEFT_BORDER = new Set<keyof ExpandedHtx>(['htxFareBeforeVat', 'driverIncome', 'htxFee', 'vigoFee']);
 
 const BASE_COLS = HTX_LEAF_COLS.filter((c) => c.group === null);
 const GROUPED_COUNT = HTX_LEAF_COLS.length - BASE_COLS.length;
@@ -48,7 +48,9 @@ export function HtxHeadLowerRows() {
       </TableRow>
       <TableRow>
         <TableHead rowSpan={2} className={`${thNum} border-l`}>Thu nhập tài xế</TableHead>
-        <TableHead colSpan={5} className={thGrp}>Các khoản thu tài xế</TableHead>
+        <TableHead rowSpan={2} className={thNum}>Phí nền tảng (gộp)</TableHead>
+        <TableHead rowSpan={2} className={thNum}>Khuyến mãi (nền tảng tài trợ)</TableHead>
+        <TableHead colSpan={3} className={thGrp}>Các khoản thu tài xế</TableHead>
         <TableHead rowSpan={2} className={thNum}>Tổng tiền tài xế thực nhận</TableHead>
         <TableHead rowSpan={2} className={`${thNum} border-l`}>Phí Hỗ trợ phát triển kinh doanh</TableHead>
         <TableHead rowSpan={2} className={thNum}>VAT thu hộ HTX, ĐVCCX</TableHead>
@@ -59,8 +61,6 @@ export function HtxHeadLowerRows() {
         <TableHead rowSpan={2} className={thNum}>Tổng tiền VIGO nhận</TableHead>
       </TableRow>
       <TableRow>
-        <TableHead className={thNum}>Phí nền tảng (gộp)</TableHead>
-        <TableHead className={thNum}>Khuyến mãi (nền tảng tài trợ)</TableHead>
         <TableHead className={thNum}>Phí nền tảng (thực thu)</TableHead>
         <TableHead className={thNum}>Thuế TNCN</TableHead>
         <TableHead className={thNum}>Tổng thu tài xế</TableHead>

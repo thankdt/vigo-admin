@@ -3,16 +3,17 @@ import { render, screen } from '@testing-library/react';
 import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from './htx-recon-table';
 import { expandHtxRow, type HtxFinancials } from './htx-recon-shared';
 
+// Same worked example as htx-recon-shared.test.ts (cột 8…26 trong spec sheet).
 const SAMPLE: HtxFinancials = {
-  grossRevenue: 270000,
-  totalVat: 20000,
-  htxCommission: 12500,
-  htxVatRemit: 16000,
-  htxTotalReceived: 31500,
-  vigoCommission: 37500,
-  vigoVatRemit: 4000,
-  platformFeeGross: 60000,
-  km: 10000,
+  grossRevenue: 259200,
+  totalVat: 19200,
+  htxCommission: 7000,
+  htxVatRemit: 15360,
+  htxTotalReceived: 25540,
+  vigoCommission: 21000,
+  vigoVatRemit: 3840,
+  platformFeeGross: 48000,
+  km: 20000,
 };
 
 // Renders the shared header + body fragments inside a real table. This is the
@@ -39,9 +40,12 @@ function renderTable() {
 }
 
 describe('HTX reconciliation table fragments', () => {
-  it('renders the grouped header labels without crashing', () => {
+  it('renders the grouped + base header labels without crashing', () => {
     renderTable();
     expect(screen.getByText('Phân bổ doanh, VAT, Thuế TNCN và các khoản phí')).toBeInTheDocument();
+    expect(screen.getByText('Cước vận tải HTX trước VAT')).toBeInTheDocument();
+    expect(screen.getByText('VAT cước vận tải HTX')).toBeInTheDocument();
+    expect(screen.getByText('Phí APP trước VAT (phí nền tảng VIGO)')).toBeInTheDocument();
     expect(screen.getByText('Tài xế')).toBeInTheDocument();
     expect(screen.getByText('HTX, ĐVCCX')).toBeInTheDocument();
     expect(screen.getByText('VIGO')).toBeInTheDocument();
@@ -54,15 +58,19 @@ describe('HTX reconciliation table fragments', () => {
 
   it('renders the 19 formatted financial body cells', () => {
     renderTable();
-    expect(screen.getByText('250.000')).toBeInTheDocument(); // priceBeforeVat
-    // commission nền tảng (50.000 = platformFee) + giá cước DVVT (200.000 = driverIncome)
-    // each appear twice: once in the split, once in the original column.
-    expect(screen.getAllByText('50.000')).toHaveLength(2); // platformCommission + platformFee
-    expect(screen.getAllByText('200.000')).toHaveLength(2); // dvvtFare + driverIncome
-    expect(screen.getByText('60.000')).toBeInTheDocument(); // platformFeeGross
-    expect(screen.getByText('10.000')).toBeInTheDocument(); // km
-    expect(screen.getByText('197.000')).toBeInTheDocument(); // driverNet
-    expect(screen.getByText('31.500')).toBeInTheDocument(); // htxTotal
-    expect(screen.getByText('41.500')).toBeInTheDocument(); // vigoTotal
+    expect(screen.getByText('192.000')).toBeInTheDocument(); // htxFareBeforeVat (8)
+    expect(screen.getAllByText('15.360')).toHaveLength(2); // htxFareVat (9) + htxVat (21)
+    expect(screen.getAllByText('48.000')).toHaveLength(2); // appFeeBeforeVat (10) + platformFeeGross (14)
+    expect(screen.getAllByText('3.840')).toHaveLength(2); // appFeeVat (11) + vigoVat (25)
+    expect(screen.getByText('259.200')).toBeInTheDocument(); // customerTotal (12)
+    expect(screen.getByText('212.000')).toBeInTheDocument(); // driverIncome (13)
+    expect(screen.getByText('20.000')).toBeInTheDocument(); // km (15)
+    expect(screen.getByText('28.000')).toBeInTheDocument(); // platformFee (16)
+    expect(screen.getAllByText('3.180')).toHaveLength(2); // driverPit (17) + htxPit (22)
+    expect(screen.getByText('208.820')).toBeInTheDocument(); // driverNet (19)
+    expect(screen.getByText('7.000')).toBeInTheDocument(); // htxFee (20)
+    expect(screen.getByText('25.540')).toBeInTheDocument(); // htxTotal (23)
+    expect(screen.getByText('21.000')).toBeInTheDocument(); // vigoFee (24)
+    expect(screen.getByText('24.840')).toBeInTheDocument(); // vigoTotal (26)
   });
 });

@@ -21,12 +21,20 @@ export type HtxFinancials = {
   km: number; // khuyến mãi nền tảng tài trợ (platformFeeGross − km = phí thực thu)
 };
 
+/** VAT rate áp cho phần cước vận tải HTX và phần phí nền tảng (8%). */
+export const HTX_VAT_RATE = 0.08;
+
 export type ExpandedHtx = {
-  priceBeforeVat: number; // 8 = platformCommission + dvvtFare
-  platformCommission: number; // hoa hồng nền tảng thực thu (= platformFee)
-  dvvtFare: number; // giá cước dịch vụ vận tải = 8 − platformCommission (= driverIncome)
-  vat: number; // 9
-  customerTotal: number; // 10 = 8+9
+  // Khối cột đầu — tách "giá cước trước VAT" của khách thành phần cước vận tải
+  // HTX và phần phí nền tảng (gộp, gồm khuyến mại tài trợ), mỗi phần kèm VAT 8%.
+  // Bốn cột này cộng lại = tổng khách trả.
+  htxFareBeforeVat: number; // cước vận tải HTX trước VAT = priceBeforeVat − platformFeeGross
+  htxFareVat: number; // VAT cước vận tải HTX = 8% × htxFareBeforeVat
+  appFeeBeforeVat: number; // phí APP trước VAT = platformFeeGross (gồm khuyến mại tài trợ)
+  appFeeVat: number; // VAT phí nền tảng VIGO = 8% × appFeeBeforeVat
+  customerTotal: number; // 10 = tổng khách trả (= 4 cột trên cộng lại)
+  priceBeforeVat: number; // 8 — giá cước trước VAT của khách (dùng nội bộ)
+  vat: number; // 9 — tổng VAT (dùng nội bộ)
   driverIncome: number; // 11 = 8 − platformFee
   platformFeeGross: number; // hoa hồng nền tảng trước KM
   km: number; // khuyến mãi nền tảng tài trợ
@@ -45,29 +53,44 @@ export type ExpandedHtx = {
 
 export function expandHtxRow(f: HtxFinancials): ExpandedHtx {
   const priceBeforeVat = f.grossRevenue - f.totalVat;
-  const platformFee = f.htxCommission + f.vigoCommission;
-  const driverPit = f.htxTotalReceived - f.htxCommission - f.htxVatRemit;
-  const driverDeductTotal = platformFee + driverPit;
+  // Commission HTX + VIGO đến từ backend (theo tỉ lệ riêng mỗi HTX) — KHÔNG
+  // hardcode tỉ lệ 5%/15%; chỉ tỉ lệ VAT 8% là cố định.
+  const platformFee = f.htxCommission + f.vigoCommission; // 16 = phí nền tảng thực thu
+  const driverPit = f.htxTotalReceived - f.htxCommission - f.htxVatRemit; // 17 = thu nhập × 1,5%
+  const driverDeductTotal = platformFee + driverPit; // 18
+
+  // Tách giá cước trước VAT của khách (priceBeforeVat) thành:
+  //  - phần cước vận tải HTX = priceBeforeVat − phí nền tảng (gộp)  (col 8)
+  //  - phần phí nền tảng VIGO = phí nền tảng GỘP, gồm khuyến mại tài trợ (col 10)
+  // mỗi phần kèm VAT 8% (col 9, col 11). Hai con VAT này cũng là "VAT thu hộ
+  // HTX" (col 21 = col 9) và "VAT phí nền tảng VIGO" (col 25 = col 11).
+  const appFeeBeforeVat = f.platformFeeGross; // 10
+  const htxFareBeforeVat = priceBeforeVat - f.platformFeeGross; // 8
+  const htxFareVat = Math.round(htxFareBeforeVat * HTX_VAT_RATE); // 9 = 21
+  const appFeeVat = Math.round(appFeeBeforeVat * HTX_VAT_RATE); // 11 = 25
+
   return {
+    htxFareBeforeVat,
+    htxFareVat,
+    appFeeBeforeVat,
+    appFeeVat,
+    customerTotal: htxFareBeforeVat + htxFareVat + appFeeBeforeVat + appFeeVat, // 12 = 8+9+10+11
     priceBeforeVat,
-    platformCommission: platformFee,
-    dvvtFare: priceBeforeVat - platformFee,
     vat: f.totalVat,
-    customerTotal: f.grossRevenue,
-    driverIncome: priceBeforeVat - platformFee,
-    platformFeeGross: f.platformFeeGross,
-    km: f.km,
-    platformFee,
-    driverPit,
-    driverDeductTotal,
-    driverNet: priceBeforeVat - driverDeductTotal,
-    htxFee: f.htxCommission,
-    htxVat: f.htxVatRemit,
-    htxPit: driverPit,
-    htxTotal: f.htxTotalReceived,
-    vigoFee: f.vigoCommission,
-    vigoVat: f.vigoVatRemit,
-    vigoTotal: f.vigoCommission + f.vigoVatRemit,
+    driverIncome: priceBeforeVat - platformFee, // 13 = 8 + 15
+    platformFeeGross: f.platformFeeGross, // 14
+    km: f.km, // 15
+    platformFee, // 16
+    driverPit, // 17
+    driverDeductTotal, // 18
+    driverNet: priceBeforeVat - driverDeductTotal, // 19 = (8+10) − 18
+    htxFee: f.htxCommission, // 20
+    htxVat: htxFareVat, // 21 = 9
+    htxPit: driverPit, // 22 = 17
+    htxTotal: f.htxCommission + htxFareVat + driverPit, // 23 = 20+21+22
+    vigoFee: f.vigoCommission, // 24
+    vigoVat: appFeeVat, // 25 = 11
+    vigoTotal: f.vigoCommission + appFeeVat, // 26 = 24+25
   };
 }
 
@@ -82,10 +105,10 @@ export type HtxLeafCol = {
 
 /** The 19 leaf columns, in spec order. Drives table bodies + xlsx export. */
 export const HTX_LEAF_COLS: HtxLeafCol[] = [
-  { key: 'priceBeforeVat', label: 'Giá cước trước VAT', group: null },
-  { key: 'platformCommission', label: 'Commission nền tảng', group: null },
-  { key: 'dvvtFare', label: 'Giá cước DVVT', group: null },
-  { key: 'vat', label: 'VAT', group: null },
+  { key: 'htxFareBeforeVat', label: 'Cước vận tải HTX trước VAT', group: null },
+  { key: 'htxFareVat', label: 'VAT cước vận tải HTX', group: null },
+  { key: 'appFeeBeforeVat', label: 'Phí APP trước VAT (phí nền tảng VIGO)', group: null },
+  { key: 'appFeeVat', label: 'VAT phí nền tảng VIGO', group: null },
   { key: 'customerTotal', label: 'Tổng khách trả cho tài xế', group: null },
   { key: 'driverIncome', label: 'Thu nhập tài xế', group: 'Tài xế' },
   { key: 'platformFeeGross', label: 'Phí nền tảng (gộp)', group: 'Tài xế' },
@@ -117,12 +140,12 @@ type XlsxMerge = { s: { r: number; c: number }; e: { r: number; c: number } };
  * single flat row. Layout (4 header rows):
  *   r0: [entity… | base… spanning all 4 rows] + "Phân bổ…" over the 14 grouped cols
  *   r1: Tài xế (7) | HTX, ĐVCCX (4) | VIGO (3)
- *   r2: Thu nhập tài xế | "Các khoản thu tài xế" (5) | Tổng tiền tài xế thực nhận | HTX leaves | VIGO leaves
- *   r3: Phí nền tảng (gộp) | Khuyến mãi | Phí nền tảng (thực thu) | Thuế TNCN | Tổng thu tài xế   (under "Các khoản thu tài xế")
+ *   r2: Thu nhập tài xế | Phí nền tảng (gộp) | Khuyến mãi | "Các khoản thu tài xế" (3) | Tổng tiền tài xế thực nhận | HTX leaves | VIGO leaves
+ *   r3: Phí nền tảng (thực thu) | Thuế TNCN | Tổng thu tài xế   (under "Các khoản thu tài xế")
  *
  * `entityLabels` are the non-financial leading columns (STT, HTX name, …). The
- * ungrouped base financial columns (Giá cước trước VAT / Commission nền tảng /
- * Giá cước DVVT / VAT / Tổng khách trả) are appended automatically; together
+ * ungrouped base financial columns (Giá cước trước VAT / VAT cước HTX / Phí APP
+ * trước VAT / VAT phí VIGO / Tổng khách trả) are appended automatically; together
  * they form the full-height standalone block.
  * Body rows must be: [...entity values, ...all HTX_LEAF_COLS values].
  */
@@ -146,18 +169,19 @@ export function buildHtxExportHeader(entityLabels: string[]): {
   r0[S] = 'Phân bổ doanh, VAT, Thuế TNCN và các khoản phí';
 
   // Grouped leaf layout (offsets into the grouped section, from S):
-  //   Tài xế (7): 0 Thu nhập | 1-5 "Các khoản thu tài xế" | 6 Tổng tiền thực nhận
+  //   Tài xế (7): 0 Thu nhập | 1 Phí nền tảng (gộp) | 2 Khuyến mãi |
+  //               3-5 "Các khoản thu tài xế" | 6 Tổng tiền thực nhận
   //   HTX (4): 7-10 · VIGO (3): 11-13
   r1[S] = 'Tài xế';
   r1[S + 7] = 'HTX, ĐVCCX';
   r1[S + 11] = 'VIGO';
 
-  // Tài xế: leaf0 standalone, leaves 1-5 under "Các khoản thu tài xế", leaf6 standalone
+  // Tài xế: leaves 0-2 standalone, leaves 3-5 under "Các khoản thu tài xế", leaf6 standalone
   r2[S + 0] = grouped[0].label; // Thu nhập tài xế
-  r2[S + 1] = 'Các khoản thu tài xế';
+  r2[S + 1] = grouped[1].label; // Phí nền tảng (gộp)
+  r2[S + 2] = grouped[2].label; // Khuyến mãi (nền tảng tài trợ)
+  r2[S + 3] = 'Các khoản thu tài xế';
   r2[S + 6] = grouped[6].label; // Tổng tiền tài xế thực nhận
-  r3[S + 1] = grouped[1].label; // Phí nền tảng (gộp)
-  r3[S + 2] = grouped[2].label; // Khuyến mãi (nền tảng tài trợ)
   r3[S + 3] = grouped[3].label; // Phí nền tảng (thực thu)
   r3[S + 4] = grouped[4].label; // Thuế TNCN
   r3[S + 5] = grouped[5].label; // Tổng thu tài xế
@@ -175,7 +199,9 @@ export function buildHtxExportHeader(entityLabels: string[]): {
   merges.push({ s: { r: 1, c: S + 11 }, e: { r: 1, c: S + 13 } }); // VIGO (3)
   // Tài xế sub-row.
   merges.push({ s: { r: 2, c: S + 0 }, e: { r: 3, c: S + 0 } }); // Thu nhập (full height)
-  merges.push({ s: { r: 2, c: S + 1 }, e: { r: 2, c: S + 5 } }); // Các khoản thu (5 wide)
+  merges.push({ s: { r: 2, c: S + 1 }, e: { r: 3, c: S + 1 } }); // Phí nền tảng (gộp)
+  merges.push({ s: { r: 2, c: S + 2 }, e: { r: 3, c: S + 2 } }); // Khuyến mãi
+  merges.push({ s: { r: 2, c: S + 3 }, e: { r: 2, c: S + 5 } }); // Các khoản thu (3 wide)
   merges.push({ s: { r: 2, c: S + 6 }, e: { r: 3, c: S + 6 } }); // Tổng tiền tài xế thực nhận
   // HTX + VIGO leaves span r2:r3.
   for (let i = 7; i < 14; i++) merges.push({ s: { r: 2, c: S + i }, e: { r: 3, c: S + i } });
