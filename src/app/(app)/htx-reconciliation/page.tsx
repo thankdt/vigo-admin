@@ -125,7 +125,7 @@ export default function HtxReconciliationPage() {
         </div>
       </Card>
       <p className="text-xs text-muted-foreground">
-        Đơn vị: đồng (đ). Giá cước trước VAT = Commission nền tảng + Giá cước DVVT. Tổng khách trả = Giá cước trước VAT + VAT, và luôn bằng (Tài xế thực nhận + HTX, ĐVCCX nhận + VIGO nhận).
+        Đơn vị: đồng (đ). VAT = 8%. Tổng khách trả = (Cước vận tải HTX + VAT) + (Phí APP trước VAT + VAT), và luôn bằng (Tài xế thực nhận + HTX, ĐVCCX nhận + VIGO nhận).
       </p>
     </div>
   );
