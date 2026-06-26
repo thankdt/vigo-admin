@@ -90,7 +90,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   // Wrap the predicate — passing it straight to filter would feed the array
   // index in as the `now` argument and break the date-window check.
   const selectableVouchers = React.useMemo(() => vouchers.filter((v) => isVoucherSelectable(v)), [vouchers]);
-  const clearEstimate = () => { clearEstimate(); setEstimateOriginal(null); };
+  const clearEstimate = () => { setPriceEstimate(null); setEstimateOriginal(null); };
 
   const checkCustomer = async () => {
     if (!customerPhone || customerPhone.length < 10) {
