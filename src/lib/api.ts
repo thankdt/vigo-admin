@@ -627,7 +627,14 @@ export async function createAdminBooking(data: {
   driverId?: string;
   // ISO 8601 timestamp (e.g. new Date(...).toISOString()). Omit for an
   // immediate (SEARCHING) booking; set for a SCHEDULED trip.
+  // For a pickup-window trip send scheduledTime = scheduledFromTime so a backend
+  // without window support (whitelist strips the unknown fields) still schedules
+  // at the window start instead of silently falling back to "now".
   scheduledTime?: string;
+  // Pickup-window [from, to] (ISO). Backend with window support prefers these;
+  // omit (all three undefined) for an immediate trip.
+  scheduledFromTime?: string;
+  scheduledToTime?: string;
   // Voucher áp cho chuyến (tuỳ chọn). BE tính giảm giá, lưu lên booking và đếm
   // lượt dùng ở compl() — dùng lại y luồng khách tự đặt.
   promotionId?: number;

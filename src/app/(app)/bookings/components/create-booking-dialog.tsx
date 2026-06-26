@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
 import { fmtVnd, isVoucherSelectable, voucherLabel } from './voucher-utils';
+import { validateWindow, toIso } from './schedule-utils';
 
 interface CreateBookingDialogProps {
   onSuccess: () => void;
@@ -138,11 +139,12 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     }
   };
 
-  // Scheduled-trip state. `scheduledAt` is the raw <input type="datetime-local">
-  // value (no timezone suffix). We convert to ISO at submit time. Default to
-  // 30 min from now so the picker isn't empty when the operator toggles on.
+  // Scheduled-trip state. Pickup WINDOW [from, to] — raw <input
+  // type="datetime-local"> values (no timezone suffix). Converted to ISO at
+  // submit. Default to from=+30m / to=+60m when the operator toggles on.
   const [isScheduled, setIsScheduled] = React.useState(false);
-  const [scheduledAt, setScheduledAt] = React.useState('');
+  const [scheduledFrom, setScheduledFrom] = React.useState('');
+  const [scheduledTo, setScheduledTo] = React.useState('');
 
   // Driver selection
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
@@ -188,7 +190,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setSelectedDriverId(null);
     setDriverSearch('');
     setIsScheduled(false);
-    setScheduledAt('');
+    setScheduledFrom('');
+    setScheduledTo('');
   };
 
   // Editing the phone after a check invalidates the customer lookup → re-check.
@@ -209,20 +212,23 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
-  // Min-attr for the datetime input — block "in the past" choices at the
-  // browser level so the user gets immediate feedback instead of a backend
-  // error toast.
+  // Min-attr for the "from" datetime input — block "in the past" choices at the
+  // browser level so the user gets immediate feedback. "to" uses `from` as its
+  // min (see UI) so the window can't end before it starts.
   const minScheduledAt = React.useMemo(() => formatLocal(new Date()), [open, isScheduled]);
 
-  // Default the picker to +30 minutes when the operator first toggles
+  // Default the window to from=+30m / to=+60m when the operator first toggles
   // scheduling on, so they only have to bump it forward.
   React.useEffect(() => {
-    if (isScheduled && !scheduledAt) {
-      const d = new Date();
-      d.setMinutes(d.getMinutes() + 30);
-      setScheduledAt(formatLocal(d));
+    if (isScheduled && !scheduledFrom) {
+      const from = new Date();
+      from.setMinutes(from.getMinutes() + 30);
+      const to = new Date();
+      to.setMinutes(to.getMinutes() + 60);
+      setScheduledFrom(formatLocal(from));
+      setScheduledTo(formatLocal(to));
     }
-  }, [isScheduled, scheduledAt]);
+  }, [isScheduled, scheduledFrom]);
 
   const handleSubmit = async () => {
     // Validation
@@ -246,22 +252,16 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
       toast({ variant: 'destructive', title: 'Lỗi', description: 'Vui lòng chọn địa chỉ trả.' });
       return;
     }
-    let scheduledIso: string | undefined;
+    // Pickup window [from, to] — undefined for an immediate trip.
+    let scheduledFromIso: string | undefined, scheduledToIso: string | undefined;
     if (isScheduled) {
-      if (!scheduledAt) {
-        toast({ variant: 'destructive', title: 'Lỗi', description: 'Vui lòng chọn thời gian hẹn.' });
+      const v = validateWindow(scheduledFrom, scheduledTo);
+      if (!v.ok) {
+        toast({ variant: 'destructive', title: 'Lỗi', description: v.error });
         return;
       }
-      const parsed = new Date(scheduledAt);
-      if (Number.isNaN(parsed.getTime())) {
-        toast({ variant: 'destructive', title: 'Lỗi', description: 'Thời gian hẹn không hợp lệ.' });
-        return;
-      }
-      if (parsed.getTime() < Date.now() - 60_000) {
-        toast({ variant: 'destructive', title: 'Lỗi', description: 'Thời gian hẹn phải ở tương lai.' });
-        return;
-      }
-      scheduledIso = parsed.toISOString();
+      scheduledFromIso = toIso(scheduledFrom);
+      scheduledToIso = toIso(scheduledTo);
     }
 
     setIsSubmitting(true);
@@ -291,7 +291,13 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         })(),
         note: note || undefined,
         driverId: selectedDriverId || undefined,
-        scheduledTime: scheduledIso,
+        // Pickup window. Send scheduledTime = from too: a backend without window
+        // support (whitelist:true strips the unknown from/to fields) then still
+        // schedules at the window start instead of silently falling back to
+        // "now". All three are undefined for an immediate trip.
+        scheduledTime: scheduledFromIso,
+        scheduledFromTime: scheduledFromIso,
+        scheduledToTime: scheduledToIso,
         promotionId: selectedPromotionId ?? undefined,
       });
       toast({ title: 'Thành công', description: 'Đã tạo chuyến mới.' });
@@ -604,7 +610,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                   Hẹn giờ
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Bật để tạo chuyến hẹn giờ. Tài xế sẽ nhận thông báo trước 10 phút.
+                  Bật để đặt khoảng giờ đón [từ → đến]. Tài xế nhận thông báo trước 10 phút.
                 </p>
               </div>
               <Switch
@@ -614,15 +620,27 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               />
             </div>
             {isScheduled && (
-              <div className="space-y-1.5">
-                <Label htmlFor="cb-scheduled-at">Thời gian khách muốn đi <span className="text-destructive">*</span></Label>
-                <Input
-                  id="cb-scheduled-at"
-                  type="datetime-local"
-                  value={scheduledAt}
-                  min={minScheduledAt}
-                  onChange={(e) => setScheduledAt(e.target.value)}
-                />
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="cb-scheduled-from">Đón từ <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="cb-scheduled-from"
+                    type="datetime-local"
+                    value={scheduledFrom}
+                    min={minScheduledAt}
+                    onChange={(e) => setScheduledFrom(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="cb-scheduled-to">Đến <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="cb-scheduled-to"
+                    type="datetime-local"
+                    value={scheduledTo}
+                    min={scheduledFrom || minScheduledAt}
+                    onChange={(e) => setScheduledTo(e.target.value)}
+                  />
+                </div>
               </div>
             )}
           </div>
