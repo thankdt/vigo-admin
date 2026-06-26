@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { searchAddress, getPlaceDetail } from '@/lib/api';
 import type { AutocompleteResult } from '@/lib/api';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface AddressAutocompleteProps {
   value: string;
@@ -22,6 +23,7 @@ export function AddressAutocomplete({
   onClear,
   className,
 }: AddressAutocompleteProps) {
+  const { toast } = useToast();
   const [query, setQuery] = React.useState('');
   const [results, setResults] = React.useState<AutocompleteResult[]>([]);
   const [isSearching, setIsSearching] = React.useState(false);
@@ -94,8 +96,15 @@ export function AddressAutocomplete({
       setQuery(address);
       setSelected(true);
       onSelect({ address, lat, long: lng });
-    } catch {
-      // Fallback: use description without coords
+    } catch (err) {
+      // Surface the failure instead of silently storing 0,0 coords (which would
+      // mis-price the trip). Keep the address text but warn the operator to retry.
+      console.error('[AddressAutocomplete] getPlaceDetail failed:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Không lấy được toạ độ',
+        description: `Không resolve được điểm "${item.description}". Vui lòng chọn lại địa điểm.`,
+      });
       setSelected(true);
       onSelect({ address: item.description, lat: 0, long: 0 });
     } finally {
