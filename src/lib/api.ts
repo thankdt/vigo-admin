@@ -590,13 +590,26 @@ export async function estimateTripPrice(body: {
   requestedVehicleType?: 'CAR_4' | 'CAR_7';
   // CARPOOL nhân giá theo số ghế — truyền vào để ước tính khớp giá tạo chuyến.
   requestedSeats?: number;
-}): Promise<{ price: number; finalPrice: number; distanceKm?: number }> {
+  // Voucher áp thử để xem giá sau giảm. BE validate ở context admin (userId =
+  // admin); với voucher công khai (pointCost=0) kết quả khớp lúc tạo chuyến.
+  promotionId?: number;
+}): Promise<{ price: number; finalPrice: number; distanceKm?: number; discount?: number; priceBeforeDiscount?: number }> {
   const response = await fetchWithAuth('/pricing/calculate', {
     method: 'POST',
     body: JSON.stringify(body),
   });
   const result = await response.json();
-  return result.data ?? result;
+  const data = result.data ?? result;
+  return {
+    price: data.price,
+    finalPrice: data.finalPrice,
+    distanceKm: data.distanceKm,
+    discount: data.discount,
+    // VAT-inclusive total trước khi trừ khuyến mãi — backend tính sẵn để hiển
+    // thị giá gạch ngang chính xác (tránh tự cộng discount trước-thuế vào giá
+    // sau-thuế gây lệch làm tròn).
+    priceBeforeDiscount: data.breakdown?.priceBeforeDiscount,
+  };
 }
 
 export async function createAdminBooking(data: {
@@ -615,6 +628,9 @@ export async function createAdminBooking(data: {
   // ISO 8601 timestamp (e.g. new Date(...).toISOString()). Omit for an
   // immediate (SEARCHING) booking; set for a SCHEDULED trip.
   scheduledTime?: string;
+  // Voucher áp cho chuyến (tuỳ chọn). BE tính giảm giá, lưu lên booking và đếm
+  // lượt dùng ở compl() — dùng lại y luồng khách tự đặt.
+  promotionId?: number;
 }): Promise<Booking> {
   const response = await fetchWithAuth('/bookings/admin/create', {
     method: 'POST',
