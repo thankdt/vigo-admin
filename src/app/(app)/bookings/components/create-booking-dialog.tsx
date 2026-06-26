@@ -43,7 +43,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const [customerStatus, setCustomerStatus] = React.useState<'idle' | 'checking' | 'existing' | 'new'>('idle');
   const [pickup, setPickup] = React.useState<AddressData | null>(null);
   const [dropoff, setDropoff] = React.useState<AddressData | null>(null);
-  const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('RIDE');
+  const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('CARPOOL');
   const [vehicleType, setVehicleType] = React.useState<'CAR_4' | 'CAR_7'>('CAR_4');
   const [note, setNote] = React.useState('');
   // Co-passengers (khách đi cùng) — passenger #2 onward. Passenger #1 is the
@@ -179,7 +179,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setCustomerStatus('idle');
     setPickup(null);
     setDropoff(null);
-    setServiceType('RIDE');
+    setServiceType('CARPOOL');
     setVehicleType('CAR_4');
     setCoPassengers([]);
     clearEstimate();
@@ -448,7 +448,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="RIDE">🚗 Chở khách</SelectItem>
+                  <SelectItem value="RIDE">🚗 Bao xe</SelectItem>
                   <SelectItem value="DELIVERY">📦 Giao hàng</SelectItem>
                   <SelectItem value="CARPOOL">🚌 Đi chung</SelectItem>
                 </SelectContent>
