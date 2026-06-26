@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, Users, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search, X } from 'lucide-react';
+import { Loader2, Plus, Phone, User, Users, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,12 +12,13 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { createAdminBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice } from '@/lib/api';
-import type { Driver } from '@/lib/types';
+import { createAdminBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice, getVouchers } from '@/lib/api';
+import type { Driver, Promotion } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
+import { fmtVnd, isVoucherSelectable, voucherLabel } from './voucher-utils';
 
 interface CreateBookingDialogProps {
   onSuccess: () => void;
@@ -73,8 +74,23 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setCoPassengers((p) => p.filter((_, idx) => idx !== i));
 
   // Price estimate (manual — "Tính giá" button, to avoid spamming BE).
+  // `priceEstimate` is the VAT-inclusive price actually charged; `estimateOriginal`
+  // is the VAT-inclusive price before any discount (for the strikethrough).
   const [priceEstimate, setPriceEstimate] = React.useState<number | null>(null);
+  const [estimateOriginal, setEstimateOriginal] = React.useState<number | null>(null);
   const [estimating, setEstimating] = React.useState(false);
+  const estimateSavings = priceEstimate != null && estimateOriginal != null
+    ? Math.max(0, estimateOriginal - priceEstimate)
+    : 0;
+
+  // Promotion (voucher) — optional. Applied to both the estimate and the
+  // created booking. Changing it invalidates a stale estimate.
+  const [vouchers, setVouchers] = React.useState<Promotion[]>([]);
+  const [selectedPromotionId, setSelectedPromotionId] = React.useState<number | null>(null);
+  // Wrap the predicate — passing it straight to filter would feed the array
+  // index in as the `now` argument and break the date-window check.
+  const selectableVouchers = React.useMemo(() => vouchers.filter((v) => isVoucherSelectable(v)), [vouchers]);
+  const clearEstimate = () => { clearEstimate(); setEstimateOriginal(null); };
 
   const checkCustomer = async () => {
     if (!customerPhone || customerPhone.length < 10) {
@@ -110,8 +126,11 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         serviceType,
         requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
         requestedSeats: showPassengerFields ? totalPassengers : undefined,
+        promotionId: selectedPromotionId ?? undefined,
       });
-      setPriceEstimate(res.finalPrice ?? res.price);
+      const final = res.finalPrice ?? res.price;
+      setPriceEstimate(final);
+      setEstimateOriginal(res.priceBeforeDiscount ?? final);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Tính giá thất bại', description: err.message });
     } finally {
@@ -147,6 +166,13 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     fetchDrivers();
   }, [open]);
 
+  React.useEffect(() => {
+    if (!open) return;
+    getVouchers().then(setVouchers).catch(() => {
+      // Ignore — voucher list is optional; promo selector just stays empty.
+    });
+  }, [open]);
+
   const resetForm = () => {
     setCustomerPhone('');
     setCustomerName('');
@@ -156,7 +182,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
     setServiceType('RIDE');
     setVehicleType('CAR_4');
     setCoPassengers([]);
-    setPriceEstimate(null);
+    clearEstimate();
+    setSelectedPromotionId(null);
     setNote('');
     setSelectedDriverId(null);
     setDriverSearch('');
@@ -265,6 +292,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         note: note || undefined,
         driverId: selectedDriverId || undefined,
         scheduledTime: scheduledIso,
+        promotionId: selectedPromotionId ?? undefined,
       });
       toast({ title: 'Thành công', description: 'Đã tạo chuyến mới.' });
       resetForm();
@@ -385,8 +413,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               <AddressAutocomplete
                 value={pickup?.address ?? ''}
                 placeholder="Tìm kiếm điểm đón..."
-                onSelect={(data) => { setPickup(data); setPriceEstimate(null); }}
-                onClear={() => { setPickup(null); setPriceEstimate(null); }}
+                onSelect={(data) => { setPickup(data); clearEstimate(); }}
+                onClear={() => { setPickup(null); clearEstimate(); }}
               />
               {pickup && (
                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -400,8 +428,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               <AddressAutocomplete
                 value={dropoff?.address ?? ''}
                 placeholder="Tìm kiếm điểm trả..."
-                onSelect={(data) => { setDropoff(data); setPriceEstimate(null); }}
-                onClear={() => { setDropoff(null); setPriceEstimate(null); }}
+                onSelect={(data) => { setDropoff(data); clearEstimate(); }}
+                onClear={() => { setDropoff(null); clearEstimate(); }}
               />
               {dropoff && (
                 <div className="text-xs text-muted-foreground flex items-center gap-1 mt-1">
@@ -415,7 +443,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <Label>Loại dịch vụ</Label>
-              <Select value={serviceType} onValueChange={(v) => { setServiceType(v as any); setPriceEstimate(null); }}>
+              <Select value={serviceType} onValueChange={(v) => { setServiceType(v as any); clearEstimate(); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -429,7 +457,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             {serviceType === 'RIDE' ? (
               <div className="space-y-1.5">
                 <Label>Loại xe <span className="text-destructive">*</span></Label>
-                <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v as any); setPriceEstimate(null); }}>
+                <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v as any); clearEstimate(); }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -480,9 +508,9 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                   <Input
                     placeholder={`Tên khách ${i + 2} (đi cùng)`}
                     value={name}
-                    onChange={(e) => { updatePassenger(i, e.target.value); setPriceEstimate(null); }}
+                    onChange={(e) => { updatePassenger(i, e.target.value); clearEstimate(); }}
                   />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => { removePassenger(i); setPriceEstimate(null); }} aria-label="Xoá khách">
+                  <Button type="button" variant="ghost" size="icon" onClick={() => { removePassenger(i); clearEstimate(); }} aria-label="Xoá khách">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -493,7 +521,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => { addPassenger(); setPriceEstimate(null); }}
+                  onClick={() => { addPassenger(); clearEstimate(); }}
                   disabled={coPassengers.length >= maxExtras}
                 >
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Thêm khách đi cùng
@@ -509,6 +537,36 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             </div>
           )}
 
+          {/* Promotion (voucher) */}
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+              <Ticket className="h-4 w-4" /> Khuyến mãi
+            </Label>
+            <Select
+              value={selectedPromotionId != null ? String(selectedPromotionId) : 'none'}
+              onValueChange={(v) => { setSelectedPromotionId(v === 'none' ? null : Number(v)); clearEstimate(); }}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Không dùng khuyến mãi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Không dùng khuyến mãi</SelectItem>
+                {selectableVouchers.map((v) => (
+                  <SelectItem key={v.id} value={String(v.id)}>{voucherLabel(v)}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedPromotionId != null ? (
+              <p className="text-xs text-muted-foreground">Bấm "Tính giá" để xem giá sau khi áp khuyến mãi.</p>
+            ) : selectableVouchers.length === 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {vouchers.length === 0
+                  ? 'Chưa tải được danh sách khuyến mãi.'
+                  : 'Không có khuyến mãi khả dụng (cần đang bật, còn hạn, còn lượt, loại công khai).'}
+              </p>
+            ) : null}
+          </div>
+
           {/* Price estimate */}
           <div className="flex items-center justify-between rounded-lg border p-3">
             <div>
@@ -516,7 +574,17 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                 <Calculator className="h-4 w-4" /> Giá dự kiến
               </div>
               {priceEstimate != null ? (
-                <div className="text-lg font-bold text-primary">{new Intl.NumberFormat('vi-VN').format(priceEstimate)} đ</div>
+                <div>
+                  {estimateSavings > 0 && (
+                    <div className="text-xs text-muted-foreground line-through">{fmtVnd(estimateOriginal!)} đ</div>
+                  )}
+                  <div className="text-lg font-bold text-primary">{fmtVnd(priceEstimate)} đ</div>
+                  {estimateSavings > 0 ? (
+                    <div className="text-xs font-medium text-green-600 dark:text-green-400">Đã giảm {fmtVnd(estimateSavings)} đ</div>
+                  ) : selectedPromotionId != null ? (
+                    <div className="text-xs text-amber-600">Khuyến mãi chưa áp dụng (chưa đạt đơn tối thiểu hoặc không hợp lệ).</div>
+                  ) : null}
+                </div>
               ) : (
                 <p className="text-xs text-muted-foreground">Chọn điểm đón/trả{serviceType === 'RIDE' ? ' + loại xe' : ''} rồi bấm Tính giá.</p>
               )}
