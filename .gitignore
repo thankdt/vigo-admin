@@ -46,3 +46,6 @@ firestore-debug.log
 
 # local build/dev logs
 .build-logs/
+
+# Claude local per-developer settings (không commit)
+.claude/settings.local.json
