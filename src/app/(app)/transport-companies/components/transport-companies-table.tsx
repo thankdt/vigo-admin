@@ -32,6 +32,7 @@ import {
   Building2,
   KeyRound,
   CheckCircle2,
+  Download,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -46,6 +47,8 @@ import {
   type HtxDashboardRange,
 } from '@/lib/api';
 import type { TransportCompany, Driver } from '@/lib/types';
+import { downloadXlsx } from '@/lib/csv';
+import { DRIVER_EXPORT_HEADER, driverExportRows } from './driver-export';
 import { useToast } from '@/hooks/use-toast';
 import { DriverDetailDialog } from '../../drivers/components/driver-detail-dialog';
 import { Card } from '@/components/ui/card';
@@ -144,7 +147,39 @@ export function TransportCompaniesTable() {
   const [driversPage, setDriversPage] = React.useState(1);
   const [driversTotalPages, setDriversTotalPages] = React.useState(1);
   const [driversTotal, setDriversTotal] = React.useState(0);
+  const [exportingDrivers, setExportingDrivers] = React.useState(false);
   const DRIVERS_PAGE_SIZE = 20;
+
+  // Export the FULL driver list of the open HTX to xlsx. The on-screen list is
+  // paginated, so we page through all of them (big limit → usually one request).
+  const handleExportDrivers = React.useCallback(async () => {
+    const company = viewDriversCompany;
+    if (!company || exportingDrivers) return;
+    setExportingDrivers(true);
+    try {
+      const all: Driver[] = [];
+      let page = 1;
+      let totalPages = 1;
+      do {
+        const res = await getDrivers({ transportCompanyId: company.id, limit: 200, page });
+        all.push(...res.data);
+        totalPages = Math.max(1, (res as any).meta?.totalPages ?? 1);
+        page += 1;
+      } while (page <= totalPages);
+
+      if (all.length === 0) {
+        toast({ title: 'Không có tài xế để xuất' });
+        return;
+      }
+      const stamp = new Date(Date.now() + 7 * 3_600_000).toISOString().slice(0, 10); // VN date
+      const safe = (company.name || 'htx').replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase();
+      await downloadXlsx(`tai-xe_${safe}_${stamp}.xlsx`, DRIVER_EXPORT_HEADER, driverExportRows(all), 'Tài xế');
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Xuất Excel thất bại', description: err.message });
+    } finally {
+      setExportingDrivers(false);
+    }
+  }, [viewDriversCompany, exportingDrivers, toast]);
 
   const fetchCompanyDriversPage = React.useCallback(async (companyId: string, page: number) => {
     setCompanyDriversLoading(true);
@@ -788,11 +823,22 @@ export function TransportCompaniesTable() {
             </div>
           </div>
 
-          <div className="mt-1 text-sm font-medium">
-            Danh sách tài xế{' '}
-            <span className="text-muted-foreground font-normal">
-              ({companyDriversLoading && companyDrivers.length === 0 ? 'đang tải…' : `${driversTotal}`})
-            </span>
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="text-sm font-medium">
+              Danh sách tài xế{' '}
+              <span className="text-muted-foreground font-normal">
+                ({companyDriversLoading && companyDrivers.length === 0 ? 'đang tải…' : `${driversTotal}`})
+              </span>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportDrivers}
+              disabled={exportingDrivers || driversTotal === 0}
+            >
+              {exportingDrivers ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
+              Tải Excel
+            </Button>
           </div>
           <div className="max-h-[40vh] overflow-y-auto">
             {companyDriversLoading && companyDrivers.length === 0 ? (
