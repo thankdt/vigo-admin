@@ -239,6 +239,10 @@ export type Booking = {
   updatedAt?: string;
   // Scheduled pickup time set by the customer (null/undefined = ride is "now").
   scheduledTime?: string | null;
+  // Pickup-window [from, to] (null/undefined for legacy single-instant trips).
+  // scheduledTime mirrors scheduledFromTime so old clients read one instant.
+  scheduledFromTime?: string | null;
+  scheduledToTime?: string | null;
   customer: {
     id: string;
     fullName: string;
