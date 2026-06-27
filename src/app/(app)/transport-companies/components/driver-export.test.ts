@@ -46,7 +46,8 @@ describe('driverExportRows', () => {
 
   it('maps approval + online states; tolerates missing optional fields', () => {
     const rows = driverExportRows([
-      base({ isApproved: 'false', status: 'BUSY' }),
+      // isApproved=false WITH a rejectionReason → rejected (see driver-approval rule)
+      base({ isApproved: 'false', rejectionReason: 'Thiếu giấy tờ', status: 'BUSY' } as any),
       base({ id: 'd2', isApproved: true }),
     ]);
     expect(rows[0][6]).toBe('Từ chối');

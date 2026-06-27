@@ -59,6 +59,7 @@ import { ApprovalTimeline } from './driver-detail-dialog';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
+import { getDriverApprovalStatus } from './driver-approval';
 
 // Safely parse image arrays - handles string, comma-separated, PostgreSQL array format, etc.
 function safeImageArray(images: any): string[] {
@@ -87,20 +88,8 @@ function safeImageArray(images: any): string[] {
 // Only fields the backend can ORDER BY (whitelisted in
 // drivers.service.findAllForAdmin). Adding a new key requires server-side
 // support — there's no client-side fallback anymore.
-// Normalize the driver's approval state into one enum. Backend stores
-// `isApproved` as a boolean but list payloads have shipped it as both boolean
-// and string ('true'/'false'/'pending'/'-') over time. A pending driver and a
-// rejected driver BOTH have `isApproved=false`; the only signal that separates
-// them is `rejectionReason` (set = rejected). This helper centralizes that
-// rule so callers don't get it wrong (e.g. showing Duyệt/Từ chối on an
-// already-approved driver because `false !== 'true'`).
-type DriverApprovalStatus = 'approved' | 'rejected' | 'pending';
-function getDriverApprovalStatus(driver: { isApproved?: unknown; rejectionReason?: string | null } | null | undefined): DriverApprovalStatus {
-  const v = driver?.isApproved;
-  if (v === true || v === 'true') return 'approved';
-  if (typeof driver?.rejectionReason === 'string' && driver.rejectionReason.trim().length > 0) return 'rejected';
-  return 'pending';
-}
+// Driver approval status is normalized by getDriverApprovalStatus (./driver-approval),
+// shared with the transport-companies dialog + xlsx export so the rule can't drift.
 
 type SortKey = 'name' | 'isApproved' | 'createdAt';
 type TableTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false' | 'needsReview';
