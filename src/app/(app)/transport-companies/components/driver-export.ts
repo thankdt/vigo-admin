@@ -1,4 +1,5 @@
 import type { Driver } from '@/lib/types';
+import { driverApprovalLabel } from '../../drivers/components/driver-approval';
 
 // Column order for the per-HTX driver xlsx export. Kept next to the row builder
 // so header and cells can't drift apart.
@@ -13,9 +14,6 @@ export const DRIVER_EXPORT_HEADER = [
   'Trạng thái',
   'Ngày tạo',
 ];
-
-const approvalLabel = (v: Driver['isApproved']): string =>
-  v === 'true' || v === true ? 'Đã duyệt' : v === 'false' || v === false ? 'Từ chối' : 'Chờ duyệt';
 
 const onlineLabel = (s: Driver['status']): string =>
   s === 'ONLINE' ? 'Online' : s === 'BUSY' ? 'Bận' : 'Offline';
@@ -52,7 +50,7 @@ export function driverExportRows(drivers: Driver[]): Array<Array<string | number
     d.vehicle?.plateNumber || d.vehicleRegistration?.plateNumber || '',
     vehicleLabel(d),
     routeLabel(d),
-    approvalLabel(d.isApproved),
+    driverApprovalLabel(d),
     onlineLabel(d.status),
     fmtDateVn(d.createdAt || d.user?.createdAt),
   ]);

@@ -49,6 +49,7 @@ import {
 import type { TransportCompany, Driver } from '@/lib/types';
 import { downloadXlsx } from '@/lib/csv';
 import { DRIVER_EXPORT_HEADER, driverExportRows } from './driver-export';
+import { getDriverApprovalStatus } from '../../drivers/components/driver-approval';
 import { useToast } from '@/hooks/use-toast';
 import { DriverDetailDialog } from '../../drivers/components/driver-detail-dialog';
 import { Card } from '@/components/ui/card';
@@ -761,7 +762,7 @@ export function TransportCompaniesTable() {
 
       {/* Drivers-of-company dialog — click TC row to see who's in it */}
       <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); setDriversPage(1); setCompanyStats(null); } }}>
-        <DialogContent className="sm:max-w-4xl">
+        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết đơn vị: {viewDriversCompany?.name}</DialogTitle>
           </DialogHeader>
@@ -860,9 +861,10 @@ export function TransportCompaniesTable() {
                     const name = d.name || d.user?.fullName || '—';
                     const phone = d.phone || d.user?.phone || '—';
                     const plate = d.vehicle?.plateNumber || d.vehicleRegistration?.plateNumber || '—';
+                    const status = getDriverApprovalStatus(d);
                     const approvalBadge =
-                      d.isApproved === 'true' ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã duyệt</Badge>
-                      : d.isApproved === 'false' ? <Badge variant="destructive">Từ chối</Badge>
+                      status === 'approved' ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã duyệt</Badge>
+                      : status === 'rejected' ? <Badge variant="destructive">Từ chối</Badge>
                       : <Badge variant="secondary">Chờ duyệt</Badge>;
                     return (
                       <TableRow
