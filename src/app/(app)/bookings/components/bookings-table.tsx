@@ -826,7 +826,9 @@ export function BookingsTable() {
   const [error, setError] = React.useState<string | null>(null);
   const { toast } = useToast();
 
-  const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
+  // Server-side sort (sắp cả bảng, không chỉ trang hiện tại). Mặc định ngày tạo
+  // mới nhất trước; tab Hoàn thành đổi mặc định sang updatedAt (thời gian hoàn thành).
+  const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' }>({ key: 'createdAt', direction: 'descending' });
   // Tìm theo tên/SĐT của khách HOẶC tài xế (BE LIKE %term%).
   const [searchTerm, setSearchTerm] = React.useState('');
   // Tìm theo ID chuyến — BE prefix-match nên admin paste full UUID hay 8 ký tự đầu đều ra.
@@ -857,7 +859,7 @@ export function BookingsTable() {
   const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async (tab: string, search: string, bookingId: string, page: number, limit: number, routeFilter: string) => {
+  const fetchBookings = React.useCallback(async (tab: string, search: string, bookingId: string, page: number, limit: number, routeFilter: string, sort: { key: SortKey; direction: 'ascending' | 'descending' }) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -874,7 +876,12 @@ export function BookingsTable() {
         processingState = 'claimed';
       }
 
-      const params: any = { page, limit, status, processingState };
+      const params: any = {
+        page, limit, status, processingState,
+        // Sắp xếp ở server → áp cho toàn bộ dữ liệu của tab, không chỉ trang đang xem.
+        sortBy: sort.key,
+        order: sort.direction === 'ascending' ? 'ASC' : 'DESC',
+      };
       if (search) {
         params.q = search;
       }
@@ -908,11 +915,11 @@ export function BookingsTable() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -934,6 +941,14 @@ export function BookingsTable() {
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
     setCurrentPage(1); // Reset to page 1 on tab change
+    // Tab Hoàn thành mặc định sắp theo thời gian hoàn thành (updatedAt của chuyến
+    // COMPLETED); các tab khác giữ mặc định theo ngày tạo. Người dùng vẫn bấm
+    // tiêu đề cột để đổi.
+    setSortConfig(
+      value === 'COMPLETED'
+        ? { key: 'updatedAt', direction: 'descending' }
+        : { key: 'createdAt', direction: 'descending' },
+    );
   }
 
   const handleSearchChange = (value: string) => {
@@ -959,7 +974,7 @@ export function BookingsTable() {
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
       toast({ title: 'Đã cập nhật trạng thái', description: `Chuyến #${dialogState.booking.id} đã được chuyển sang ${statusLabelMap[dialogState.newStatus] ?? dialogState.newStatus}.` });
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
       setDialogState({ open: false, booking: null, newStatus: null });
       setStatusNote('');
     } catch (err: any) {
@@ -979,7 +994,7 @@ export function BookingsTable() {
     try {
       await adminAcceptBooking(acceptingBookingId);
       toast({ title: 'Thành công', description: 'Đã nhận chuyến thành công.' });
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
       setAcceptingBookingId(null);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận chuyến thất bại', description: err.message });
@@ -992,29 +1007,15 @@ export function BookingsTable() {
     try {
       await claimProcessingBooking(booking.id);
       toast({ title: 'Đã nhận xử lý', description: 'Chuyến không còn bị tự huỷ sau 5 phút. Bạn cần đẩy chuyến cho tài xế hoặc huỷ thủ công.' });
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
+      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận xử lý thất bại', description: err.message });
     }
   }
 
-  const sortedBookings = React.useMemo(() => {
-    let sortableBookings = [...bookings];
-    if (sortConfig !== null) {
-      sortableBookings.sort((a, b) => {
-        const aValue = a[sortConfig.key] as any;
-        const bValue = b[sortConfig.key] as any;
-        if (aValue < bValue) {
-          return sortConfig.direction === 'ascending' ? -1 : 1;
-        }
-        if (aValue > bValue) {
-          return sortConfig.direction === 'ascending' ? 1 : -1;
-        }
-        return 0;
-      });
-    }
-    return sortableBookings;
-  }, [bookings, sortConfig]);
+  // Server đã sắp xếp toàn bộ tập dữ liệu của tab (không chỉ trang hiện tại), nên
+  // hiển thị nguyên thứ tự trả về — KHÔNG sắp lại phía client (sẽ chỉ đảo 20 dòng).
+  const sortedBookings = bookings;
 
   const requestSort = (key: SortKey) => {
     let direction: 'ascending' | 'descending' = 'ascending';
@@ -1022,6 +1023,7 @@ export function BookingsTable() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
+    setCurrentPage(1); // Sắp xếp lại từ trang đầu để đúng thứ tự toàn cục.
   };
 
   const statusChangeOptions: BookingStatus[] = ['ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
@@ -1037,7 +1039,7 @@ export function BookingsTable() {
             ))}
           </TabsList>
           <div className='ml-auto flex items-center gap-2'>
-            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId)} />
+            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig)} />
             <Select
               value={selectedRouteId}
               onValueChange={(val) => { setSelectedRouteId(val); setCurrentPage(1); }}
@@ -1092,6 +1094,16 @@ export function BookingsTable() {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
+                {/* Tab Hoàn thành: thêm cột thời gian hoàn thành (updatedAt của chuyến
+                    COMPLETED) và cho sắp xếp theo nó. */}
+                {activeTab === 'COMPLETED' && (
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('updatedAt')}>
+                      Ngày hoàn thành
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                )}
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('status')}>
                     Trạng thái
@@ -1116,19 +1128,19 @@ export function BookingsTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : 7} className="h-24 text-center">
+                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : activeTab === 'COMPLETED' ? 8 : 7} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : 7} className="text-center text-destructive">
+                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : activeTab === 'COMPLETED' ? 8 : 7} className="text-center text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
               ) : sortedBookings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : 7} className="h-24 text-center">
+                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : activeTab === 'COMPLETED' ? 8 : 7} className="h-24 text-center">
                     Không tìm thấy chuyến nào.
                   </TableCell>
                 </TableRow>
@@ -1167,6 +1179,15 @@ export function BookingsTable() {
                     <TableCell>
                       {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
                     </TableCell>
+                    {/* Ngày hoàn thành = updatedAt của chuyến COMPLETED (hệ thống
+                        chưa lưu completedAt riêng). Chỉ hiện ở tab Hoàn thành. */}
+                    {activeTab === 'COMPLETED' && (
+                      <TableCell>
+                        {booking.updatedAt
+                          ? format(new Date(booking.updatedAt), "dd/MM/yyyy HH:mm")
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                    )}
                     <TableCell>
                       <div className="flex flex-col gap-1 items-start">
                         {getStatusBadge(booking)}
@@ -1375,7 +1396,7 @@ export function BookingsTable() {
           onOpenChange={(open) => !open && setReassigningBooking(null)}
           onReassignSuccess={() => {
             setReassigningBooking(null);
-            fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId);
+            fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
           }}
         />
       </Dialog>
@@ -1383,7 +1404,7 @@ export function BookingsTable() {
         bookingId={voidBookingId}
         open={!!voidBookingId}
         onOpenChange={(o) => { if (!o) setVoidBookingId(null); }}
-        onDone={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId)}
+        onDone={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig)}
       />
       {/* Accept Booking Confirmation */}
       <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>
