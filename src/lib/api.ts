@@ -489,6 +489,10 @@ export async function getBookings(params: {
   q?: string;
   // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
   bookingId?: string;
+  // Sắp xếp server-side (sắp cả bảng, không chỉ trang hiện tại). BE whitelist
+  // cột: createdAt|updatedAt|price|status. Mặc định createdAt DESC.
+  sortBy?: string;
+  order?: 'ASC' | 'DESC';
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -500,6 +504,8 @@ export async function getBookings(params: {
     ...(params.routeId !== undefined && { routeId: String(params.routeId) }),
     ...(params.q && { q: params.q }),
     ...(params.bookingId && { bookingId: params.bookingId }),
+    ...(params.sortBy && { sortBy: params.sortBy }),
+    ...(params.order && { order: params.order }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
