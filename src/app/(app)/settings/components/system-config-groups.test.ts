@@ -1,0 +1,63 @@
+import { describe, it, expect } from 'vitest';
+import { groupIdFor, CONFIG_GROUPS } from './system-config-groups';
+
+describe('groupIdFor — loyalty redesign keys', () => {
+  // §9 keys that must surface in the existing "Giới thiệu & Hạng thành viên" group.
+  const loyaltyKeys = [
+    'TIER_POINT_VND_PER_POINT',
+    'REWARD_POINT_VND_PER_POINT',
+    'REWARD_MULTIPLIER_MEMBER',
+    'REWARD_MULTIPLIER_SILVER',
+    'REWARD_MULTIPLIER_GOLD',
+    'REWARD_MULTIPLIER_DIAMOND',
+    'TIER_THRESHOLD_SILVER',
+    'TIER_THRESHOLD_GOLD',
+    'TIER_THRESHOLD_DIAMOND',
+    'REWARD_POINT_EXPIRY_MONTHS',
+    'REWARD_EXPIRY_NOTIFY_DAYS',
+    'TIER_RECALC_STALE_HOURS',
+    'TIER_DOWNGRADE_NOTIFY_DAYS',
+  ];
+
+  it.each(loyaltyKeys)('routes %s to the growth group', (key) => {
+    expect(groupIdFor(key)).toBe('growth');
+  });
+
+  it('keeps the pre-existing growth keys in growth (no regression)', () => {
+    expect(groupIdFor('LOYALTY_GOLD_PERCENT')).toBe('growth');
+    expect(groupIdFor('REFERRAL_BONUS_AMOUNT')).toBe('growth');
+    expect(groupIdFor('SIGNUP_LOYALTY_REWARD')).toBe('growth');
+  });
+});
+
+describe('groupIdFor — other groups unchanged (precedence guard)', () => {
+  it('does not let TIER_/REWARD_ leak into an earlier group', () => {
+    // None of the loyalty keys contain _APP_, start with PRICING_/DISPATCH_/ROUTE_/
+    // CHAIN_/DRIVER_, so the FIRST match must be growth, not an earlier group.
+    expect(groupIdFor('REWARD_MULTIPLIER_GOLD')).not.toBe('app');
+    expect(groupIdFor('TIER_THRESHOLD_GOLD')).not.toBe('dispatch');
+    expect(groupIdFor('TIER_DOWNGRADE_NOTIFY_DAYS')).not.toBe('driver');
+  });
+
+  it('maps representative keys of each other group correctly', () => {
+    expect(groupIdFor('PRICING_BASE_FARE')).toBe('pricing');
+    expect(groupIdFor('VIGO_COMMISSION_RATE')).toBe('pricing');
+    expect(groupIdFor('DISPATCH_RADIUS')).toBe('dispatch');
+    expect(groupIdFor('ROUTE_MATCH_SHADOW')).toBe('dispatch');
+    expect(groupIdFor('RIDE_ALLOW_OFF_ROUTE')).toBe('dispatch');
+    expect(groupIdFor('DRIVER_MAX_ROUTES')).toBe('driver');
+    expect(groupIdFor('MIN_APP_VERSION')).toBe('app');
+    expect(groupIdFor('SOME_RANDOM_KEY')).toBe('misc'); // catch-all
+  });
+
+  it('SIGNUP_LOYALTY_REWARD is an EXACT match, not a SIGNUP_ prefix', () => {
+    // The growth rule matches `k === 'SIGNUP_LOYALTY_REWARD'`, not `startsWith('SIGNUP_')`
+    // — so an unrelated SIGNUP_* key must fall through to the catch-all.
+    expect(groupIdFor('SIGNUP_LOYALTY_REWARD')).toBe('growth');
+    expect(groupIdFor('SIGNUP_OTHER_THING')).toBe('misc');
+  });
+
+  it('catch-all group stays last', () => {
+    expect(CONFIG_GROUPS[CONFIG_GROUPS.length - 1].id).toBe('misc');
+  });
+});
