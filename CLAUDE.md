@@ -75,3 +75,34 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
 > Lưu ý: môi trường DEV (deploy riêng) hiện đang lỗi, config chưa đưa vào repo;
 > script `deploy:dev` + tách API base theo env sẽ bổ sung sau. Tạm thời test
 > bằng `npm run dev` (local, trỏ prod backend).
+
+## Quy trình phát triển (BẮT BUỘC — mọi thành viên & agent follow)
+
+Áp dụng cho MỌI thay đổi code (feature/fix). Không bỏ bước.
+
+0. **Cắt nhánh `feat/*` hoặc `fix/*` từ `main`** (đã `git pull`). KHÔNG code trực tiếp trên `main`/`dev`.
+1. **Code kèm test (TDD)** — viết test trước/cùng lúc, không để "test cho có" sau cùng.
+2. **Vòng lặp chất lượng** (lặp tới khi sạch):
+   - a. Self-review lại diff — altitude, edge case, đọc lại TỪNG site đã đổi.
+   - b. Unit test pass + kiểm tĩnh sạch (xem "Lệnh kiểm" cuối mục).
+   - c. Nhờ 1 **reviewer độc lập** (agent fresh-context, adversarial) review code.
+   - d. Sửa theo review → quay lại (a).
+3. **Commit sạch** — `git add` NGAY trước `git commit` (hoặc `git commit -a`) để đảm bảo phần staged == bản cuối (tránh commit sót do stage rồi mới sửa). Commit theo đơn vị hoàn chỉnh. Message kết bằng:
+   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+4. **Kiểm tương thích ngược với CLIENT CŨ** (BẮT BUỘC trước mọi rollout — backend deploy trước app nên app cũ vẫn gọi API shape cũ):
+   - Không xoá/đổi tên field response client cũ đang đọc (chỉ được THÊM — additive).
+   - Giữ field `required` client cũ cần + field mirror/deprecated (vd giá trị hiển thị cũ).
+   - Không để `disallowUnrecognizedKeys` (Flutter) phá vỡ khi thêm field.
+   - Không đổi enum client map cứng; không đổi shape/required của REQUEST body.
+   - Kiểm cả app tài xế nếu đụng endpoint dùng chung.
+5. **Push nhánh feat**.
+6. **Merge vào `dev` → test trên môi trường DEV** (verify runtime). Không PR→main khi chưa test DEV.
+7. **PR `feature→main`** — review của người = cổng cuối → merge = deploy/build production.
+8. **Resync `main→dev`**. KHÔNG PR `dev→main`, KHÔNG cherry-pick.
+
+**Đa repo / đổi API contract:** chốt contract trước khi code FE/admin; rollout **backend TRƯỚC** app; điều phối PR các repo cùng đợt.
+
+**Lệnh kiểm tĩnh theo repo:**
+- backend (`vigo-backend`): `npx tsc --noEmit` + `npx jest`
+- app khách/tài xế (`vigo`, `vigo-driver`): `dart analyze` (+ `dart run build_runner build` nếu đổi model/DTO)
+- admin (`vigo-admin`): `npx tsc --noEmit` + `npx vitest run`
