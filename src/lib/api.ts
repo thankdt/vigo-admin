@@ -599,6 +599,9 @@ export async function estimateTripPrice(body: {
   // Voucher áp thử để xem giá sau giảm. BE validate ở context admin (userId =
   // admin); với voucher công khai (pointCost=0) kết quả khớp lúc tạo chuyến.
   promotionId?: number;
+  // Thời điểm đi (ISO) — quyết định phụ phí cuối tuần/lễ theo NGÀY ĐI, không phải
+  // ngày đặt. Bỏ trống (đi ngay) → backend tính theo hiện tại.
+  departureTime?: string;
 }): Promise<{ price: number; finalPrice: number; distanceKm?: number; discount?: number; priceBeforeDiscount?: number }> {
   const response = await fetchWithAuth('/pricing/calculate', {
     method: 'POST',
