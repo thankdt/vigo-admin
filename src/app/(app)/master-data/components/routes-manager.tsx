@@ -34,6 +34,11 @@ export function RoutesManager() {
     const itemsPerPage = 50;
     const { toast } = useToast();
 
+    // Bulk-deactivate (soft delete) of ACTIVE routes only.
+    const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set());
+    const [bulkConfirm, setBulkConfirm] = React.useState<{ ids: number[]; scope: 'selected' | 'all' } | null>(null);
+    const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
+
     const fetchData = React.useCallback(async () => {
         // We do NOT set setIsLoading(true) here to avoid wiping the table content during refresh.
         // This keeps the DOM nodes (triggers) alive, preventing Radix UI focus issues and "UI Freeze".
@@ -129,6 +134,44 @@ export function RoutesManager() {
         }
     };
 
+    // Active routes (across ALL pages) + current-page selection helpers.
+    const activeRoutes = React.useMemo(() => routes.filter(r => !r.deletedAt), [routes]);
+    const pageRoutes = routes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+    const pageActiveIds = pageRoutes.filter(r => !r.deletedAt).map(r => r.id);
+    const allPageActiveSelected = pageActiveIds.length > 0 && pageActiveIds.every(id => selectedIds.has(id));
+
+    const toggleSelect = (id: number) => setSelectedIds(prev => {
+        const n = new Set(prev);
+        if (n.has(id)) n.delete(id); else n.add(id);
+        return n;
+    });
+    const toggleSelectPage = () => setSelectedIds(prev => {
+        const n = new Set(prev);
+        if (allPageActiveSelected) pageActiveIds.forEach(id => n.delete(id));
+        else pageActiveIds.forEach(id => n.add(id));
+        return n;
+    });
+
+    // Soft-delete each route (reuses the guarded single-delete endpoint). Soft +
+    // restorable, so a bulk action is recoverable via "Hiện tuyến đã ngừng".
+    const runBulkDelete = async (ids: number[]) => {
+        setIsBulkDeleting(true);
+        const results = await Promise.allSettled(ids.map(id => deleteRoute(id)));
+        const ok = results.filter(r => r.status === 'fulfilled').length;
+        const fail = results.length - ok;
+        setIsBulkDeleting(false);
+        setBulkConfirm(null);
+        setSelectedIds(new Set());
+        toast({
+            title: fail === 0 ? `Đã ngừng ${ok} tuyến` : `Ngừng ${ok} tuyến, lỗi ${fail}`,
+            description: fail === 0
+                ? 'Có thể khôi phục trong "Hiện tuyến đã ngừng".'
+                : 'Một số tuyến không ngừng được — thử lại.',
+            variant: fail === 0 ? undefined : 'destructive',
+        });
+        fetchData();
+    };
+
     return (
         <>
             <Card>
@@ -149,6 +192,25 @@ export function RoutesManager() {
                                 />
                                 Hiện tuyến đã ngừng
                             </label>
+                            {selectedIds.size > 0 && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                                    onClick={() => setBulkConfirm({ ids: [...selectedIds], scope: 'selected' })}
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" /> Xóa đã chọn ({selectedIds.size})
+                                </Button>
+                            )}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="text-destructive border-destructive/40 hover:bg-destructive/10"
+                                disabled={activeRoutes.length === 0}
+                                onClick={() => setBulkConfirm({ ids: activeRoutes.map(r => r.id), scope: 'all' })}
+                            >
+                                <Trash2 className="mr-2 h-4 w-4" /> Xóa tất cả
+                            </Button>
                         </div>
                         <div className="space-x-2">
                             <Button
@@ -172,6 +234,14 @@ export function RoutesManager() {
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-10">
+                                    <Checkbox
+                                        checked={allPageActiveSelected}
+                                        onCheckedChange={toggleSelectPage}
+                                        disabled={pageActiveIds.length === 0}
+                                        aria-label="Chọn tất cả tuyến trong trang"
+                                    />
+                                </TableHead>
                                 <TableHead>ID</TableHead>
                                 <TableHead>Ảnh</TableHead>
                                 <TableHead>Tên</TableHead>
@@ -182,7 +252,7 @@ export function RoutesManager() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={5} className="h-24 text-center">
+                                    <TableCell colSpan={6} className="h-24 text-center">
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
@@ -192,6 +262,15 @@ export function RoutesManager() {
                                     className="cursor-pointer hover:bg-muted/50"
                                     onClick={() => handleOpenForm(route)}
                                 >
+                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                        {!route.deletedAt && (
+                                            <Checkbox
+                                                checked={selectedIds.has(route.id)}
+                                                onCheckedChange={() => toggleSelect(route.id)}
+                                                aria-label={`Chọn tuyến ${route.name}`}
+                                            />
+                                        )}
+                                    </TableCell>
                                     <TableCell>{route.id}</TableCell>
                                     <TableCell>
                                         <Image
@@ -307,6 +386,43 @@ export function RoutesManager() {
                         <AlertDialogCancel>Hủy</AlertDialogCancel>
                         <AlertDialogAction onClick={handleDeleteConfirm} className="bg-destructive hover:bg-destructive/90">
                             <Trash2 className="mr-2 h-4 w-4" /> Ngừng hoạt động
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            <AlertDialog open={!!bulkConfirm} onOpenChange={() => { if (!isBulkDeleting) setBulkConfirm(null); }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {bulkConfirm?.scope === 'all'
+                                ? 'Ngừng hoạt động TẤT CẢ tuyến?'
+                                : `Ngừng hoạt động ${bulkConfirm?.ids.length ?? 0} tuyến đã chọn?`}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-2 text-sm">
+                                <p>
+                                    <span className="font-medium text-foreground">{bulkConfirm?.ids.length ?? 0}</span> tuyến
+                                    sẽ chuyển sang trạng thái ngừng hoạt động. Tài xế đang đăng ký các tuyến này sẽ nhận
+                                    thông báo và phải chọn tuyến khác; bảng giá &amp; lịch sử được giữ lại.
+                                </p>
+                                <p className="text-muted-foreground">
+                                    Có thể khôi phục bất cứ lúc nào qua "Hiện tuyến đã ngừng".
+                                </p>
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isBulkDeleting}>Hủy</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={(e) => { e.preventDefault(); if (bulkConfirm) runBulkDelete(bulkConfirm.ids); }}
+                            disabled={isBulkDeleting}
+                            className="bg-destructive hover:bg-destructive/90"
+                        >
+                            {isBulkDeleting
+                                ? <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                : <Trash2 className="mr-2 h-4 w-4" />}
+                            Ngừng {bulkConfirm?.ids.length ?? 0} tuyến
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

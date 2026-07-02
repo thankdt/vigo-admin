@@ -9,12 +9,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { getHtxTrips, type HtxTripRow, type HtxReconTotals } from '@/lib/api';
-import { downloadXlsx } from '@/lib/csv';
+import { downloadXlsxGrouped } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../../finance/components/finance-filter';
+import { expandHtxRow, HTX_LEAF_COLS, buildHtxExportHeader, HTX_PAYMENT_LABEL } from '../htx-recon-shared';
+import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from '../htx-recon-table';
 
-const fmt = (v: number) => new Intl.NumberFormat('vi-VN').format(v ?? 0);
 const fmtVnTime = (iso: string) =>
   new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
+// Leading (non-financial) columns: STT, Mã chuyến, Ngày giờ, Tài xế, Biển số xe, TÊN HTX/ĐVCCX, Hình thức TT
+const LEADING = 7;
+const TOTAL_COLS = LEADING + HTX_LEAF_COLS.length;
 
 export default function HtxDetailPage() {
   const searchParams = useSearchParams();
@@ -44,25 +49,19 @@ export default function HtxDetailPage() {
 
   React.useEffect(() => { const t = setTimeout(load, 250); return () => clearTimeout(t); }, [load]);
 
-  const cols: Array<{ key: keyof HtxTripRow; label: string; className?: string }> = [
-    { key: 'grossRevenue', label: 'Doanh thu gộp' },
-    { key: 'totalVat', label: 'VAT tổng' },
-    { key: 'htxCommission', label: 'HH HTX' },
-    { key: 'htxVatRemit', label: 'VAT HTX' },
-    { key: 'htxTotalReceived', label: 'Tổng HTX nhận', className: 'text-purple-700 dark:text-purple-400 font-semibold' },
-    { key: 'vigoCommission', label: 'HH VIGO' },
-    { key: 'vigoVatRemit', label: 'VAT VIGO' },
-  ];
-
   const handleExport = async () => {
     if (trips.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
-    const body: Array<Array<string | number>> = trips.map((t) => [
-      fmtVnTime(t.createdAt), t.driverName, t.driverPhone, t.plate,
-      ...cols.map((c) => t[c.key] as number),
-    ]);
-    if (totals) body.push(['TỔNG', '', '', '', ...cols.map((c) => totals[c.key as keyof HtxReconTotals] as number)]);
+    const { headerRows, merges } = buildHtxExportHeader(['STT', 'Mã chuyến', 'Ngày giờ', 'Tài xế', 'SĐT', 'Biển số xe', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
+    const body: Array<Array<string | number>> = trips.map((t, i) => {
+      const ex = expandHtxRow(t);
+      return [i + 1, t.bookingId, fmtVnTime(t.createdAt), t.driverName, t.driverPhone, t.plate, name, HTX_PAYMENT_LABEL, ...HTX_LEAF_COLS.map((c) => ex[c.key])];
+    });
+    if (totals) {
+      const ex = expandHtxRow(totals);
+      body.push(['', 'TỔNG', '', '', '', '', '', '', ...HTX_LEAF_COLS.map((c) => ex[c.key])]);
+    }
     const safeName = (name || 'htx').replace(/[^\p{L}\p{N}]+/gu, '-').toLowerCase();
-    await downloadXlsx(`doi-soat-${safeName}_${range.from}_${range.to}.xlsx`, ['Thời gian (VN)', 'Tài xế', 'SĐT', 'Biển số', ...cols.map((c) => c.label)], body, 'Đối soát HTX');
+    await downloadXlsxGrouped(`doi-soat-${safeName}_${range.from}_${range.to}.xlsx`, headerRows, merges, body, 'Đối soát HTX');
   };
 
   return (
@@ -94,27 +93,36 @@ export default function HtxDetailPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="whitespace-nowrap">Thời gian (VN)</TableHead>
-                <TableHead>Tài xế</TableHead>
-                <TableHead>Biển số</TableHead>
-                {cols.map((c) => <TableHead key={c.key} className="text-right whitespace-nowrap">{c.label}</TableHead>)}
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">STT</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Mã chuyến</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Ngày giờ</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Tài xế</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Biển số xe</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">TÊN HTX/ĐVCCX</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Hình thức TT</TableHead>
+                <HtxHeadTailRow1 />
               </TableRow>
+              <HtxHeadLowerRows />
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={cols.length + 3} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={TOTAL_COLS} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
               ) : trips.length === 0 ? (
-                <TableRow><TableCell colSpan={cols.length + 3} className="h-24 text-center text-muted-foreground">Không có chuyến nào trong kỳ.</TableCell></TableRow>
+                <TableRow><TableCell colSpan={TOTAL_COLS} className="h-24 text-center text-muted-foreground">Không có chuyến nào trong kỳ.</TableCell></TableRow>
               ) : (
-                trips.map((t) => (
+                trips.map((t, i) => (
                   <TableRow key={t.bookingId}>
+                    <TableCell className="tabular-nums">{i + 1}</TableCell>
+                    <TableCell className="font-mono text-xs whitespace-nowrap">{t.bookingId}</TableCell>
                     <TableCell className="whitespace-nowrap">{fmtVnTime(t.createdAt)}</TableCell>
-                    <TableCell>
+                    <TableCell className="whitespace-nowrap">
                       <div className="font-medium">{t.driverName || '—'}</div>
                       <div className="text-xs text-muted-foreground">{t.driverPhone || '—'}</div>
                     </TableCell>
-                    <TableCell className="font-mono text-xs uppercase">{t.plate || '—'}</TableCell>
-                    {cols.map((c) => <TableCell key={c.key} className={`text-right tabular-nums whitespace-nowrap ${c.className ?? ''}`}>{fmt(t[c.key] as number)}</TableCell>)}
+                    <TableCell className="font-mono text-xs uppercase whitespace-nowrap">{t.plate || '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">{name || '—'}</TableCell>
+                    <TableCell className="whitespace-nowrap">{HTX_PAYMENT_LABEL}</TableCell>
+                    <HtxLeafCells row={expandHtxRow(t)} />
                   </TableRow>
                 ))
               )}
@@ -122,15 +130,17 @@ export default function HtxDetailPage() {
             {totals && !loading && trips.length > 0 && (
               <TableFooter>
                 <TableRow className="font-semibold">
-                  <TableCell colSpan={3} className="whitespace-nowrap">TỔNG</TableCell>
-                  {cols.map((c) => <TableCell key={c.key} className="text-right tabular-nums whitespace-nowrap">{fmt(totals[c.key as keyof HtxReconTotals] as number)}</TableCell>)}
+                  <TableCell colSpan={LEADING} className="whitespace-nowrap">TỔNG</TableCell>
+                  <HtxLeafCells row={expandHtxRow(totals)} />
                 </TableRow>
               </TableFooter>
             )}
           </Table>
         </div>
       </Card>
-      <p className="text-xs text-muted-foreground">Đơn vị: đồng (đ). Tổng HTX nhận = HH HTX + VAT HTX + PIT giữ hộ.</p>
+      <p className="text-xs text-muted-foreground">
+        Đơn vị: đồng (đ). VAT = 8%. Tổng khách trả = (Cước vận tải HTX + VAT) + (Phí APP trước VAT + VAT), và luôn bằng (Tài xế thực nhận + HTX, ĐVCCX nhận + VIGO nhận).
+      </p>
     </div>
   );
 }

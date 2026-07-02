@@ -21,7 +21,11 @@
       "Bash(aws cloudwatch get-metric-statistics:*)",
       "Bash(aws cloudwatch get-metric-data:*)",
       "Edit(.claude/skills/**)",
-      "mcp__postgres-readonly__query"
+      "mcp__postgres-readonly__query",
+      "Bash(echo \"exit=$?\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(rm -rf .next)",
+      "Bash(npm run *)"
     ],
     "ask": [
       "Bash(psql:*)",
