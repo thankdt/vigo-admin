@@ -73,7 +73,7 @@ pipeline {
 Job: ${JOB_NAME} #${BUILD_NUMBER}
 Branch: ${BRANCH}
 Commit: ${COMMIT}
-URL: https://admin.vigodev.site
+URL: https://admin.vigodev.online
 Log: ${BUILD_URL}console"
           curl -s -X POST "https://api.telegram.org/bot${TG_TOKEN}/sendMessage" \
             --data-urlencode "chat_id=${TG_CHAT}" \

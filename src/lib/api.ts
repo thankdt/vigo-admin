@@ -2,7 +2,7 @@
 import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
-// NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.site; prod builds fall back to
+// NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
 // the production API. NEXT_PUBLIC_* is read at runtime in `next dev` and inlined
 // at build time for `next build`.
 export const API_BASE_URL =

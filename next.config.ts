@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   // Allow the dev server (next dev) to accept requests proxied from the
   // Cloudflare tunnel host. Next 15.5 blocks cross-origin dev requests
   // otherwise. No effect on `next build` / static export.
-  allowedDevOrigins: ['admin.vigodev.site'],
+  allowedDevOrigins: ['admin.vigodev.online'],
 
   images: {
     unoptimized: true, // Required for static export

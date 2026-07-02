@@ -8,7 +8,7 @@ services:
     environment:
       # Admin (browser) → dev backend. next dev reads this at runtime; prod
       # builds fall back to the hardcoded prod URL in src/lib/api.ts.
-      - NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.site
+      - NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online
       # Bigger V8 heap so large on-demand compiles don't stall on GC.
       - NODE_OPTIONS=--max-old-space-size=2048
     volumes:
@@ -25,8 +25,8 @@ volumes:
   admin_next_cache:
 
 # Reuse the backend stack's network so its EXISTING cloudflared can reach this
-# container. The route admin.vigodev.site → http://admin:9002 lives on the same
-# tunnel as api.vigodev.site (no separate tunnel/cloudflared needed here).
+# container. The route admin.vigodev.online → http://admin:9002 lives on the same
+# tunnel as api.vigodev.online (no separate tunnel/cloudflared needed here).
 networks:
   vigo-shared:
     external: true
