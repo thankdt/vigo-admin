@@ -152,7 +152,9 @@ export function TransportCompaniesTable() {
   const DRIVERS_PAGE_SIZE = 20;
 
   // Export the FULL driver list of the open HTX to xlsx. The on-screen list is
-  // paginated, so we page through all of them (big limit → usually one request).
+  // paginated, so we page through all of them. Backend caps limit at 100
+  // (pagination.dto @Max(100)), so use 100/page and loop over totalPages —
+  // limit>100 → VAL_001 "Limit cannot exceed 100" and the export fails.
   const handleExportDrivers = React.useCallback(async () => {
     const company = viewDriversCompany;
     if (!company || exportingDrivers) return;
@@ -162,7 +164,7 @@ export function TransportCompaniesTable() {
       let page = 1;
       let totalPages = 1;
       do {
-        const res = await getDrivers({ transportCompanyId: company.id, limit: 200, page });
+        const res = await getDrivers({ transportCompanyId: company.id, limit: 100, page });
         all.push(...res.data);
         totalPages = Math.max(1, (res as any).meta?.totalPages ?? 1);
         page += 1;
