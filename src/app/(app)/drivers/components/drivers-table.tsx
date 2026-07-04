@@ -24,7 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3 } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
@@ -155,6 +155,10 @@ export function DriversTable() {
   }>({ plateNumber: '', brand: '', model: '', color: '' });
   const [savingVehicle, setSavingVehicle] = React.useState(false);
 
+  // Upload giấy xác nhận HTX (admin upload hộ tài xế).
+  const [uploadingHtx, setUploadingHtx] = React.useState(false);
+  const htxFileInputRef = React.useRef<HTMLInputElement>(null);
+
   // Edit-routes state (multi-route). null = not editing; number[] = staged route ids.
   const [editingRoutes, setEditingRoutes] = React.useState<number[] | null>(null);
   const [savingRoutes, setSavingRoutes] = React.useState(false);
@@ -272,6 +276,25 @@ export function DriversTable() {
       toast({ title: 'Không cập nhật được tên', description: e?.message, variant: 'destructive' });
     } finally {
       setSavingName(false);
+    }
+  };
+
+  // Upload ảnh giấy xác nhận HTX: presign → PUT S3 → lưu key lên tài xế. "Thay
+  // ảnh" dùng cùng luồng (backend ghi đè). Mirror handleSaveVehicle cho refresh.
+  const handleUploadHtxImage = async (file: File) => {
+    if (!viewDriver || !file) return;
+    setUploadingHtx(true);
+    try {
+      const presigned = await getPresignedUrl(file.name, file.type || 'application/octet-stream');
+      await uploadToS3(presigned.url, file);
+      const updated = await updateDriverProfile(viewDriver.id, { htxConfirmationImage: presigned.key });
+      setViewDriver({ ...viewDriver, ...updated });
+      toast({ title: 'Đã cập nhật giấy xác nhận HTX' });
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+    } catch (e: any) {
+      toast({ title: 'Tải ảnh thất bại', description: e?.message, variant: 'destructive' });
+    } finally {
+      setUploadingHtx(false);
     }
   };
 
@@ -1140,6 +1163,43 @@ export function DriversTable() {
                   />
                 </div>
               )}
+
+              {/* Giấy xác nhận HTX — admin upload hộ tài xế. Luôn hiển thị (kể cả
+                  khi chưa có) để admin có nút Tải lên; có rồi thì nút Thay ảnh. */}
+              <div className="space-y-2 border-t pt-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold">Giấy xác nhận HTX</h4>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={uploadingHtx}
+                    onClick={() => htxFileInputRef.current?.click()}
+                  >
+                    {uploadingHtx && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    {viewDriver.htxConfirmationImage ? 'Thay ảnh' : 'Tải lên'}
+                  </Button>
+                </div>
+                {viewDriver.htxConfirmationImage ? (
+                  <ImageThumbList
+                    urls={[getImageUrl(viewDriver.htxConfirmationImage)]}
+                    altPrefix="HTX"
+                  />
+                ) : (
+                  <p className="text-sm text-muted-foreground">Chưa có ảnh giấy xác nhận.</p>
+                )}
+                <input
+                  ref={htxFileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) handleUploadHtxImage(f);
+                    e.target.value = ''; // cho phép chọn lại cùng file
+                  }}
+                />
+              </div>
 
               <div className="space-y-2 border-t pt-4">
                 <div className="flex items-center justify-between">
