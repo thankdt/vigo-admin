@@ -244,7 +244,7 @@ export default function InvoicesPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="whitespace-nowrap">Ngày đặt xe</TableHead>
+              <TableHead className="whitespace-nowrap">Ngày hoàn thành</TableHead>
               <TableHead>Dịch vụ</TableHead>
               <TableHead className="text-right">Thành tiền (gồm VAT)</TableHead>
               <TableHead className="text-right">VAT</TableHead>
