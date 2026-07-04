@@ -383,6 +383,8 @@ export async function updateDriverProfile(
       model?: string;
       color?: string;
     };
+    // S3 key ảnh giấy xác nhận HTX (admin upload hộ). Gửi = tải lên/thay ảnh.
+    htxConfirmationImage?: string;
   },
 ): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/profile`, {

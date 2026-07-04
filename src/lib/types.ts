@@ -131,6 +131,8 @@ export type Driver = {
   licenseNumber?: string;
   licenseImages?: string[];
   cccdImages?: string[];
+  // Ảnh giấy xác nhận HTX (admin upload hộ). 1 ảnh, S3 key; rỗng = chưa có.
+  htxConfirmationImage?: string;
   enabledDropoffDistricts?: number[];
   fixedRouteId?: number;
   enabledServices?: string[];
