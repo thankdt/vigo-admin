@@ -81,6 +81,11 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
 Áp dụng cho MỌI thay đổi code (feature/fix). Không bỏ bước.
 
 0. **Cắt nhánh `feat/*` hoặc `fix/*` từ `main`** (đã `git pull`). KHÔNG code trực tiếp trên `main`/`dev`.
+0.5. **Chốt & review GIẢI PHÁP trước khi code — CỔNG CHẶN, BẮT BUỘC với thay đổi non-trivial:**
+   - a. Viết plan/spec ngắn: mục tiêu, cách tiếp cận, file/đối tượng sẽ đụng, edge case, ảnh hưởng tương thích client cũ.
+   - b. Nhờ 1 **sub-agent fresh-context, adversarial** review plan (không phải chỉ self-review).
+   - c. Sửa plan theo review → **quay lại (b)**. KHÔNG code ngay sau khi chỉnh — xong plan vẫn phải ĐỢI review duyệt.
+   - d. Chỉ chuyển sang bước 1 (code) khi plan đã qua review sạch.
 1. **Code kèm test (TDD)** — viết test trước/cùng lúc, không để "test cho có" sau cùng.
 2. **Vòng lặp chất lượng** (lặp tới khi sạch):
    - a. Self-review lại diff — altitude, edge case, đọc lại TỪNG site đã đổi.
