@@ -2,27 +2,15 @@ services:
   admin:
     build:
       context: .
-      target: development
+      target: static
+      args:
+        # Inlined into the static bundle at build time → admin calls the dev backend.
+        NEXT_PUBLIC_API_BASE_URL: https://api.vigodev.online
     ports:
       - "9002:9002"
-    environment:
-      # Admin (browser) → dev backend. next dev reads this at runtime; prod
-      # builds fall back to the hardcoded prod URL in src/lib/api.ts.
-      - NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online
-      # Bigger V8 heap so large on-demand compiles don't stall on GC.
-      - NODE_OPTIONS=--max-old-space-size=2048
-    volumes:
-      - .:/app
-      - /app/node_modules        # keep image's installed deps
-      # Named volume so Turbopack's compile cache (.next/cache) survives
-      # restarts/recreates/deploys — only the first warm-up is slow.
-      - admin_next_cache:/app/.next
     restart: unless-stopped
     networks:
       - vigo-shared
-
-volumes:
-  admin_next_cache:
 
 # Reuse the backend stack's network so its EXISTING cloudflared can reach this
 # container. The route admin.vigodev.online → http://admin:9002 lives on the same

@@ -37,19 +37,13 @@ pipeline {
             OLD=$(git rev-parse HEAD 2>/dev/null || echo none)
             git fetch "https://${GH_USER}:${GH_TOKEN}@${GIT_REPO}" "$BRANCH"
             git checkout -f -B "$BRANCH" FETCH_HEAD
-            NEW=$(git rev-parse HEAD)
-            echo "Deploying $OLD -> $NEW"
+            echo "Deploying $OLD -> $(git rev-parse HEAD)"
 
-            # Rebuild the dev image only when deps/build config change; otherwise
-            # the running `next dev` watcher reloads source from the bind mount.
-            if [ "$OLD" = "none" ] || git diff --name-only "$OLD" "$NEW" \
-                 | grep -qE '^(package-lock\\.json|package\\.json|Dockerfile|docker-compose\\.yml)$'; then
-              echo ">> deps/build config changed — rebuilding admin image"
-              docker compose up -d --build admin
-            else
-              echo ">> source-only change — recreating admin"
-              docker compose up -d admin
-            fi
+            # Static build: every deploy re-runs `next build` inside the image
+            # and serves the fresh static export via nginx. Docker layer cache
+            # keeps `npm ci` fast when deps are unchanged.
+            echo ">> building static admin + serving via nginx"
+            docker compose up -d --build admin
 
             docker compose ps
           '''
