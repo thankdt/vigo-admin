@@ -128,6 +128,9 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
         requestedSeats: showPassengerFields ? totalPassengers : undefined,
         promotionId: selectedPromotionId ?? undefined,
+        // Chuyến đặt lịch → tính phụ phí theo NGÀY ĐI (đầu khung giờ), không phải
+        // ngày đặt. Đi ngay → bỏ trống, backend dùng hiện tại.
+        departureTime: isScheduled && scheduledFrom ? toIso(scheduledFrom) : undefined,
       });
       const final = res.finalPrice ?? res.price;
       setPriceEstimate(final);
@@ -616,7 +619,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               <Switch
                 id="cb-scheduled-toggle"
                 checked={isScheduled}
-                onCheckedChange={setIsScheduled}
+                // Đổi đi-ngay ↔ đặt-lịch làm đổi ngày cơ sở tính phụ phí → xoá giá cũ.
+                onCheckedChange={(v) => { setIsScheduled(v); clearEstimate(); }}
               />
             </div>
             {isScheduled && (
@@ -628,7 +632,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                     type="datetime-local"
                     value={scheduledFrom}
                     min={minScheduledAt}
-                    onChange={(e) => setScheduledFrom(e.target.value)}
+                    // Đổi giờ đón (đầu khung) = đổi ngày tính phụ phí → xoá giá cũ, buộc tính lại.
+                    onChange={(e) => { setScheduledFrom(e.target.value); clearEstimate(); }}
                   />
                 </div>
                 <div className="space-y-1.5">

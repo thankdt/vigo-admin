@@ -36,7 +36,7 @@ export type InvoiceExportRow = {
 };
 
 export const INVOICE_EXPORT_HEADERS = [
-  'Ngày đặt xe',
+  'Ngày hoàn thành',
   'Dịch vụ',
   'Thành tiền (gồm VAT)',
   'VAT',
@@ -94,14 +94,17 @@ export const formatInvoiceTripDate = (value: string) =>
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    // Cố định giờ VN — không phụ thuộc timezone trình duyệt admin.
+    timeZone: 'Asia/Ho_Chi_Minh',
   }).format(new Date(value));
 
-// "Ngày đặt xe" column — date only (no time).
+// "Ngày hoàn thành" column — date only (no time).
 export const formatInvoiceDateOnly = (value: string) =>
   new Intl.DateTimeFormat('vi-VN', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: 'Asia/Ho_Chi_Minh',
   }).format(new Date(value));
 
 // The VAT-invoice "Dịch vụ" line. Shared by the table and the Excel export so

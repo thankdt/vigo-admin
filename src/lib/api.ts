@@ -388,6 +388,8 @@ export async function updateDriverProfile(
       model?: string;
       color?: string;
     };
+    // S3 key ảnh giấy xác nhận HTX (admin upload hộ). Gửi = tải lên/thay ảnh.
+    htxConfirmationImage?: string;
   },
 ): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/profile`, {
@@ -494,6 +496,10 @@ export async function getBookings(params: {
   q?: string;
   // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
   bookingId?: string;
+  // Sắp xếp server-side (sắp cả bảng, không chỉ trang hiện tại). BE whitelist
+  // cột: createdAt|updatedAt|price|status. Mặc định createdAt DESC.
+  sortBy?: string;
+  order?: 'ASC' | 'DESC';
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -505,6 +511,8 @@ export async function getBookings(params: {
     ...(params.routeId !== undefined && { routeId: String(params.routeId) }),
     ...(params.q && { q: params.q }),
     ...(params.bookingId && { bookingId: params.bookingId }),
+    ...(params.sortBy && { sortBy: params.sortBy }),
+    ...(params.order && { order: params.order }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -598,6 +606,9 @@ export async function estimateTripPrice(body: {
   // Voucher áp thử để xem giá sau giảm. BE validate ở context admin (userId =
   // admin); với voucher công khai (pointCost=0) kết quả khớp lúc tạo chuyến.
   promotionId?: number;
+  // Thời điểm đi (ISO) — quyết định phụ phí cuối tuần/lễ theo NGÀY ĐI, không phải
+  // ngày đặt. Bỏ trống (đi ngay) → backend tính theo hiện tại.
+  departureTime?: string;
 }): Promise<{ price: number; finalPrice: number; distanceKm?: number; discount?: number; priceBeforeDiscount?: number }> {
   const response = await fetchWithAuth('/pricing/calculate', {
     method: 'POST',
