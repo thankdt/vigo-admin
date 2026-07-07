@@ -93,11 +93,12 @@ export function UsersTable() {
         name: apiUser.fullName,
         email: apiUser.email || 'N/A',
         role: apiUser.role,
-        status: apiUser.isLocked ? 'Inactive' : 'Active',
+        // Backend trả `isActive` (default true), KHÔNG có `isLocked`. Khoá = isActive===false.
+        status: apiUser.isActive === false ? 'Inactive' : 'Active',
         avatarUrl: `https://picsum.photos/seed/${apiUser.id}/40/40`,
         lastLogin: 'N/A',
         phone: apiUser.phone,
-        isLocked: apiUser.isLocked,
+        isLocked: apiUser.isActive === false,
         createdAt: apiUser.createdAt,
         loyaltyTier: apiUser.loyaltyTier,
         currentBalance: Number(apiUser.currentBalance ?? 0),
@@ -231,8 +232,8 @@ export function UsersTable() {
 
   const handleRestore = async (user: User) => {
     try {
-      await restoreUser(user.id);
-      toast({ title: 'Đã khôi phục', description: `Tài khoản ${user.phone ?? user.name} đã được khôi phục.` });
+      const res = await restoreUser(user.id);
+      toast({ title: 'Đã khôi phục', description: res?.message ?? `Tài khoản ${user.phone ?? user.name} đã được khôi phục.` });
       fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không khôi phục được', description: err?.message ?? 'Vui lòng thử lại' });
@@ -460,9 +461,13 @@ export function UsersTable() {
                   {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(user.totalWithdrawn ?? 0)}
                 </TableCell>
                 <TableCell>
-                   <Badge variant={user.status === 'Active' ? 'default' : 'secondary'} className={user.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' : ''}>
-                    {user.status === 'Active' ? 'Hoạt động' : 'Bị khóa'}
-                  </Badge>
+                  {user.deletedAt ? (
+                    <Badge variant="destructive">Đã xoá</Badge>
+                  ) : (
+                    <Badge variant={user.status === 'Active' ? 'default' : 'secondary'} className={user.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' : ''}>
+                      {user.status === 'Active' ? 'Hoạt động' : 'Bị khóa'}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <span className="text-sm text-muted-foreground">
