@@ -72,15 +72,20 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
 - **Luôn resync `main → dev` sau mỗi promote** → `dev ≈ main`, test DEV trung thực.
 - Feature kẹt vì phụ thuộc (vd chờ backend) cứ nằm trên `dev` tới khi sẵn sàng.
 
-> Lưu ý: môi trường DEV (deploy riêng) hiện đang lỗi, config chưa đưa vào repo;
-> script `deploy:dev` + tách API base theo env sẽ bổ sung sau. Tạm thời test
-> bằng `npm run dev` (local, trỏ prod backend).
+> Môi trường DEV đã hoạt động (cập nhật 2026-07-06): merge `feat/X` → `dev` để
+> deploy DEV và **test runtime trên DEV trước khi PR → main** (cổng bắt buộc).
+> `npm run dev` (local) vẫn dùng để lặp nhanh khi code.
 
 ## Quy trình phát triển (BẮT BUỘC — mọi thành viên & agent follow)
 
 Áp dụng cho MỌI thay đổi code (feature/fix). Không bỏ bước.
 
 0. **Cắt nhánh `feat/*` hoặc `fix/*` từ `main`** (đã `git pull`). KHÔNG code trực tiếp trên `main`/`dev`.
+0.5. **Chốt & review GIẢI PHÁP trước khi code — CỔNG CHẶN, BẮT BUỘC với thay đổi non-trivial:**
+   - a. Viết plan/spec ngắn: mục tiêu, cách tiếp cận, file/đối tượng sẽ đụng, edge case, ảnh hưởng tương thích client cũ.
+   - b. Nhờ 1 **sub-agent fresh-context, adversarial** review plan (không phải chỉ self-review).
+   - c. Sửa plan theo review → **quay lại (b)**. KHÔNG code ngay sau khi chỉnh — xong plan vẫn phải ĐỢI review duyệt.
+   - d. Chỉ chuyển sang bước 1 (code) khi plan đã qua review sạch.
 1. **Code kèm test (TDD)** — viết test trước/cùng lúc, không để "test cho có" sau cùng.
 2. **Vòng lặp chất lượng** (lặp tới khi sạch):
    - a. Self-review lại diff — altitude, edge case, đọc lại TỪNG site đã đổi.
