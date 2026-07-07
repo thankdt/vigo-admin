@@ -395,17 +395,22 @@ export function NotificationsManager() {
     const fetchData = React.useCallback(async () => {
         setIsLoading(true);
         try {
-            const response = await getScheduledNotifications();
-            // API returns: {success, data: {data: [...], total, page}}
+            // Envelope không nhất quán giữa các endpoint (có chỗ nested
+            // {data:{data:[]}}, có chỗ flat {data:[]}, hoặc mảng trần) → nhận
+            // diện shape theo runtime. Cast sang union permissive để type-check
+            // 3 nhánh; LOGIC runtime giữ nguyên.
+            const payload = (await getScheduledNotifications()) as unknown as
+                | ScheduledNotification[]
+                | { data?: ScheduledNotification[] | { data?: ScheduledNotification[] } };
             let notifArray: ScheduledNotification[] = [];
-            if (Array.isArray(response)) {
-                notifArray = response;
-            } else if (response?.data?.data && Array.isArray(response.data.data)) {
+            if (Array.isArray(payload)) {
+                notifArray = payload;
+            } else if (payload?.data && !Array.isArray(payload.data) && Array.isArray(payload.data.data)) {
                 // Nested structure: {data: {data: [...]}}
-                notifArray = response.data.data;
-            } else if (response?.data && Array.isArray(response.data)) {
+                notifArray = payload.data.data;
+            } else if (Array.isArray(payload?.data)) {
                 // Simple structure: {data: [...]}
-                notifArray = response.data;
+                notifArray = payload.data;
             }
             setNotifications(notifArray);
         } catch (err: any) {
