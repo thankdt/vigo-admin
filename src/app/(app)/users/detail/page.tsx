@@ -14,6 +14,7 @@ import {
   Lock,
   Trash2,
   Unlock,
+  RotateCcw,
 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   getAdminUserDetail,
   deleteAdminUser,
+  restoreUser,
   lockUser,
   unlockUser,
   getBookings,
@@ -173,6 +175,20 @@ export default function UserDetailPage() {
     }
   };
 
+  const handleRestore = async () => {
+    if (!user) return;
+    setBusy(true);
+    try {
+      const res = await restoreUser(user.id);
+      toast({ title: 'Đã khôi phục', description: res?.message ?? 'Tài khoản đã được khôi phục.' });
+      await fetchUser();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Không khôi phục được', description: e?.message ?? 'Vui lòng thử lại' });
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (!id) {
     return (
       <div className="space-y-4">
@@ -235,7 +251,13 @@ export default function UserDetailPage() {
               </div>
             </div>
           </div>
-          {!isDeleted && (
+          {isDeleted ? (
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleRestore} disabled={busy} variant="outline" size="sm">
+                <RotateCcw className="mr-2 h-4 w-4" /> Khôi phục
+              </Button>
+            </div>
+          ) : (
             <div className="flex flex-wrap gap-2">
               <Button onClick={handleToggleLock} disabled={busy} variant="outline" size="sm">
                 {user.isActive ? <><Lock className="mr-2 h-4 w-4" /> Khoá</> : <><Unlock className="mr-2 h-4 w-4" /> Mở khoá</>}
