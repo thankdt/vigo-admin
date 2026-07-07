@@ -185,12 +185,13 @@ type GetApiResponse<T> = {
   }
 }
 
-export async function getUsers(params: { page?: number; limit?: number; search?: string; role?: string } = {}): Promise<GetApiResponse<User>> {
+export async function getUsers(params: { page?: number; limit?: number; search?: string; role?: string; deleted?: 'only' | 'all' } = {}): Promise<GetApiResponse<User>> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
     ...(params.search && { search: params.search }),
     ...(params.role && { role: params.role }),
+    ...(params.deleted && { deleted: params.deleted }),
   });
 
   const response = await fetchWithAuth(`/users/admin/list?${query.toString()}`);
@@ -203,6 +204,13 @@ export async function lockUser(id: string): Promise<void> {
 
 export async function unlockUser(id: string): Promise<void> {
   await fetchWithAuth(`/users/admin/${id}/unlock`, { method: 'POST' });
+}
+
+// Khôi phục user đã soft-delete (đảo deletedAt). Khác lock/unlock (isActive).
+export async function restoreUser(id: string): Promise<{ success: boolean; message: string }> {
+  const response = await fetchWithAuth(`/users/admin/${id}/restore`, { method: 'POST' });
+  const json = await response.json();
+  return json?.data ?? json;
 }
 
 export type AdminUserDetail = {
