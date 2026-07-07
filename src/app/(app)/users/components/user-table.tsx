@@ -29,10 +29,10 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus, Trash2 } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUsers, lockUser, unlockUser, deleteAdminUser, adminGetUserReferralStats, createAdminUser, type AdminUserReferralStats } from '@/lib/api';
+import { getUsers, lockUser, unlockUser, deleteAdminUser, restoreUser, adminGetUserReferralStats, createAdminUser, type AdminUserReferralStats } from '@/lib/api';
 import type { User } from '@/lib/types';
 import {
   Dialog,
@@ -59,6 +59,8 @@ export function UsersTable() {
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
   const [roleFilter, setRoleFilter] = React.useState<'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER'>('ALL');
+  // Trạng thái xoá: 'active' = user sống (mặc định); 'deleted' = user đã xoá (để khôi phục).
+  const [deletedScope, setDeletedScope] = React.useState<'active' | 'deleted'>('active');
   const [isFormOpen, setIsFormOpen] = React.useState(false);
   const [editingUser, setEditingUser] = React.useState<User | null>(null);
 
@@ -75,7 +77,7 @@ export function UsersTable() {
   const [totalItems, setTotalItems] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(20);
 
-  const fetchUsers = React.useCallback(async (search: string, page: number, limit: number, role: 'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER') => {
+  const fetchUsers = React.useCallback(async (search: string, page: number, limit: number, role: 'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER', scope: 'active' | 'deleted') => {
     setIsLoading(true);
     setError(null);
     try {
@@ -84,21 +86,24 @@ export function UsersTable() {
         page,
         limit,
         ...(role !== 'ALL' && { role }),
+        ...(scope === 'deleted' && { deleted: 'only' as const }),
       });
       const mappedUsers: User[] = response.data.map((apiUser: any) => ({
         id: apiUser.id,
         name: apiUser.fullName,
         email: apiUser.email || 'N/A',
         role: apiUser.role,
-        status: apiUser.isLocked ? 'Inactive' : 'Active',
+        // Backend trả `isActive` (default true), KHÔNG có `isLocked`. Khoá = isActive===false.
+        status: apiUser.isActive === false ? 'Inactive' : 'Active',
         avatarUrl: `https://picsum.photos/seed/${apiUser.id}/40/40`,
         lastLogin: 'N/A',
         phone: apiUser.phone,
-        isLocked: apiUser.isLocked,
+        isLocked: apiUser.isActive === false,
         createdAt: apiUser.createdAt,
         loyaltyTier: apiUser.loyaltyTier,
         currentBalance: Number(apiUser.currentBalance ?? 0),
         totalWithdrawn: Number(apiUser.totalWithdrawn ?? 0),
+        deletedAt: apiUser.deletedAt ?? null,
       }));
       setUsers(mappedUsers);
       const total = response.meta?.total ?? 0;
@@ -119,11 +124,11 @@ export function UsersTable() {
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-        fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
+        fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchUsers, searchTerm, currentPage, pageSize, roleFilter]);
+  }, [fetchUsers, searchTerm, currentPage, pageSize, roleFilter, deletedScope]);
 
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
@@ -179,7 +184,7 @@ export function UsersTable() {
       toast({ title: 'Đã xoá', description: `Tài khoản ${pendingDelete.phone} đã chuyển trạng thái xoá.` });
       setPendingDelete(null);
       // Refresh list to drop the deleted user (admin list filters soft-deleted by default).
-      fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
+      fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không xoá được', description: err?.message ?? 'Vui lòng thử lại' });
     } finally {
@@ -215,7 +220,7 @@ export function UsersTable() {
         toast({ title: 'Đã khóa', description: `${user.name} đã bị khóa.` });
       }
       // Refresh user list
-      fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
+      fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -224,6 +229,16 @@ export function UsersTable() {
       });
     }
   }
+
+  const handleRestore = async (user: User) => {
+    try {
+      const res = await restoreUser(user.id);
+      toast({ title: 'Đã khôi phục', description: res?.message ?? `Tài khoản ${user.phone ?? user.name} đã được khôi phục.` });
+      fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không khôi phục được', description: err?.message ?? 'Vui lòng thử lại' });
+    }
+  };
 
 
   const CreateAdminForm = ({ onClose }: { onClose: () => void }) => {
@@ -252,7 +267,7 @@ export function UsersTable() {
           email: email.trim() || undefined,
         });
         toast({ title: 'Đã tạo tài khoản admin', description: fullName.trim() || phone.trim() });
-        fetchUsers(searchTerm, currentPage, pageSize, roleFilter);
+        fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
         onClose();
       } catch (err: any) {
         toast({ variant: 'destructive', title: 'Không tạo được tài khoản', description: err.message });
@@ -321,6 +336,18 @@ export function UsersTable() {
               <SelectItem value="ALL">Tất cả</SelectItem>
               <SelectItem value="USER">Khách</SelectItem>
               <SelectItem value="TRANSPORT_COMPANY_OWNER">Chủ HTX</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={deletedScope}
+            onValueChange={(val) => { setDeletedScope(val as typeof deletedScope); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Đang hoạt động</SelectItem>
+              <SelectItem value="deleted">Đã xoá</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -434,9 +461,13 @@ export function UsersTable() {
                   {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(user.totalWithdrawn ?? 0)}
                 </TableCell>
                 <TableCell>
-                   <Badge variant={user.status === 'Active' ? 'default' : 'secondary'} className={user.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' : ''}>
-                    {user.status === 'Active' ? 'Hoạt động' : 'Bị khóa'}
-                  </Badge>
+                  {user.deletedAt ? (
+                    <Badge variant="destructive">Đã xoá</Badge>
+                  ) : (
+                    <Badge variant={user.status === 'Active' ? 'default' : 'secondary'} className={user.status === 'Active' ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400' : ''}>
+                      {user.status === 'Active' ? 'Hoạt động' : 'Bị khóa'}
+                    </Badge>
+                  )}
                 </TableCell>
                 <TableCell>
                   <span className="text-sm text-muted-foreground">
@@ -459,27 +490,39 @@ export function UsersTable() {
                         <Share2 className="mr-2 h-4 w-4" />
                         <span>Xem affiliate</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => setTimeout(() => handleToggleLock(user), 0)}>
-                        {user.isLocked ? (
-                          <>
-                            <Unlock className="mr-2 h-4 w-4" />
-                            <span>Mở khóa</span>
-                          </>
-                        ) : (
-                          <>
-                            <Lock className="mr-2 h-4 w-4" />
-                            <span>Khóa</span>
-                          </>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                        onSelect={() => setTimeout(() => setPendingDelete(user), 0)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        <span>Xóa</span>
-                      </DropdownMenuItem>
+                      {user.deletedAt ? (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem onSelect={() => setTimeout(() => handleRestore(user), 0)}>
+                            <RotateCcw className="mr-2 h-4 w-4" />
+                            <span>Khôi phục</span>
+                          </DropdownMenuItem>
+                        </>
+                      ) : (
+                        <>
+                          <DropdownMenuItem onSelect={() => setTimeout(() => handleToggleLock(user), 0)}>
+                            {user.isLocked ? (
+                              <>
+                                <Unlock className="mr-2 h-4 w-4" />
+                                <span>Mở khóa</span>
+                              </>
+                            ) : (
+                              <>
+                                <Lock className="mr-2 h-4 w-4" />
+                                <span>Khóa</span>
+                              </>
+                            )}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            onSelect={() => setTimeout(() => setPendingDelete(user), 0)}
+                          >
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            <span>Xóa</span>
+                          </DropdownMenuItem>
+                        </>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </TableCell>

@@ -15,6 +15,7 @@ export type User = {
   loyaltyTier?: LoyaltyTier;
   currentBalance?: number;
   totalWithdrawn?: number;
+  deletedAt?: string | null;
 };
 
 export type Article = {
