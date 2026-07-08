@@ -666,6 +666,9 @@ export async function createAdminBooking(data: {
   return result.data || result;
 }
 
+// [DISABLED 2026-07-09] "admin ôm chuyến về operator" — endpoint BE (admin/:id/accept) đã tắt
+// vì gán về tài khoản ảo, 0 commission => vỡ dòng tiền. Dùng reassign tài xế THẬT thay thế.
+/*
 export async function adminAcceptBooking(bookingId: string): Promise<Booking> {
   const response = await fetchWithAuth(`/bookings/admin/${bookingId}/accept`, {
     method: 'POST',
@@ -673,6 +676,7 @@ export async function adminAcceptBooking(bookingId: string): Promise<Booking> {
   const result = await response.json();
   return result.data || result;
 }
+*/
 
 
 // Master Data APIs
