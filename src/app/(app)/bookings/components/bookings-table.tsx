@@ -36,7 +36,8 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, adminAcceptBooking, claimProcessingBooking, getRoutes } from '@/lib/api';
+// [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
+import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes } from '@/lib/api';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
@@ -855,8 +856,9 @@ export function BookingsTable() {
   const [dialogState, setDialogState] = React.useState<{ open: boolean; booking: Booking | null; newStatus: BookingStatus | null }>({ open: false, booking: null, newStatus: null });
   const [statusNote, setStatusNote] = React.useState('');
   const [isUpdating, setIsUpdating] = React.useState(false);
-  const [acceptingBookingId, setAcceptingBookingId] = React.useState<string | null>(null);
-  const [isAccepting, setIsAccepting] = React.useState(false);
+  // [DISABLED 2026-07-09] state cho "admin ôm chuyến về operator" (đã tắt).
+  // const [acceptingBookingId, setAcceptingBookingId] = React.useState<string | null>(null);
+  // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
   const fetchBookings = React.useCallback(async (tab: string, search: string, bookingId: string, page: number, limit: number, routeFilter: string, sort: { key: SortKey; direction: 'ascending' | 'descending' }) => {
@@ -988,6 +990,9 @@ export function BookingsTable() {
     setDialogState({ open: true, booking, newStatus });
   }
 
+  // [DISABLED 2026-07-09] handler "admin ôm chuyến về operator" — gán về tài khoản ảo,
+  // 0 commission => vỡ dòng tiền. Dùng PROCESSING + claim + reassign tài thật thay thế.
+  /*
   const handleAcceptBooking = async () => {
     if (!acceptingBookingId) return;
     setIsAccepting(true);
@@ -1002,6 +1007,7 @@ export function BookingsTable() {
       setIsAccepting(false);
     }
   }
+  */
 
   const handleClaimBooking = async (booking: Booking) => {
     try {
@@ -1252,11 +1258,14 @@ export function BookingsTable() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Thao tác</DropdownMenuLabel>
+                          {/* [DISABLED 2026-07-09] "⭐ Nhận chuyến" (admin ôm về operator) — vỡ dòng tiền.
+                              Dùng "🛎️ Nhận xử lý" (PROCESSING) + gán tài xế THẬT.
                           {(booking.status === 'SEARCHING' || booking.status === 'SCHEDULED') && (
                             <DropdownMenuItem onSelect={() => setAcceptingBookingId(booking.id)}>
                               ⭐ Nhận chuyến
                             </DropdownMenuItem>
                           )}
+                          */}
                           {booking.status === 'PROCESSING' && !booking.adminClaimedAt && (
                             <DropdownMenuItem onSelect={() => handleClaimBooking(booking)}>
                               🛎️ Nhận xử lý
@@ -1406,7 +1415,7 @@ export function BookingsTable() {
         onOpenChange={(o) => { if (!o) setVoidBookingId(null); }}
         onDone={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig)}
       />
-      {/* Accept Booking Confirmation */}
+      {/* [DISABLED 2026-07-09] Dialog "admin ôm chuyến về operator" — vỡ dòng tiền (gán về tài khoản ảo, 0 commission).
       <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
@@ -1424,6 +1433,7 @@ export function BookingsTable() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      */}
     </>
   );
 }
