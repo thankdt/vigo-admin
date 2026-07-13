@@ -1757,7 +1757,7 @@ export async function getFinanceSeries(metric: string, from: string, to: string)
 export type AdminOverview = {
   range: { from: string; to: string };
   realtime: { activeTrips: number; waitingCustomers: number; onlineDrivers: number; busyDrivers: number };
-  today: { created: number; completed: number; cancelled: number; completionRate: number };
+  today: { created: number; completed: number; cancelled: number; completionRate: number; newUsers: number };
   queues: { awaitingClaim: number; processing: number; driversPendingApproval: number; withdrawalsPending: number };
   business: { completedTripsInPeriod: number };
   supply: { totalDrivers: number; onlineDrivers: number; pendingApproval: number; newDriversInPeriod: number };
