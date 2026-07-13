@@ -8,6 +8,27 @@ import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, S
 export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || 'https://api.vigogroup.vn';
 
+// On an unrecoverable 401 we bounce to a login page. Pick the one for the current area so a KOL
+// (passwordless) isn't stranded on the admin password login, and HTX owners land on their own login.
+function loginPathForCurrentArea(): string {
+  if (typeof window === 'undefined') return '/';
+  const p = window.location.pathname;
+  if (p.startsWith('/kol-portal')) return '/kol-portal/login';
+  if (p.startsWith('/htx')) return '/htx/login';
+  return '/';
+}
+
+// The backend wraps errors as { error: { code, message } }; some legacy endpoints use { message }.
+// fetchWithAuth throws Error(JSON.stringify(envelope)) — this pulls out the human sentence for toasts.
+export function parseApiError(msg: string): string {
+  try {
+    const o = JSON.parse(msg);
+    return o?.error?.message || o?.message || msg;
+  } catch {
+    return msg;
+  }
+}
+
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value: unknown) => void;
@@ -89,7 +110,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
             processQueue(refreshError, null);
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            window.location.href = '/';
+            window.location.href = loginPathForCurrentArea();
             // Return a never-resolving promise to prevent further error propagation during redirect
             return new Promise<Response>(() => {});
           } finally {
@@ -1518,6 +1539,142 @@ export async function adminRevokeKol(userId: string): Promise<AdminKolRow> {
     method: 'POST',
   });
   return unwrap<AdminKolRow>(response);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// KOL / KOC portal (self-service — the KOL logs in here to see their own dashboard)
+// ─────────────────────────────────────────────────────────────────────
+
+// Passwordless login for the KOL portal.
+export async function sendKolLoginOtp(phone: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/send-login-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Gửi OTP thất bại');
+  }
+  return response.json().then((b) => b.data ?? b);
+}
+
+// Verify OTP → tokens. Stores them (single-session: this invalidates the KOL's mobile session).
+export async function kolLoginOtp(phone: string, otp: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/auth/login-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone, otp }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Đăng nhập thất bại');
+  }
+  const data = await response.json();
+  if (data?.data?.access_token && typeof window !== 'undefined') {
+    localStorage.setItem('access_token', data.data.access_token);
+    if (data.data.refresh_token) localStorage.setItem('refresh_token', data.data.refresh_token);
+  }
+  return data;
+}
+
+export type KolBankInfo = { bankName: string; accountNumber: string; accountHolder: string };
+
+export type KolMe = {
+  kind: KolKind;
+  status: KolStatus;
+  displayName: string | null;
+  code: string;
+  shareLink: string | null;
+  commissionPercent: number | null;
+  balance: number;
+  tripRewardTotal: number;
+  refereeCount: number;
+  tripCount: number;
+  bankInfo: KolBankInfo | null;
+};
+
+export async function getKolMe(): Promise<KolMe> {
+  const response = await fetchWithAuth('/kol/me');
+  return unwrap<KolMe>(response);
+}
+
+export type KolReferee = {
+  refereeId: string;
+  refereeName: string | null;
+  refereePhone: string | null;
+  firstTripDone: boolean;
+  firstTripAt: string | null;
+  commissionEarned: number;
+  createdAt: string;
+};
+
+export async function getKolReferees(page = 1, limit = 20): Promise<{ data: KolReferee[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
+  const response = await fetchWithAuth(`/kol/me/referees?page=${page}&limit=${limit}`);
+  return unwrap(response);
+}
+
+export type KolLeaderDashboard = {
+  kind: KolKind;
+  yearMonthVn: string;
+  teamEarningsThisMonth: number;
+  threshold: number;
+  currentRate: number;
+  overrideEarnedMonth: number;
+  overrideEarnedTotal: number;
+  subKols: Array<{ subKolUserId: string; name: string | null; earnings: number; myOverride: number }>;
+};
+
+export async function getKolLeaderDashboard(): Promise<KolLeaderDashboard> {
+  const response = await fetchWithAuth('/kol/me/leader');
+  return unwrap<KolLeaderDashboard>(response);
+}
+
+export type KolEarningsSeries = {
+  kind: KolKind;
+  granularity: 'hour' | 'day' | 'month';
+  points: Array<{ label: string; value: number }>;
+};
+
+export async function getKolEarnings(from: string, to: string): Promise<KolEarningsSeries> {
+  const response = await fetchWithAuth(`/kol/me/earnings?from=${from}&to=${to}`);
+  return unwrap<KolEarningsSeries>(response);
+}
+
+// Withdrawal (reused from the referral module; the KOL uses the same USER_REFERRAL balance).
+export type KolWithdrawal = {
+  id: string;
+  amount: number;
+  bankName: string;
+  accountNumber: string;
+  accountHolder: string;
+  status: 'PENDING' | 'APPROVED' | 'TRANSFERRED' | 'REJECTED';
+  adminNote: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+};
+
+export async function updateMyBankInfo(body: KolBankInfo): Promise<KolBankInfo> {
+  const response = await fetchWithAuth('/referrals/me/bank-info', {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return unwrap<KolBankInfo>(response);
+}
+
+export async function getMyWithdrawals(): Promise<KolWithdrawal[]> {
+  const response = await fetchWithAuth('/referrals/me/withdrawals');
+  const rows = await unwrap<KolWithdrawal[]>(response);
+  // amount is a numeric column → pg serializes it as a string; coerce so the `number` type is honest.
+  return rows.map((w) => ({ ...w, amount: Number(w.amount) }));
+}
+
+export async function submitMyWithdrawal(amount: number): Promise<KolWithdrawal> {
+  const response = await fetchWithAuth('/referrals/me/withdrawals', {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+  });
+  return unwrap<KolWithdrawal>(response);
 }
 
 export async function assignTransportCompany(driverId: string, transportCompanyId: string): Promise<Driver> {
