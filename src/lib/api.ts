@@ -1441,7 +1441,9 @@ export type AdminKolRow = {
   status: KolStatus;
   commissionPercent: number | null;
   leaderId: string | null;
+  leaderName: string | null;
   displayName: string | null;
+  note: string | null;
   createdAt: string;
 };
 
