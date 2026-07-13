@@ -1426,6 +1426,93 @@ export async function adminMarkWithdrawalTransferred(id: string): Promise<AdminW
   return unwrap(response);
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// KOL / KOC (admin)
+// ─────────────────────────────────────────────────────────────────────
+
+export type KolKind = 'STANDARD' | 'LEADER';
+export type KolStatus = 'PENDING' | 'ACTIVE' | 'REVOKED';
+
+export type AdminKolRow = {
+  userId: string;
+  userFullName: string | null;
+  userPhone: string | null;
+  kind: KolKind;
+  status: KolStatus;
+  commissionPercent: number | null;
+  leaderId: string | null;
+  displayName: string | null;
+  createdAt: string;
+};
+
+export type AdminKolListResponse = {
+  data: AdminKolRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
+};
+
+export async function adminListKols(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  kind?: KolKind;
+  status?: KolStatus;
+} = {}): Promise<AdminKolListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.search) q.set('search', params.search);
+  if (params.kind) q.set('kind', params.kind);
+  if (params.status) q.set('status', params.status);
+  const qs = q.toString();
+  const response = await fetchWithAuth(`/kol/admin/kols${qs ? '?' + qs : ''}`);
+  return unwrap<AdminKolListResponse>(response);
+}
+
+// Promote / approve a user to KOL (also re-activates a REVOKED profile). Sets status ACTIVE.
+export async function adminPromoteKol(userId: string, body: {
+  kind: KolKind;
+  commissionPercent?: number | null;
+  leaderId?: string;
+  displayName?: string;
+  note?: string;
+}): Promise<AdminKolRow> {
+  const response = await fetchWithAuth(`/kol/admin/users/${userId}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<AdminKolRow>(response);
+}
+
+export async function adminUpdateKol(userId: string, body: {
+  kind?: KolKind;
+  commissionPercent?: number | null;
+  leaderId?: string | null;
+  displayName?: string;
+  note?: string;
+  status?: KolStatus;
+}): Promise<AdminKolRow> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return unwrap<AdminKolRow>(response);
+}
+
+export async function adminAssignKolLeader(userId: string, leaderId: string): Promise<AdminKolRow> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}/assign-leader`, {
+    method: 'POST',
+    body: JSON.stringify({ leaderId }),
+  });
+  return unwrap<AdminKolRow>(response);
+}
+
+export async function adminRevokeKol(userId: string): Promise<AdminKolRow> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}/revoke`, {
+    method: 'POST',
+  });
+  return unwrap<AdminKolRow>(response);
+}
+
 export async function assignTransportCompany(driverId: string, transportCompanyId: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${driverId}/transport-company`, {
     method: 'PUT',
