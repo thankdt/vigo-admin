@@ -86,17 +86,21 @@ export default function KolDashboardPage() {
         <Badge variant={isLeader ? 'default' : 'secondary'}>{isLeader ? 'Thủ lĩnh' : 'KOL/KOC'}</Badge>
       </div>
 
-      {/* Share link */}
+      {/* Share code / link — leaders RECRUIT sub-KOLs, standard KOLs REFER customers */}
       <Card className="p-4">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <div className="text-xs text-muted-foreground">Mã giới thiệu của bạn</div>
+            <div className="text-xs text-muted-foreground">
+              {isLeader ? 'Mã tuyển KOL — chia sẻ để mời người vào đội của bạn' : 'Mã giới thiệu khách — khách nhập khi đăng ký'}
+            </div>
             <div className="flex items-center gap-2">
               <code className="rounded bg-muted px-2 py-1 text-base font-bold tracking-wide">{me.code}</code>
               {me.shareLink && <span className="hidden text-sm text-muted-foreground sm:inline">{me.shareLink}</span>}
             </div>
           </div>
-          <Button variant="outline" onClick={copyLink}><Copy className="mr-2 h-4 w-4" /> Copy link</Button>
+          <Button variant="outline" onClick={copyLink}>
+            <Copy className="mr-2 h-4 w-4" /> {me.shareLink ? 'Copy link' : 'Copy mã'}
+          </Button>
         </div>
       </Card>
 
