@@ -127,7 +127,11 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
 
-        <TabsContent value="system">
+        {/* forceMount: keep SystemConfigManager mounted across tab switches so unsaved
+            edits (dirty state) survive when the user flips to another tab and back.
+            Radix hides inactive forceMounted content; add data-[state=inactive]:hidden
+            so it doesn't render while another tab is active. */}
+        <TabsContent value="system" forceMount className="data-[state=inactive]:hidden">
             <SystemConfigManager />
         </TabsContent>
 
