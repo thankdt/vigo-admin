@@ -113,6 +113,7 @@ export default function DashboardPage() {
 
           {/* Hôm nay */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <Stat icon={<UserPlus className="h-5 w-5" />} label="Người dùng mới hôm nay" value={fmtNum(ov.today.newUsers ?? 0)} hint="Tài khoản đăng ký mới (giờ VN)" accent="text-green-600 dark:text-green-400" />
             <Stat icon={<Banknote className="h-5 w-5" />} label="Chuyến tạo hôm nay" value={fmtNum(ov.today.created)} />
             <Stat icon={<CheckCircle2 className="h-5 w-5" />} label="Hoàn thành hôm nay" value={fmtNum(ov.today.completed)} accent="text-green-600 dark:text-green-400" />
             <Stat icon={<XCircle className="h-5 w-5" />} label="Huỷ hôm nay" value={fmtNum(ov.today.cancelled)} accent={ov.today.cancelled > 0 ? 'text-destructive' : ''} />

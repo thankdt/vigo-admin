@@ -1,0 +1,21 @@
+services:
+  admin:
+    build:
+      context: .
+      target: static
+      args:
+        # Inlined into the static bundle at build time → admin calls the dev backend.
+        NEXT_PUBLIC_API_BASE_URL: https://api.vigodev.online
+    ports:
+      - "9002:9002"
+    restart: unless-stopped
+    networks:
+      - vigo-shared
+
+# Reuse the backend stack's network so its EXISTING cloudflared can reach this
+# container. The route admin.vigodev.online → http://admin:9002 lives on the same
+# tunnel as api.vigodev.online (no separate tunnel/cloudflared needed here).
+networks:
+  vigo-shared:
+    external: true
+    name: vigo-backend_vigo-network
