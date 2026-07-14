@@ -53,6 +53,7 @@ type FormState = {
   kind: KolKind;
   commissionPercent: string;
   leaderId: string;
+  leaderName?: string; // label for leaderId when that leader falls outside the top-100 dropdown list
   displayName: string;
   note: string;
 };
@@ -141,6 +142,7 @@ export default function KolPage() {
       kind: existing?.kind ?? 'STANDARD',
       commissionPercent: existing?.commissionPercent != null ? String(existing.commissionPercent) : '',
       leaderId: existing?.leaderId ?? '',
+      leaderName: existing?.leaderName ?? undefined,
       displayName: existing?.displayName ?? '',
       note: existing?.note ?? '',
     });
@@ -154,6 +156,7 @@ export default function KolPage() {
       kind: row.kind,
       commissionPercent: row.commissionPercent != null ? String(row.commissionPercent) : '',
       leaderId: row.leaderId ?? '',
+      leaderName: row.leaderName ?? undefined,
       displayName: row.displayName ?? '',
       note: row.note ?? '',
     });
@@ -452,6 +455,15 @@ export default function KolPage() {
                       <SelectTrigger><SelectValue placeholder="Không có" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="NONE">Không có</SelectItem>
+                        {/* The dropdown only lists the top-100 ACTIVE leaders. If the KOL being
+                            edited is already attached to a leader outside that window, inject a
+                            synthetic item so their leaderId still shows (with a name) instead of a
+                            blank trigger — avoids silently detaching them on save. */}
+                        {form.leaderId && !leaders.some((l) => l.userId === form.leaderId) && (
+                          <SelectItem value={form.leaderId}>
+                            {form.leaderName ?? leaderName.get(form.leaderId) ?? form.leaderId.slice(0, 8)}
+                          </SelectItem>
+                        )}
                         {leaders.map((l) => (
                           <SelectItem key={l.userId} value={l.userId}>
                             {l.displayName || l.userFullName || l.userPhone || l.userId.slice(0, 8)}
