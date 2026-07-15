@@ -371,11 +371,63 @@ export async function rejectDriver(id: string, reason: string, note?: string): P
   return data.data || data;
 }
 
+// Admin khoá cứng tài khoản tài xế (chặn đăng nhập + dispatch + force-logout).
+// Lý do bắt buộc — hiển thị cho tài xế khi họ cố đăng nhập.
+export async function banDriver(id: string, reason: string, note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, note: note?.trim() || undefined }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+// Mở khoá — backend không đụng isActive/isApproved (giữ nguyên trạng thái trước ban).
+export async function unbanDriver(id: string, note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/unban`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note?.trim() || undefined }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+// Tạm khoá NHẬN CHUYẾN có hẹn giờ (chỉ chặn dispatch, tự hết hạn). Đặt bằng
+// durationMinutes (presets) HOẶC until (ISO tuyệt đối — FE quy đổi từ giờ VN).
+export async function suspendDriver(
+  id: string,
+  opts: { until?: string; durationMinutes?: number; reason: string },
+): Promise<Driver> {
+  const body: { reason: string; until?: string; durationMinutes?: number } = { reason: opts.reason };
+  if (typeof opts.durationMinutes === 'number') body.durationMinutes = opts.durationMinutes;
+  else if (opts.until) body.until = opts.until;
+  const response = await fetchWithAuth(`/drivers/admin/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+// Gỡ tạm khoá nhận chuyến (mở sớm).
+export async function unsuspendDriver(id: string, note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/unsuspend`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note?.trim() || undefined }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export type DriverApprovalAction =
   | 'APPROVED'
   | 'REJECTED'
   | 'SUBMITTED'
-  | 'MOVED_BACK_TO_PENDING';
+  | 'MOVED_BACK_TO_PENDING'
+  | 'BANNED'
+  | 'UNBANNED'
+  | 'SUSPENDED'
+  | 'UNSUSPENDED';
 
 export type DriverApprovalEvent = {
   id: string;
