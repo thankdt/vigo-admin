@@ -54,12 +54,12 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ className, ...props }) => (
-          <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
-        ),
-        IconRight: ({ className, ...props }) => (
-          <ChevronRight className={cn("h-4 w-4", className)} {...props} />
-        ),
+        // react-day-picker v9 thay IconLeft/IconRight bằng 1 component Chevron
+        // (phân biệt qua `orientation`). Giữ đúng icon lucide + kích thước cũ.
+        Chevron: ({ orientation, className }) => {
+          const Icon = orientation === "left" ? ChevronLeft : ChevronRight;
+          return <Icon className={cn("h-4 w-4", className)} />;
+        },
       }}
       {...props}
     />
