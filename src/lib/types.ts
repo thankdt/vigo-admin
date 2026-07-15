@@ -162,6 +162,9 @@ export type Driver = {
   isBanned?: boolean;
   bannedAt?: string | null;
   bannedReason?: string | null;
+  // Tạm khoá nhận chuyến có hẹn giờ (chỉ chặn dispatch). Đang khoá khi suspendedUntil > now.
+  suspendedUntil?: string | null;
+  suspendedReason?: string | null;
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PROCESSING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';

@@ -392,13 +392,42 @@ export async function unbanDriver(id: string, note?: string): Promise<Driver> {
   return data.data || data;
 }
 
+// Tạm khoá NHẬN CHUYẾN có hẹn giờ (chỉ chặn dispatch, tự hết hạn). Đặt bằng
+// durationMinutes (presets) HOẶC until (ISO tuyệt đối — FE quy đổi từ giờ VN).
+export async function suspendDriver(
+  id: string,
+  opts: { until?: string; durationMinutes?: number; reason: string },
+): Promise<Driver> {
+  const body: { reason: string; until?: string; durationMinutes?: number } = { reason: opts.reason };
+  if (typeof opts.durationMinutes === 'number') body.durationMinutes = opts.durationMinutes;
+  else if (opts.until) body.until = opts.until;
+  const response = await fetchWithAuth(`/drivers/admin/${id}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+// Gỡ tạm khoá nhận chuyến (mở sớm).
+export async function unsuspendDriver(id: string, note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/unsuspend`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note?.trim() || undefined }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export type DriverApprovalAction =
   | 'APPROVED'
   | 'REJECTED'
   | 'SUBMITTED'
   | 'MOVED_BACK_TO_PENDING'
   | 'BANNED'
-  | 'UNBANNED';
+  | 'UNBANNED'
+  | 'SUSPENDED'
+  | 'UNSUSPENDED';
 
 export type DriverApprovalEvent = {
   id: string;

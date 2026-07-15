@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { format } from 'date-fns';
-import { AlertTriangle, CheckCircle2, Send, Undo2, XCircle, Ban, LockOpen } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Send, Undo2, XCircle, Ban, LockOpen, Clock, PlayCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -62,7 +62,24 @@ const APPROVAL_ACTION_META: Record<
   },
   BANNED: { label: 'Khoá tài khoản', icon: Ban, tone: 'text-red-600' },
   UNBANNED: { label: 'Mở khoá', icon: LockOpen, tone: 'text-emerald-600' },
+  SUSPENDED: { label: 'Tạm khoá nhận chuyến', icon: Clock, tone: 'text-amber-600' },
+  UNSUSPENDED: { label: 'Gỡ khoá nhận chuyến', icon: PlayCircle, tone: 'text-emerald-600' },
 };
+
+// Format một mốc ISO theo GIỜ VN (+7), độc lập TZ trình duyệt (CLAUDE.md).
+export function formatVnDateTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return '';
+  const d = new Date(t + 7 * 3600_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(d.getUTCHours())}:${p(d.getUTCMinutes())} ${p(d.getUTCDate())}/${p(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+}
+
+// Đang tạm khoá nhận chuyến nếu suspendedUntil còn ở tương lai (hết hạn = tự mở).
+export function isSuspendedNow(driver: { suspendedUntil?: string | null } | null | undefined): boolean {
+  return !!driver?.suspendedUntil && new Date(driver.suspendedUntil).getTime() > Date.now();
+}
 
 // showAdminNote: render the admin-internal note. ONLY the admin Quản lý tài xế
 // dialog passes true. The HTX (transport-companies) dialog leaves it false so
@@ -178,6 +195,20 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                   </div>
                   {driver.bannedReason && (
                     <p className="mt-0.5 text-red-900 dark:text-red-200">Lý do: {driver.bannedReason}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {isSuspendedNow(driver) && (
+              <div className="rounded-md border border-amber-400 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 flex items-start gap-2">
+                <Clock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="flex-1 text-sm">
+                  <div className="font-semibold text-amber-700 dark:text-amber-400">
+                    Đang tạm khoá nhận chuyến · đến {formatVnDateTime(driver.suspendedUntil)}
+                  </div>
+                  {driver.suspendedReason && (
+                    <p className="mt-0.5 text-amber-900 dark:text-amber-200">Lý do: {driver.suspendedReason}</p>
                   )}
                 </div>
               </div>

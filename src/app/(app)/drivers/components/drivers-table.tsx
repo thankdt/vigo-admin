@@ -18,13 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen, Clock, PlayCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3, banDriver, unbanDriver } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
@@ -55,7 +55,7 @@ import {
 import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { Textarea } from '@/components/ui/textarea';
-import { ApprovalTimeline } from './driver-detail-dialog';
+import { ApprovalTimeline, formatVnDateTime, isSuspendedNow } from './driver-detail-dialog';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
@@ -180,6 +180,94 @@ export function DriversTable() {
       toast({ variant: 'destructive', title: 'Không thể mở khoá', description: err.message });
     } finally {
       setIsUnbanning(false);
+    }
+  };
+
+  // Tạm khoá nhận chuyến (có hẹn giờ).
+  const [suspendTarget, setSuspendTarget] = React.useState<Driver | null>(null);
+  const [suspendReason, setSuspendReason] = React.useState('');
+  const [suspendMode, setSuspendMode] = React.useState<'duration' | 'until'>('duration');
+  const [suspendMinutes, setSuspendMinutes] = React.useState<number | null>(null);
+  const [suspendUntilLocal, setSuspendUntilLocal] = React.useState('');
+  const [isSuspending, setIsSuspending] = React.useState(false);
+  const [unsuspendTarget, setUnsuspendTarget] = React.useState<Driver | null>(null);
+  const [unsuspendNote, setUnsuspendNote] = React.useState('');
+  const [isUnsuspending, setIsUnsuspending] = React.useState(false);
+
+  const SUSPEND_PRESETS: { label: string; minutes: number }[] = [
+    { label: '1 giờ', minutes: 60 },
+    { label: '3 giờ', minutes: 180 },
+    { label: '6 giờ', minutes: 360 },
+    { label: '12 giờ', minutes: 720 },
+    { label: '1 ngày', minutes: 1440 },
+    { label: '3 ngày', minutes: 4320 },
+    { label: '7 ngày', minutes: 10080 },
+  ];
+
+  const openSuspendDialog = (driver: Driver) => {
+    setSuspendReason('');
+    setSuspendMode('duration');
+    setSuspendMinutes(null);
+    // Prefill datetime-local với mốc VN +1 giờ (browser-tz-independent).
+    setSuspendUntilLocal(new Date(Date.now() + 7 * 3600_000 + 3600_000).toISOString().slice(0, 16));
+    setSuspendTarget(driver);
+  };
+
+  const handleConfirmSuspend = async () => {
+    if (!suspendTarget) return;
+    const reason = suspendReason.trim();
+    if (!reason) {
+      toast({ variant: 'destructive', title: 'Thiếu lý do', description: 'Vui lòng nhập lý do khoá nhận chuyến.' });
+      return;
+    }
+    let opts: { until?: string; durationMinutes?: number; reason: string };
+    if (suspendMode === 'duration') {
+      if (!suspendMinutes || suspendMinutes <= 0) {
+        toast({ variant: 'destructive', title: 'Thiếu thời lượng', description: 'Chọn nhanh hoặc nhập số giờ/ngày.' });
+        return;
+      }
+      opts = { durationMinutes: suspendMinutes, reason };
+    } else {
+      if (!suspendUntilLocal) {
+        toast({ variant: 'destructive', title: 'Thiếu thời điểm', description: 'Chọn thời điểm kết thúc.' });
+        return;
+      }
+      // datetime-local là giờ VN → nối offset +07:00 thành ISO tuyệt đối (KHÔNG toISOString trên string).
+      const until = `${suspendUntilLocal}:00+07:00`;
+      if (new Date(until).getTime() <= Date.now()) {
+        toast({ variant: 'destructive', title: 'Thời điểm không hợp lệ', description: 'Thời điểm kết thúc phải ở tương lai.' });
+        return;
+      }
+      opts = { until, reason };
+    }
+    setIsSuspending(true);
+    try {
+      await suspendDriver(suspendTarget.id, opts);
+      toast({ title: 'Đã tạm khoá nhận chuyến', description: `${suspendTarget.name || suspendTarget.user?.fullName || 'Tài xế'} sẽ không nhận chuyến mới tới khi hết hạn.` });
+      if (viewDriver?.id === suspendTarget.id) setViewDriver(null);
+      setSuspendTarget(null);
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể tạm khoá', description: err.message });
+    } finally {
+      setIsSuspending(false);
+    }
+  };
+
+  const handleConfirmUnsuspend = async () => {
+    if (!unsuspendTarget) return;
+    setIsUnsuspending(true);
+    try {
+      await unsuspendDriver(unsuspendTarget.id, unsuspendNote);
+      toast({ title: 'Đã gỡ khoá nhận chuyến', description: `${unsuspendTarget.name || unsuspendTarget.user?.fullName || 'Tài xế'} có thể nhận chuyến trở lại.` });
+      if (viewDriver?.id === unsuspendTarget.id) setViewDriver(null);
+      setUnsuspendTarget(null);
+      setUnsuspendNote('');
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể gỡ khoá', description: err.message });
+    } finally {
+      setIsUnsuspending(false);
     }
   };
 
@@ -711,9 +799,13 @@ export function DriversTable() {
                           <span className="font-semibold">{driverName}</span>
                           <span className="text-sm text-muted-foreground">{driverPhone}</span>
                           <DriverIssueBadges issues={driver.issues} />
-                          {driver.isBanned && (
+                          {driver.isBanned ? (
                             <Badge variant="destructive" className="w-fit gap-1 mt-0.5">
                               <Ban className="h-3 w-3" /> Đã khoá
+                            </Badge>
+                          ) : isSuspendedNow(driver) && (
+                            <Badge className="w-fit gap-1 mt-0.5 bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800">
+                              <Clock className="h-3 w-3" /> Tạm khoá chuyến · {formatVnDateTime(driver.suspendedUntil)}
                             </Badge>
                           )}
                         </div>
@@ -819,6 +911,17 @@ export function DriversTable() {
                             >
                               <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
                             </DropdownMenuItem>
+                          )}
+                          {!driver.isBanned && (
+                            isSuspendedNow(driver) ? (
+                              <DropdownMenuItem onSelect={() => setTimeout(() => { setUnsuspendNote(''); setUnsuspendTarget(driver); }, 0)}>
+                                <PlayCircle className="mr-2 h-4 w-4" /> Gỡ khoá nhận chuyến
+                              </DropdownMenuItem>
+                            ) : (
+                              <DropdownMenuItem onSelect={() => setTimeout(() => openSuspendDialog(driver), 0)}>
+                                <Clock className="mr-2 h-4 w-4" /> Khoá nhận chuyến (tạm)
+                              </DropdownMenuItem>
+                            )
                           )}
                           {(() => {
                             const ds = getDriverApprovalStatus(driver);
@@ -1073,6 +1176,29 @@ export function DriversTable() {
                     onClick={() => { const d = viewDriver; setViewDriver(null); setUnbanNote(''); setUnbanTarget(d); }}
                   >
                     <LockOpen className="mr-1.5 h-3.5 w-3.5" /> Mở khoá
+                  </Button>
+                </div>
+              )}
+
+              {!viewDriver.isBanned && isSuspendedNow(viewDriver) && (
+                <div className="rounded-md border border-amber-400 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40 p-3 flex items-start gap-2">
+                  <Clock className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 text-sm">
+                    <div className="font-semibold text-amber-700 dark:text-amber-400">
+                      Đang tạm khoá nhận chuyến · đến {formatVnDateTime(viewDriver.suspendedUntil)}
+                    </div>
+                    {viewDriver.suspendedReason && (
+                      <p className="mt-0.5 text-amber-900 dark:text-amber-200">Lý do: {viewDriver.suspendedReason}</p>
+                    )}
+                    <p className="mt-1 text-xs text-amber-700/80 dark:text-amber-300/80">Tài xế vẫn đăng nhập được nhưng không nhận chuyến mới tới khi hết hạn.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-300"
+                    onClick={() => { const d = viewDriver; setViewDriver(null); setUnsuspendNote(''); setUnsuspendTarget(d); }}
+                  >
+                    <PlayCircle className="mr-1.5 h-3.5 w-3.5" /> Gỡ khoá
                   </Button>
                 </div>
               )}
@@ -1488,20 +1614,36 @@ export function DriversTable() {
               {detailAction === null && (
                 <div className="flex flex-wrap justify-end gap-2">
                   {!viewDriver?.isBanned && (
-                    <Button
-                      variant="outline"
-                      className="text-destructive hover:text-destructive border-red-300 dark:border-red-800 mr-auto"
-                      onClick={() => {
-                        if (!viewDriver) return;
-                        const d = viewDriver;
-                        setViewDriver(null);
-                        setBanReason('');
-                        setBanNote('');
-                        setBanTarget(d);
-                      }}
-                    >
-                      <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
-                    </Button>
+                    <div className="flex flex-wrap gap-2 mr-auto">
+                      <Button
+                        variant="outline"
+                        className="text-destructive hover:text-destructive border-red-300 dark:border-red-800"
+                        onClick={() => {
+                          if (!viewDriver) return;
+                          const d = viewDriver;
+                          setViewDriver(null);
+                          setBanReason('');
+                          setBanNote('');
+                          setBanTarget(d);
+                        }}
+                      >
+                        <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
+                      </Button>
+                      {!isSuspendedNow(viewDriver) && (
+                        <Button
+                          variant="outline"
+                          className="text-amber-700 hover:text-amber-800 border-amber-300 dark:border-amber-800 dark:text-amber-300"
+                          onClick={() => {
+                            if (!viewDriver) return;
+                            const d = viewDriver;
+                            setViewDriver(null);
+                            openSuspendDialog(d);
+                          }}
+                        >
+                          <Clock className="mr-2 h-4 w-4" /> Khoá nhận chuyến
+                        </Button>
+                      )}
+                    </div>
                   )}
                   {status === 'rejected' && (
                     <Button
@@ -1698,6 +1840,99 @@ export function DriversTable() {
             <AlertDialogAction disabled={isUnbanning} onClick={(e) => { e.preventDefault(); handleConfirmUnban(); }}>
               {isUnbanning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Xác nhận mở khoá
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Suspend (temp trip-lock) confirm — presets or specific VN datetime */}
+      <AlertDialog open={!!suspendTarget} onOpenChange={(open) => { if (!open && !isSuspending) { setSuspendTarget(null); } }}>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
+              <Clock className="h-5 w-5" /> Tạm khoá nhận chuyến
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài xế <span className="font-semibold text-foreground">{suspendTarget?.name || suspendTarget?.user?.fullName || 'N/A'}</span> sẽ <span className="font-semibold">không nhận chuyến mới</span> trong thời hạn (vẫn đăng nhập/dùng app được). Tự mở lại khi hết hạn.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant={suspendMode === 'duration' ? 'default' : 'outline'} onClick={() => setSuspendMode('duration')} disabled={isSuspending}>Theo thời lượng</Button>
+              <Button type="button" size="sm" variant={suspendMode === 'until' ? 'default' : 'outline'} onClick={() => setSuspendMode('until')} disabled={isSuspending}>Đến mốc cụ thể</Button>
+            </div>
+
+            {suspendMode === 'duration' ? (
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-1.5">
+                  {SUSPEND_PRESETS.map((p) => (
+                    <Button key={p.minutes} type="button" size="sm" variant={suspendMinutes === p.minutes ? 'default' : 'outline'} onClick={() => setSuspendMinutes(p.minutes)} disabled={isSuspending}>
+                      {p.label}
+                    </Button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label className="text-xs text-muted-foreground whitespace-nowrap">Hoặc tự nhập số giờ:</Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    className="h-8 w-24"
+                    placeholder="giờ"
+                    value={suspendMinutes && !SUSPEND_PRESETS.some((p) => p.minutes === suspendMinutes) ? String(suspendMinutes / 60) : ''}
+                    onChange={(e) => { const h = Number(e.target.value); setSuspendMinutes(Number.isFinite(h) && h > 0 ? Math.round(h * 60) : null); }}
+                    disabled={isSuspending}
+                  />
+                </div>
+                {suspendMinutes ? (
+                  <p className="text-xs text-muted-foreground">Kết thúc khoảng: {formatVnDateTime(new Date(Date.now() + suspendMinutes * 60000).toISOString())} (giờ VN)</p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Thời điểm kết thúc (giờ VN)</Label>
+                <Input type="datetime-local" className="h-9" value={suspendUntilLocal} onChange={(e) => setSuspendUntilLocal(e.target.value)} disabled={isSuspending} />
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Lý do <span className="text-destructive">*</span> (tài xế sẽ thấy)</label>
+              <Textarea value={suspendReason} onChange={(e) => setSuspendReason(e.target.value)} placeholder="Ví dụ: vi phạm giờ giấc, cần xác minh lại…" rows={2} disabled={isSuspending} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isSuspending}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isSuspending || !suspendReason.trim() || (suspendMode === 'duration' ? !suspendMinutes : !suspendUntilLocal)}
+              onClick={(e) => { e.preventDefault(); handleConfirmSuspend(); }}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {isSuspending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận khoá
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unsuspend confirm */}
+      <AlertDialog open={!!unsuspendTarget} onOpenChange={(open) => { if (!open && !isUnsuspending) { setUnsuspendTarget(null); setUnsuspendNote(''); } }}>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <PlayCircle className="h-5 w-5" /> Gỡ khoá nhận chuyến
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài xế <span className="font-semibold text-foreground">{unsuspendTarget?.name || unsuspendTarget?.user?.fullName || 'N/A'}</span> sẽ nhận chuyến trở lại ngay.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn)</label>
+            <Textarea value={unsuspendNote} onChange={(e) => setUnsuspendNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} disabled={isUnsuspending} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnsuspending}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction disabled={isUnsuspending} onClick={(e) => { e.preventDefault(); handleConfirmUnsuspend(); }}>
+              {isUnsuspending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận gỡ khoá
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
