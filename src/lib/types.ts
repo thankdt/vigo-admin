@@ -158,6 +158,10 @@ export type Driver = {
   customTransportCompanyPhone?: string | null;
   isIndependentDriver?: boolean;
   issues?: string[];
+  // Admin khoá cứng tài khoản (khác isActive của HTX). Additive — backend chỉ THÊM field.
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  bannedReason?: string | null;
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PROCESSING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';

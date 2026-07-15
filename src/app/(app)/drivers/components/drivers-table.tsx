@@ -18,13 +18,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3 } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3, banDriver, unbanDriver } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
@@ -133,6 +133,55 @@ export function DriversTable() {
   // Move-back-to-pending state (admin reverses a rejection without re-approving).
   const [moveBackTarget, setMoveBackTarget] = React.useState<Driver | null>(null);
   const [isMovingBack, setIsMovingBack] = React.useState(false);
+
+  // Ban / unban state (admin hard-lock a driver account).
+  const [banTarget, setBanTarget] = React.useState<Driver | null>(null);
+  const [banReason, setBanReason] = React.useState('');
+  const [banNote, setBanNote] = React.useState('');
+  const [isBanning, setIsBanning] = React.useState(false);
+  const [unbanTarget, setUnbanTarget] = React.useState<Driver | null>(null);
+  const [unbanNote, setUnbanNote] = React.useState('');
+  const [isUnbanning, setIsUnbanning] = React.useState(false);
+
+  const handleConfirmBan = async () => {
+    if (!banTarget) return;
+    const reason = banReason.trim();
+    if (!reason) {
+      toast({ variant: 'destructive', title: 'Thiếu lý do', description: 'Vui lòng nhập lý do khoá tài khoản.' });
+      return;
+    }
+    setIsBanning(true);
+    try {
+      await banDriver(banTarget.id, reason, banNote);
+      toast({ title: 'Đã khoá tài khoản', description: `${banTarget.name || banTarget.user?.fullName || 'Tài xế'} sẽ bị đăng xuất và không đăng nhập được.` });
+      if (viewDriver?.id === banTarget.id) setViewDriver(null);
+      setBanTarget(null);
+      setBanReason('');
+      setBanNote('');
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể khoá tài khoản', description: err.message });
+    } finally {
+      setIsBanning(false);
+    }
+  };
+
+  const handleConfirmUnban = async () => {
+    if (!unbanTarget) return;
+    setIsUnbanning(true);
+    try {
+      await unbanDriver(unbanTarget.id, unbanNote);
+      toast({ title: 'Đã mở khoá', description: `${unbanTarget.name || unbanTarget.user?.fullName || 'Tài xế'} có thể đăng nhập lại.` });
+      if (viewDriver?.id === unbanTarget.id) setViewDriver(null);
+      setUnbanTarget(null);
+      setUnbanNote('');
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể mở khoá', description: err.message });
+    } finally {
+      setIsUnbanning(false);
+    }
+  };
 
   // Assign transport company state
   const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
@@ -662,6 +711,11 @@ export function DriversTable() {
                           <span className="font-semibold">{driverName}</span>
                           <span className="text-sm text-muted-foreground">{driverPhone}</span>
                           <DriverIssueBadges issues={driver.issues} />
+                          {driver.isBanned && (
+                            <Badge variant="destructive" className="w-fit gap-1 mt-0.5">
+                              <Ban className="h-3 w-3" /> Đã khoá
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     </TableCell>
@@ -754,6 +808,18 @@ export function DriversTable() {
                           <DropdownMenuItem onSelect={() => setTimeout(() => setWalletDriver(driver), 0)}>
                             <WalletIcon className="mr-2 h-4 w-4" /> Nạp / trừ tiền
                           </DropdownMenuItem>
+                          {driver.isBanned ? (
+                            <DropdownMenuItem onSelect={() => setTimeout(() => { setUnbanNote(''); setUnbanTarget(driver); }, 0)}>
+                              <LockOpen className="mr-2 h-4 w-4" /> Mở khoá tài khoản
+                            </DropdownMenuItem>
+                          ) : (
+                            <DropdownMenuItem
+                              onSelect={() => setTimeout(() => { setBanReason(''); setBanNote(''); setBanTarget(driver); }, 0)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
+                            </DropdownMenuItem>
+                          )}
                           {(() => {
                             const ds = getDriverApprovalStatus(driver);
                             // Approved drivers also need a way back to rejected
@@ -981,9 +1047,35 @@ export function DriversTable() {
                     </div>
                   )}
                   <p className="text-sm text-muted-foreground truncate">{viewDriver.phone || viewDriver.user?.phone || 'Chưa có SĐT'}</p>
-                  <p className="text-sm font-medium mt-1">Trạng thái: {getStatusBadge(viewDriver)}</p>
+                  <p className="text-sm font-medium mt-1 flex items-center gap-1.5">
+                    Trạng thái: {getStatusBadge(viewDriver)}
+                    {viewDriver.isBanned && <Badge variant="destructive" className="gap-1"><Ban className="h-3 w-3" /> Đã khoá</Badge>}
+                  </p>
                 </div>
               </div>
+
+              {viewDriver.isBanned && (
+                <div className="rounded-md border border-red-400 bg-red-100 dark:border-red-800 dark:bg-red-950/50 p-3 flex items-start gap-2">
+                  <Ban className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 text-sm">
+                    <div className="font-semibold text-red-700 dark:text-red-400">
+                      Tài khoản đã bị khoá{viewDriver.bannedAt ? ` · ${new Date(viewDriver.bannedAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}` : ''}
+                    </div>
+                    {viewDriver.bannedReason && (
+                      <p className="mt-0.5 text-red-900 dark:text-red-200">Lý do: {viewDriver.bannedReason}</p>
+                    )}
+                    <p className="mt-1 text-xs text-red-700/80 dark:text-red-300/80">Tài xế bị đăng xuất và không thể đăng nhập cho tới khi được mở khoá.</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 border-red-300 text-red-700 hover:bg-red-50 dark:border-red-800 dark:text-red-300"
+                    onClick={() => { const d = viewDriver; setViewDriver(null); setUnbanNote(''); setUnbanTarget(d); }}
+                  >
+                    <LockOpen className="mr-1.5 h-3.5 w-3.5" /> Mở khoá
+                  </Button>
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
@@ -1395,6 +1487,22 @@ export function DriversTable() {
             <div className="border-t pt-4">
               {detailAction === null && (
                 <div className="flex flex-wrap justify-end gap-2">
+                  {!viewDriver?.isBanned && (
+                    <Button
+                      variant="outline"
+                      className="text-destructive hover:text-destructive border-red-300 dark:border-red-800 mr-auto"
+                      onClick={() => {
+                        if (!viewDriver) return;
+                        const d = viewDriver;
+                        setViewDriver(null);
+                        setBanReason('');
+                        setBanNote('');
+                        setBanTarget(d);
+                      }}
+                    >
+                      <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
+                    </Button>
+                  )}
                   {status === 'rejected' && (
                     <Button
                       onClick={() => {
@@ -1530,6 +1638,66 @@ export function DriversTable() {
             >
               {isMovingBack && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Xác nhận
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Ban account confirm — reason required */}
+      <AlertDialog open={!!banTarget} onOpenChange={(open) => { if (!open && !isBanning) { setBanTarget(null); setBanReason(''); setBanNote(''); } }}>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+              <Ban className="h-5 w-5" /> Khoá tài khoản tài xế
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài xế <span className="font-semibold text-foreground">{banTarget?.name || banTarget?.user?.fullName || 'N/A'}</span> sẽ bị <span className="font-semibold">đăng xuất ngay</span> và <span className="font-semibold">không thể đăng nhập</span>, không nhận chuyến cho tới khi được mở khoá.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Lý do khoá <span className="text-destructive">*</span> (tài xế sẽ thấy lý do này)</label>
+              <Textarea value={banReason} onChange={(e) => setBanReason(e.target.value)} placeholder="Ví dụ: gian lận cước, giả mạo hồ sơ…" rows={2} disabled={isBanning} autoFocus />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn — không hiện cho tài xế)</label>
+              <Textarea value={banNote} onChange={(e) => setBanNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} disabled={isBanning} />
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isBanning}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isBanning || !banReason.trim()}
+              onClick={(e) => { e.preventDefault(); handleConfirmBan(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isBanning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận khoá
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Unban account confirm */}
+      <AlertDialog open={!!unbanTarget} onOpenChange={(open) => { if (!open && !isUnbanning) { setUnbanTarget(null); setUnbanNote(''); } }}>
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <LockOpen className="h-5 w-5" /> Mở khoá tài khoản
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tài xế <span className="font-semibold text-foreground">{unbanTarget?.name || unbanTarget?.user?.fullName || 'N/A'}</span> sẽ đăng nhập lại được và trở lại trạng thái trước khi bị khoá.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">Ghi chú nội bộ (tuỳ chọn)</label>
+            <Textarea value={unbanNote} onChange={(e) => setUnbanNote(e.target.value)} placeholder="Ghi chú cho admin…" rows={2} disabled={isUnbanning} />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUnbanning}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction disabled={isUnbanning} onClick={(e) => { e.preventDefault(); handleConfirmUnban(); }}>
+              {isUnbanning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Xác nhận mở khoá
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -371,11 +371,34 @@ export async function rejectDriver(id: string, reason: string, note?: string): P
   return data.data || data;
 }
 
+// Admin khoá cứng tài khoản tài xế (chặn đăng nhập + dispatch + force-logout).
+// Lý do bắt buộc — hiển thị cho tài xế khi họ cố đăng nhập.
+export async function banDriver(id: string, reason: string, note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({ reason, note: note?.trim() || undefined }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
+// Mở khoá — backend không đụng isActive/isApproved (giữ nguyên trạng thái trước ban).
+export async function unbanDriver(id: string, note?: string): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/unban`, {
+    method: 'POST',
+    body: JSON.stringify({ note: note?.trim() || undefined }),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export type DriverApprovalAction =
   | 'APPROVED'
   | 'REJECTED'
   | 'SUBMITTED'
-  | 'MOVED_BACK_TO_PENDING';
+  | 'MOVED_BACK_TO_PENDING'
+  | 'BANNED'
+  | 'UNBANNED';
 
 export type DriverApprovalEvent = {
   id: string;
