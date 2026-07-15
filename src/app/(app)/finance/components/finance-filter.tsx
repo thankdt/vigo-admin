@@ -55,12 +55,18 @@ export function FinanceFilter({
   value,
   onChange,
   isLoading,
+  initialPreset = 'today',
 }: {
   value: DateRange;
   onChange: (next: DateRange) => void;
   isLoading?: boolean;
+  /** Preset key to highlight on mount. Callers that seed `value` from a preset
+   *  other than PRESETS[0] must pass the matching key, otherwise the bar
+   *  highlights "Hôm nay" while showing a different range. Defaults to 'today'
+   *  so existing callers are unaffected. */
+  initialPreset?: string;
 }) {
-  const [activePreset, setActivePreset] = React.useState<string | null>('today');
+  const [activePreset, setActivePreset] = React.useState<string | null>(initialPreset);
 
   const applyPreset = (key: string) => {
     const preset = PRESETS.find((p) => p.key === key);
