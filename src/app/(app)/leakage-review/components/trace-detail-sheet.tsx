@@ -52,7 +52,7 @@ export function TraceDetailSheet({
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <SheetTitle className="flex flex-wrap items-center gap-2">
-            <Badge className={verdictBadgeClass(trace.verdict)}>{VERDICT_LABEL[trace.verdict]}</Badge>
+            <Badge className={verdictBadgeClass(trace.verdict)}>{VERDICT_LABEL[trace.verdict] ?? trace.verdict}</Badge>
           </SheetTitle>
           <SheetDescription>
             Chuyến bị khách huỷ sau khi tài xế đã nhận. Xem bằng chứng rồi kết luận.
@@ -65,8 +65,10 @@ export function TraceDetailSheet({
             <Field label="Phát hiện lúc (đóng cửa sổ canh)">{formatVnDateTime(trace.createdAt)}</Field>
             <Field label="Tài xế">
               {trace.driver ? (
-                // /users/detail?id= is the real detail route (drivers/ has only a
-                // list page — /drivers/{id} would 404).
+                // /users/detail?id=<User.id> is the real detail route: drivers/ has
+                // only a list page (detail is a dialog), so /drivers/{id} would 404.
+                // Next normalizes the trailing slash per next.config — matches the
+                // existing precedent in users/components/user-table.tsx.
                 <Link
                   href={`/users/detail?id=${trace.driver.userId}`}
                   className="text-primary underline underline-offset-2"

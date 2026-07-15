@@ -20,10 +20,14 @@ const COL_COUNT = 6;
 const LIST_CAP = 500;
 const ALL = 'ALL';
 
+/** Key-coupled, not index-coupled: reordering PRESETS must not desync the range
+ *  from the highlighted chip (the exact bug `initialPreset` exists to prevent). */
+const DEFAULT_PRESET = 'last7';
+const defaultRange = () => (PRESETS.find((p) => p.key === DEFAULT_PRESET) ?? PRESETS[0]).range();
+
 export default function LeakageReviewPage() {
-  // Traces are rare — "Hôm nay" is usually empty, so default to 7 days and tell
-  // FinanceFilter which chip to highlight.
-  const [range, setRange] = React.useState<DateRange>(PRESETS[1].range());
+  // Traces are rare — "Hôm nay" is usually empty, so default to 7 days.
+  const [range, setRange] = React.useState<DateRange>(defaultRange());
   const [status, setStatus] = React.useState<LeakageTraceStatus | typeof ALL>(ALL);
   const [verdict, setVerdict] = React.useState<LeakageVerdict | typeof ALL>(ALL);
   const [driverUserId, setDriverUserId] = React.useState<string | null>(null);
@@ -33,7 +37,13 @@ export default function LeakageReviewPage() {
   const [selected, setSelected] = React.useState<LeakageTraceRow | null>(null);
   const { toast } = useToast();
 
+  // The debounce cancels the pending timer, not an in-flight request. Without a
+  // sequence guard, a slow earlier fetch can resolve last and overwrite the list
+  // with data that contradicts the current filters.
+  const reqIdRef = React.useRef(0);
+
   const load = React.useCallback(async () => {
+    const reqId = ++reqIdRef.current;
     setLoading(true);
     try {
       const data = await getLeakageTraces({
@@ -43,11 +53,14 @@ export default function LeakageReviewPage() {
         ...(verdict !== ALL && { verdict }),
         ...(driverUserId && { driverUserId }),
       });
+      if (reqId !== reqIdRef.current) return; // superseded — drop the stale result
       setRows(data);
     } catch (err: any) {
+      if (reqId !== reqIdRef.current) return;
       toast({ variant: 'destructive', title: 'Không tải được danh sách nghi vấn', description: err.message });
     } finally {
-      setLoading(false);
+      // Only the newest request may clear the spinner.
+      if (reqId === reqIdRef.current) setLoading(false);
     }
   }, [range.from, range.to, status, verdict, driverUserId, toast]);
 
@@ -82,7 +95,7 @@ export default function LeakageReviewPage() {
       />
 
       <Card className="space-y-3 p-4">
-        <FinanceFilter value={range} onChange={setRange} isLoading={loading} initialPreset="last7" />
+        <FinanceFilter value={range} onChange={setRange} isLoading={loading} initialPreset={DEFAULT_PRESET} />
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <Select value={status} onValueChange={(v) => setStatus(v as any)}>
             <SelectTrigger className="sm:w-56"><SelectValue placeholder="Trạng thái" /></SelectTrigger>
@@ -149,7 +162,7 @@ export default function LeakageReviewPage() {
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
                     <TableCell className="whitespace-nowrap">{formatVnDateTime(r.eventAt)}</TableCell>
                     <TableCell>
-                      <Badge className={verdictBadgeClass(r.verdict)}>{VERDICT_LABEL[r.verdict]}</Badge>
+                      <Badge className={verdictBadgeClass(r.verdict)}>{VERDICT_LABEL[r.verdict] ?? r.verdict}</Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       <Button
@@ -171,7 +184,7 @@ export default function LeakageReviewPage() {
                       </span>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <Badge variant={statusBadgeVariant(r.status)}>{STATUS_LABEL[r.status]}</Badge>
+                      <Badge variant={statusBadgeVariant(r.status)}>{STATUS_LABEL[r.status] ?? r.status}</Badge>
                     </TableCell>
                   </TableRow>
                 ))}

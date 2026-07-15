@@ -26,6 +26,14 @@ describe('leakage-labels', () => {
     expect(verdictBadgeClass('PICKUP_DROPOFF_UNEXPLAINED')).not.toBe(verdictBadgeClass('PICKUP_ONLY'));
   });
 
+  it('pins a hover background — Badge default cva ships hover:bg-primary/80 which tailwind-merge will NOT strip', () => {
+    // Without this, hovering a row flips every badge to primary and HIGH looks like LOW.
+    (['PICKUP_DROPOFF_UNEXPLAINED', 'PICKUP_ONLY', 'WENT_DARK'] as const).forEach((v) => {
+      expect(verdictBadgeClass(v)).toMatch(/(^|\s)hover:bg-/);
+      expect(verdictBadgeClass(v)).toMatch(/dark:hover:bg-/);
+    });
+  });
+
   it('maps trace status to a badge variant', () => {
     expect(statusBadgeVariant('CONFIRMED')).toBe('destructive');
     expect(statusBadgeVariant('DISMISSED')).toBe('outline');
@@ -63,6 +71,21 @@ describe('leakage-labels', () => {
   it('describeEvidence marks a hit that WAS serving as explained', () => {
     const lines = describeEvidence({ nearPickupAt: '2026-07-15T02:00:00Z', nearPickupServing: true });
     expect(lines.join(' | ')).toContain('đang chở khách của hệ thống');
+  });
+
+  it('qualifies the distance with the GPS staleness bound (backend refuses to claim exact age)', () => {
+    const lines = describeEvidence({
+      nearPickupAt: '2026-07-15T02:00:00Z',
+      nearPickupServing: false,
+      pickupHit: { ts: '2026-07-15T02:00:00Z', lat: 21, lng: 105.8, distanceM: 120, servingAtHit: false, maxSampleAgeSec: 180 },
+    });
+    expect(lines.join(' | ')).toContain('mẫu GPS có thể cũ tới 180s');
+  });
+
+  it('unknown serving state is NOT reported as suspicious', () => {
+    const lines = describeEvidence({ nearPickupAt: '2026-07-15T02:00:00Z', nearPickupServing: null });
+    expect(lines.join(' | ')).toContain('không rõ');
+    expect(lines.join(' | ')).not.toContain('đáng ngờ');
   });
 
   it('describeEvidence reports went-dark and tolerates empty/null evidence', () => {

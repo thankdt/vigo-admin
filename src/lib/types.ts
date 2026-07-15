@@ -466,7 +466,8 @@ export type LeakageTraceRow = {
   id: string;
   watchId: string;
   bookingId: string;
-  /** Driver entity id — for deep-linking to /drivers/{id}. */
+  /** Driver entity id (Driver.id, NOT User.id). Kept for backend correlation;
+   *  deep-links use driver.userId via /users/detail/?id= — /drivers/{id} does not exist. */
   driverEntityId: string;
   customerId: string | null;
   /** When the customer cancelled = when the incident happened. Filter/sort key. */
