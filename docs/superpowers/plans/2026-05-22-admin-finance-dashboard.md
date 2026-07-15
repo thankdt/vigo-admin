@@ -467,6 +467,13 @@ EOF
 
 - [ ] **Step 1: Add the trend aggregator**
 
+> ⚠️ **Historical plan — the `bucket` snippet below is WRONG. Do not copy it.**
+> The single `t."createdAt" AT TIME ZONE 'Asia/Ho_Chi_Minh'` shifts −7h instead of
+> +7h (a 14h error): `createdAt` is `timestamp WITHOUT time zone` holding UTC bytes,
+> and for that type `AT TIME ZONE` *interprets* rather than renders. The shipped code
+> correctly double-converts — see `vnBucketSql` in
+> `vigo-backend/src/common/vn-time.util.ts`. Kept as-is for the record.
+
 Add this method to the service:
 
 ```ts
