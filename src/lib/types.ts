@@ -433,3 +433,58 @@ export type DriverFeedback = {
   };
 };
 
+
+// --- Cancel-leakage detection (anti-fraud) ---
+// Values mirror the backend enums exactly (leakage-trace.entity.ts).
+export type LeakageVerdict = 'PICKUP_DROPOFF_UNEXPLAINED' | 'PICKUP_ONLY' | 'WENT_DARK';
+export type LeakageTraceStatus = 'NEW' | 'REVIEWED' | 'DISMISSED' | 'CONFIRMED';
+
+/** A near-hit sample captured at the tick it happened. Coordinates exist only at
+ *  that instant (Redis GEO is overwritten per ping), so this is the sole record. */
+export type LeakageHit = {
+  ts: string;
+  lat: number;
+  lng: number;
+  distanceM: number;
+  servingAtHit: boolean;
+  /** Upper bound on the sample's staleness (DRIVER_ALIVE_TTL_SEC), not an exact age. */
+  maxSampleAgeSec?: number;
+};
+
+export type LeakageEvidence = {
+  nearPickupAt?: string | null;
+  nearPickupServing?: boolean | null;
+  nearDropoffAt?: string | null;
+  nearDropoffServing?: boolean | null;
+  wentDark?: boolean;
+  watchType?: 'IMMEDIATE' | 'SCHEDULED_DEFERRED';
+  pickupHit?: LeakageHit;
+  dropoffHit?: LeakageHit;
+};
+
+export type LeakageTraceRow = {
+  id: string;
+  watchId: string;
+  bookingId: string;
+  /** Driver entity id — for deep-linking to /drivers/{id}. */
+  driverEntityId: string;
+  customerId: string | null;
+  /** When the customer cancelled = when the incident happened. Filter/sort key. */
+  eventAt: string | null;
+  /** When the verdict was written (watch window close). Secondary. */
+  createdAt: string;
+  verdict: LeakageVerdict;
+  confidence: 'HIGH' | 'LOW';
+  status: LeakageTraceStatus;
+  evidence?: LeakageEvidence | null;
+  driver: { userId: string; fullName?: string | null; phone?: string | null } | null;
+  customer: { userId: string; fullName?: string | null; phone?: string | null } | null;
+  booking: {
+    id: string;
+    pickupAddress?: any;
+    dropoffAddress?: any;
+    cancelledAt?: string | null;
+    cancelReason?: string | null;
+    scheduledTime?: string | null;
+  } | null;
+};

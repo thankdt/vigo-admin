@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict } from '@/lib/types';
 
 export const API_BASE_URL = 'https://api.vigogroup.vn';
 
@@ -1649,4 +1649,38 @@ export async function getFeedback(params: {
     limit: result.meta?.limit ?? 20,
     totalPages: result.meta?.totalPages ?? 1,
   };
+}
+
+// --- Cancel-leakage detection (anti-fraud) ---
+
+/** Suspicious cancel-leakage traces for admin review. The backend filters/sorts
+ *  by `eventAt` (when the customer cancelled), not by detection time. */
+export async function getLeakageTraces(
+  params: {
+    status?: LeakageTraceStatus;
+    verdict?: LeakageVerdict;
+    confidence?: 'HIGH' | 'LOW';
+    driverUserId?: string;
+    from?: string; // VN YYYY-MM-DD
+    to?: string;   // VN YYYY-MM-DD
+  } = {},
+): Promise<LeakageTraceRow[]> {
+  const query = new URLSearchParams({
+    ...(params.status && { status: params.status }),
+    ...(params.verdict && { verdict: params.verdict }),
+    ...(params.confidence && { confidence: params.confidence }),
+    ...(params.driverUserId && { driverUserId: params.driverUserId }),
+    ...(params.from && { from: params.from }),
+    ...(params.to && { to: params.to }),
+  });
+  const qs = query.toString();
+  const response = await fetchWithAuth(`/admin/leakage-traces${qs ? `?${qs}` : ''}`);
+  return unwrap<LeakageTraceRow[]>(response);
+}
+
+export async function updateLeakageTraceStatus(id: string, status: LeakageTraceStatus): Promise<void> {
+  await fetchWithAuth(`/admin/leakage-traces/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
 }
