@@ -31,6 +31,8 @@ import {
   Share2,
   Wallet,
   Crown,
+  Store,
+  PackageOpen,
   Megaphone,
   DollarSign,
   Scale,
@@ -55,6 +57,8 @@ const navItems = [
   { href: '/bookings', label: 'Chuyến đi', icon: Book },
   { href: '/referrals', label: 'Affiliate', icon: Share2 },
   { href: '/kol', label: 'KOL/KOC', icon: Crown },
+  { href: '/agent', label: 'Đại lý đặt hộ', icon: Store },
+  { href: '/agent-orders', label: 'Đơn đặt hộ', icon: PackageOpen },
   { href: '/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
   { href: '/finance', label: 'Tài chính', icon: DollarSign },
   { href: '/driver-cashflow', label: 'Dòng tiền tài xế', icon: ArrowDownCircle },
@@ -146,7 +150,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   asChild
-                  isActive={pathname.startsWith(item.href)}
+                  // Exact match or a true sub-path (href + '/') — NOT a bare prefix, so sibling
+                  // routes that share a prefix (e.g. /agent vs /agent-orders) don't both highlight.
+                  isActive={pathname === item.href || pathname.startsWith(item.href + '/')}
                   tooltip={item.label}
                 >
                   <Link href={item.href}>

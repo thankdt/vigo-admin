@@ -207,12 +207,13 @@ type GetApiResponse<T> = {
   }
 }
 
-export async function getUsers(params: { page?: number; limit?: number; search?: string; role?: string; deleted?: 'only' | 'all' } = {}): Promise<GetApiResponse<User>> {
+export async function getUsers(params: { page?: number; limit?: number; search?: string; role?: string; includeDrivers?: boolean; deleted?: 'only' | 'all' } = {}): Promise<GetApiResponse<User>> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
     ...(params.search && { search: params.search }),
     ...(params.role && { role: params.role }),
+    ...(params.includeDrivers && { includeDrivers: 'true' }),
     ...(params.deleted && { deleted: params.deleted }),
   });
 
@@ -1540,6 +1541,127 @@ export async function adminRevokeKol(userId: string): Promise<AdminKolRow> {
     method: 'POST',
   });
   return unwrap<AdminKolRow>(response);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Booking-agent (đại lý đặt hộ) — admin management
+// ─────────────────────────────────────────────────────────────────────
+
+export type AgentStatus = 'PENDING' | 'ACTIVE' | 'REVOKED';
+
+export type AdminAgentRow = {
+  id: string;
+  userId: string;
+  status: AgentStatus;
+  commissionPercent: number | null; // null ⇒ dùng mức nhóm (BOOKING_AGENT_COMMISSION_PERCENT)
+  displayName: string | null;
+  note: string | null;
+  userFullName: string | null;
+  userPhone: string | null;
+  isDriver: boolean; // tài khoản này cũng là tài xế?
+  createdAt: string;
+};
+
+export type AdminAgentListResponse = {
+  data: AdminAgentRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
+};
+
+export async function adminListAgents(params: {
+  page?: number;
+  limit?: number;
+  search?: string;
+  status?: AgentStatus;
+} = {}): Promise<AdminAgentListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.search) q.set('search', params.search);
+  if (params.status) q.set('status', params.status);
+  const qs = q.toString();
+  return unwrap<AdminAgentListResponse>(await fetchWithAuth(`/agent/admin/agents${qs ? '?' + qs : ''}`));
+}
+
+// Promote / approve an account (USER or DRIVER) to booking-agent (also re-activates REVOKED). → ACTIVE.
+export async function adminPromoteAgent(userId: string, body: {
+  commissionPercent?: number | null;
+  displayName?: string;
+  note?: string;
+}): Promise<AdminAgentRow> {
+  return unwrap<AdminAgentRow>(await fetchWithAuth(`/agent/admin/users/${userId}`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function adminUpdateAgent(userId: string, body: {
+  commissionPercent?: number | null;
+  displayName?: string;
+  note?: string;
+  status?: AgentStatus;
+}): Promise<AdminAgentRow> {
+  return unwrap<AdminAgentRow>(await fetchWithAuth(`/agent/admin/agents/${userId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  }));
+}
+
+export async function adminRevokeAgent(userId: string): Promise<AdminAgentRow> {
+  return unwrap<AdminAgentRow>(await fetchWithAuth(`/agent/admin/agents/${userId}/revoke`, {
+    method: 'POST',
+  }));
+}
+
+// ── admin browse + void of đặt-hộ orders ──
+export type AdminAgentOrder = {
+  id: string;
+  status: 'DRAFT' | 'SEARCHING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  billingMode: 'BAO' | 'GHEP';
+  waypoints: AgentWaypoint[];
+  passengers: AgentPassenger[];
+  capacityRequired: number;
+  totalFare: number | null;
+  commissionAmount: number | null;
+  paymentMethod: string | null;
+  contractNumber: string | null;
+  createdAt: string;
+  completedAt: string | null;
+  agentUserId: string;
+  agentName: string | null;
+  agentPhone: string | null;
+  driverId: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+};
+
+export type AdminAgentOrderListResponse = {
+  data: AdminAgentOrder[];
+  meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
+};
+
+export async function adminListAgentOrders(params: {
+  page?: number;
+  limit?: number;
+  status?: AdminAgentOrder['status'];
+  search?: string;
+} = {}): Promise<AdminAgentOrderListResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.status) q.set('status', params.status);
+  if (params.search) q.set('search', params.search);
+  const qs = q.toString();
+  return unwrap<AdminAgentOrderListResponse>(await fetchWithAuth(`/agent/admin/orders${qs ? '?' + qs : ''}`));
+}
+
+/** Void a COMPLETED order → clawback the agent commission. */
+export async function adminVoidAgentOrder(id: string, reason?: string): Promise<AdminAgentOrder> {
+  return unwrap<AdminAgentOrder>(await fetchWithAuth(`/agent/admin/orders/${id}/void`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  }));
 }
 
 // ─────────────────────────────────────────────────────────────────────
