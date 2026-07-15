@@ -91,7 +91,7 @@ export default function LeakageReviewPage() {
     <div className="space-y-6">
       <PageHeader
         title="Nghi vấn gian lận"
-        description="Chuyến bị khách huỷ sau khi tài xế đã nhận, nhưng tài xế vẫn đi qua điểm đón→đến. Chỉ là tín hiệu để người xem xét — hệ thống không tự phạt."
+        description="Chuyến bị khách huỷ sau khi tài xế đã nhận, nhưng tài xế vẫn đi qua điểm đón→đến. Kết luận chỉ hiện SAU KHI cửa sổ canh đóng (~3 giờ sau khi huỷ; chuyến hẹn giờ có thể vài ngày) — huỷ xong mở trang ngay sẽ chưa thấy gì. Đây chỉ là tín hiệu để người xem xét, hệ thống không tự phạt."
       />
 
       <Card className="space-y-3 p-4">
@@ -151,9 +151,13 @@ export default function LeakageReviewPage() {
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={COL_COUNT} className="h-24 text-center text-muted-foreground">
+                <TableCell colSpan={COL_COUNT} className="h-28 text-center text-muted-foreground">
                   <ShieldAlert className="mx-auto mb-2 h-6 w-6 opacity-50" />
                   Không có nghi vấn nào khớp bộ lọc.
+                  <div className="mt-1 text-xs">
+                    Trống là bình thường. Kết luận chỉ sinh ra sau khi cửa sổ canh đóng
+                    (~3 giờ sau khi khách huỷ), và tính năng phải được bật trong Cấu hình hệ thống.
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -165,14 +169,24 @@ export default function LeakageReviewPage() {
                       <Badge className={verdictBadgeClass(r.verdict)}>{VERDICT_LABEL[r.verdict] ?? r.verdict}</Badge>
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
-                      <Button
-                        variant="link"
-                        className="h-auto p-0 text-left"
-                        onClick={(e) => { e.stopPropagation(); filterByDriver(r); }}
-                      >
-                        {r.driver?.fullName || r.driver?.phone || '—'}
-                      </Button>
-                      <div className="text-xs text-muted-foreground">{r.driver?.phone}</div>
+                      {/* Only a real driver gets the filter Button: otherwise the cell
+                          becomes a dead zone — stopPropagation would swallow the row
+                          click (no sheet) while filterByDriver returns early (no filter). */}
+                      {r.driver ? (
+                        <>
+                          <Button
+                            variant="link"
+                            className="h-auto p-0 text-left"
+                            title="Lọc theo tài xế này"
+                            onClick={(e) => { e.stopPropagation(); filterByDriver(r); }}
+                          >
+                            {r.driver.fullName || r.driver.phone || '—'}
+                          </Button>
+                          <div className="text-xs text-muted-foreground">{r.driver.phone}</div>
+                        </>
+                      ) : (
+                        '—'
+                      )}
                     </TableCell>
                     <TableCell className="whitespace-nowrap">
                       {r.customer?.fullName || '—'}
