@@ -14,6 +14,7 @@ function loginPathForCurrentArea(): string {
   if (typeof window === 'undefined') return '/';
   const p = window.location.pathname;
   if (p.startsWith('/kol-portal')) return '/kol-portal/login';
+  if (p.startsWith('/agent-portal')) return '/agent-portal/login';
   if (p.startsWith('/htx')) return '/htx/login';
   return '/';
 }
@@ -1597,6 +1598,106 @@ export type KolMe = {
 export async function getKolMe(): Promise<KolMe> {
   const response = await fetchWithAuth('/kol/me');
   return unwrap<KolMe>(response);
+}
+
+// ─────────────────────────── Booking-agent (đặt hộ) portal ───────────────────────────
+export type AgentMe = {
+  status: string;
+  displayName: string | null;
+  commissionPercent: number | null;
+  bankInfo: KolBankInfo | null;
+};
+export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
+export type AgentPassenger = {
+  name: string; phone: string; pickupIdx: number; dropoffIdx: number; note?: string | null;
+};
+export type AgentOrder = {
+  id: string;
+  status: 'DRAFT' | 'SEARCHING' | 'ACCEPTED' | 'IN_PROGRESS' | 'COMPLETED' | 'CANCELLED';
+  billingMode: 'BAO' | 'GHEP';
+  waypoints: AgentWaypoint[];
+  passengers: AgentPassenger[];
+  capacityRequired: number;
+  totalFare: number | null;
+  priceBreakdown: Record<string, any> | null;
+  perPassengerFare: { passengerIdx: number; amount: number }[] | null;
+  driverId: string | null;
+  commissionAmount: number | null;
+  createdAt: string;
+};
+
+export async function sendAgentLoginOtp(phone: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/send-login-otp`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Không gửi được OTP');
+  }
+  return response.json();
+}
+export async function agentLoginOtp(phone: string, otp: string): Promise<any> {
+  const response = await fetch(`${API_BASE_URL}/auth/login-otp`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, otp }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Đăng nhập thất bại');
+  }
+  const data = await response.json();
+  if (data?.data?.access_token && typeof window !== 'undefined') {
+    localStorage.setItem('access_token', data.data.access_token);
+    if (data.data.refresh_token) localStorage.setItem('refresh_token', data.data.refresh_token);
+  }
+  return data;
+}
+export async function getAgentMe(): Promise<AgentMe> {
+  return unwrap<AgentMe>(await fetchWithAuth('/agent/me'));
+}
+export async function listAgentOrders(page = 1, limit = 20): Promise<{ data: AgentOrder[]; meta: any }> {
+  return unwrap(await fetchWithAuth(`/agent/orders?page=${page}&limit=${limit}`));
+}
+export async function getAgentOrder(id: string): Promise<AgentOrder> {
+  return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}`));
+}
+export async function createAgentOrder(body: {
+  billingMode: 'BAO' | 'GHEP';
+  waypoints: AgentWaypoint[];
+  passengers: AgentPassenger[];
+  paymentMethod?: string;
+}): Promise<AgentOrder> {
+  return unwrap<AgentOrder>(await fetchWithAuth('/agent/orders', { method: 'POST', body: JSON.stringify(body) }));
+}
+export async function quoteAgentOrder(id: string): Promise<AgentOrder> {
+  return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}/quote`, { method: 'POST' }));
+}
+export async function submitAgentOrder(id: string): Promise<AgentOrder> {
+  return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}/submit`, { method: 'POST' }));
+}
+export async function redispatchAgentOrder(id: string): Promise<{ offered: number }> {
+  return unwrap(await fetchWithAuth(`/agent/orders/${id}/redispatch`, { method: 'POST' }));
+}
+export async function cancelAgentOrder(id: string): Promise<AgentOrder> {
+  return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}/cancel`, { method: 'POST' }));
+}
+/**
+ * Fetch the contract PDF WITH the auth header and hand it to the browser (a bare URL can't carry
+ * the JWT). We use a synthetic <a download> click rather than window.open: the fetch+blob awaits
+ * push us out of the click gesture, so window.open would be popup-blocked in Safari/others. A
+ * download-anchor click is not gated by the popup blocker. Rejects on fetch/blob failure so the
+ * caller can surface it (don't swallow — otherwise the button silently does nothing).
+ */
+export async function openAgentContract(id: string): Promise<void> {
+  const res = await fetchWithAuth(`/agent/orders/${id}/contract.pdf`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hop-dong-dat-ho-${id}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 export type KolReferee = {
