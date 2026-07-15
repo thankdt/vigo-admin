@@ -39,6 +39,7 @@ import {
   ArrowDownCircle,
   Receipt,
   MessageSquare,
+  ShieldAlert,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -73,6 +74,7 @@ const navItems = [
   { href: '/banners', label: 'Banner', icon: ImageIcon },
   { href: '/app-popups', label: 'Popup quảng cáo', icon: Megaphone },
   { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
+  { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
 ];
 
 // Error Boundary to prevent full page crash
