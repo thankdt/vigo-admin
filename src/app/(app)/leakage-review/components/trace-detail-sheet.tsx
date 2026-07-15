@@ -64,9 +64,18 @@ export function TraceDetailSheet({
             <Field label="Thời điểm huỷ (xảy ra)">{formatVnDateTime(trace.eventAt)}</Field>
             <Field label="Phát hiện lúc (đóng cửa sổ canh)">{formatVnDateTime(trace.createdAt)}</Field>
             <Field label="Tài xế">
-              <Link href={`/drivers/${trace.driverEntityId}`} className="text-primary underline underline-offset-2">
-                {person(trace.driver)}
-              </Link>
+              {trace.driver ? (
+                // /users/detail?id= is the real detail route (drivers/ has only a
+                // list page — /drivers/{id} would 404).
+                <Link
+                  href={`/users/detail?id=${trace.driver.userId}`}
+                  className="text-primary underline underline-offset-2"
+                >
+                  {person(trace.driver)}
+                </Link>
+              ) : (
+                '—'
+              )}
             </Field>
             <Field label="Khách">{person(trace.customer)}</Field>
             <Field label="Điểm đón">{addressText(trace.booking?.pickupAddress)}</Field>

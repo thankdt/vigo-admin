@@ -53,9 +53,14 @@ describe('TraceDetailSheet', () => {
     expect(screen.getByText(/12:00 15\/07\/2026/)).toBeInTheDocument(); // createdAt, VN
   });
 
-  it('deep-links to the driver record', () => {
+  it('deep-links the driver to the real detail route (/users/detail?id=, not /drivers/{id} which 404s)', () => {
     render(<TraceDetailSheet trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
-    expect(screen.getByRole('link', { name: /Tài A/ })).toHaveAttribute('href', '/drivers/de1');
+    expect(screen.getByRole('link', { name: /Tài A/ })).toHaveAttribute('href', '/users/detail?id=du1');
+  });
+
+  it('renders a dash instead of a broken link when the driver is missing', () => {
+    render(<TraceDetailSheet trace={{ ...trace, driver: null }} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
+    expect(screen.queryByRole('link', { name: /Tài A/ })).not.toBeInTheDocument();
   });
 
   it('confirming fraud calls onUpdateStatus once with CONFIRMED', async () => {
