@@ -1822,6 +1822,31 @@ export async function openAgentContract(id: string): Promise<void> {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
+// ── Đại lý "đi ghép": tạo booking carpool hộ từng khách (giá theo tuyến) ──
+export type AgentGhepAddr = { address: string; lat: number; long: number };
+export type AgentGhepPassenger = {
+  phone: string;
+  name?: string;
+  pickupAddress: AgentGhepAddr;
+  dropoffAddress: AgentGhepAddr;
+  promotionId?: number;
+};
+export type AgentGhepResult = {
+  count: number;
+  bookings: Array<{ id: string; shareLink?: string; customerPhone?: string; finalPrice?: number | null }>;
+  failed: Array<{ phone: string; error: string }>;
+};
+
+export async function createAgentGhepBookings(body: {
+  passengers: AgentGhepPassenger[];
+  note?: string;
+  scheduledTime?: string;
+}): Promise<AgentGhepResult> {
+  return unwrap<AgentGhepResult>(
+    await fetchWithAuth('/agent/bookings/ghep', { method: 'POST', body: JSON.stringify(body) }),
+  );
+}
+
 export type KolReferee = {
   refereeId: string;
   refereeName: string | null;
