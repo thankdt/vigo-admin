@@ -746,6 +746,34 @@ export async function createAdminBooking(data: {
   return result.data || result;
 }
 
+/**
+ * Đặt hộ: an ACTIVE agent (đại lý) creates ONE normal trip on a customer's behalf. Same body as
+ * createAdminBooking MINUS driverId (an agent can't force-assign). The server injects agentUserId from
+ * the JWT → the agent commission is credited at COMPLETE (driver→ví khuyến mại, user→ví affiliate).
+ */
+export async function createAgentBooking(data: {
+  customerPhone: string;
+  customerName?: string;
+  pickupAddress: { address: string; lat: number; long: number };
+  dropoffAddress: { address: string; lat: number; long: number };
+  serviceType?: 'RIDE' | 'DELIVERY' | 'CARPOOL';
+  requestedVehicleType?: 'CAR_4' | 'CAR_7';
+  requestedSeats?: number;
+  passengerNames?: string[];
+  note?: string;
+  scheduledTime?: string;
+  scheduledFromTime?: string;
+  scheduledToTime?: string;
+  promotionId?: number;
+}): Promise<Booking> {
+  const response = await fetchWithAuth('/agent/bookings', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
 // [DISABLED 2026-07-09] "admin ôm chuyến về operator" — endpoint BE (admin/:id/accept) đã tắt
 // vì gán về tài khoản ảo, 0 commission => vỡ dòng tiền. Dùng reassign tài xế THẬT thay thế.
 /*

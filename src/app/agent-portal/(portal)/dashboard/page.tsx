@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getAgentMe, AgentMe } from '@/lib/api';
-import { PlusCircle, ListOrdered, Percent } from 'lucide-react';
+import { ListOrdered, Percent } from 'lucide-react';
+import { CreateBookingDialog } from '@/app/(app)/bookings/components/create-booking-dialog';
 
 export default function AgentDashboardPage() {
   const [me, setMe] = React.useState<AgentMe | null>(null);
@@ -18,7 +19,7 @@ export default function AgentDashboardPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Chào {me?.displayName ?? 'đại lý'} 👋</h1>
-        <p className="text-muted-foreground">Cổng đặt hộ — tạo chuyến đa-điểm cho khách, nhận hoa hồng.</p>
+        <p className="text-muted-foreground">Cổng đặt hộ — tạo chuyến cho khách, nhận hoa hồng.</p>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
@@ -44,9 +45,7 @@ export default function AgentDashboardPage() {
       </div>
 
       <div className="flex flex-wrap gap-3">
-        <Button asChild>
-          <Link href="/agent-portal/orders/new"><PlusCircle className="mr-2 h-4 w-4" /> Đặt hộ mới</Link>
-        </Button>
+        <CreateBookingDialog mode="agent" onSuccess={() => {}} />
         <Button variant="outline" asChild>
           <Link href="/agent-portal/orders"><ListOrdered className="mr-2 h-4 w-4" /> Đơn của tôi</Link>
         </Button>
