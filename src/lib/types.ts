@@ -496,3 +496,19 @@ export type LeakageTraceRow = {
     scheduledTime?: string | null;
   } | null;
 };
+
+export type DriverCancelStat = {
+  driverEntityId: string;
+  driverUserId: string;
+  fullName: string | null;
+  phone: string;
+  assignedTrips: number;
+  customerCancels: number;
+  ratePct: number;
+  cancelRuleAStrikes: number;
+  suspendedUntil: string | null;
+  isBanned: boolean;
+  depositForfeitFlagged: boolean;
+  lastAlertReason: string | null;
+  lastAlertAt: string | null;
+};
