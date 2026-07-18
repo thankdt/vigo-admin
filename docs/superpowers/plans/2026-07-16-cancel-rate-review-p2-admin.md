@@ -70,11 +70,12 @@ export async function getDriverCancelStats(from?: string, to?: string): Promise<
   const q = new URLSearchParams();
   if (from) q.set('from', from);
   if (to) q.set('to', to);
-  const res = await apiFetch(`/admin/driver-cancel-stats?${q.toString()}`); // dùng đúng helper fetch/apiFetch của file
-  return unwrap<DriverCancelStat[]>(res);
+  const qs = q.toString();
+  const res = await fetchWithAuth(`/admin/driver-cancel-stats${qs ? `?${qs}` : ''}`); // fetchWithAuth: helper thật getLeakageTraces dùng (api.ts:50)
+  return unwrap<DriverCancelStat[]>(res); // unwrap: tên thật, api.ts:1237
 }
 ```
-(Thay `apiFetch`/`unwrap` bằng đúng tên helper mà `getLeakageTraces` dùng — đọc file trước.)
+(**Xác nhận review**: helper thật là `fetchWithAuth` (api.ts:50), `unwrap` (api.ts:1237) — dùng đúng như trên.)
 
 - [ ] **Step 3: tsc + vitest**
 
@@ -210,6 +211,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
   - `load()` với `reqIdRef` sequence-guard (copy pattern từ leakage-review) gọi `getDriverCancelStats(range.from, range.to)`.
   - `Table`: cột Tài xế (tên + phone, link `/users/detail?id=${driverUserId}` — precedent leakage-review) · Chuyến giao · Khách huỷ · **Tỉ lệ** (`Badge` `rateBadgeClass`) · Strike (`cancelRuleAStrikes`) · Trạng thái (`Badge` `driverStatus`) · Cảnh báo gần nhất (`lastAlertReason` + `formatVnDateTime(lastAlertAt)`). Sort backend sẵn (ratePct DESC) — giữ nguyên thứ tự trả về.
   - Row click → mở `DriverActionDialog` với `stat` đó; `onDone` → `load()`.
+  - ⚠️ **Link `/users/detail?id=${driverUserId}` trong cột Tài xế (và mọi nút trong row) PHẢI `onClick={(e)=>e.stopPropagation()}`** — nếu không bấm link vừa điều hướng vừa mở dialog (double-action, xem leakage `page.tsx:181`).
   - Loading spinner + empty state ("Không có tài xế nào trong khoảng ngày").
   - Cột `depositForfeitFlagged=true` → icon/badge nhỏ "cờ cọc".
 
@@ -229,7 +231,7 @@ Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>"
 **Files:**
 - Modify: `src/app/(app)/layout.tsx`
 
-- [ ] **Step 1:** Thêm mục nav trỏ `/driver-cancel-review` (label "Tỉ lệ huỷ tài xế", icon phù hợp vd `TrendingDown`/`UserX` từ lucide) — đọc cách các mục hiện có (vd leakage-review) được khai báo trong layout, mirror đúng cấu trúc (nhóm, guard nếu có).
+- [ ] **Step 1:** Thêm mục nav vào mảng phẳng `navItems` (`layout.tsx:51-73`, cấu trúc `{href,label,icon}` — KHÔNG có nhóm/guard): `{ href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown }`. **PHẢI thêm `TrendingDown` (hoặc `UserX`) vào block import lucide ở `:40`** — nếu không `tsc` báo undefined.
 - [ ] **Step 2: tsc + vitest sạch; `npm run build` nếu nhanh để chắc route hợp lệ. Commit.**
 
 ```bash
