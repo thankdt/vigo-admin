@@ -78,7 +78,10 @@ export function DriverActionDialog({
   const handleUnlock = () =>
     run(
       'unlock',
-      () => (stat.isBanned ? unbanDriver(stat.driverEntityId) : unsuspendDriver(stat.driverEntityId)),
+      async () => {
+        if (stat.isBanned) await unbanDriver(stat.driverEntityId);
+        if (suspendedActive) await unsuspendDriver(stat.driverEntityId);
+      },
       'Đã gỡ khoá.',
     );
 

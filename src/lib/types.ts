@@ -500,7 +500,7 @@ export type LeakageTraceRow = {
 export type DriverCancelStat = {
   driverEntityId: string;
   driverUserId: string;
-  fullName: string;
+  fullName: string | null;
   phone: string;
   assignedTrips: number;
   customerCancels: number;
