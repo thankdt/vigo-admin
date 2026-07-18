@@ -22,11 +22,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { Loader2, Calendar as CalendarIcon, PlusCircle, Trash2, Clock, Repeat, Bell, ExternalLink } from 'lucide-react';
+import { dateTimeInputValue, parseDateTimeInput } from '@/lib/date-input-utils';
+import { Loader2, PlusCircle, Trash2, Clock, Repeat, Bell, ExternalLink } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 import Image from 'next/image';
 
 const notificationSchema = z.object({
@@ -287,46 +285,11 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                             name="scheduleTime"
                             control={control}
                             render={({ field }) => (
-                                <Popover modal={true}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant={"outline"}
-                                            className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                                        >
-                                            <CalendarIcon className="mr-2 h-4 w-4" />
-                                            {field.value ? format(field.value, "PPP HH:mm") : <span>Chọn ngày & giờ</span>}
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-auto p-0" align="start">
-                                        <div className="p-3 border-b border-border">
-                                            <p className="text-xs text-muted-foreground mb-2">Chọn ngày</p>
-                                            <Calendar mode="single" selected={field.value} onSelect={(date) => {
-                                                // Combine date with current time selection if exists, else default to 00:00
-                                                const newDate = date || new Date();
-                                                if (field.value) {
-                                                    newDate.setHours(field.value.getHours());
-                                                    newDate.setMinutes(field.value.getMinutes());
-                                                }
-                                                field.onChange(newDate);
-                                            }} initialFocus />
-                                        </div>
-                                        <div className="p-3">
-                                            <p className="text-xs text-muted-foreground mb-2">Chọn giờ</p>
-                                            <Input
-                                                type="time"
-                                                className="w-full"
-                                                value={field.value ? format(field.value, 'HH:mm') : ''}
-                                                onChange={(e) => {
-                                                    const [hours, minutes] = e.target.value.split(':').map(Number);
-                                                    const newDate = field.value ? new Date(field.value) : new Date();
-                                                    newDate.setHours(hours);
-                                                    newDate.setMinutes(minutes);
-                                                    field.onChange(newDate);
-                                                }}
-                                            />
-                                        </div>
-                                    </PopoverContent>
-                                </Popover>
+                                <Input
+                                    type="datetime-local"
+                                    value={dateTimeInputValue(field.value)}
+                                    onChange={(e) => field.onChange(parseDateTimeInput(e.target.value))}
+                                />
                             )}
                         />
                         {errors.scheduleTime && <p className="text-sm text-destructive">{errors.scheduleTime.message}</p>}
