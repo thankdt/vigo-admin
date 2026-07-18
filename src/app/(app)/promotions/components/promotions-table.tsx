@@ -21,12 +21,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { Loader2, Calendar as CalendarIcon } from 'lucide-react';
+import { dateInputValue, parseDateInput } from '@/lib/date-input-utils';
+import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import { cn } from '@/lib/utils';
 
 // Optional numeric fields used to break the save button: an empty <Input
 // type="number"> sends "" to RHF; z.coerce.number()('') === 0, then
@@ -256,24 +254,11 @@ function PromotionForm({
             name="startDate"
             control={control}
             render={({ field }) => (
-              <Popover modal={true}>
-                <PopoverTrigger asChild>
-                  {/* type="button" is critical here: a bare <button> inside a
-                      <form> defaults to type="submit", which made clicking the
-                      date picker submit the form mid-edit. */}
-                  <Button
-                    type="button"
-                    variant={"outline"}
-                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {field.value ? format(field.value, "PPP") : <span>Chọn ngày</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
-                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                value={dateInputValue(field.value)}
+                onChange={(e) => field.onChange(parseDateInput(e.target.value))}
+              />
             )}
           />
           {errors.startDate && <p className="text-sm text-destructive">{errors.startDate.message}</p>}
@@ -284,21 +269,11 @@ function PromotionForm({
             name="endDate"
             control={control}
             render={({ field }) => (
-              <Popover modal={true}>
-                <PopoverTrigger asChild>
-                  <Button
-                    type="button"
-                    variant={"outline"}
-                    className={cn("w-full justify-start text-left font-normal", !field.value && "text-muted-foreground")}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {field.value ? format(field.value, "PPP") : <span>Chọn ngày</span>}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" style={{ zIndex: 9999 }}>
-                  <Calendar mode="single" selected={field.value} onSelect={field.onChange} initialFocus />
-                </PopoverContent>
-              </Popover>
+              <Input
+                type="date"
+                value={dateInputValue(field.value)}
+                onChange={(e) => field.onChange(parseDateInput(e.target.value))}
+              />
             )}
           />
           {errors.endDate && <p className="text-sm text-destructive">{errors.endDate.message}</p>}
