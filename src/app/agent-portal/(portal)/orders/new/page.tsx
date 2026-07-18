@@ -14,7 +14,30 @@ import { useToast } from '@/hooks/use-toast';
 import {
   createAgentOrder, quoteAgentOrder, submitAgentOrder, cancelAgentOrder, AgentOrder,
 } from '@/lib/api';
-import { Plus, Trash2, MapPin, User, Loader2, ArrowLeft, Send } from 'lucide-react';
+import { Plus, Trash2, MapPin, User, Loader2, ArrowLeft, Send, Car, Users } from 'lucide-react';
+import { GhepComposer } from './ghep-composer';
+
+type Mode = 'rieng' | 'ghep';
+
+function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => void }) {
+  const opt = (m: Mode, title: string, sub: string, Icon: any) => (
+    <button
+      type="button" onClick={() => onChange(m)}
+      className={`flex-1 rounded-lg border p-3 text-left text-sm transition ${
+        mode === m ? 'border-primary bg-primary/5 ring-1 ring-primary' : 'hover:bg-accent'
+      }`}
+    >
+      <div className="font-semibold flex items-center gap-1.5"><Icon className="h-4 w-4" /> {title}</div>
+      <div className="text-xs text-muted-foreground">{sub}</div>
+    </button>
+  );
+  return (
+    <div className="flex gap-3">
+      {opt('rieng', 'Xe riêng', 'Bao trọn 1 xe, nhiều điểm, không ghép khách lạ', Car)}
+      {opt('ghep', 'Ghép tuyến', 'Ghép chung xe, giá theo tuyến từng khách', Users)}
+    </div>
+  );
+}
 
 type WP = { label: string; address: string; lat: number; lng: number };
 type PX = { name: string; phone: string; pickupIdx: number; dropoffIdx: number; note: string };
@@ -27,6 +50,7 @@ export default function NewAgentOrderPage() {
   const router = useRouter();
   const { toast } = useToast();
 
+  const [mode, setMode] = React.useState<Mode>('rieng');
   const [billingMode, setBillingMode] = React.useState<'BAO' | 'GHEP'>('BAO');
   const [waypoints, setWaypoints] = React.useState<WP[]>([emptyWp(), emptyWp()]);
   const [passengers, setPassengers] = React.useState<PX[]>([emptyPx()]);
@@ -48,6 +72,18 @@ export default function NewAgentOrderPage() {
     const id = draftIdRef.current;
     if (id) cancelAgentOrder(id).catch(() => {});
   }, []);
+
+  // Switching AWAY from "xe riêng" while a bao-xe draft is pending → discard it (the ghép flow
+  // renders a separate component, so the unmount cleanup won't fire; without this the draft orphans).
+  const changeMode = (m: Mode) => {
+    if (m !== 'rieng') {
+      const id = draftIdRef.current;
+      if (id) cancelAgentOrder(id).catch(() => {});
+      setDraftId(null);
+      setQuoted(null);
+    }
+    setMode(m);
+  };
 
   const wpLabel = (i: number) => waypoints[i]?.label?.trim() || waypoints[i]?.address || `Điểm ${i + 1}`;
 
@@ -139,7 +175,18 @@ export default function NewAgentOrderPage() {
     } finally { setBusy(false); }
   };
 
-  // ─────────────────────── review phase ───────────────────────
+  // ─────────────────────── ghép-tuyến mode (fully separate flow) ───────────────────────
+  if (mode === 'ghep') {
+    return (
+      <div className="space-y-6 max-w-2xl">
+        <h1 className="text-2xl font-bold">Đặt hộ mới</h1>
+        <ModeToggle mode={mode} onChange={changeMode} />
+        <GhepComposer />
+      </div>
+    );
+  }
+
+  // ─────────────────────── review phase (xe riêng) ───────────────────────
   if (quoted) {
     return (
       <div className="space-y-5 max-w-2xl">
@@ -188,6 +235,7 @@ export default function NewAgentOrderPage() {
   return (
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-bold">Đặt hộ mới</h1>
+      <ModeToggle mode={mode} onChange={changeMode} />
 
       {/* Billing mode */}
       <Card>

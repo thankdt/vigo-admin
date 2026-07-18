@@ -12,7 +12,7 @@ import { Card } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
-import { createAdminBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice, getVouchers } from '@/lib/api';
+import { createAdminBooking, createAgentBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice, getVouchers } from '@/lib/api';
 import type { Driver, Promotion } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -23,6 +23,9 @@ import { validateWindow, toIso } from './schedule-utils';
 
 interface CreateBookingDialogProps {
   onSuccess: () => void;
+  // 'agent' = đặt hộ portal: no admin customer-lookup / driver-assign; posts to /agent/bookings
+  // (agentUserId from the JWT) → commission credited to the agent at COMPLETE.
+  mode?: 'admin' | 'agent';
 }
 
 interface AddressData {
@@ -31,7 +34,7 @@ interface AddressData {
   long: number;
 }
 
-export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
+export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBookingDialogProps) {
   const [open, setOpen] = React.useState(false);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { toast } = useToast();
@@ -41,7 +44,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const [customerName, setCustomerName] = React.useState('');
   // Phone-first flow: name stays locked until the phone is checked.
   //   idle → chưa kiểm tra | checking | existing (khách cũ, khoá tên) | new (khách mới, bắt nhập tên)
-  const [customerStatus, setCustomerStatus] = React.useState<'idle' | 'checking' | 'existing' | 'new'>('idle');
+  // Agent mode has no admin phone-lookup → start in 'new' so the name field is open + submit-ready.
+  const [customerStatus, setCustomerStatus] = React.useState<'idle' | 'checking' | 'existing' | 'new'>(mode === 'agent' ? 'new' : 'idle');
   const [pickup, setPickup] = React.useState<AddressData | null>(null);
   const [dropoff, setDropoff] = React.useState<AddressData | null>(null);
   const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('CARPOOL');
@@ -156,7 +160,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   const [driverSearch, setDriverSearch] = React.useState('');
 
   React.useEffect(() => {
-    if (!open) return;
+    if (!open || mode === 'agent') return; // agent can't force-assign a driver → skip the fetch
     const fetchDrivers = async () => {
       setIsLoadingDrivers(true);
       try {
@@ -200,7 +204,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
   // Editing the phone after a check invalidates the customer lookup → re-check.
   const onPhoneChange = (v: string) => {
     setCustomerPhone(v);
-    if (customerStatus !== 'idle') {
+    // Agent portal has no admin phone-lookup → keep the name field open ('new').
+    if (mode === 'admin' && customerStatus !== 'idle') {
       setCustomerStatus('idle');
       setCustomerName('');
     }
@@ -269,7 +274,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
 
     setIsSubmitting(true);
     try {
-      await createAdminBooking({
+      const payload = {
         customerPhone,
         customerName: customerName || undefined,
         pickupAddress: {
@@ -293,7 +298,6 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
           return extras.length > 0 ? [customerName.trim(), ...extras] : undefined;
         })(),
         note: note || undefined,
-        driverId: selectedDriverId || undefined,
         // Pickup window. Send scheduledTime = from too: a backend without window
         // support (whitelist:true strips the unknown from/to fields) then still
         // schedules at the window start instead of silently falling back to
@@ -302,7 +306,14 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
         scheduledFromTime: scheduledFromIso,
         scheduledToTime: scheduledToIso,
         promotionId: selectedPromotionId ?? undefined,
-      });
+      };
+      // đặt hộ: agent posts to /agent/bookings (agentUserId from JWT, no driver-assign);
+      // admin keeps the driver pre-assign path.
+      if (mode === 'agent') {
+        await createAgentBooking(payload);
+      } else {
+        await createAdminBooking({ ...payload, driverId: selectedDriverId || undefined });
+      }
       toast({ title: 'Thành công', description: 'Đã tạo chuyến mới.' });
       resetForm();
       setOpen(false);
@@ -343,12 +354,12 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
       <DialogTrigger asChild>
         <Button>
           <Plus className="mr-2 h-4 w-4" />
-          Tạo chuyến
+          {mode === 'agent' ? 'Đặt hộ chuyến' : 'Tạo chuyến'}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
         <DialogHeader>
-          <DialogTitle>Tạo chuyến mới</DialogTitle>
+          <DialogTitle>{mode === 'agent' ? 'Đặt hộ chuyến mới' : 'Tạo chuyến mới'}</DialogTitle>
           <DialogDescription>
             Nhập thông tin khách hàng và chuyến đi. Nếu khách chưa có tài khoản, hệ thống sẽ tự tạo mới.
           </DialogDescription>
@@ -376,10 +387,12 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
                       className="pl-8"
                     />
                   </div>
-                  <Button type="button" variant="outline" onClick={checkCustomer} disabled={customerStatus === 'checking' || customerPhone.length < 10}>
-                    {customerStatus === 'checking' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-                    <span className="ml-1.5">Kiểm tra</span>
-                  </Button>
+                  {mode === 'admin' && (
+                    <Button type="button" variant="outline" onClick={checkCustomer} disabled={customerStatus === 'checking' || customerPhone.length < 10}>
+                      {customerStatus === 'checking' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                      <span className="ml-1.5">Kiểm tra</span>
+                    </Button>
+                  )}
                 </div>
               </div>
               <div className="space-y-1.5">
@@ -650,7 +663,8 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
             )}
           </div>
 
-          {/* Driver Selection */}
+          {/* Driver Selection — admin only (an agent can't force-assign a driver). */}
+          {mode === 'admin' && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
@@ -735,6 +749,7 @@ export function CreateBookingDialog({ onSuccess }: CreateBookingDialogProps) {
               </div>
             )}
           </div>
+          )}
         </div>
 
         <DialogFooter>
