@@ -12,6 +12,10 @@ describe('rateBadgeClass', () => {
     expect(rateBadgeClass(30)).toContain('amber');
     expect(rateBadgeClass(29)).toContain('slate');
   });
+  it('biên: 100% đỏ đậm, 99% vẫn đỏ nhạt', () => {
+    expect(rateBadgeClass(100)).toContain('red-600');
+    expect(rateBadgeClass(99)).toContain('red-100');
+  });
 });
 
 describe('driverStatus', () => {
