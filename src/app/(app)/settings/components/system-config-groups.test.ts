@@ -48,6 +48,7 @@ describe('groupIdFor — other groups unchanged (precedence guard)', () => {
     expect(groupIdFor('DRIVER_MAX_ROUTES')).toBe('driver');
     expect(groupIdFor('MIN_APP_VERSION')).toBe('app');
     expect(groupIdFor('SOME_RANDOM_KEY')).toBe('misc'); // catch-all
+    expect(groupIdFor('CANCEL_ENFORCEMENT_MODE')).toBe('cancel');
   });
 
   it('SIGNUP_LOYALTY_REWARD is an EXACT match, not a SIGNUP_ prefix', () => {
@@ -59,5 +60,14 @@ describe('groupIdFor — other groups unchanged (precedence guard)', () => {
 
   it('catch-all group stays last', () => {
     expect(CONFIG_GROUPS[CONFIG_GROUPS.length - 1].id).toBe('misc');
+  });
+
+  it('does not let CANCEL_ leak into an earlier group and stays before misc', () => {
+    expect(groupIdFor('CANCEL_ENFORCEMENT_MODE')).toBe('cancel');
+    expect(groupIdFor('CANCEL_RATE_THRESHOLD_PCT')).toBe('cancel');
+    const cancelIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'cancel');
+    const miscIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'misc');
+    expect(cancelIdx).toBeGreaterThanOrEqual(0);
+    expect(cancelIdx).toBeLessThan(miscIdx);
   });
 });
