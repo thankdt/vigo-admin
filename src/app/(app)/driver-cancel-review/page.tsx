@@ -74,6 +74,10 @@ export default function DriverCancelReviewPage() {
       const data = await getDriverCancelStats(range.from, range.to);
       if (reqId !== reqIdRef.current) return; // superseded — drop the stale result
       setRows(data);
+      // Re-sync the open sheet's `stat` prop to the freshly-loaded row (same id)
+      // so a ban/suspend/unlock action is reflected immediately — the sheet's
+      // detail-fetch effect keys on driverEntityId, so this doesn't refetch.
+      setSelected((prev) => (prev ? (data.find((r) => r.driverEntityId === prev.driverEntityId) ?? prev) : prev));
     } catch (err: any) {
       if (reqId !== reqIdRef.current) return;
       toast({ variant: 'destructive', title: 'Không tải được danh sách tài xế', description: err.message });
@@ -224,7 +228,7 @@ export default function DriverCancelReviewPage() {
                 variant="outline"
                 size="sm"
                 disabled={pageClamped <= 0}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                onClick={() => setPage(Math.max(0, pageClamped - 1))}
               >
                 Trước
               </Button>
@@ -232,7 +236,7 @@ export default function DriverCancelReviewPage() {
                 variant="outline"
                 size="sm"
                 disabled={pageClamped >= totalPages - 1}
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                onClick={() => setPage(Math.min(totalPages - 1, pageClamped + 1))}
               >
                 Sau
               </Button>

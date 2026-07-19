@@ -143,7 +143,9 @@ export function DriverDetailSheet({
       onDone();
       // Lịch sử khoá/mở khoá đổi ngay — refetch phần trong sheet. Trạng thái
       // isBanned/suspendedUntil hiển thị ở mục 1 do `stat` (prop cha) quyết định;
-      // cha cập nhật lại qua onDone (reload danh sách + chọn lại dòng mới).
+      // onDone() ở trên gọi `load` bên page.tsx, nơi này reload danh sách RỒI
+      // re-sync `selected` (= stat) về đúng dòng vừa cập nhật (cùng driverEntityId)
+      // — nên mục 1 (badge trạng thái, nút Gỡ khoá) tự cập nhật, không cần đóng/mở lại sheet.
       loadDetail(stat.driverEntityId);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Thao tác thất bại', description: err.message });
