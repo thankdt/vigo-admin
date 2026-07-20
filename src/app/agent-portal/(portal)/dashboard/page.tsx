@@ -10,9 +10,18 @@ import { CreateBookingDialog } from '@/app/(app)/bookings/components/create-book
 
 export default function AgentDashboardPage() {
   const [me, setMe] = React.useState<AgentMe | null>(null);
+  // Trong app (webview đặt hộ) app inject bridge `VigoApp`. Có bridge → card hoa hồng bấm được
+  // để thoát webview về màn ví hoa hồng native (khách: affiliate, tài xế: ví thưởng). Trên web
+  // thuần không có bridge → card giữ nguyên như cũ (chỉ hiển thị %), không tương tác.
+  const [inApp, setInApp] = React.useState(false);
 
   React.useEffect(() => {
     getAgentMe().then(setMe).catch(() => {});
+    setInApp(typeof window !== 'undefined' && !!(window as unknown as { VigoApp?: unknown }).VigoApp);
+  }, []);
+
+  const openCommissionWallet = React.useCallback(() => {
+    (window as unknown as { VigoApp?: { postMessage: (m: string) => void } }).VigoApp?.postMessage('open-commission');
   }, []);
 
   return (
@@ -23,7 +32,24 @@ export default function AgentDashboardPage() {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <Card>
+        <Card
+          {...(inApp
+            ? {
+                role: 'button' as const,
+                tabIndex: 0,
+                'aria-label': 'Xem ví hoa hồng',
+                onClick: openCommissionWallet,
+                onKeyDown: (e: React.KeyboardEvent) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openCommissionWallet();
+                  }
+                },
+                className:
+                  'cursor-pointer transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+              }
+            : {})}
+        >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
               <Percent className="h-4 w-4" /> Hoa hồng của bạn
@@ -32,6 +58,7 @@ export default function AgentDashboardPage() {
           <CardContent>
             <div className="text-3xl font-bold">{me?.commissionPercent != null ? `${me.commissionPercent}%` : '—'}</div>
             <p className="text-xs text-muted-foreground mt-1">Trên cước (trước VAT) mỗi đơn hoàn thành</p>
+            {inApp && <p className="text-xs text-primary mt-2 font-medium">Xem ví hoa hồng →</p>}
           </CardContent>
         </Card>
         <Card>
