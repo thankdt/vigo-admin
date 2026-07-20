@@ -1859,6 +1859,25 @@ export async function getAgentMe(): Promise<AgentMe> {
 export async function listAgentOrders(page = 1, limit = 20): Promise<{ data: AgentOrder[]; meta: any }> {
   return unwrap(await fetchWithAuth(`/agent/orders?page=${page}&limit=${limit}`));
 }
+
+// Đặt hộ chuyến-thường (POST /agent/bookings) → "Đơn của tôi". Slim shape from the backend.
+export type AgentBooking = {
+  id: string;
+  status: string;
+  serviceType: 'RIDE' | 'DELIVERY' | 'CARPOOL';
+  pickupAddress: { address?: string } | null;
+  dropoffAddress: { address?: string } | null;
+  finalPrice: number | null;
+  agentCommissionAmount: number | null;
+  agentCommissionPercent: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  passengerNames: string[] | null;
+  createdAt: string;
+};
+export async function listAgentBookings(page = 1, limit = 50): Promise<{ data: AgentBooking[]; meta: any }> {
+  return unwrap(await fetchWithAuth(`/agent/bookings?page=${page}&limit=${limit}`));
+}
 export async function getAgentOrder(id: string): Promise<AgentOrder> {
   return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}`));
 }
