@@ -40,6 +40,7 @@ import {
   Receipt,
   MessageSquare,
   ShieldAlert,
+  TrendingDown,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -75,6 +76,7 @@ const navItems = [
   { href: '/app-popups', label: 'Popup quảng cáo', icon: Megaphone },
   { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
   { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
+  { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
 ];
 
 // Error Boundary to prevent full page crash

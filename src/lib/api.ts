@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -2262,4 +2262,26 @@ export async function updateLeakageTraceStatus(id: string, status: LeakageTraceS
     method: 'PATCH',
     body: JSON.stringify({ status }),
   });
+}
+
+export async function getDriverCancelStats(from?: string, to?: string): Promise<DriverCancelStat[]> {
+  const q = new URLSearchParams();
+  if (from) q.set('from', from);
+  if (to) q.set('to', to);
+  const qs = q.toString();
+  const res = await fetchWithAuth(`/admin/driver-cancel-stats${qs ? `?${qs}` : ''}`);
+  return unwrap<DriverCancelStat[]>(res);
+}
+
+// Per-driver list of cancelled trips backing the detail sheet's "Danh sách chuyến
+// huỷ". Anchored on cancelledAt (not createdAt) and does NOT exclude VINOW/test
+// bookings the way the stats row's customerCancels does — counts can legitimately
+// differ, see DriverCancelTrip's doc comment.
+export async function getDriverCancelDetail(driverId: string, from?: string, to?: string): Promise<DriverCancelTrip[]> {
+  const q = new URLSearchParams();
+  if (from) q.set('from', from);
+  if (to) q.set('to', to);
+  const qs = q.toString();
+  const res = await fetchWithAuth(`/admin/driver-cancel-stats/${driverId}/detail${qs ? `?${qs}` : ''}`);
+  return unwrap<DriverCancelTrip[]>(res);
 }

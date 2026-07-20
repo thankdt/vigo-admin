@@ -496,3 +496,34 @@ export type LeakageTraceRow = {
     scheduledTime?: string | null;
   } | null;
 };
+
+export type DriverCancelStat = {
+  driverEntityId: string;
+  driverUserId: string;
+  fullName: string | null;
+  phone: string;
+  assignedTrips: number;
+  customerCancels: number;
+  ratePct: number;
+  cancelRuleAStrikes: number;
+  suspendedUntil: string | null;
+  isBanned: boolean;
+  depositForfeitFlagged: boolean;
+  lastAlertReason: string | null;
+  lastAlertAt: string | null;
+};
+
+/** One customer-cancelled trip for a driver, anchored on `cancelledAt` — NOT
+ *  the same population as DriverCancelStat.customerCancels (that one filters
+ *  out VINOW + test bookings and anchors on createdAt). See driver-detail-sheet.tsx. */
+export type DriverCancelTrip = {
+  bookingId: string;
+  cancelledAt: string;
+  acceptedAt: string | null;
+  minutesToCancel: number | null;
+  cancelReason: string | null;
+  cancelledByRole: string | null;
+  pickupAddress: any;
+  dropoffAddress: any;
+  isVinow: boolean;
+};
