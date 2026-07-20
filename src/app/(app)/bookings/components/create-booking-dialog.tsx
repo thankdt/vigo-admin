@@ -118,9 +118,9 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
     }
   };
 
-  const handleEstimate = async () => {
+  const handleEstimate = async (silent = false) => {
     if (!pickup || !dropoff) {
-      toast({ variant: 'destructive', title: 'Lỗi', description: 'Chọn điểm đón và điểm trả trước khi tính giá.' });
+      if (!silent) toast({ variant: 'destructive', title: 'Lỗi', description: 'Chọn điểm đón và điểm trả trước khi tính giá.' });
       return;
     }
     setEstimating(true);
@@ -140,7 +140,8 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
       setPriceEstimate(final);
       setEstimateOriginal(res.priceBeforeDiscount ?? final);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Tính giá thất bại', description: err.message });
+      clearEstimate();
+      if (!silent) toast({ variant: 'destructive', title: 'Tính giá thất bại', description: err.message });
     } finally {
       setEstimating(false);
     }
@@ -152,6 +153,16 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
   const [isScheduled, setIsScheduled] = React.useState(false);
   const [scheduledFrom, setScheduledFrom] = React.useState('');
   const [scheduledTo, setScheduledTo] = React.useState('');
+
+  // Auto tính giá: mỗi khi input ảnh hưởng giá đổi (đã chọn đón/trả), tự tính lại sau 600ms
+  // (debounce để khỏi spam BE). Thay cho việc bấm nút "Tính giá" thủ công.
+  React.useEffect(() => {
+    if (!open) return;
+    if (!pickup || !dropoff) { clearEstimate(); return; }
+    const t = setTimeout(() => { handleEstimate(true); }, 600);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, pickup, dropoff, serviceType, vehicleType, totalPassengers, selectedPromotionId, isScheduled, scheduledFrom]);
 
   // Driver selection
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
@@ -579,7 +590,7 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
               </SelectContent>
             </Select>
             {selectedPromotionId != null ? (
-              <p className="text-xs text-muted-foreground">Bấm "Tính giá" để xem giá sau khi áp khuyến mãi.</p>
+              <p className="text-xs text-muted-foreground">Giá dự kiến tự cập nhật sau khi áp khuyến mãi.</p>
             ) : selectableVouchers.length === 0 ? (
               <p className="text-xs text-muted-foreground">
                 {vouchers.length === 0
@@ -589,32 +600,31 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
             ) : null}
           </div>
 
-          {/* Price estimate */}
-          <div className="flex items-center justify-between rounded-lg border p-3">
-            <div>
-              <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-                <Calculator className="h-4 w-4" /> Giá dự kiến
-              </div>
-              {priceEstimate != null ? (
-                <div>
-                  {estimateSavings > 0 && (
-                    <div className="text-xs text-muted-foreground line-through">{fmtVnd(estimateOriginal!)} đ</div>
-                  )}
-                  <div className="text-lg font-bold text-primary">{fmtVnd(priceEstimate)} đ</div>
-                  {estimateSavings > 0 ? (
-                    <div className="text-xs font-medium text-green-600 dark:text-green-400">Đã giảm {fmtVnd(estimateSavings)} đ</div>
-                  ) : selectedPromotionId != null ? (
-                    <div className="text-xs text-amber-600">Khuyến mãi chưa áp dụng (chưa đạt đơn tối thiểu hoặc không hợp lệ).</div>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">Chọn điểm đón/trả{serviceType === 'RIDE' ? ' + loại xe' : ''} rồi bấm Tính giá.</p>
-              )}
+          {/* Price estimate — tự động tính (debounce) khi đủ điểm đón/trả */}
+          <div className="rounded-lg border p-3">
+            <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+              <Calculator className="h-4 w-4" /> Giá dự kiến
+              {estimating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             </div>
-            <Button type="button" variant="outline" onClick={handleEstimate} disabled={estimating || !pickup || !dropoff}>
-              {estimating ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Calculator className="mr-1.5 h-4 w-4" />}
-              Tính giá
-            </Button>
+            {priceEstimate != null ? (
+              <div className="mt-1">
+                {estimateSavings > 0 && (
+                  <div className="text-xs text-muted-foreground line-through">{fmtVnd(estimateOriginal!)} đ</div>
+                )}
+                <div className="text-lg font-bold text-primary">{fmtVnd(priceEstimate)} đ</div>
+                {estimateSavings > 0 ? (
+                  <div className="text-xs font-medium text-green-600 dark:text-green-400">Đã giảm {fmtVnd(estimateSavings)} đ</div>
+                ) : selectedPromotionId != null ? (
+                  <div className="text-xs text-amber-600">Khuyến mãi chưa áp dụng (chưa đạt đơn tối thiểu hoặc không hợp lệ).</div>
+                ) : null}
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground mt-1">
+                {estimating
+                  ? 'Đang tính giá…'
+                  : `Chọn điểm đón/trả${serviceType === 'RIDE' ? ' + loại xe' : ''} để tự tính giá.`}
+              </p>
+            )}
           </div>
 
           {/* Scheduled Trip */}

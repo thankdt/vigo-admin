@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter,
-  SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset,
+  SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { LayoutDashboard, LogOut, Store, ListOrdered, PlusCircle } from 'lucide-react';
 import { getAgentMe } from '@/lib/api';
@@ -82,6 +82,14 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
+        {/* Mobile header: sidebar is hidden on small screens (webview), so give a hamburger to
+            open the nav — otherwise there's no way to move between pages / go back. */}
+        <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background p-3 md:hidden">
+          <SidebarTrigger />
+          <Link href="/agent-portal/dashboard" className="flex items-center gap-2 font-semibold">
+            <Store className="h-5 w-5 text-primary" /> Vigo Đặt hộ
+          </Link>
+        </header>
         <div className="p-6 max-w-5xl mx-auto w-full">{children}</div>
       </SidebarInset>
     </SidebarProvider>
