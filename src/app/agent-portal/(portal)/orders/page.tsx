@@ -38,6 +38,8 @@ export default function AgentOrdersPage() {
   const [bookings, setBookings] = React.useState<AgentBooking[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // Two-step inline confirm — window.confirm() is a no-op inside the in-app webview.
+  const [confirmId, setConfirmId] = React.useState<string | null>(null);
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -50,11 +52,11 @@ export default function AgentOrdersPage() {
   React.useEffect(() => { load(); }, [load]);
 
   const doCancel = async (id: string) => {
-    if (!confirm('Huỷ đơn đặt hộ này?')) return;
     setBusyId(id);
     try {
       await cancelAgentBooking(id);
       toast({ title: 'Đã huỷ đơn' });
+      setConfirmId(null);
       load();
     } catch (e: any) {
       toast({ variant: 'destructive', title: 'Không huỷ được', description: e?.message });
@@ -112,16 +114,38 @@ export default function AgentOrdersPage() {
                       </div>
                     )}
                     {CANCELLABLE.has(b.status) && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive h-7 px-2"
-                        onClick={() => doCancel(b.id)}
-                        disabled={busyId === b.id}
-                      >
-                        {busyId === b.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <XCircle className="mr-1 h-3.5 w-3.5" />}
-                        Huỷ
-                      </Button>
+                      confirmId === b.id ? (
+                        <div className="flex justify-end gap-1">
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => doCancel(b.id)}
+                            disabled={busyId === b.id}
+                          >
+                            {busyId === b.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                            Xác nhận huỷ
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2"
+                            onClick={() => setConfirmId(null)}
+                            disabled={busyId === b.id}
+                          >
+                            Không
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive h-7 px-2"
+                          onClick={() => setConfirmId(b.id)}
+                        >
+                          <XCircle className="mr-1 h-3.5 w-3.5" /> Huỷ
+                        </Button>
+                      )
                     )}
                   </div>
                 </div>
