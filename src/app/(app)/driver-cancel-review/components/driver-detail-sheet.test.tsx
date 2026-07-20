@@ -50,6 +50,8 @@ beforeEach(() => {
       cancelledAt: '2026-07-15T02:00:00Z',
       acceptedAt: '2026-07-15T01:50:00Z',
       minutesToCancel: 10,
+      secondsToCancel: 600,
+      durationFromCreated: false,
       cancelReason: 'Đổi ý',
       cancelledByRole: 'CUSTOMER',
       pickupAddress: { address: 'Hà Nội' },
@@ -99,6 +101,31 @@ describe('DriverDetailSheet', () => {
     expect(
       screen.getByText(/Danh sách mọi chuyến khách huỷ trong khoảng/),
     ).toBeInTheDocument();
+  });
+
+  it('shows seconds-precision duration with the "từ lúc đặt" note when anchored on createdAt', async () => {
+    vi.mocked(getDriverCancelDetail).mockResolvedValue([
+      {
+        bookingId: 'b2',
+        cancelledAt: '2026-07-15T02:00:00Z',
+        acceptedAt: null,
+        minutesToCancel: 0,
+        secondsToCancel: 45,
+        durationFromCreated: true,
+        cancelReason: 'Đổi ý',
+        cancelledByRole: 'CUSTOMER',
+        pickupAddress: { address: 'Hà Nội' },
+        dropoffAddress: { address: 'Hưng Yên' },
+        isVinow: false,
+      },
+    ]);
+    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    // "45 giây" and "(từ lúc đặt)" sit in separate text nodes (the latter inside
+    // its own <span> for muted styling), so RTL's default text matcher — which
+    // only concatenates an element's OWN direct text-node children, not nested
+    // elements — can't match a single regex spanning both. Assert separately.
+    expect(await screen.findByText(/45 giây/)).toBeInTheDocument();
+    expect(screen.getByText(/từ lúc đặt/)).toBeInTheDocument();
   });
 
   it('shows an empty state when there are no cancelled trips', async () => {

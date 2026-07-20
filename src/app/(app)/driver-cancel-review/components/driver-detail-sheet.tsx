@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { formatDurationVi } from '@/lib/format-duration';
 import {
   getDriverCancelDetail,
   getDriverApprovalHistory,
@@ -226,7 +227,8 @@ export function DriverDetailSheet({
                     <div className="flex flex-wrap items-center justify-between gap-1">
                       <span className="font-medium">{formatVnDateTime(t.cancelledAt)}</span>
                       <span className="text-xs text-muted-foreground">
-                        Huỷ sau {t.minutesToCancel != null ? `${t.minutesToCancel} phút` : '—'}
+                        Huỷ sau {formatDurationVi(t.secondsToCancel)}
+                        {t.durationFromCreated ? <span className="text-muted-foreground"> (từ lúc đặt)</span> : null}
                       </span>
                     </div>
                     <div className="text-muted-foreground">
