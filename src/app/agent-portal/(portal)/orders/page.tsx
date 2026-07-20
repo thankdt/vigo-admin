@@ -6,21 +6,29 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { listAgentBookings, AgentBooking } from '@/lib/api';
-import { RefreshCw, Loader2, MapPin } from 'lucide-react';
+import { listAgentBookings, cancelAgentBooking, AgentBooking } from '@/lib/api';
+import { RefreshCw, Loader2, MapPin, XCircle } from 'lucide-react';
 
 // Booking statuses (chuyến thường). Unknown → shown as-is (outline).
 const STATUS_META: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   PENDING: { label: 'Chờ xử lý', variant: 'outline' },
+  CREATED: { label: 'Đã tạo', variant: 'outline' },
   SEARCHING: { label: 'Đang tìm xe', variant: 'secondary' },
   SCHEDULED: { label: 'Đã hẹn giờ', variant: 'secondary' },
   ACCEPTED: { label: 'Đã nhận', variant: 'default' },
-  DRIVER_ARRIVED: { label: 'Tài xế đã đến', variant: 'default' },
+  ARRIVED: { label: 'Tài xế đã đến', variant: 'default' },
+  PICKED_UP: { label: 'Đã đón khách', variant: 'default' },
   IN_PROGRESS: { label: 'Đang chạy', variant: 'default' },
   COMPLETED: { label: 'Hoàn thành', variant: 'default' },
   CANCELLED: { label: 'Đã huỷ', variant: 'destructive' },
 };
 const statusMeta = (s: string) => STATUS_META[s] ?? { label: s, variant: 'outline' as const };
+
+// Có thể huỷ khi chưa hoàn thành / chưa đón khách. Backend là nguồn quyết định cuối (phí huỷ, chính sách).
+const CANCELLABLE = new Set([
+  'CREATED', 'SEARCHING', 'PENDING', 'PENDING_MATCHING', 'PENDING_CONFIRMATION',
+  'AWAITING_CLAIM', 'PROCESSING', 'SCHEDULED', 'DELAYED_WAITING', 'ACCEPTED', 'ARRIVED',
+]);
 
 const fmtVnd = (n: number | null | undefined) => (n == null ? '—' : `${n.toLocaleString('vi-VN')}₫`);
 const addr = (a: { address?: string } | null | undefined) => a?.address ?? '—';
@@ -29,6 +37,7 @@ export default function AgentOrdersPage() {
   const { toast } = useToast();
   const [bookings, setBookings] = React.useState<AgentBooking[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [busyId, setBusyId] = React.useState<string | null>(null);
 
   const load = React.useCallback(() => {
     setLoading(true);
@@ -39,6 +48,20 @@ export default function AgentOrdersPage() {
   }, [toast]);
 
   React.useEffect(() => { load(); }, [load]);
+
+  const doCancel = async (id: string) => {
+    if (!confirm('Huỷ đơn đặt hộ này?')) return;
+    setBusyId(id);
+    try {
+      await cancelAgentBooking(id);
+      toast({ title: 'Đã huỷ đơn' });
+      load();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Không huỷ được', description: e?.message });
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -81,12 +104,24 @@ export default function AgentOrdersPage() {
                       </div>
                     )}
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 space-y-1">
                     <div className="text-sm font-semibold">{fmtVnd(b.finalPrice)}</div>
                     {b.agentCommissionAmount != null && (
                       <div className="text-xs font-medium text-green-600 dark:text-green-400">
                         HH: {fmtVnd(b.agentCommissionAmount)}
                       </div>
+                    )}
+                    {CANCELLABLE.has(b.status) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="text-destructive h-7 px-2"
+                        onClick={() => doCancel(b.id)}
+                        disabled={busyId === b.id}
+                      >
+                        {busyId === b.id ? <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" /> : <XCircle className="mr-1 h-3.5 w-3.5" />}
+                        Huỷ
+                      </Button>
                     )}
                   </div>
                 </div>

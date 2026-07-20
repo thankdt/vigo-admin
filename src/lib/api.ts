@@ -1878,6 +1878,16 @@ export type AgentBooking = {
 export async function listAgentBookings(page = 1, limit = 50): Promise<{ data: AgentBooking[]; meta: any }> {
   return unwrap(await fetchWithAuth(`/agent/bookings?page=${page}&limit=${limit}`));
 }
+export async function cancelAgentBooking(id: string, reason?: string): Promise<void> {
+  const res = await fetchWithAuth(`/agent/bookings/${id}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Không huỷ được đơn');
+  }
+}
 export async function getAgentOrder(id: string): Promise<AgentOrder> {
   return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}`));
 }
