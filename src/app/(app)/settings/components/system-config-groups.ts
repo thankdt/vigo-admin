@@ -37,3 +37,21 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
 
 export const groupIdFor = (key: string) =>
   (CONFIG_GROUPS.find((g) => g.match(key)) ?? CONFIG_GROUPS[CONFIG_GROUPS.length - 1]).id;
+
+// Chia config vào nhóm, áp filter tìm kiếm + gate quyền (RBAC). `canGroup(groupId)` do
+// caller cung cấp (super -> luôn true). Chỉ trả nhóm user có quyền VÀ có ít nhất 1 item
+// khớp query. Tách thuần để test không cần render cả manager (jsdom/Radix).
+export function buildConfigGroups<T extends { key: string; description?: string | null }>(
+  configs: T[],
+  query: string,
+  canGroup: (groupId: string) => boolean,
+): { group: ConfigGroup; items: T[] }[] {
+  const q = query.trim().toLowerCase();
+  const visible = q
+    ? configs.filter((c) => c.key.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q))
+    : configs;
+  return CONFIG_GROUPS
+    .filter((g) => canGroup(g.id))
+    .map((g) => ({ group: g, items: visible.filter((c) => groupIdFor(c.key) === g.id) }))
+    .filter((entry) => entry.items.length > 0);
+}

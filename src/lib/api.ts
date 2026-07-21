@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -2388,4 +2388,67 @@ export async function getDriverCancelDetail(driverId: string, from?: string, to?
   const qs = q.toString();
   const res = await fetchWithAuth(`/admin/driver-cancel-stats/${driverId}/detail${qs ? `?${qs}` : ''}`);
   return unwrap<DriverCancelTrip[]>(res);
+}
+
+// --- RBAC (phân quyền admin theo function) ---
+// Admin-only endpoints; backend là nguồn an ninh, các hàm này chỉ phục vụ UI gating.
+
+// Quyền hiệu lực của admin đang đăng nhập (functions rỗng nếu super = thấy tất).
+export async function getAdminMe(): Promise<AdminMe> {
+  const res = await fetchWithAuth('/admin/me');
+  return unwrap<AdminMe>(res);
+}
+
+// Đăng xuất ĐÚNG: gọi backend (best-effort) rồi xoá CẢ hai token. UserNav cũ chỉ xoá
+// access_token — refresh_token còn lại có thể tự đăng nhập lại (spec §5.4).
+export async function logout(): Promise<void> {
+  try {
+    await fetchWithAuth('/auth/logout', { method: 'POST' });
+  } catch {
+    /* best-effort — vẫn xoá token cục bộ dù backend lỗi/hết hạn */
+  }
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('refresh_token');
+  }
+}
+
+// CRUD role (super-only ở backend).
+export async function adminListRoles(): Promise<AdminRole[]> {
+  const res = await fetchWithAuth('/admin/roles');
+  return unwrap<AdminRole[]>(res);
+}
+export async function adminCreateRole(body: { key: string; name: string; description?: string; functions: string[] }): Promise<AdminRole> {
+  const res = await fetchWithAuth('/admin/roles', { method: 'POST', body: JSON.stringify(body) });
+  return unwrap<AdminRole>(res);
+}
+export async function adminUpdateRole(id: string, body: Partial<{ name: string; description: string; functions: string[] }>): Promise<AdminRole> {
+  const res = await fetchWithAuth(`/admin/roles/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+  return unwrap<AdminRole>(res);
+}
+export async function adminDeleteRole(id: string): Promise<void> {
+  await fetchWithAuth(`/admin/roles/${id}`, { method: 'DELETE' });
+}
+
+// Catalog function (key + nhãn + nhóm) để UI render danh sách tick.
+export async function adminGetFunctions(): Promise<FunctionCatalogItem[]> {
+  const res = await fetchWithAuth('/admin/functions');
+  return unwrap<FunctionCatalogItem[]>(res);
+}
+
+// Danh sách user admin cho màn gán quyền (kèm isSuperAdmin + role/override hiện tại).
+export async function adminListAssignableUsers(): Promise<AdminAssignmentUser[]> {
+  const res = await fetchWithAuth('/admin/users?role=ADMIN');
+  return unwrap<AdminAssignmentUser[]>(res);
+}
+
+// Gán role / override / cờ super cho 1 user admin (set-replace, last-write-wins).
+export async function adminSetUserRoles(userId: string, roleIds: string[]): Promise<void> {
+  await fetchWithAuth(`/admin/users/${userId}/roles`, { method: 'POST', body: JSON.stringify({ roleIds }) });
+}
+export async function adminSetUserOverrides(userId: string, overrides: FunctionOverride[]): Promise<void> {
+  await fetchWithAuth(`/admin/users/${userId}/overrides`, { method: 'PUT', body: JSON.stringify({ overrides }) });
+}
+export async function adminSetUserSuper(userId: string, value: boolean): Promise<void> {
+  await fetchWithAuth(`/admin/users/${userId}/super`, { method: 'PATCH', body: JSON.stringify({ value }) });
 }

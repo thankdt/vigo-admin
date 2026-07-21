@@ -66,13 +66,40 @@ export type AppPopup = {
   deletedAt: string | null;
 };
 
-export type Role = {
+// --- RBAC (phân quyền admin theo function) ---
+// Shape khớp backend GET /admin/me và CRUD role. functions rỗng khi super (super = thấy tất).
+export type AdminMe = {
   id: string;
-  name: 'Admin' | 'Editor' | 'Viewer';
-  description: string;
-  userCount: number;
-  permissions: Permission[];
+  fullName: string | null;
+  phone: string;
+  isSuperAdmin: boolean;
+  functions: string[];
 };
+
+export type AdminRole = {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  functions: string[];
+};
+
+export type FunctionOverride = { functionKey: string; effect: 'GRANT' | 'REVOKE' };
+
+// User admin trên màn gán quyền (/roles). Backend query addSelect isSuperAdmin + load
+// role/override (spec §4.6). Chỉ dùng ở admin, không rò ra mobile.
+export type AdminAssignmentUser = {
+  id: string;
+  fullName: string | null;
+  phone: string;
+  isSuperAdmin: boolean;
+  roleIds: string[];
+  overrides: FunctionOverride[];
+};
+
+// Catalog function cho UI render (GET /admin/functions): key + nhãn + nhóm.
+export type FunctionCatalogItem = { key: string; label: string; group: string };
 
 export type TransportCompany = {
   id: string;
@@ -315,20 +342,8 @@ export type Booking = {
   } | null;
 }
 
-export type Permission =
-  | 'users:create' | 'users:read' | 'users:update' | 'users:delete'
-  | 'content:create' | 'content:read' | 'content:update' | 'content:delete'
-  | 'roles:create' | 'roles:read' | 'roles:update' | 'roles:delete'
-  | 'reports:generate' | 'analytics:view'
-  | 'settings:update';
-
-export const allPermissions: Permission[] = [
-  'users:create', 'users:read', 'users:update', 'users:delete',
-  'content:create', 'content:read', 'content:update', 'content:delete',
-  'roles:create', 'roles:read', 'roles:update', 'roles:delete',
-  'reports:generate', 'analytics:view',
-  'settings:update'
-];
+// Permission/allPermissions mock cũ (action:resource string) đã bỏ — RBAC nay theo
+// function key (xem AdminRole.functions + src/lib/rbac.ts).
 
 // Master Data Types
 export type AdminUnit = {

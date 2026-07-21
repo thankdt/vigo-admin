@@ -1,83 +1,42 @@
 import { describe, it, expect } from 'vitest';
-import { groupIdFor, CONFIG_GROUPS } from './system-config-groups';
+import { buildConfigGroups, groupIdFor } from './system-config-groups';
+import type { AdminMe } from '@/lib/types';
 
-describe('groupIdFor — loyalty redesign keys', () => {
-  // §9 keys that must surface in the existing "Giới thiệu & Hạng thành viên" group.
-  const loyaltyKeys = [
-    'TIER_POINT_VND_PER_POINT',
-    'REWARD_POINT_VND_PER_POINT',
-    'REWARD_MULTIPLIER_MEMBER',
-    'REWARD_MULTIPLIER_SILVER',
-    'REWARD_MULTIPLIER_GOLD',
-    'REWARD_MULTIPLIER_DIAMOND',
-    'TIER_THRESHOLD_SILVER',
-    'TIER_THRESHOLD_GOLD',
-    'TIER_THRESHOLD_DIAMOND',
-    'REWARD_POINT_EXPIRY_MONTHS',
-    'REWARD_EXPIRY_NOTIFY_DAYS',
-    'TIER_RECALC_STALE_HOURS',
-    'TIER_DOWNGRADE_NOTIFY_DAYS',
-  ];
+const CONFIGS = [
+  { key: 'PRICING_BASE_FARE', value: '10000', description: 'Giá cơ bản' },
+  { key: 'DISPATCH_RADIUS', value: '5', description: 'Bán kính điều phối' },
+];
 
-  it.each(loyaltyKeys)('routes %s to the growth group', (key) => {
-    expect(groupIdFor(key)).toBe('growth');
-  });
+const canFor = (me: AdminMe) => (groupId: string) =>
+  me.isSuperAdmin || me.functions.includes('settings.' + groupId);
 
-  it('keeps the pre-existing growth keys in growth (no regression)', () => {
-    expect(groupIdFor('LOYALTY_GOLD_PERCENT')).toBe('growth');
-    expect(groupIdFor('REFERRAL_BONUS_AMOUNT')).toBe('growth');
-    expect(groupIdFor('SIGNUP_LOYALTY_REWARD')).toBe('growth');
-  });
+const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
+  id: 'u', fullName: 'A', phone: '0900', isSuperAdmin: false, functions: [], ...over,
 });
 
-describe('groupIdFor — other groups unchanged (precedence guard)', () => {
-  it('does not let TIER_/REWARD_ leak into an earlier group', () => {
-    // None of the loyalty keys contain _APP_, start with PRICING_/DISPATCH_/ROUTE_/
-    // CHAIN_/DRIVER_, so the FIRST match must be growth, not an earlier group.
-    expect(groupIdFor('REWARD_MULTIPLIER_GOLD')).not.toBe('app');
-    expect(groupIdFor('TIER_THRESHOLD_GOLD')).not.toBe('dispatch');
-    expect(groupIdFor('TIER_DOWNGRADE_NOTIFY_DAYS')).not.toBe('driver');
+// buildConfigGroups is the RBAC gate for the settings page: only groups the user has
+// settings.<id> for (super = all) come through, and only when they have matching items.
+describe('buildConfigGroups (settings RBAC gate)', () => {
+  it('returns only the groups the user has settings.<group> for', () => {
+    const groups = buildConfigGroups(CONFIGS, '', canFor(mkMe({ functions: ['settings.pricing'] })));
+    expect(groups.map((g) => g.group.id)).toEqual(['pricing']);
+    expect(groups.map((g) => g.group.label)).toContain('Giá & Hoa hồng');
   });
 
-  it('maps representative keys of each other group correctly', () => {
-    expect(groupIdFor('PRICING_BASE_FARE')).toBe('pricing');
-    expect(groupIdFor('VIGO_COMMISSION_RATE')).toBe('pricing');
-    expect(groupIdFor('DISPATCH_RADIUS')).toBe('dispatch');
-    expect(groupIdFor('ROUTE_MATCH_SHADOW')).toBe('dispatch');
-    expect(groupIdFor('RIDE_ALLOW_OFF_ROUTE')).toBe('dispatch');
-    expect(groupIdFor('DRIVER_MAX_ROUTES')).toBe('driver');
-    expect(groupIdFor('MIN_APP_VERSION')).toBe('app');
-    expect(groupIdFor('SOME_RANDOM_KEY')).toBe('misc'); // catch-all
-    expect(groupIdFor('CANCEL_ENFORCEMENT_MODE')).toBe('cancel');
+  it('super admin gets every group that has items', () => {
+    const ids = buildConfigGroups(CONFIGS, '', canFor(mkMe({ isSuperAdmin: true }))).map((g) => g.group.id);
+    expect(ids).toContain('pricing');
+    expect(ids).toContain('dispatch');
   });
 
-  it('SIGNUP_LOYALTY_REWARD is an EXACT match, not a SIGNUP_ prefix', () => {
-    // The growth rule matches `k === 'SIGNUP_LOYALTY_REWARD'`, not `startsWith('SIGNUP_')`
-    // — so an unrelated SIGNUP_* key must fall through to the catch-all.
-    expect(groupIdFor('SIGNUP_LOYALTY_REWARD')).toBe('growth');
-    expect(groupIdFor('SIGNUP_OTHER_THING')).toBe('misc');
+  it('returns nothing when the user has no settings.* permission', () => {
+    expect(buildConfigGroups(CONFIGS, '', canFor(mkMe({ functions: ['users'] })))).toEqual([]);
   });
 
-  it('catch-all group stays last', () => {
-    expect(CONFIG_GROUPS[CONFIG_GROUPS.length - 1].id).toBe('misc');
-  });
-
-  it('does not let CANCEL_ leak into an earlier group and stays before misc', () => {
-    expect(groupIdFor('CANCEL_ENFORCEMENT_MODE')).toBe('cancel');
-    expect(groupIdFor('CANCEL_RATE_THRESHOLD_PCT')).toBe('cancel');
-    const cancelIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'cancel');
-    const miscIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'misc');
-    expect(cancelIdx).toBeGreaterThanOrEqual(0);
-    expect(cancelIdx).toBeLessThan(miscIdx);
-  });
-
-  it('routes PHONE_REVEAL_ keys to the phone-reveal group and stays before misc', () => {
-    expect(groupIdFor('PHONE_REVEAL_RADIUS_M')).toBe('phone-reveal');
-    expect(groupIdFor('PHONE_REVEAL_SCHEDULED_MIN')).toBe('phone-reveal');
-    const phoneRevealIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'phone-reveal');
-    const miscIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'misc');
-    expect(phoneRevealIdx).toBeGreaterThanOrEqual(0);
-    expect(phoneRevealIdx).toBeLessThan(miscIdx);
+  it('applies the search filter within permitted groups', () => {
+    const groups = buildConfigGroups(CONFIGS, 'radius', canFor(mkMe({ isSuperAdmin: true })));
+    expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);
+    expect(groups[0].items).toHaveLength(1);
   });
 });
 

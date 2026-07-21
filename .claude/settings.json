@@ -26,7 +26,8 @@
       "Bash(pkill -f \"next dev\")",
       "Bash(rm -rf .next)",
       "Bash(npm run *)",
-      "Bash(docker buildx *)"
+      "Bash(docker buildx *)",
+      "Bash(docker info *)"
     ],
     "ask": [
       "Bash(psql:*)",

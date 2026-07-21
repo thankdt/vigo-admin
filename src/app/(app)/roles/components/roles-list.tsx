@@ -3,163 +3,149 @@
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, Edit, Plus, Users, X } from 'lucide-react';
-import { mockRoles, allPermissions } from '@/lib/data';
-import type { Role, Permission } from '@/lib/types';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Checkbox } from '@/components/ui/checkbox';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
+import { Check, Edit, Loader2, Lock, Plus, PlusCircle, Trash2 } from 'lucide-react';
+import type { AdminRole } from '@/lib/types';
+import { adminListRoles, adminDeleteRole } from '@/lib/api';
+import { allFunctionKeys } from '@/lib/function-catalog';
+import { useToast } from '@/hooks/use-toast';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { RoleEditor } from './role-editor';
 
-function RoleForm({ role, onSave, onCancel }: { role: Role | Partial<Role>; onSave: (role: Role) => void; onCancel: () => void }) {
-  const [name, setName] = React.useState(role.name || '');
-  const [description, setDescription] = React.useState(role.description || '');
-  const [selectedPermissions, setSelectedPermissions] = React.useState<Permission[]>(role.permissions || []);
-
-  const handlePermissionChange = (permission: Permission, checked: boolean) => {
-    setSelectedPermissions(prev =>
-      checked ? [...prev, permission] : prev.filter(p => p !== permission)
-    );
-  };
-
-  const handleSubmit = () => {
-    // In a real app, you'd validate and send this to a server
-    const newRole: Role = {
-      id: role.id || Date.now().toString(),
-      name: name as Role['name'],
-      description: description,
-      userCount: role.userCount || 0,
-      permissions: selectedPermissions,
-    };
-    onSave(newRole);
-  };
-  
-  const groupedPermissions = allPermissions.reduce((acc, permission) => {
-    const group = permission.split(':')[0];
-    if (!acc[group]) {
-      acc[group] = [];
-    }
-    acc[group].push(permission);
-    return acc;
-  }, {} as Record<string, Permission[]>);
-
-
-  return (
-    <DialogContent className="sm:max-w-2xl">
-      <DialogHeader>
-        <DialogTitle>{role.id ? 'Sửa vai trò' : 'Tạo vai trò'}</DialogTitle>
-        <DialogDescription>Định nghĩa vai trò và quyền truy cập.</DialogDescription>
-      </DialogHeader>
-      <div className="space-y-4 py-4">
-        <div className="space-y-2">
-          <Label htmlFor="role-name">Tên vai trò</Label>
-          <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="role-description">Mô tả</Label>
-          <Input id="role-description" value={description} onChange={(e) => setDescription(e.target.value)} />
-        </div>
-        <div className="space-y-2">
-          <Label>Quyền hạn</Label>
-          <ScrollArea className="h-72 rounded-md border p-4">
-            <div className="space-y-4">
-              {Object.entries(groupedPermissions).map(([group, permissions], index) => (
-                <div key={group}>
-                  <h4 className="mb-2 text-sm font-medium capitalize tracking-tight">{group}</h4>
-                  <div className="grid grid-cols-2 gap-2">
-                    {permissions.map(p => (
-                      <div key={p} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={p}
-                          checked={selectedPermissions.includes(p)}
-                          onCheckedChange={(checked) => handlePermissionChange(p, !!checked)}
-                        />
-                        <label htmlFor={p} className="text-sm font-normal">
-                          {p.split(':')[1]}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                   {index < Object.keys(groupedPermissions).length - 1 && <Separator className="mt-4" />}
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        </div>
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={onCancel}>Hủy</Button>
-        <Button onClick={handleSubmit}>Lưu vai trò</Button>
-      </DialogFooter>
-    </DialogContent>
-  );
-}
+const TOTAL_FUNCTIONS = allFunctionKeys().length;
 
 export function RolesList() {
-  const [roles, setRoles] = React.useState(mockRoles);
-  const [isFormOpen, setIsFormOpen] = React.useState(false);
-  const [editingRole, setEditingRole] = React.useState<Role | null>(null);
+  const { toast } = useToast();
+  const [roles, setRoles] = React.useState<AdminRole[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  // undefined = dialog đóng · null = tạo mới · AdminRole = sửa.
+  const [editing, setEditing] = React.useState<AdminRole | null | undefined>(undefined);
+  const [deleting, setDeleting] = React.useState<AdminRole | null>(null);
 
-  const handleEdit = (role: Role) => {
-    setEditingRole(role);
-    setIsFormOpen(true);
+  const load = React.useCallback(async () => {
+    setLoading(true);
+    try {
+      setRoles(await adminListRoles());
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể tải danh sách vai trò', description: err?.message });
+    } finally {
+      setLoading(false);
+    }
+  }, [toast]);
+
+  React.useEffect(() => { load(); }, [load]);
+
+  const confirmDelete = async () => {
+    if (!deleting || deleting.isSystem) return;
+    try {
+      await adminDeleteRole(deleting.id);
+      toast({ title: 'Đã xoá', description: `Vai trò "${deleting.name}" đã được xoá.` });
+      setDeleting(null);
+      load();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể xoá vai trò', description: err?.message });
+    }
   };
-  
-  const handleSave = (roleToSave: Role) => {
-    setRoles(prevRoles => {
-      const existing = prevRoles.find(r => r.id === roleToSave.id);
-      if (existing) {
-        return prevRoles.map(r => r.id === roleToSave.id ? roleToSave : r);
-      }
-      return [...prevRoles, roleToSave];
-    });
-    setIsFormOpen(false);
-    setEditingRole(null);
-  }
 
   return (
     <>
-      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {roles.map((role) => (
-          <Card key={role.id}>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>{role.name}</CardTitle>
-                <Button variant="ghost" size="icon" onClick={() => handleEdit(role)}>
-                  <Edit className="h-4 w-4" />
-                </Button>
-              </div>
-              <CardDescription>{role.description}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm font-medium">Quyền hạn ({role.permissions.length}/{allPermissions.length})</div>
-              <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
-                {role.permissions.slice(0, 5).map(p => (
-                  <li key={p} className="flex items-center gap-2">
-                    <Check className="h-3 w-3 text-green-500" /> <span>{p}</span>
-                  </li>
-                ))}
-                 {role.permissions.length > 5 && (
-                  <li className="flex items-center gap-2">
-                    <Plus className="h-3 w-3" /> <span>và {role.permissions.length - 5} quyền khác...</span>
-                  </li>
-                )}
-              </ul>
-            </CardContent>
-            <CardFooter>
-                <div className="flex items-center text-sm text-muted-foreground">
-                    <Users className="mr-2 h-4 w-4" />
-                    {role.userCount} người dùng
-                </div>
-            </CardFooter>
-          </Card>
-        ))}
+      <div className="flex justify-end">
+        <Button onClick={() => setEditing(null)}>
+          <PlusCircle className="mr-2 h-4 w-4" />
+          Thêm vai trò
+        </Button>
       </div>
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        {editingRole && <RoleForm role={editingRole} onSave={handleSave} onCancel={() => setIsFormOpen(false)} />}
+
+      {loading ? (
+        <div className="flex h-48 items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      ) : roles.length === 0 ? (
+        <div className="py-12 text-center text-sm text-muted-foreground">Chưa có vai trò nào.</div>
+      ) : (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {roles.map((role) => (
+            <Card key={role.id}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    {role.name}
+                    {role.isSystem && <Lock className="h-3.5 w-3.5 text-muted-foreground" aria-label="Vai trò hệ thống" />}
+                  </CardTitle>
+                  <div className="flex items-center">
+                    <Button variant="ghost" size="icon" onClick={() => setEditing(role)} aria-label="Sửa">
+                      <Edit className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDeleting(role)}
+                      disabled={role.isSystem}
+                      aria-label="Xoá"
+                      title={role.isSystem ? 'Vai trò hệ thống — không thể xoá' : 'Xoá'}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+                <CardDescription>{role.description}</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm font-medium">Quyền ({role.functions.length}/{TOTAL_FUNCTIONS})</div>
+                <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+                  {role.functions.slice(0, 5).map((fn) => (
+                    <li key={fn} className="flex items-center gap-2">
+                      <Check className="h-3 w-3 text-green-500" /> <span>{fn}</span>
+                    </li>
+                  ))}
+                  {role.functions.length > 5 && (
+                    <li className="flex items-center gap-2">
+                      <Plus className="h-3 w-3" /> <span>và {role.functions.length - 5} quyền khác…</span>
+                    </li>
+                  )}
+                </ul>
+              </CardContent>
+              <CardFooter className="text-xs text-muted-foreground">
+                {role.isSystem ? 'Vai trò hệ thống' : 'Vai trò tuỳ chỉnh'}
+              </CardFooter>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <Dialog open={editing !== undefined} onOpenChange={(o) => { if (!o) setEditing(undefined); }}>
+        <DialogContent className="sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{editing ? 'Sửa vai trò' : 'Tạo vai trò'}</DialogTitle>
+            <DialogDescription>Định nghĩa vai trò và các function được phép truy cập.</DialogDescription>
+          </DialogHeader>
+          {editing !== undefined && (
+            <RoleEditor
+              role={editing}
+              onCancel={() => setEditing(undefined)}
+              onSaved={() => { setEditing(undefined); load(); }}
+            />
+          )}
+        </DialogContent>
       </Dialog>
+
+      <AlertDialog open={deleting !== null} onOpenChange={(o) => { if (!o) setDeleting(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xoá vai trò “{deleting?.name}”?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Người dùng đang gán vai trò này sẽ mất các quyền tương ứng. Hành động không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Huỷ</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete}>Xoá</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

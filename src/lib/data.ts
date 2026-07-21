@@ -1,4 +1,4 @@
-import type { User, Article, Role, Permission } from './types';
+import type { User, Article } from './types';
 import placeholderData from './placeholder-images.json';
 
 const { placeholderImages } = placeholderData;
@@ -25,35 +25,8 @@ export const mockArticles: Article[] = [
   { id: '5', title: 'Understanding Blockchain Technology', author: 'Patricia Williams', status: 'Published', createdAt: '2024-05-22', imageUrl: getPlaceholderImageUrl('article5') },
 ];
 
-const adminPermissions: Permission[] = [
-  'users:create', 'users:read', 'users:update', 'users:delete',
-  'content:create', 'content:read', 'content:update', 'content:delete',
-  'roles:create', 'roles:read', 'roles:update', 'roles:delete',
-  'reports:generate', 'analytics:view', 'settings:update'
-];
-
-const editorPermissions: Permission[] = [
-  'content:create', 'content:read', 'content:update',
-  'analytics:view'
-];
-
-const viewerPermissions: Permission[] = [
-  'content:read', 'analytics:view'
-];
-
-export const mockRoles: Role[] = [
-  { id: '1', name: 'Admin', description: 'Has full access to all features and settings.', userCount: 1, permissions: adminPermissions },
-  { id: '2', name: 'Editor', description: 'Can create, edit, and manage content.', userCount: 3, permissions: editorPermissions },
-  { id: '3', name: 'Viewer', description: 'Has read-only access to content and analytics.', userCount: 2, permissions: viewerPermissions },
-];
-
-export const allPermissions: Permission[] = [
-  'users:create', 'users:read', 'users:update', 'users:delete',
-  'content:create', 'content:read', 'content:update', 'content:delete',
-  'roles:create', 'roles:read', 'roles:update', 'roles:delete',
-  'reports:generate', 'analytics:view',
-  'settings:update'
-];
+// RBAC mock (mockRoles/allPermissions/Permission) đã bỏ — /roles nay dùng API thật
+// (adminListRoles + function-catalog). Xem [[admin-rbac-frontend]].
 
 export const userSignupsData = [
   { date: 'Jan 24', "New Users": 23 },

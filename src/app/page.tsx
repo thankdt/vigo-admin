@@ -6,10 +6,24 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Logo } from '@/components/logo';
-import { login } from '@/lib/api';
+import { login, getAdminMe } from '@/lib/api';
+import { firstAllowedRoute } from '@/lib/rbac';
+import { navItems } from '@/lib/nav-items';
 import React from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+
+// Route đích sau đăng nhập = mục ĐẦU TIÊN user có quyền (không mù quáng /dashboard —
+// user không có function 'dashboard' sẽ bị route guard đá sang /no-access, gây nhấp nháy).
+// getAdminMe cần token (đã set sau login). Lỗi -> để /dashboard, guard tự xử lý.
+async function resolveLanding(): Promise<string> {
+  try {
+    const me = await getAdminMe();
+    return firstAllowedRoute(me, navItems.map((i) => i.href));
+  } catch {
+    return '/dashboard';
+  }
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -21,7 +35,7 @@ export default function LoginPage() {
   React.useEffect(() => {
     const token = localStorage.getItem('access_token');
     if (token) {
-      router.replace('/dashboard');
+      resolveLanding().then((route) => router.replace(route));
     }
   }, [router]);
 
@@ -36,8 +50,8 @@ export default function LoginPage() {
         title: 'Đăng nhập thành công',
         description: 'Đang chuyển hướng đến trang quản trị...',
       });
-      // Use client-side navigation to avoid S3 404s
-      router.push('/dashboard');
+      // Điều hướng client-side (tránh 404 trên S3) tới route đầu tiên user có quyền.
+      router.push(await resolveLanding());
     } catch (error: any) {
       console.error('Login error:', error);
       toast({
