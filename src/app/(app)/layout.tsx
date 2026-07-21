@@ -14,72 +14,20 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
-import {
-  LayoutDashboard,
-  LogOut,
-  Settings,
-  Users,
-  Bot,
-  Car,
-  Book,
-  Map,
-  Ticket,
-  Bell,
-  Newspaper,
-  Image as ImageIcon,
-  Building2,
-  Share2,
-  Wallet,
-  Crown,
-  Store,
-  PackageOpen,
-  Megaphone,
-  DollarSign,
-  Scale,
-  ArrowDownCircle,
-  Receipt,
-  MessageSquare,
-  ShieldAlert,
-  TrendingDown,
-  PieChart,
-} from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Header } from '@/components/header';
 import placeholderData from '@/lib/placeholder-images.json';
-import { Separator } from '@/components/ui/separator';
 import React from 'react';
+import { navItems, type NavItem } from '@/lib/nav-items';
+import { AuthProvider, useAuth } from '@/lib/auth-context';
+import { isMenuVisible, isRouteAllowed } from '@/lib/rbac';
 
 const { placeholderImages } = placeholderData;
 
-const navItems = [
-  { href: '/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
-  { href: '/users', label: 'Người dùng', icon: Users },
-  { href: '/drivers', label: 'Tài xế', icon: Car },
-  { href: '/transport-companies', label: 'Đơn vị vận tải', icon: Building2 },
-  { href: '/bookings', label: 'Chuyến đi', icon: Book },
-  { href: '/referrals', label: 'Affiliate', icon: Share2 },
-  { href: '/kol', label: 'KOL/KOC', icon: Crown },
-  { href: '/agent', label: 'Đại lý đặt hộ', icon: Store },
-  { href: '/agent-orders', label: 'Đơn đặt hộ', icon: PackageOpen },
-  { href: '/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
-  { href: '/finance', label: 'Tài chính', icon: DollarSign },
-  { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
-  { href: '/driver-cashflow', label: 'Dòng tiền tài xế', icon: ArrowDownCircle },
-  { href: '/htx-reconciliation', label: 'Đối soát HTX', icon: Scale },
-  { href: '/invoices', label: 'Hoá đơn', icon: Receipt },
-  { href: '/master-data', label: 'Dữ liệu chung', icon: Map },
-  { href: '/promotions', label: 'Khuyến mãi', icon: Ticket },
-  { href: '/reports', label: 'Báo cáo', icon: Bot },
-  { href: '/settings', label: 'Cài đặt', icon: Settings },
-  { href: '/notifications', label: 'Thông báo', icon: Bell },
-  { href: '/news', label: 'Tin tức', icon: Newspaper },
-  { href: '/banners', label: 'Banner', icon: ImageIcon },
-  { href: '/app-popups', label: 'Popup quảng cáo', icon: Megaphone },
-  { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
-  { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
-  { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
-];
+// Mục "Phân quyền" chỉ hiện cho super admin (không nằm trong navItems catalog).
+const ROLES_NAV_ITEM: NavItem = { href: '/roles', label: 'Phân quyền', icon: ShieldCheck };
 
 // Error Boundary to prevent full page crash
 class ErrorBoundary extends React.Component<
@@ -120,8 +68,17 @@ class ErrorBoundary extends React.Component<
 }
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <AuthProvider>
+      <AppShell>{children}</AppShell>
+    </AuthProvider>
+  );
+}
+
+function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { me, loading } = useAuth();
   const avatarUrl = placeholderImages.find(p => p.id === 'avatar1')?.imageUrl;
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
@@ -134,11 +91,23 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }
   }, [router]);
 
-  // Don't render any children until we've verified the token exists
-  // This prevents API calls from firing before auth check completes
-  if (!isAuthenticated) {
+  // Route guard (UX). Chỉ chạy khi đã biết quyền (me loaded) — nếu không thì có thể
+  // đá nhầm trước khi biết. /no-access luôn được phép (đích redirect, chống loop).
+  React.useEffect(() => {
+    if (loading || !me) return;
+    if (!isRouteAllowed(pathname, me)) {
+      router.replace('/no-access');
+    }
+  }, [pathname, me, loading, router]);
+
+  // Chưa xác thực token: chờ (tránh gọi API trước khi check auth). Đang tải quyền:
+  // chưa render menu để không chớp mục không có quyền (spec §5.1).
+  if (!isAuthenticated || loading) {
     return null;
   }
+
+  const visibleNav = navItems.filter((item) => isMenuVisible(item.href, me));
+  if (me?.isSuperAdmin) visibleNav.push(ROLES_NAV_ITEM);
 
   return (
     <SidebarProvider>
@@ -152,7 +121,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
-            {navItems.map((item) => (
+            {visibleNav.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton
                   asChild

@@ -47,3 +47,51 @@ export const SETTINGS_GROUP_FUNCTIONS = [
 export function functionForHref(href: string): string | undefined {
   return MENU_FUNCTION_BY_HREF[href];
 }
+
+import type { AdminMe } from './types';
+
+// can nội bộ (không import makeCan để rbac.ts thuần data, tránh vòng phụ thuộc api).
+const canFn = (me: AdminMe | null) => (fn: string) =>
+  !!me && (me.isSuperAdmin || me.functions.includes(fn));
+
+// Mục menu có hiện cho user này không.
+// /settings: hiện nếu có ≥1 settings.* · /roles: chỉ super · mục thường: theo function.
+// Href KHÔNG có trong map (mục mới quên khai báo) -> fail-CLOSED (ẩn) để không rò
+// route chưa gate; test đồng bộ sẽ bắt việc quên khai báo.
+export function isMenuVisible(href: string, me: AdminMe | null): boolean {
+  const can = canFn(me);
+  if (href === '/settings') return SETTINGS_GROUP_FUNCTIONS.some(can);
+  if (href === '/roles') return !!me?.isSuperAdmin;
+  const fn = functionForHref(href);
+  return fn ? can(fn) : false;
+}
+
+// Segment cấp 1 của path: '/users/123' -> '/users'.
+export function topSegment(pathname: string): string {
+  return '/' + (pathname.split('/')[1] || '');
+}
+
+// Route guard (client-side UX; backend mới là chốt an ninh). me null -> false: caller
+// PHẢI tự chặn gọi khi đang loading/chưa có me để tránh redirect nhầm lúc chưa biết quyền.
+// /no-access luôn cho vào (đích redirect, không đòi quyền) -> tránh vòng lặp.
+export function isRouteAllowed(pathname: string, me: AdminMe | null): boolean {
+  if (!me) return false;
+  const top = topSegment(pathname);
+  if (top === '/no-access') return true;
+  if (top === '/roles') return me.isSuperAdmin;
+  const can = canFn(me);
+  if (top === '/settings') return SETTINGS_GROUP_FUNCTIONS.some(can);
+  const fn = functionForHref(top);
+  // Route không thuộc catalog (vd trang tiện ích không gate) -> cho vào.
+  return fn ? can(fn) : true;
+}
+
+// Route đích sau đăng nhập = mục ĐẦU TIÊN user có quyền (theo thứ tự menu), hoặc
+// /no-access nếu rỗng. KHÔNG bao giờ trả /dashboard mù quáng (dashboard cũng là 1
+// function -> user không có nó sẽ bị guard đá lại -> vòng lặp).
+export function firstAllowedRoute(me: AdminMe | null, orderedHrefs: string[]): string {
+  if (!me) return '/no-access';
+  if (me.isSuperAdmin) return orderedHrefs[0] ?? '/no-access';
+  const first = orderedHrefs.find((h) => isMenuVisible(h, me));
+  return first ?? '/no-access';
+}
