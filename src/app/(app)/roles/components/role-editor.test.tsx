@@ -63,4 +63,15 @@ describe('RoleEditor', () => {
     render(<RoleEditor onCancel={() => {}} onSaved={() => {}} />);
     expect(screen.getByRole('button', { name: /Lưu vai trò/ })).toBeDisabled();
   });
+
+  it('does NOT create a role whose name slugifies to an empty key', async () => {
+    const onSaved = vi.fn();
+    render(<RoleEditor onCancel={() => {}} onSaved={onSaved} />);
+    fireEvent.change(screen.getByLabelText('Tên vai trò'), { target: { value: '@@@' } });
+    fireEvent.click(screen.getByRole('button', { name: /Lưu vai trò/ }));
+
+    // no API call, stays open
+    await waitFor(() => expect(adminCreateRole).not.toHaveBeenCalled());
+    expect(onSaved).not.toHaveBeenCalled();
+  });
 });

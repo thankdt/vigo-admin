@@ -45,13 +45,24 @@ export function RoleEditor({
   const handleSubmit = async () => {
     const trimmed = name.trim();
     if (!trimmed) return;
+    // Create: key = slug(tên). Tên chỉ gồm ký tự đặc biệt/emoji -> slug rỗng -> chặn
+    // (không gửi role key rỗng cho backend). Edit giữ nguyên key cũ.
+    const key = role ? role.key : slugifyRoleKey(trimmed);
+    if (!role && !key) {
+      toast({
+        variant: 'destructive',
+        title: 'Tên vai trò không hợp lệ',
+        description: 'Tên phải chứa ít nhất một chữ cái hoặc số.',
+      });
+      return;
+    }
     setSaving(true);
     try {
       const functions = [...selected];
       if (role) {
         await adminUpdateRole(role.id, { name: trimmed, description, functions });
       } else {
-        await adminCreateRole({ key: slugifyRoleKey(trimmed), name: trimmed, description, functions });
+        await adminCreateRole({ key, name: trimmed, description, functions });
       }
       toast({ title: 'Đã lưu', description: `Vai trò "${trimmed}" đã được lưu.` });
       onSaved();

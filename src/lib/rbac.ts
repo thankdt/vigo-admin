@@ -76,14 +76,17 @@ export function topSegment(pathname: string): string {
 // /no-access luôn cho vào (đích redirect, không đòi quyền) -> tránh vòng lặp.
 export function isRouteAllowed(pathname: string, me: AdminMe | null): boolean {
   if (!me) return false;
+  if (me.isSuperAdmin) return true; // super bỏ qua mọi kiểm tra (kể cả route ngoài catalog)
   const top = topSegment(pathname);
   if (top === '/no-access') return true;
-  if (top === '/roles') return me.isSuperAdmin;
+  if (top === '/roles') return false; // super-only, super đã return ở trên
   const can = canFn(me);
   if (top === '/settings') return SETTINGS_GROUP_FUNCTIONS.some(can);
   const fn = functionForHref(top);
-  // Route không thuộc catalog (vd trang tiện ích không gate) -> cho vào.
-  return fn ? can(fn) : true;
+  // Fail-CLOSED: route ngoài catalog (chỉ /no-access, /roles, /settings xử lý ở trên)
+  // -> chặn về /no-access. Nhất quán với isMenuVisible; nếu sau này có trang tiện ích
+  // cần miễn quyền, thêm allowlist tường minh ở đầu hàm.
+  return fn ? can(fn) : false;
 }
 
 // Route đích sau đăng nhập = mục ĐẦU TIÊN user có quyền (theo thứ tự menu), hoặc

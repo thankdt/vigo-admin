@@ -16,6 +16,7 @@ import {
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
 import { ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/logo';
+import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
 import { SidebarIdentity } from '@/components/sidebar-identity';
 import React from 'react';
@@ -103,8 +104,28 @@ function AppShell({ children }: { children: React.ReactNode }) {
     return null;
   }
 
+  // Token còn nhưng /admin/me lỗi (mạng/500 — không phải 401, vì 401 đã bị fetchWithAuth
+  // xử lý). KHÔNG render children (tránh trang con gọi API nhầm) — hiện fallback + logout.
+  if (!me) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 p-8 text-center">
+        <p className="text-sm text-muted-foreground">
+          Không tải được thông tin quyền tài khoản. Vui lòng thử lại hoặc đăng nhập lại.
+        </p>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => window.location.reload()}>Thử lại</Button>
+          <Button onClick={async () => { await logout(); router.push('/'); }}>Đăng xuất</Button>
+        </div>
+      </div>
+    );
+  }
+
   const visibleNav = navItems.filter((item) => isMenuVisible(item.href, me));
-  if (me?.isSuperAdmin) visibleNav.push(ROLES_NAV_ITEM);
+  if (me.isSuperAdmin) visibleNav.push(ROLES_NAV_ITEM);
+
+  // Route không có quyền: KHÔNG render children (chặn nội dung + effect fetch của trang
+  // cấm chớp lên trước khi effect guard redirect). Sidebar vẫn hiện (menu đã lọc).
+  const routeAllowed = isRouteAllowed(pathname, me);
 
   return (
     <SidebarProvider>
@@ -150,7 +171,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <SidebarInset>
         <Header />
         <main className="flex-1 p-4 sm:px-6 sm:py-0">
-          <ErrorBoundary>{children}</ErrorBoundary>
+          <ErrorBoundary>{routeAllowed ? children : null}</ErrorBoundary>
         </main>
       </SidebarInset>
     </SidebarProvider>

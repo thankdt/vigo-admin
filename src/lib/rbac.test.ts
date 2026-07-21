@@ -102,6 +102,11 @@ describe('isRouteAllowed()', () => {
     expect(isRouteAllowed('/settings', mkMe({ functions: ['settings.app'] }))).toBe(true);
     expect(isRouteAllowed('/settings', me)).toBe(false);
   });
+
+  it('fails CLOSED for a route outside the catalog (e.g. leftover /content)', () => {
+    expect(isRouteAllowed('/content', me)).toBe(false);
+    expect(isRouteAllowed('/content', mkMe({ isSuperAdmin: true }))).toBe(true); // super bypasses
+  });
 });
 
 describe('firstAllowedRoute()', () => {
