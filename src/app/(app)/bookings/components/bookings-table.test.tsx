@@ -20,22 +20,19 @@ const baseBooking: Booking = {
   customer: null,
 } as Booking;
 
-describe('PriceBreakdownCard — giảm giá theo ghế (CARPOOL)', () => {
-  it('không hiện dòng giảm giá theo ghế khi seatDiscountAmount = 0/thiếu', () => {
-    render(<PriceBreakdownCard booking={{ ...baseBooking, priceBreakdown: breakdown }} />);
-    expect(screen.queryByText(/Giảm giá theo số ghế/)).not.toBeInTheDocument();
-  });
-
-  it('hiện dòng giảm giá theo ghế kèm % khi có seatDiscountAmount > 0', () => {
+describe('PriceBreakdownCard — chi tiết chuyến KHÔNG nêu giảm theo ghế', () => {
+  // Chuyến đã tạo: giá là giá CHỐT + loại dịch vụ đã chốt → không nêu lý do đổi
+  // hay số đã giảm theo ghế (đó là info lúc BÁO GIÁ, xem app khách).
+  it('không hiện dòng giảm giá theo ghế dù seatDiscountAmount > 0', () => {
     render(
       <PriceBreakdownCard
         booking={{ ...baseBooking, priceBreakdown: { ...breakdown, seatDiscountAmount: 15000, seatDiscountPercent: 10 } }}
       />,
     );
-    expect(screen.getByText('Giảm giá theo số ghế (đi chung, -10%)')).toBeInTheDocument();
+    expect(screen.queryByText(/Giảm giá theo số ghế/)).not.toBeInTheDocument();
   });
 
-  it('vẫn hiện 2 dòng giảm giá cũ khi có (regression)', () => {
+  it('vẫn hiện 2 dòng giảm giá cũ (loyalty/promotion) khi có — regression', () => {
     render(
       <PriceBreakdownCard
         booking={{ ...baseBooking, priceBreakdown: { ...breakdown, loyaltyDiscount: 5000, promotionDiscount: 20000 } }}
@@ -46,20 +43,11 @@ describe('PriceBreakdownCard — giảm giá theo ghế (CARPOOL)', () => {
   });
 });
 
-describe('BookingDetail — badge "Đã tự chuyển sang Bao xe" (switchedToWholeCar)', () => {
-  it('hiện badge khi switchedToWholeCar = true', async () => {
+describe('BookingDetail — KHÔNG hiện badge auto-switch ở chi tiết chuyến', () => {
+  it('không hiện badge "Đã tự chuyển sang Bao xe" dù switchedToWholeCar = true', async () => {
     vi.mocked(getBookingDetails).mockResolvedValue({ ...baseBooking, switchedToWholeCar: true });
     render(<BookingDetail bookingId="b1" onClose={() => {}} />);
-    expect(await screen.findByText(/Đã tự chuyển sang Bao xe/)).toBeInTheDocument();
-  });
-
-  it('không hiện badge khi switchedToWholeCar false/thiếu (regression)', async () => {
-    vi.mocked(getBookingDetails).mockResolvedValue({ ...baseBooking });
-    render(<BookingDetail bookingId="b1" onClose={() => {}} />);
-    // "Khách hàng" card chỉ render sau khi `booking` state có giá trị (fetch
-    // đã resolve) — chờ nó trước khi assert absence, tránh false-negative do
-    // assert lúc còn đang loading (booking === null → cả 2 badge cùng không
-    // hiện, không chứng minh được gì).
+    // Chờ card "Khách hàng" render (fetch resolve) trước khi assert absence.
     await screen.findByText('Khách hàng');
     expect(screen.queryByText(/Đã tự chuyển sang Bao xe/)).not.toBeInTheDocument();
   });

@@ -14,11 +14,8 @@ export function buildDiscountRows(breakdown: PriceBreakdown | null | undefined):
   if (loyalty > 0) rows.push({ label: 'Khách thân thiết', value: loyalty });
   const promotion = Number(breakdown.promotionDiscount ?? 0);
   if (promotion > 0) rows.push({ label: 'Mã khuyến mãi', value: promotion });
-  const seatDiscount = Number(breakdown.seatDiscountAmount ?? 0);
-  if (seatDiscount > 0) {
-    const percent = Number(breakdown.seatDiscountPercent ?? 0);
-    const label = percent > 0 ? `Giảm giá theo số ghế (đi chung, -${percent}%)` : 'Giảm giá theo số ghế (đi chung)';
-    rows.push({ label, value: seatDiscount });
-  }
+  // Giảm giá theo ghế / auto-switch KHÔNG hiện ở chi tiết chuyến: chuyến đã tạo thì
+  // giá + loại dịch vụ đã là giá/loại CHỐT — không cần nêu lý do đổi hay số đã giảm
+  // (đó là thông tin lúc BÁO GIÁ cho khách, xem app khách).
   return rows;
 }

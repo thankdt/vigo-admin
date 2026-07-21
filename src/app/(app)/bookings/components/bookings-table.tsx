@@ -312,10 +312,7 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
           <div className="text-xs font-medium text-muted-foreground">Giá cước</div>
           <div className="flex justify-between">
             <span>Giá vận chuyển</span>
-            {/* Hiện GỘP trước giảm ghế (= net + seatDiscountAmount) để dòng "Giảm
-                giá theo số ghế" bên dưới trừ ra cho khớp tổng — transportPrice của
-                backend đã trừ sẵn giảm ghế nên hiện thẳng sẽ gây trừ 2 lần. */}
-            <span>{fmtVnd(breakdown.transportPrice + (breakdown.seatDiscountAmount ?? 0))}</span>
+            <span>{fmtVnd(breakdown.transportPrice)}</span>
           </div>
           {surcharges.map(s => (
             <div key={s.label} className="flex justify-between">
@@ -443,11 +440,6 @@ export function BookingDetail({ bookingId, onClose }: { bookingId: string, onClo
                 {booking.serviceType && (
                   <Badge variant="outline" className="text-xs">
                     {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
-                  </Badge>
-                )}
-                {booking.switchedToWholeCar && (
-                  <Badge className="text-xs bg-amber-600 text-white hover:bg-amber-600">
-                    🔁 Đã tự chuyển sang Bao xe
                   </Badge>
                 )}
                 {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}

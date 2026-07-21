@@ -32,18 +32,12 @@ describe('buildDiscountRows', () => {
     ]);
   });
 
-  it('thêm dòng giảm giá theo ghế khi seatDiscountAmount > 0, không có percent', () => {
-    const rows = buildDiscountRows({ ...base, seatDiscountAmount: 15000 });
-    expect(rows).toEqual([{ label: 'Giảm giá theo số ghế (đi chung)', value: 15000 }]);
-  });
-
-  it('thêm % vào label khi có seatDiscountPercent > 0', () => {
-    const rows = buildDiscountRows({ ...base, seatDiscountAmount: 15000, seatDiscountPercent: 10 });
-    expect(rows).toEqual([{ label: 'Giảm giá theo số ghế (đi chung, -10%)', value: 15000 }]);
-  });
-
-  it('không thêm dòng khi seatDiscountAmount = 0 hoặc thiếu', () => {
-    expect(buildDiscountRows({ ...base, seatDiscountAmount: 0 })).toEqual([]);
-    expect(buildDiscountRows(base)).toEqual([]);
+  it('KHÔNG hiện dòng giảm theo ghế ở chi tiết chuyến (dù seatDiscountAmount > 0)', () => {
+    // Chuyến đã tạo: giá là giá CHỐT → không nêu giảm theo ghế (info lúc báo giá).
+    expect(buildDiscountRows({ ...base, seatDiscountAmount: 15000, seatDiscountPercent: 10 })).toEqual([]);
+    // loyalty/promotion vẫn hiện như cũ.
+    expect(buildDiscountRows({ ...base, loyaltyDiscount: 5000, seatDiscountAmount: 15000 })).toEqual([
+      { label: 'Khách thân thiết', value: 5000 },
+    ]);
   });
 });
