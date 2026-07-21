@@ -141,7 +141,7 @@ export default function ReferralsPage() {
       if (res.skipped) {
         toast({ title: 'Đang có phiên đồng bộ khác chạy', description: 'Vui lòng đợi rồi tải lại.' });
       } else {
-        toast({ title: 'Đã đồng bộ ChottuLink', description: `Tạo ${res.minted} link mới · cập nhật ${res.synced} link. Đang tải lại…` });
+        toast({ title: 'Đã đồng bộ ChottuLink', description: `Quét ${res.discovered} link mới · cập nhật ${res.synced} link. Đang tải lại…` });
         await loadReferrers();
       }
     } catch (err: any) {
