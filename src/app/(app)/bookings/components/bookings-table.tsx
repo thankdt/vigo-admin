@@ -312,7 +312,10 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
           <div className="text-xs font-medium text-muted-foreground">Giá cước</div>
           <div className="flex justify-between">
             <span>Giá vận chuyển</span>
-            <span>{fmtVnd(breakdown.transportPrice)}</span>
+            {/* Hiện GỘP trước giảm ghế (= net + seatDiscountAmount) để dòng "Giảm
+                giá theo số ghế" bên dưới trừ ra cho khớp tổng — transportPrice của
+                backend đã trừ sẵn giảm ghế nên hiện thẳng sẽ gây trừ 2 lần. */}
+            <span>{fmtVnd(breakdown.transportPrice + (breakdown.seatDiscountAmount ?? 0))}</span>
           </div>
           {surcharges.map(s => (
             <div key={s.label} className="flex justify-between">
