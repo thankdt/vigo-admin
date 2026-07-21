@@ -61,6 +61,25 @@ type SortKey = keyof Booking;
 // Both are mapped to `status=PROCESSING&processingState=…` on the server.
 type TabKey = BookingStatus | 'NEEDS_ADMIN' | 'ADMIN_HANDLING' | 'ALL';
 
+// Outer trip-type tabs: 'all' = no filter (default landing, unchanged behaviour),
+// 'regular' = ride-now (scheduledTime IS NULL), 'scheduled' = booked-ahead (IS NOT NULL).
+// Maps to the `scheduled` query param (all → omit) so CSKH can distinguish the two.
+type TripKind = 'all' | 'regular' | 'scheduled';
+
+// Options object for fetchBookings — 8 inputs is past the point where positional args are
+// safe (a missed/re-ordered arg at any of the 6 call sites would be silent). tsc now checks
+// each call site names every field.
+type FetchArgs = {
+  tab: string;
+  search: string;
+  bookingId: string;
+  page: number;
+  limit: number;
+  routeFilter: string;
+  sort: { key: SortKey; direction: 'ascending' | 'descending' };
+  tripKind: TripKind;
+};
+
 const tabKeys: TabKey[] = [
   'SEARCHING',
   'NEEDS_ADMIN',
@@ -80,7 +99,10 @@ const statusLabelMap: Record<string, string> = {
   PROCESSING: 'Đang xử lý',
   NEEDS_ADMIN: 'Cần xử lý',
   ADMIN_HANDLING: 'Admin đang xử lý',
-  SCHEDULED: 'Đặt lịch',
+  // Renamed from "Đặt lịch" → "Chờ đến giờ" so it no longer collides with the outer
+  // trip-type tab "Đặt lịch". This is the transient pre-dispatch status (a booked-ahead
+  // trip waiting for its pickup time); the outer tab covers scheduled trips of ANY status.
+  SCHEDULED: 'Chờ đến giờ',
   ACCEPTED: 'Đã nhận',
   PICKED_UP: 'Đã đón',
   COMPLETED: 'Hoàn thành',
@@ -842,6 +864,8 @@ export function BookingsTable() {
   // Tìm theo ID chuyến — BE prefix-match nên admin paste full UUID hay 8 ký tự đầu đều ra.
   const [bookingIdTerm, setBookingIdTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
+  // Outer trip-type tab. Default 'all' = same landing view as before (no scheduled filter).
+  const [tripKind, setTripKind] = React.useState<TripKind>('all');
   // 'ALL' = no route filter; 'none' = trips with no route stamped (debug
   // bucket: legacy + routing-miss); numeric string = exact match. UI keeps
   // it as string so the Select's value/onValueChange contract is clean —
@@ -868,7 +892,7 @@ export function BookingsTable() {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async (tab: string, search: string, bookingId: string, page: number, limit: number, routeFilter: string, sort: { key: SortKey; direction: 'ascending' | 'descending' }) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -905,6 +929,9 @@ export function BookingsTable() {
         const parsed = Number(routeFilter);
         if (Number.isFinite(parsed)) params.routeId = parsed;
       }
+      // Trip-type: 'all' omits the param (no filter); the other two map to the boolean.
+      if (tripKind === 'scheduled') params.scheduled = true;
+      else if (tripKind === 'regular') params.scheduled = false;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -922,13 +949,19 @@ export function BookingsTable() {
     }
   }, [toast]);
 
+  // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
+  // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
+  const reload = React.useCallback(() => {
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind]);
+
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -960,6 +993,16 @@ export function BookingsTable() {
     );
   }
 
+  const handleTripKindChange = (value: string) => {
+    setTripKind(value as TripKind);
+    // Reset the status sub-tab to "Tất cả" and the sort to the createdAt default: switching to
+    // "Chuyến thường" hides the SCHEDULED sub-tab, so staying on it would orphan the selection
+    // (empty table, no highlighted tab). Resetting keeps the view predictable.
+    setActiveTab('ALL');
+    setSortConfig({ key: 'createdAt', direction: 'descending' });
+    setCurrentPage(1);
+  }
+
   const handleSearchChange = (value: string) => {
     setSearchTerm(value);
     setCurrentPage(1); // Reset to page 1 on search
@@ -983,7 +1026,7 @@ export function BookingsTable() {
     try {
       await updateBookingStatus(dialogState.booking.id, dialogState.newStatus, statusNote || undefined);
       toast({ title: 'Đã cập nhật trạng thái', description: `Chuyến #${dialogState.booking.id} đã được chuyển sang ${statusLabelMap[dialogState.newStatus] ?? dialogState.newStatus}.` });
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
+      reload();
       setDialogState({ open: false, booking: null, newStatus: null });
       setStatusNote('');
     } catch (err: any) {
@@ -1006,7 +1049,7 @@ export function BookingsTable() {
     try {
       await adminAcceptBooking(acceptingBookingId);
       toast({ title: 'Thành công', description: 'Đã nhận chuyến thành công.' });
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
+      reload();
       setAcceptingBookingId(null);
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận chuyến thất bại', description: err.message });
@@ -1020,7 +1063,7 @@ export function BookingsTable() {
     try {
       await claimProcessingBooking(booking.id);
       toast({ title: 'Đã nhận xử lý', description: 'Chuyến không còn bị tự huỷ sau 5 phút. Bạn cần đẩy chuyến cho tài xế hoặc huỷ thủ công.' });
-      fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
+      reload();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Nhận xử lý thất bại', description: err.message });
     }
@@ -1041,18 +1084,39 @@ export function BookingsTable() {
 
   const statusChangeOptions: BookingStatus[] = ['ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
 
+  // Hide the SCHEDULED status sub-tab under "Chuyến thường" — a ride-now trip is never in the
+  // pre-dispatch SCHEDULED state, so that sub-tab would always be empty there.
+  const visibleTabKeys = tripKind === 'regular' ? tabKeys.filter((k) => k !== 'SCHEDULED') : tabKeys;
+
+  // The "Đặt lịch" tab adds a "Giờ hẹn đón" column. Column count for the loading/empty/error rows:
+  // base 7, +1 for COMPLETED (Ngày hoàn thành), +3 for CANCELLED (huỷ cols), +1 for the scheduled
+  // column — these stack (e.g. a completed scheduled trip on the Đặt lịch + Hoàn thành view).
+  const showScheduledCol = tripKind === 'scheduled';
+  const colSpan =
+    7 +
+    (activeTab === 'COMPLETED' ? 1 : 0) +
+    (activeTab === 'CANCELLED' ? 3 : 0) +
+    (showScheduledCol ? 1 : 0);
+
   return (
     <>
+      <Tabs value={tripKind} onValueChange={handleTripKindChange} className="mb-4">
+        <TabsList>
+          <TabsTrigger value="all">Tất cả</TabsTrigger>
+          <TabsTrigger value="regular">Chuyến thường</TabsTrigger>
+          <TabsTrigger value="scheduled">Đặt lịch</TabsTrigger>
+        </TabsList>
+      </Tabs>
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <div className="flex items-center pb-4">
           <TabsList className='flex-wrap h-auto'>
             <TabsTrigger value="ALL">{statusLabelMap['ALL']}</TabsTrigger>
-            {tabKeys.map(key => (
+            {visibleTabKeys.map(key => (
               <TabsTrigger key={key} value={key}>{statusLabelMap[key] ?? key}</TabsTrigger>
             ))}
           </TabsList>
           <div className='ml-auto flex items-center gap-2'>
-            <CreateBookingDialog onSuccess={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig)} />
+            <CreateBookingDialog onSuccess={() => reload()} />
             <Select
               value={selectedRouteId}
               onValueChange={(val) => { setSelectedRouteId(val); setCurrentPage(1); }}
@@ -1107,6 +1171,15 @@ export function BookingsTable() {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
+                {/* Tab Đặt lịch: cột "Giờ hẹn đón" (scheduledTime) + cho sắp xếp theo giờ đón. */}
+                {showScheduledCol && (
+                  <TableHead>
+                    <Button variant="ghost" onClick={() => requestSort('scheduledTime')}>
+                      Giờ hẹn đón
+                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </TableHead>
+                )}
                 {/* Tab Hoàn thành: thêm cột thời gian hoàn thành (updatedAt của chuyến
                     COMPLETED) và cho sắp xếp theo nó. */}
                 {activeTab === 'COMPLETED' && (
@@ -1141,19 +1214,19 @@ export function BookingsTable() {
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : activeTab === 'COMPLETED' ? 8 : 7} className="h-24 text-center">
+                  <TableCell colSpan={colSpan} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : error ? (
                 <TableRow>
-                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : activeTab === 'COMPLETED' ? 8 : 7} className="text-center text-destructive">
+                  <TableCell colSpan={colSpan} className="text-center text-destructive">
                     {error}
                   </TableCell>
                 </TableRow>
               ) : sortedBookings.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={activeTab === 'CANCELLED' ? 10 : activeTab === 'COMPLETED' ? 8 : 7} className="h-24 text-center">
+                  <TableCell colSpan={colSpan} className="h-24 text-center">
                     Không tìm thấy chuyến nào.
                   </TableCell>
                 </TableRow>
@@ -1192,6 +1265,14 @@ export function BookingsTable() {
                     <TableCell>
                       {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
                     </TableCell>
+                    {/* Giờ hẹn đón — chỉ ở tab Đặt lịch. Chuyến thường không có scheduledTime. */}
+                    {showScheduledCol && (
+                      <TableCell>
+                        {booking.scheduledTime
+                          ? format(new Date(booking.scheduledTime), "dd/MM/yyyy HH:mm")
+                          : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                    )}
                     {/* Ngày hoàn thành = updatedAt của chuyến COMPLETED (hệ thống
                         chưa lưu completedAt riêng). Chỉ hiện ở tab Hoàn thành. */}
                     {activeTab === 'COMPLETED' && (
@@ -1412,7 +1493,7 @@ export function BookingsTable() {
           onOpenChange={(open) => !open && setReassigningBooking(null)}
           onReassignSuccess={() => {
             setReassigningBooking(null);
-            fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig);
+            reload();
           }}
         />
       </Dialog>
@@ -1420,7 +1501,7 @@ export function BookingsTable() {
         bookingId={voidBookingId}
         open={!!voidBookingId}
         onOpenChange={(o) => { if (!o) setVoidBookingId(null); }}
-        onDone={() => fetchBookings(activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig)}
+        onDone={() => reload()}
       />
       {/* [DISABLED 2026-07-09] Dialog "admin ôm chuyến về operator" — vỡ dòng tiền (gán về tài khoản ảo, 0 commission).
       <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>

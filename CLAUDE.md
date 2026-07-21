@@ -81,16 +81,21 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
 Áp dụng cho MỌI thay đổi code (feature/fix). Không bỏ bước.
 
 0. **Cắt nhánh `feat/*` hoặc `fix/*` từ `main`** (đã `git pull`). KHÔNG code trực tiếp trên `main`/`dev`.
-0.5. **Chốt & review GIẢI PHÁP trước khi code — CỔNG CHẶN, BẮT BUỘC với thay đổi non-trivial:**
-   - a. Viết plan/spec ngắn: mục tiêu, cách tiếp cận, file/đối tượng sẽ đụng, edge case, ảnh hưởng tương thích client cũ.
-   - b. **TỰ ĐỘNG dispatch 1 sub-agent fresh-context, adversarial để review plan/spec** — KHÔNG hỏi xin phép user để chạy sub-agent, cứ chạy luôn.
-   - c. Sub-agent phản biện → sửa plan → **dispatch lại review**. Lặp tới khi **2 bên (agent + reviewer) hội tụ/đồng ý**, không còn finding.
-   - d. **Chỉ khi plan đã hội tụ sạch mới BÁO user để user review** (cổng người cuối). KHÔNG code trước khi user duyệt plan đã hội tụ.
+0.5. **Chốt GIẢI PHÁP trước khi code — CỔNG CHẶN. Review SCALE THEO RỦI RO:**
+   - a. Plan/spec ngắn: mục tiêu, cách tiếp cận, file đụng, edge case, ảnh hưởng client cũ.
+   - b. Phân loại: **CAO** = tiền/ví/cọc, auth/guard/RBAC, migration, contract đa-repo, tương thích client cũ. **Cơ học/nhỏ** = rename, field additive, sửa copy, config. **NGHI NGỜ/KHÔNG CHẮC thuộc nhóm nào → mặc định coi là CAO.**
+   - c. CHỈ nhóm CAO cần sub-agent review (fresh-context, adversarial). Cơ học → self-review kỹ, bỏ sub-agent.
+   - d. Reviewer đọc **FILE ĐỤNG + call-site trực tiếp** (1 hop; đi thêm 1 hop nếu call-site có mùi) — KHÔNG quét cả repo. KHÔNG pre-judge finding.
+   - e. **TỐI ĐA 1 lượt review cho CẢ thay đổi** (2 nếu lượt 1 lộ lỗi lớn). Đếm TOÀN CỤC, không reset sau mỗi lần sửa. Đích: hết lỗi đáng kể, KHÔNG phải hội-tụ-0-finding (hội tụ ≠ đúng).
+   - f. Hết cap còn finding chưa chốt → **nêu user quyết**; đừng lặp thêm hay bỏ lặng.
+   - g. Sub-agent **ghi review ra FILE trong scratchpad** (ephemeral, ngoài git); trả về status + 1 dòng tóm tắt — KHÔNG dán full report vào session chính.
+   - h. Model: review nhóm CAO **GIỮ model mạnh (Opus)** — đúng lúc cần phán đoán khó. Model rẻ chỉ cho sanity-check phụ, TUYỆT ĐỐI không cho vùng tiền/auth/migration.
+   - i. Plan sạch → **BÁO user duyệt** (cổng người cuối). KHÔNG code trước khi user duyệt.
 1. **Code kèm test (TDD)** — viết test trước/cùng lúc, không để "test cho có" sau cùng.
-2. **Vòng lặp chất lượng** (lặp tới khi sạch):
-   - a. Self-review lại diff — altitude, edge case, đọc lại TỪNG site đã đổi.
+2. **Vòng lặp chất lượng:**
+   - a. Self-review lại diff — altitude, edge case, đọc lại TỪNG site đã đổi. (LUÔN, mọi thay đổi.)
    - b. Unit test pass + kiểm tĩnh sạch (xem "Lệnh kiểm" cuối mục).
-   - c. Nhờ 1 **reviewer độc lập** (agent fresh-context, adversarial) review code.
+   - c. Reviewer độc lập **CHỈ cho thay đổi rủi ro CAO** (0.5.b): fresh-context, đọc file đụng + call-site trực tiếp, handoff bằng file (scratchpad), giữ model mạnh. **Tối đa 1 lượt reviewer cho cả thay đổi** (đếm toàn cục, không reset khi quay lại a). Cơ học → dừng ở a+b.
    - d. Sửa theo review → quay lại (a).
 3. **Commit sạch** — `git add` NGAY trước `git commit` (hoặc `git commit -a`) để đảm bảo phần staged == bản cuối (tránh commit sót do stage rồi mới sửa). Commit theo đơn vị hoàn chỉnh. Message kết bằng:
    `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`

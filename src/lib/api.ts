@@ -580,9 +580,12 @@ export async function getBookings(params: {
   // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
   bookingId?: string;
   // Sắp xếp server-side (sắp cả bảng, không chỉ trang hiện tại). BE whitelist
-  // cột: createdAt|updatedAt|price|status. Mặc định createdAt DESC.
+  // cột: createdAt|updatedAt|price|status|scheduledTime. Mặc định createdAt DESC.
   sortBy?: string;
   order?: 'ASC' | 'DESC';
+  // Lọc loại chuyến cho 2 tab admin "Chuyến thường / Đặt lịch". true = đặt lịch
+  // (scheduledTime IS NOT NULL), false = thường (IS NULL). undefined = không lọc (tab "Tất cả").
+  scheduled?: boolean;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -596,6 +599,7 @@ export async function getBookings(params: {
     ...(params.bookingId && { bookingId: params.bookingId }),
     ...(params.sortBy && { sortBy: params.sortBy }),
     ...(params.order && { order: params.order }),
+    ...(params.scheduled !== undefined && { scheduled: String(params.scheduled) }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
