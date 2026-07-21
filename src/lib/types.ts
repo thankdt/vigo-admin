@@ -95,6 +95,17 @@ export type AdminRole = {
 
 export type FunctionOverride = { functionKey: string; effect: 'GRANT' | 'REVOKE' };
 
+// User admin trên màn gán quyền (/roles). Backend query addSelect isSuperAdmin + load
+// role/override (spec §4.6). Chỉ dùng ở admin, không rò ra mobile.
+export type AdminAssignmentUser = {
+  id: string;
+  fullName: string | null;
+  phone: string;
+  isSuperAdmin: boolean;
+  roleIds: string[];
+  overrides: FunctionOverride[];
+};
+
 // Catalog function cho UI render (GET /admin/functions): key + nhãn + nhóm.
 export type FunctionCatalogItem = { key: string; label: string; group: string };
 

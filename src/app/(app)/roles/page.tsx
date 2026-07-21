@@ -1,8 +1,10 @@
 import { PageHeader } from "@/components/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { RolesList } from "./components/roles-list";
+import { UserAssignment } from "./components/user-assignment";
 
-// Trang Phân quyền (super-only, guard ở layout). Nút "Thêm vai trò" + CRUD nằm trong
-// RolesList vì cần state. Màn gán role/override cho user: xem UserAssignment (Task 8).
+// Trang Phân quyền (super-only, guard ở layout). Hai màn: Vai trò (CRUD) + Gán người dùng
+// (role/override/super). CRUD nằm trong component vì cần state.
 export default function RolesPage() {
   return (
     <div className="space-y-6">
@@ -10,7 +12,18 @@ export default function RolesPage() {
         title="Phân quyền"
         description="Định nghĩa vai trò theo function và gán cho tài khoản admin."
       />
-      <RolesList />
+      <Tabs defaultValue="roles" className="w-full">
+        <TabsList>
+          <TabsTrigger value="roles">Vai trò</TabsTrigger>
+          <TabsTrigger value="assign">Gán người dùng</TabsTrigger>
+        </TabsList>
+        <TabsContent value="roles" className="pt-4">
+          <RolesList />
+        </TabsContent>
+        <TabsContent value="assign" className="pt-4">
+          <UserAssignment />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

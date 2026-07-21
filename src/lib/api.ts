@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -2430,6 +2430,12 @@ export async function adminDeleteRole(id: string): Promise<void> {
 export async function adminGetFunctions(): Promise<FunctionCatalogItem[]> {
   const res = await fetchWithAuth('/admin/functions');
   return unwrap<FunctionCatalogItem[]>(res);
+}
+
+// Danh sách user admin cho màn gán quyền (kèm isSuperAdmin + role/override hiện tại).
+export async function adminListAssignableUsers(): Promise<AdminAssignmentUser[]> {
+  const res = await fetchWithAuth('/admin/users?role=ADMIN');
+  return unwrap<AdminAssignmentUser[]>(res);
 }
 
 // Gán role / override / cờ super cho 1 user admin (set-replace, last-write-wins).
