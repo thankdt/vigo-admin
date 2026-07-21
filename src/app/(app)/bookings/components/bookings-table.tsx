@@ -366,7 +366,11 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
   );
 }
 
-function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () => void }) {
+// Exported (only the keyword — no behavior/signature change) so it can be
+// unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
+// test mock getBookingDetails() and assert on badges (e.g.
+// switchedToWholeCar) without mounting the whole BookingsTable.
+export function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () => void }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
