@@ -41,6 +41,7 @@ import {
   MessageSquare,
   ShieldAlert,
   TrendingDown,
+  PieChart,
 } from 'lucide-react';
 import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -63,6 +64,7 @@ const navItems = [
   { href: '/agent-orders', label: 'Đơn đặt hộ', icon: PackageOpen },
   { href: '/withdrawals', label: 'Lệnh rút tiền', icon: Wallet },
   { href: '/finance', label: 'Tài chính', icon: DollarSign },
+  { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
   { href: '/driver-cashflow', label: 'Dòng tiền tài xế', icon: ArrowDownCircle },
   { href: '/htx-reconciliation', label: 'Đối soát HTX', icon: Scale },
   { href: '/invoices', label: 'Hoá đơn', icon: Receipt },
