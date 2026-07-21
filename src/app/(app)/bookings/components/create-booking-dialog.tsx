@@ -368,7 +368,21 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
           {mode === 'agent' ? 'Đặt hộ chuyến' : 'Tạo chuyến'}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+      <DialogContent
+        className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto"
+        onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}
+        onFocusCapture={(e) => {
+          // iOS WKWebView ignores `interactive-widget` and dvh doesn't shrink for the soft
+          // keyboard, so a focused field can end up hidden behind it (with the dark overlay
+          // covering it). On touch devices, nudge the field into view once the keyboard has
+          // finished animating. No-op on desktop (fine pointer) to avoid scroll jumps.
+          if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+          const t = e.target as HTMLElement;
+          if (t.matches('input, textarea')) {
+            setTimeout(() => t.scrollIntoView({ block: 'center', behavior: 'smooth' }), 300);
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{mode === 'agent' ? 'Đặt hộ chuyến mới' : 'Tạo chuyến mới'}</DialogTitle>
           <DialogDescription>
