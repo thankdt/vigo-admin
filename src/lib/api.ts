@@ -2147,6 +2147,58 @@ export async function getAdminOverview(from: string, to: string): Promise<AdminO
   return result.data;
 }
 
+// ─── Acquisition ("Nguồn khách") — where customers come from ────────────────
+export type AcquisitionData = {
+  range: { from: string; to: string; granularity: 'hour' | 'day' | 'month' };
+  // First-party = OUR real customers (source of truth): signups over a VN-day series + referral split.
+  firstParty: {
+    totalSignups: number;
+    viaReferral: number;
+    direct: number;
+    granularity: 'hour' | 'day' | 'month';
+    byDay: Array<{ date: string; label: string; signups: number }>;
+  };
+  // GA4 acquisition-by-channel (best-effort). `available: false` when GA4 is unconfigured or failed.
+  ga4:
+    | {
+        available: true;
+        byChannel: Array<{ channel: string; newUsers: number; totalUsers: number; signups: number }>;
+      }
+    | { available: false; byChannel: [] };
+  // Meta paid-ads registrations (best-effort). `available: false` when unconfigured or failed.
+  meta:
+    | {
+        available: true;
+        spend: number;
+        impressions: number;
+        clicks: number;
+        registrations: number;
+        campaigns: Array<{
+          name: string;
+          spend: number;
+          impressions: number;
+          clicks: number;
+          registrations: number;
+        }>;
+      }
+    | { available: false };
+  // ChottuLink referral-link CUMULATIVE totals (not range-bounded) — labeled "tổng hiện tại".
+  chottulink: {
+    totalClicks: number;
+    totalInstalls: number;
+    linkCount: number;
+    referrerCount: number;
+    installsUnavailable: boolean;
+  };
+};
+
+export async function getAcquisition(from: string, to: string): Promise<AcquisitionData> {
+  const qs = new URLSearchParams({ from, to });
+  const response = await fetchWithAuth(`/admin/acquisition?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
+}
+
 export type CashflowCategory =
   | 'payos' | 'km' | 'earnings' | 'admin_credit' | 'refund'
   | 'admin_debit' | 'tax' | 'commission' | 'other';
