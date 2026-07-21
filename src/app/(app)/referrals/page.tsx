@@ -28,6 +28,11 @@ import {
   Wallet,
   Search,
   ArrowLeft,
+  Copy,
+  Check,
+  RefreshCw,
+  MousePointerClick,
+  Download,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -35,6 +40,7 @@ import {
   adminListReferrals,
   adminGetReferralDetail,
   adminClawbackReferralEvent,
+  adminTriggerLinkSync,
   type AdminReferrerSummary,
   type AdminReferralRow,
   type AdminReferralDetail,
@@ -43,7 +49,15 @@ import {
 const formatVND = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
 
-type SortKey = 'amount' | 'trips' | 'referees';
+// Giờ VN (Asia/Ho_Chi_Minh) độc lập timezone trình duyệt — bắt buộc theo CLAUDE.md.
+const formatVnDateTime = (iso: string | null | undefined): string => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+};
+
+type SortKey = 'amount' | 'trips' | 'referees' | 'clicks' | 'installs';
 
 export default function ReferralsPage() {
   const { toast } = useToast();
@@ -55,6 +69,8 @@ export default function ReferralsPage() {
   const [totalPages, setTotalPages] = React.useState(1);
   const [total, setTotal] = React.useState(0);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [isSyncing, setIsSyncing] = React.useState(false);
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
   // Drill-down: when a referrer is selected, fetch their list of relationships.
   const [selectedReferrer, setSelectedReferrer] = React.useState<AdminReferrerSummary | null>(null);
@@ -117,6 +133,34 @@ export default function ReferralsPage() {
     const timer = setTimeout(loadReferrers, 350);
     return () => clearTimeout(timer);
   }, [loadReferrers]);
+
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await adminTriggerLinkSync();
+      if (res.skipped) {
+        toast({ title: 'Đang có phiên đồng bộ khác chạy', description: 'Vui lòng đợi rồi tải lại.' });
+      } else {
+        toast({ title: 'Đã đồng bộ ChottuLink', description: `Tạo ${res.minted} link mới · cập nhật ${res.synced} link. Đang tải lại…` });
+        await loadReferrers();
+      }
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Đồng bộ thất bại', description: err.message });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const copyShortUrl = async (r: AdminReferrerSummary) => {
+    if (!r.shortUrl) return;
+    try {
+      await navigator.clipboard.writeText(r.shortUrl);
+      setCopiedId(r.id);
+      setTimeout(() => setCopiedId((c) => (c === r.id ? null : c)), 1500);
+    } catch {
+      toast({ variant: 'destructive', title: 'Không copy được', description: r.shortUrl });
+    }
+  };
 
   const openReferrerDrilldown = async (r: AdminReferrerSummary) => {
     setSelectedReferrer(r);
@@ -222,9 +266,15 @@ export default function ReferralsPage() {
               <SelectItem value="amount">Tổng tiền giảm dần</SelectItem>
               <SelectItem value="trips">Số chuyến giảm dần</SelectItem>
               <SelectItem value="referees">Số người mời giảm dần</SelectItem>
+              <SelectItem value="clicks">Lượt nhấn nhiều nhất</SelectItem>
+              <SelectItem value="installs">Lượt tải nhiều nhất</SelectItem>
             </SelectContent>
           </Select>
         </div>
+        <Button variant="outline" onClick={handleSync} disabled={isSyncing} title="Tạo link còn thiếu + cập nhật lượt nhấn/tải từ ChottuLink">
+          {isSyncing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+          Đồng bộ ChottuLink
+        </Button>
       </div>
 
       <Card>
@@ -233,17 +283,21 @@ export default function ReferralsPage() {
             <TableRow>
               <TableHead>Chủ link</TableHead>
               <TableHead>Mã</TableHead>
+              <TableHead>Link giới thiệu</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Lượt nhấn</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Lượt tải</TableHead>
               <TableHead className="text-right">Số người mời</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
               <TableHead className="text-right">Tổng tiền</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Cập nhật</TableHead>
               <TableHead className="text-right" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
             ) : referrers.length === 0 ? (
-              <TableRow><TableCell colSpan={6} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={10} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
             ) : (
               referrers.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openReferrerDrilldown(r)}>
@@ -263,9 +317,65 @@ export default function ReferralsPage() {
                       ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.referralCode}</code>
                       : <span className="text-muted-foreground">—</span>}
                   </TableCell>
+                  <TableCell>
+                    {r.shortUrl ? (
+                      <div className="flex items-center gap-1.5">
+                        <a
+                          href={r.shortUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-primary hover:underline max-w-[180px] truncate"
+                          title={r.shortUrl}
+                        >
+                          {r.shortUrl.replace(/^https?:\/\//, '')}
+                        </a>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 shrink-0"
+                          onClick={(e) => { e.stopPropagation(); copyShortUrl(r); }}
+                          title="Copy link"
+                        >
+                          {copiedId === r.id ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Chưa có link</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {r.clicks ? (
+                      <div>
+                        <div className="font-medium flex items-center justify-end gap-1">
+                          <MousePointerClick className="h-3 w-3 text-muted-foreground" />
+                          {r.clicks.total.toLocaleString('vi-VN')}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">7n: {r.clicks.last7} · 30n: {r.clicks.last30}</div>
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {r.installs ? (
+                      <div>
+                        <div className="font-medium flex items-center justify-end gap-1">
+                          <Download className="h-3 w-3 text-muted-foreground" />
+                          {r.installs.total.toLocaleString('vi-VN')}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground">7n: {r.installs.last7} · 30n: {r.installs.last30}</div>
+                      </div>
+                    ) : r.installsUnavailable ? (
+                      <span className="text-muted-foreground" title="Cần gói trả phí ChottuLink để xem lượt tải">—</span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{r.refereeCount}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.tripCount}</TableCell>
                   <TableCell className="text-right tabular-nums font-semibold text-primary">{formatVND(r.totalReward)}</TableCell>
+                  <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{formatVnDateTime(r.analyticsSyncedAt)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReferrerDrilldown(r); }}>
                       Chi tiết →
