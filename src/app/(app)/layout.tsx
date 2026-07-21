@@ -16,15 +16,13 @@ import {
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
 import { ShieldCheck } from 'lucide-react';
 import { Logo } from '@/components/logo';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Header } from '@/components/header';
-import placeholderData from '@/lib/placeholder-images.json';
+import { SidebarIdentity } from '@/components/sidebar-identity';
 import React from 'react';
 import { navItems, type NavItem } from '@/lib/nav-items';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { isMenuVisible, isRouteAllowed } from '@/lib/rbac';
-
-const { placeholderImages } = placeholderData;
+import { logout } from '@/lib/api';
 
 // Mục "Phân quyền" chỉ hiện cho super admin (không nằm trong navItems catalog).
 const ROLES_NAV_ITEM: NavItem = { href: '/roles', label: 'Phân quyền', icon: ShieldCheck };
@@ -79,7 +77,6 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { me, loading } = useAuth();
-  const avatarUrl = placeholderImages.find(p => p.id === 'avatar1')?.imageUrl;
   const [isAuthenticated, setIsAuthenticated] = React.useState(false);
 
   React.useEffect(() => {
@@ -140,16 +137,14 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-          <div className="flex items-center gap-3 duration-200 group-data-[collapsible=icon]:hidden">
-            <Avatar className="h-9 w-9">
-              <AvatarImage src={avatarUrl} alt="@vigo-admin" />
-              <AvatarFallback>QT</AvatarFallback>
-            </Avatar>
-            <div className="flex flex-col">
-              <span className="text-sm font-medium">Quản trị viên</span>
-              <span className="text-xs text-muted-foreground">admin@vigo.com</span>
-            </div>
-          </div>
+          <SidebarIdentity
+            fullName={me?.fullName ?? null}
+            phone={me?.phone ?? null}
+            onLogout={async () => {
+              await logout();
+              router.push('/');
+            }}
+          />
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
