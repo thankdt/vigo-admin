@@ -1378,6 +1378,9 @@ export type AdminReferralListResponse = {
   meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
 };
 
+// ChottuLink fixed-bucket counts (total / last 7d / last 30d).
+export type ReferralLinkCounts = { total: number; last7: number; last30: number };
+
 export type AdminReferrerSummary = {
   id: string;
   phone?: string;
@@ -1386,6 +1389,13 @@ export type AdminReferrerSummary = {
   refereeCount: number;
   tripCount: number;
   totalReward: number;
+  // ChottuLink referral-link + analytics (additive; null = no link minted / not synced yet).
+  shortUrl?: string | null;
+  clicks?: ReferralLinkCounts | null;
+  installs?: ReferralLinkCounts | null;
+  // true when install-analytics returned 403 (no premium subscription) → installs left null on purpose.
+  installsUnavailable?: boolean;
+  analyticsSyncedAt?: string | null;
 };
 
 export type AdminReferrerListResponse = {
@@ -1393,11 +1403,13 @@ export type AdminReferrerListResponse = {
   meta: { page: number; limit: number; total: number; totalPages: number; hasNext: boolean; hasPrevious: boolean };
 };
 
+export type ReferrerSort = 'amount' | 'trips' | 'referees' | 'clicks' | 'installs';
+
 export async function adminListReferrers(params: {
   page?: number;
   limit?: number;
   search?: string;
-  sort?: 'amount' | 'trips' | 'referees';
+  sort?: ReferrerSort;
 } = {}): Promise<AdminReferrerListResponse> {
   const q = new URLSearchParams();
   if (params.page) q.set('page', String(params.page));
@@ -1407,6 +1419,13 @@ export async function adminListReferrers(params: {
   const qs = q.toString();
   const response = await fetchWithAuth(`/referrals/admin/referrers${qs ? '?' + qs : ''}`);
   return unwrap<AdminReferrerListResponse>(response);
+}
+
+// Trigger a ChottuLink referral-link sync now (mint missing links + refresh clicks/installs).
+// Backend shares the cron's Redis lock, so this no-ops if a run is already in progress.
+export async function adminTriggerLinkSync(): Promise<{ ranBy: string; skipped: boolean; minted: number; synced: number }> {
+  const response = await fetchWithAuth('/referrals/admin/link-sync', { method: 'POST' });
+  return unwrap<{ ranBy: string; skipped: boolean; minted: number; synced: number }>(response);
 }
 
 export async function adminListReferrals(params: { page?: number; limit?: number; referrerId?: string } = {}): Promise<AdminReferralListResponse> {
