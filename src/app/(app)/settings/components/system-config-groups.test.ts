@@ -70,4 +70,13 @@ describe('groupIdFor — other groups unchanged (precedence guard)', () => {
     expect(cancelIdx).toBeGreaterThanOrEqual(0);
     expect(cancelIdx).toBeLessThan(miscIdx);
   });
+
+  it('routes PHONE_REVEAL_ keys to the phone-reveal group and stays before misc', () => {
+    expect(groupIdFor('PHONE_REVEAL_RADIUS_M')).toBe('phone-reveal');
+    expect(groupIdFor('PHONE_REVEAL_SCHEDULED_MIN')).toBe('phone-reveal');
+    const phoneRevealIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'phone-reveal');
+    const miscIdx = CONFIG_GROUPS.findIndex((g) => g.id === 'misc');
+    expect(phoneRevealIdx).toBeGreaterThanOrEqual(0);
+    expect(phoneRevealIdx).toBeLessThan(miscIdx);
+  });
 });

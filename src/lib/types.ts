@@ -521,6 +521,8 @@ export type DriverCancelTrip = {
   cancelledAt: string;
   acceptedAt: string | null;
   minutesToCancel: number | null;
+  secondsToCancel: number | null;
+  durationFromCreated: boolean;
   cancelReason: string | null;
   cancelledByRole: string | null;
   pickupAddress: any;

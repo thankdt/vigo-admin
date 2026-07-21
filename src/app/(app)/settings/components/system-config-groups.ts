@@ -1,4 +1,4 @@
-import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, type LucideIcon } from 'lucide-react';
+import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, PhoneOff, type LucideIcon } from 'lucide-react';
 
 // Group the flat system_config list by key prefix so the page stays scannable.
 // Order matters: keys are tested top-to-bottom and land in the FIRST match — so
@@ -27,6 +27,10 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
   {
     id: 'cancel', label: 'Chống huỷ chuyến (khoá tài xế)', icon: ShieldAlert, danger: true,
     match: (k) => k.startsWith('CANCEL_'),
+  },
+  {
+    id: 'phone-reveal', label: 'Ẩn số điện thoại khách', icon: PhoneOff,
+    match: (k) => k.startsWith('PHONE_REVEAL_'),
   },
   { id: 'misc', label: 'Tích hợp & Khác', icon: Plug, match: () => true }, // catch-all — must stay last
 ];
