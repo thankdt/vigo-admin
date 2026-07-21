@@ -72,7 +72,9 @@ const BOOKING_STATUS_LABEL: Record<string, string> = {
   CREATED: 'Mới tạo',
   SEARCHING: 'Đang tìm',
   PROCESSING: 'Đang xử lý',
-  SCHEDULED: 'Đặt lịch',
+  // "Chờ đến giờ" (trip booked ahead, waiting for pickup time) — kept in sync with the bookings
+  // page label so the same status doesn't read two different ways across admin screens.
+  SCHEDULED: 'Chờ đến giờ',
   ACCEPTED: 'Đã nhận',
   ARRIVED: 'Đã đến',
   PICKED_UP: 'Đã đón',
