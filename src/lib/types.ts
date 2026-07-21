@@ -74,6 +74,30 @@ export type Role = {
   permissions: Permission[];
 };
 
+// --- RBAC (phân quyền admin theo function) ---
+// Shape khớp backend GET /admin/me và CRUD role. functions rỗng khi super (super = thấy tất).
+export type AdminMe = {
+  id: string;
+  fullName: string | null;
+  phone: string;
+  isSuperAdmin: boolean;
+  functions: string[];
+};
+
+export type AdminRole = {
+  id: string;
+  key: string;
+  name: string;
+  description: string;
+  isSystem: boolean;
+  functions: string[];
+};
+
+export type FunctionOverride = { functionKey: string; effect: 'GRANT' | 'REVOKE' };
+
+// Catalog function cho UI render (GET /admin/functions): key + nhãn + nhóm.
+export type FunctionCatalogItem = { key: string; label: string; group: string };
+
 export type TransportCompany = {
   id: string;
   name: string;
