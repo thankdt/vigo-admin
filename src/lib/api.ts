@@ -1423,9 +1423,9 @@ export async function adminListReferrers(params: {
 
 // Trigger a ChottuLink referral-link sync now (mint missing links + refresh clicks/installs).
 // Backend shares the cron's Redis lock, so this no-ops if a run is already in progress.
-export async function adminTriggerLinkSync(): Promise<{ ranBy: string; skipped: boolean; minted: number; synced: number }> {
+export async function adminTriggerLinkSync(): Promise<{ ranBy: string; skipped: boolean; discovered: number; synced: number }> {
   const response = await fetchWithAuth('/referrals/admin/link-sync', { method: 'POST' });
-  return unwrap<{ ranBy: string; skipped: boolean; minted: number; synced: number }>(response);
+  return unwrap<{ ranBy: string; skipped: boolean; discovered: number; synced: number }>(response);
 }
 
 export async function adminListReferrals(params: { page?: number; limit?: number; referrerId?: string } = {}): Promise<AdminReferralListResponse> {

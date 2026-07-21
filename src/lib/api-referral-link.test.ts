@@ -51,7 +51,7 @@ describe('referral-link admin API client', () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
-      json: async () => ({ data: { ranBy: 'manual', skipped: false, minted: 2, synced: 5 } }),
+      json: async () => ({ data: { ranBy: 'manual', skipped: false, discovered: 2, synced: 5 } }),
     });
 
     const res = await adminTriggerLinkSync();
@@ -59,6 +59,6 @@ describe('referral-link admin API client', () => {
     const [url, opts] = fetchMock.mock.calls[0];
     expect(url).toBe(`${API_BASE_URL}/referrals/admin/link-sync`);
     expect(opts.method).toBe('POST');
-    expect(res).toEqual({ ranBy: 'manual', skipped: false, minted: 2, synced: 5 });
+    expect(res).toEqual({ ranBy: 'manual', skipped: false, discovered: 2, synced: 5 });
   });
 });
