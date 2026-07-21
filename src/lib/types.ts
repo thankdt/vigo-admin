@@ -184,6 +184,10 @@ export type PriceBreakdown = {
   // bookings don't have it (admin breakdown doesn't render the strikethrough
   // anyway, so the missing field is harmless here).
   priceBeforeDiscount?: number;
+  // Giảm giá CARPOOL theo số ghế đặt (2-5 ghế). Optional — chuyến cũ /
+  // chuyến không phải CARPOOL không có field này (hoặc = 0).
+  seatDiscountPercent?: number;
+  seatDiscountAmount?: number;
 };
 
 export type DriverEarnings = {
@@ -229,6 +233,12 @@ export type Booking = {
   finalPrice?: number;
   status: BookingStatus;
   serviceType?: string;
+  // Loại dịch vụ THỰC TẾ sau khi backend auto-switch CARPOOL→RIDE (đủ ghế
+  // = sức chứa xe). serviceType giữ nguyên loại GỐC khách/admin chọn;
+  // effectiveServiceType phản ánh loại đã áp dụng. Optional — backend cũ /
+  // chuyến không switch có thể không có field, hoặc trùng serviceType.
+  effectiveServiceType?: string;
+  switchedToWholeCar?: boolean;
   isPooled?: boolean;
   requestedSeats?: number;
   requestedVehicleType?: string | null;

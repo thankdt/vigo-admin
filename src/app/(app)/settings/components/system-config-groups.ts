@@ -8,7 +8,7 @@ export type ConfigGroup = { id: string; label: string; icon: LucideIcon; danger?
 
 export const CONFIG_GROUPS: ConfigGroup[] = [
   { id: 'app', label: 'Phiên bản App', icon: Smartphone, match: (k) => k.includes('_APP_') },
-  { id: 'pricing', label: 'Giá & Hoa hồng', icon: DollarSign, match: (k) => k.startsWith('PRICING_') || k.endsWith('COMMISSION_RATE') },
+  { id: 'pricing', label: 'Giá & Hoa hồng', icon: DollarSign, match: (k) => k.startsWith('PRICING_') || k.endsWith('COMMISSION_RATE') || k.startsWith('CARPOOL_SEAT_DISCOUNT') },
   {
     id: 'dispatch', label: 'Điều phối & Tuyến', icon: Navigation, danger: true,
     match: (k) =>

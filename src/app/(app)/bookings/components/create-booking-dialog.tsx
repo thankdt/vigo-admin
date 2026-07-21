@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
 import { fmtVnd, isVoucherSelectable, voucherLabel } from './voucher-utils';
 import { validateWindow, toIso } from './schedule-utils';
+import { isVehicleTypeApplicable, resolveRequestedVehicleType } from './vehicle-type-utils';
 
 interface CreateBookingDialogProps {
   onSuccess: () => void;
@@ -129,7 +130,7 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
         pickup: { address: pickup.address, lat: pickup.lat, long: pickup.long },
         dropoff: { address: dropoff.address, lat: dropoff.lat, long: dropoff.long },
         serviceType,
-        requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
+        requestedVehicleType: resolveRequestedVehicleType(serviceType, vehicleType),
         requestedSeats: showPassengerFields ? totalPassengers : undefined,
         promotionId: selectedPromotionId ?? undefined,
         // Chuyến đặt lịch → tính phụ phí theo NGÀY ĐI (đầu khung giờ), không phải
@@ -299,7 +300,7 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
           long: dropoff.long,
         },
         serviceType,
-        requestedVehicleType: serviceType === 'RIDE' ? vehicleType : undefined,
+        requestedVehicleType: resolveRequestedVehicleType(serviceType, vehicleType),
         requestedSeats: showPassengerFields ? totalPassengers : undefined,
         // [primary, ...co-passengers] — primary is the booking customer. Only
         // sent when there's at least one co-passenger; a solo ride needs no list.
@@ -501,9 +502,11 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
                 </SelectContent>
               </Select>
             </div>
-            {serviceType === 'RIDE' ? (
+            {isVehicleTypeApplicable(serviceType) ? (
               <div className="space-y-1.5">
-                <Label>Loại xe <span className="text-destructive">*</span></Label>
+                <Label>
+                  Loại xe {serviceType === 'RIDE' && <span className="text-destructive">*</span>}
+                </Label>
                 <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v as any); clearEstimate(); }}>
                   <SelectTrigger>
                     <SelectValue />
@@ -513,6 +516,11 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
                     <SelectItem value="CAR_7">🚙 7 chỗ</SelectItem>
                   </SelectContent>
                 </Select>
+                {serviceType === 'CARPOOL' && (
+                  <p className="text-xs text-muted-foreground">
+                    Đặt đủ số ghế của loại xe này (5 chỗ = 4 khách, 7 chỗ = 6 khách) sẽ tự chuyển sang Bao xe (tính giá cả xe, KHÔNG áp giảm giá theo ghế).
+                  </p>
+                )}
               </div>
             ) : (
               <div className="space-y-1.5">
@@ -522,7 +530,7 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
             )}
           </div>
 
-          {serviceType === 'RIDE' && (
+          {isVehicleTypeApplicable(serviceType) && (
             <div className="space-y-1.5">
               <Label htmlFor="cb-note">Ghi chú</Label>
               <Textarea id="cb-note" placeholder="VD: Khách VIP, hành lý cồng kềnh..." value={note} onChange={(e) => setNote(e.target.value)} rows={1} className="min-h-[36px] resize-none" />

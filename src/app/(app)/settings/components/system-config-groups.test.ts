@@ -80,3 +80,20 @@ describe('groupIdFor — other groups unchanged (precedence guard)', () => {
     expect(phoneRevealIdx).toBeLessThan(miscIdx);
   });
 });
+
+describe('groupIdFor — CARPOOL seat discount keys', () => {
+  const seatDiscountKeys = [
+    'CARPOOL_SEAT_DISCOUNT_2',
+    'CARPOOL_SEAT_DISCOUNT_3',
+    'CARPOOL_SEAT_DISCOUNT_4',
+    'CARPOOL_SEAT_DISCOUNT_5',
+  ];
+
+  it.each(seatDiscountKeys)('routes %s to the pricing group', (key) => {
+    expect(groupIdFor(key)).toBe('pricing');
+  });
+
+  it('does not fall through to misc (catch-all)', () => {
+    expect(groupIdFor('CARPOOL_SEAT_DISCOUNT_2')).not.toBe('misc');
+  });
+});
