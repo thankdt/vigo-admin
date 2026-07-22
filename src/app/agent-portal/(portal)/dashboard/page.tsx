@@ -5,8 +5,10 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getAgentMe, AgentMe } from '@/lib/api';
-import { ListOrdered, Percent } from 'lucide-react';
+import { ListOrdered, Wallet } from 'lucide-react';
 import { CreateBookingDialog } from '@/app/(app)/bookings/components/create-booking-dialog';
+
+const fmtVnd = (n: number | null | undefined) => (n == null ? '—' : `${n.toLocaleString('vi-VN')}₫`);
 
 export default function AgentDashboardPage() {
   const [me, setMe] = React.useState<AgentMe | null>(null);
@@ -52,13 +54,16 @@ export default function AgentDashboardPage() {
         >
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center gap-2 text-muted-foreground">
-              <Percent className="h-4 w-4" /> Hoa hồng của bạn
+              <Wallet className="h-4 w-4" /> {me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng'}
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-3xl font-bold">{me?.commissionPercent != null ? `${me.commissionPercent}%` : '—'}</div>
-            <p className="text-xs text-muted-foreground mt-1">Trên cước (trước VAT) mỗi đơn hoàn thành</p>
-            {inApp && <p className="text-xs text-primary mt-2 font-medium">Xem ví hoa hồng →</p>}
+            {/* Số dư ví — nguồn hoa hồng đổ về. undefined (backend cũ) → "—", không vỡ. */}
+            <div className="text-3xl font-bold">{me?.walletBalance != null ? fmtVnd(me.walletBalance) : '—'}</div>
+            <p className="text-xs text-muted-foreground mt-1">
+              Hoa hồng {me?.commissionPercent != null ? `${me.commissionPercent}%` : '—'} trên cước (trước VAT) mỗi đơn hoàn thành
+            </p>
+            {inApp && <p className="text-xs text-primary mt-2 font-medium">Xem chi tiết ví →</p>}
           </CardContent>
         </Card>
         <Card>
