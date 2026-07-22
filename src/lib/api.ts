@@ -1831,6 +1831,10 @@ export type AgentMe = {
   displayName: string | null;
   commissionPercent: number | null;
   bankInfo: KolBankInfo | null;
+  // Số dư ví hoa hồng (additive — có thể undefined nếu backend cũ). walletType để UI đặt nhãn đúng:
+  // USER_REFERRAL = ví hoa hồng (đại lý là khách), DRIVER_MAIN = ví tài xế (đại lý là tài xế).
+  walletBalance?: number;
+  walletType?: 'USER_REFERRAL' | 'DRIVER_MAIN';
 };
 export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
 export type AgentPassenger = {
@@ -1893,6 +1897,8 @@ export type AgentBooking = {
   finalPrice: number | null;
   agentCommissionAmount: number | null;
   agentCommissionPercent: number | null;
+  // Hoa hồng "dự kiến" cho đơn CHƯA hoàn thành (null nếu đã có số thật / không phát sinh). additive.
+  agentCommissionEstimate?: number | null;
   customerName: string | null;
   customerPhone: string | null;
   passengerNames: string[] | null;
