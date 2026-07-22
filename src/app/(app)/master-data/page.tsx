@@ -11,7 +11,7 @@ export default function MasterDataPage() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dữ liệu chung"
+        title="Tuyến đường & Vùng"
         description="Quản lý đơn vị hành chính, tuyến đường và bảng giá."
       />
       <Tabs defaultValue="admin-units" className="w-full">

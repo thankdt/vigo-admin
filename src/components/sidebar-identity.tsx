@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { LogOut, KeyRound, Loader2, Settings } from 'lucide-react';
+import { LogOut, KeyRound, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -36,7 +36,7 @@ export function SidebarIdentity({
           <span className="truncate text-sm font-medium">{fullName || 'Quản trị viên'}</span>
           <span className="truncate text-xs text-muted-foreground">{phone || ''}</span>
         </div>
-        <Settings className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+        <KeyRound className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
       </button>
       <Button variant="ghost" size="sm" className="justify-start" onClick={onLogout}>
         <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
