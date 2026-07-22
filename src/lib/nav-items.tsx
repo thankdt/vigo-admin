@@ -50,6 +50,7 @@ export const navGroups: NavGroup[] = [
       { href: '/bookings', label: 'Chuyến đi', icon: Book },
       { href: '/agent-orders', label: 'Đơn đặt hộ', icon: PackageOpen },
       { href: '/drivers', label: 'Tài xế', icon: Car },
+      { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
       { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
       { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
       { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
@@ -88,7 +89,6 @@ export const navGroups: NavGroup[] = [
   {
     label: 'Hệ thống',
     items: [
-      { href: '/master-data', label: 'Dữ liệu chung', icon: Map },
       { href: '/settings', label: 'Cài đặt', icon: Settings },
     ],
   },
