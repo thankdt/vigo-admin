@@ -6,9 +6,22 @@ import {
   SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter,
   SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, LogOut, Store, ListOrdered, PlusCircle } from 'lucide-react';
-import { getAgentMe } from '@/lib/api';
+import { LayoutDashboard, LogOut, ListOrdered, PlusCircle, Wallet } from 'lucide-react';
+import { getAgentMe, type AgentMe } from '@/lib/api';
 import React from 'react';
+
+/** Số dư ví hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
+function WalletChip({ me }: { me: AgentMe | null }) {
+  if (me?.walletBalance == null) return null;
+  const label = me.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng';
+  return (
+    <div className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+      <Wallet className="h-3.5 w-3.5 shrink-0" />
+      <span className="group-data-[collapsible=icon]:hidden">{label}:</span>
+      <span>{me.walletBalance.toLocaleString('vi-VN')}₫</span>
+    </div>
+  );
+}
 
 const navItems = [
   { href: '/agent-portal/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
@@ -21,6 +34,7 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
   const pathname = usePathname();
   const router = useRouter();
   const [authorized, setAuthorized] = React.useState(false);
+  const [me, setMe] = React.useState<AgentMe | null>(null);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -28,7 +42,9 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
       router.replace('/agent-portal/login');
       return;
     }
-    getAgentMe().then(() => setAuthorized(true)).catch(() => router.replace('/agent-portal/login'));
+    getAgentMe()
+      .then((m) => { setMe(m); setAuthorized(true); })
+      .catch(() => router.replace('/agent-portal/login'));
   }, [router]);
 
   if (!authorized) return null;
@@ -43,7 +59,7 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
   return (
     <SidebarProvider>
       <Sidebar>
-        <SidebarHeader className="p-4">
+        <SidebarHeader className="p-4 space-y-3">
           <Link href="/agent-portal/dashboard" className="flex items-center gap-2">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/vigo-wordmark.png" alt="ViiGO" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
@@ -51,6 +67,7 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
             <img src="/vigo-icon.png" alt="ViiGO" className="hidden h-8 w-8 shrink-0 rounded group-data-[collapsible=icon]:block" />
             <span className="text-lg font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">Đại lý</span>
           </Link>
+          <WalletChip me={me} />
         </SidebarHeader>
         <SidebarContent>
           <SidebarMenu>
@@ -93,6 +110,7 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/vigo-wordmark.png" alt="ViiGO" className="h-5 w-auto" /> Đại lý
           </Link>
+          <div className="ml-auto"><WalletChip me={me} /></div>
         </header>
         <div className="p-6 max-w-5xl mx-auto w-full">{children}</div>
       </SidebarInset>
