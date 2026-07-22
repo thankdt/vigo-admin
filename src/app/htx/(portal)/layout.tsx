@@ -55,9 +55,12 @@ export default function HtxPortalLayout({ children }: { children: React.ReactNod
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="p-4">
-          <Link href="/htx/dashboard" className="flex items-center gap-2 font-semibold">
-            <Logo className="h-7 w-7 text-primary" />
-            <span className="duration-200 group-data-[collapsible=icon]:hidden">Vigo HTX</span>
+          <Link href="/htx/dashboard" className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-wordmark.png" alt="ViiGO" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-icon.png" alt="ViiGO" className="hidden h-8 w-8 shrink-0 rounded group-data-[collapsible=icon]:block" />
+            <span className="text-lg font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">HTX</span>
           </Link>
         </SidebarHeader>
         <SidebarContent>
