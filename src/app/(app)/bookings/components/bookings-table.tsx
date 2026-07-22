@@ -983,11 +983,12 @@ export function BookingsTable() {
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
     setCurrentPage(1); // Reset to page 1 on tab change
-    // Tab Hoàn thành mặc định sắp theo thời gian hoàn thành THẬT (completedAt; BE fallback
-    // COALESCE(completedAt, updatedAt) cho rows cũ). Các tab khác giữ mặc định theo ngày tạo.
+    // Tab Hoàn thành sắp theo updatedAt (≈ thời gian hoàn thành thật: đã hết bị bump bởi backfill
+    // distanceKm + 21 chuyến lỗi đã khôi phục về đúng). Cột hiển thị dùng completedAt ?? updatedAt.
+    // KHÔNG sort theo completedAt: đa số rows cũ completedAt=NULL → bị đẩy sai thứ tự.
     setSortConfig(
       value === 'COMPLETED'
-        ? { key: 'completedAt', direction: 'descending' }
+        ? { key: 'updatedAt', direction: 'descending' }
         : { key: 'createdAt', direction: 'descending' },
     );
   }
@@ -1182,7 +1183,7 @@ export function BookingsTable() {
                 {/* Tab Hoàn thành: cột thời gian hoàn thành THẬT (completedAt, fallback updatedAt). */}
                 {activeTab === 'COMPLETED' && (
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('completedAt')}>
+                    <Button variant="ghost" onClick={() => requestSort('updatedAt')}>
                       Ngày hoàn thành
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
