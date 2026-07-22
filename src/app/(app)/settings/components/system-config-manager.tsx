@@ -11,11 +11,20 @@ import { getSystemConfigs, updateSystemConfig } from '@/lib/api';
 import type { SystemConfig } from '@/lib/types';
 import { Loader2, Save, Search, AlertTriangle, Undo2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { CONFIG_GROUPS, groupIdFor } from './system-config-groups';
+import { buildConfigGroups } from './system-config-groups';
 import { ConfigFieldRow, CONFIG_GRID } from './config-field-row';
 import { applyEdit, normalizeValue, summarizeSaveResults } from './system-config-edits';
+import { useAuth } from '@/lib/auth-context';
 
 export function SystemConfigManager() {
+  // Ẩn nhóm mà user không có settings.<group> (defense-in-depth: backend redact secret
+  // + chặn ghi; đây là UX). Super thấy tất. Chiều ĐỌC backend không lọc (spec §4.3) nên
+  // ẩn ở FE là lớp che duy nhất cho giá trị nhóm khác — chấp nhận vì config không phải secret.
+  const { me } = useAuth();
+  const canSettings = React.useCallback(
+    (groupId: string) => !!me && (me.isSuperAdmin || me.functions.includes('settings.' + groupId)),
+    [me],
+  );
   // `original` = immutable server snapshot; `edits` = only the changed keys. A field
   // is dirty iff its key is in `edits`. Displayed value = edits[key] ?? original ?? ''.
   const [original, setOriginal] = React.useState<SystemConfig[]>([]);
@@ -167,16 +176,11 @@ export function SystemConfigManager() {
   const q = query.trim().toLowerCase();
   const searching = q.length > 0;
 
-  // Bucket every config into its group, applying the search filter.
-  const grouped = React.useMemo(() => {
-    const visible = q
-      ? original.filter((c) => c.key.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q))
-      : original;
-    return CONFIG_GROUPS.map((g) => ({
-      group: g,
-      items: visible.filter((c) => groupIdFor(c.key) === g.id),
-    })).filter((entry) => entry.items.length > 0);
-  }, [original, q]);
+  // Bucket every config into its group, applying the search filter + RBAC gate.
+  const grouped = React.useMemo(
+    () => buildConfigGroups(original, query, canSettings),
+    [original, query, canSettings],
+  );
 
   // While searching, force every group with matches open so results are visible.
   const accordionValue = searching ? grouped.map((e) => e.group.id) : open;
