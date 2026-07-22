@@ -309,6 +309,16 @@ export async function createAdminUser(body: {
   return data.data || data;
 }
 
+// Super admin sửa 1 tài khoản admin (tên + reset mật khẩu). Phone bất biến.
+export async function updateAdminUser(id: string, body: { fullName?: string; password?: string }): Promise<void> {
+  await fetchWithAuth(`/users/admin/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
+}
+
+// Self: user đang đăng nhập tự đổi mật khẩu (cần mật khẩu hiện tại).
+export async function changeOwnPassword(currentPassword: string, newPassword: string): Promise<void> {
+  await fetchWithAuth('/auth/change-password', { method: 'POST', body: JSON.stringify({ currentPassword, newPassword }) });
+}
+
 export async function getDrivers(params: {
   page?: number;
   limit?: number;

@@ -32,7 +32,7 @@ import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus, Trash2, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { getUsers, lockUser, unlockUser, deleteAdminUser, restoreUser, adminGetUserReferralStats, createAdminUser, type AdminUserReferralStats } from '@/lib/api';
+import { getUsers, lockUser, unlockUser, deleteAdminUser, restoreUser, adminGetUserReferralStats, type AdminUserReferralStats } from '@/lib/api';
 import type { User } from '@/lib/types';
 import {
   Dialog,
@@ -241,79 +241,8 @@ export function UsersTable() {
   };
 
 
-  const CreateAdminForm = ({ onClose }: { onClose: () => void }) => {
-    const [fullName, setFullName] = React.useState('');
-    const [phone, setPhone] = React.useState('');
-    const [password, setPassword] = React.useState('');
-    const [email, setEmail] = React.useState('');
-    const [isSubmitting, setIsSubmitting] = React.useState(false);
-
-    const handleSubmit = async (e: React.FormEvent) => {
-      e.preventDefault();
-      if (phone.trim().length < 10) {
-        toast({ variant: 'destructive', title: 'SĐT không hợp lệ', description: 'Số điện thoại tối thiểu 10 ký tự.' });
-        return;
-      }
-      if (password.length < 6) {
-        toast({ variant: 'destructive', title: 'Mật khẩu quá ngắn', description: 'Mật khẩu tối thiểu 6 ký tự.' });
-        return;
-      }
-      setIsSubmitting(true);
-      try {
-        await createAdminUser({
-          phone: phone.trim(),
-          password,
-          fullName: fullName.trim() || undefined,
-          email: email.trim() || undefined,
-        });
-        toast({ title: 'Đã tạo tài khoản admin', description: fullName.trim() || phone.trim() });
-        fetchUsers(searchTerm, currentPage, pageSize, roleFilter, deletedScope);
-        onClose();
-      } catch (err: any) {
-        toast({ variant: 'destructive', title: 'Không tạo được tài khoản', description: err.message });
-      } finally {
-        setIsSubmitting(false);
-      }
-    };
-
-    return (
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Tạo tài khoản admin</DialogTitle>
-            <DialogDescription>
-              Tạo một tài khoản quản trị viên mới. Tài khoản đăng nhập bằng số điện thoại + mật khẩu.
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="fullName">Họ tên</Label>
-              <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} placeholder="Nguyễn Văn A" />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="phone">Số điện thoại <span className="text-destructive">*</span></Label>
-              <Input id="phone" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="0901234567" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="password">Mật khẩu <span className="text-destructive">*</span></Label>
-              <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Tối thiểu 6 ký tự" required />
-            </div>
-            <div className="grid gap-2">
-              <Label htmlFor="email">Email (không bắt buộc)</Label>
-              <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="admin@vigogroup.vn" />
-            </div>
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose} disabled={isSubmitting}>Hủy</Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Tạo admin
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    );
-  };
+  // Tạo/sửa/xoá tài khoản admin đã chuyển sang trang Phân quyền (/roles → tab "Tài
+  // khoản admin", super-only). Ở đây chỉ quản lý user thường (khoá/mở/xoá/khôi phục).
 
   return (
     <>
@@ -351,10 +280,6 @@ export function UsersTable() {
             </SelectContent>
           </Select>
         </div>
-        <Button onClick={() => { setEditingUser(null); setIsFormOpen(true); }}>
-          <Plus className="mr-2 h-4 w-4" />
-          Tạo admin
-        </Button>
       </div>
       <Card>
         <Table>
@@ -592,7 +517,6 @@ export function UsersTable() {
           </div>
         </div>
       </Card>
-      {isFormOpen && <CreateAdminForm onClose={handleCloseForm} />}
 
       {/* Affiliate stats viewer — same data the user sees in their mobile app, scoped by userId. */}
       <Dialog open={!!statsTarget} onOpenChange={(open) => { if (!open) { setStatsTarget(null); setStats(null); } }}>
