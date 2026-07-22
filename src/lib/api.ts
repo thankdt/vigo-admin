@@ -1656,6 +1656,90 @@ export async function adminRevokeKol(userId: string): Promise<AdminKolRow> {
   return unwrap<AdminKolRow>(response);
 }
 
+// ── Mã ưu đãi của KOL (kol_code): khách dùng mã → khách được cộng điểm thưởng ──
+
+export type KolCodeRow = {
+  id: string;
+  code: string;
+  ownerUserId: string;
+  refereeRewardPoints: number;
+  isActive: boolean;
+  campaignName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  usageLimit: number;
+  dailyLimit: number;
+  usedCount: number;
+  createdAt: string;
+};
+
+export type KolCodeReport = {
+  code: string;
+  isActive: boolean;
+  usageLimit: number;
+  usedCount: number;
+  dailyLimit: number;
+  refereeRewardPoints: number;
+  totalReferees: number;
+  converted: number;
+  totalPointsCredited: number;
+};
+
+export async function adminListKolCodes(userId: string): Promise<KolCodeRow[]> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}/codes`);
+  return unwrap<KolCodeRow[]>(response);
+}
+
+export async function adminCreateKolCode(
+  userId: string,
+  body: {
+    code?: string;
+    refereeRewardPoints: number;
+    usageLimit: number;
+    dailyLimit?: number;
+    campaignName?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+): Promise<KolCodeRow> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}/codes`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<KolCodeRow>(response);
+}
+
+export async function adminUpdateKolCode(
+  id: string,
+  body: {
+    refereeRewardPoints?: number;
+    usageLimit?: number;
+    dailyLimit?: number;
+    isActive?: boolean;
+    campaignName?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+): Promise<KolCodeRow> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return unwrap<KolCodeRow>(response);
+}
+
+export async function adminDeactivateKolCode(id: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}/deactivate`, {
+    method: 'POST',
+  });
+  return unwrap<{ ok: true }>(response);
+}
+
+export async function adminKolCodeReport(id: string): Promise<KolCodeReport> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}/report`);
+  return unwrap<KolCodeReport>(response);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Booking-agent (đại lý đặt hộ) — admin management
 // ─────────────────────────────────────────────────────────────────────
