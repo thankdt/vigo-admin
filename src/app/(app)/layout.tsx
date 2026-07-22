@@ -18,7 +18,6 @@ import {
 } from '@/components/ui/sidebar';
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
 import { ShieldCheck } from 'lucide-react';
-import { Logo } from '@/components/logo';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
 import { SidebarIdentity } from '@/components/sidebar-identity';
@@ -145,7 +144,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar>
         <SidebarHeader className="p-4">
           <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
-            <Logo className="h-7 w-7 text-primary" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-icon.png" alt="Vigo" className="h-8 w-8 shrink-0 rounded" />
             <span className="duration-200 group-data-[collapsible=icon]:hidden">Vigo Admin</span>
           </Link>
         </SidebarHeader>
