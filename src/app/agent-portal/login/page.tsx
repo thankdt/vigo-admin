@@ -75,9 +75,8 @@ export default function AgentLoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 p-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-2 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Store className="h-6 w-6 text-primary" />
-          </div>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/vigo-icon.png" alt="ViiGO" className="mx-auto mb-2 h-12 w-12 rounded-xl" />
           <CardTitle>Cổng đại lý đặt hộ</CardTitle>
           <CardDescription>
             {step === 'phone' ? 'Đăng nhập bằng số điện thoại' : `Nhập mã OTP gửi tới ${phone}`}

@@ -68,7 +68,8 @@ export default function LoginPage() {
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
           <CardHeader className="items-center text-center">
-            <Logo className="mb-4 h-12 w-12 text-primary" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-icon.png" alt="ViiGO" className="mb-4 h-14 w-14 rounded-xl" />
             <CardTitle className="text-2xl font-bold tracking-tight">Vigo Admin</CardTitle>
             <CardDescription>Chào mừng trở lại! Vui lòng đăng nhập để tiếp tục.</CardDescription>
           </CardHeader>
