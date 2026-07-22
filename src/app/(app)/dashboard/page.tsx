@@ -14,6 +14,7 @@ import {
   getAdminOverview, getFinanceDashboard, getFinanceSeries,
   type AdminOverview, type FinanceDashboard, type FinanceSeries,
 } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 
 const fmtVnd = (v: number) => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v);
@@ -61,6 +62,11 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const { can } = useAuth();
+  // Widget tiền (GMV, doanh thu, Top HTX) lấy từ /admin/finance/* — backend gate
+  // bằng quyền `finance`. User không có `finance` thì bỏ qua các call đó (tránh 403
+  // làm hỏng cả trang) và ẩn phần tiền; phần vận hành (/admin/overview) vẫn hiện.
+  const canFinance = can('finance');
   const [range, setRange] = React.useState<DateRange>(PRESETS[0].range());
   const [ov, setOv] = React.useState<AdminOverview | null>(null);
   const [fin, setFin] = React.useState<FinanceDashboard | null>(null);
@@ -70,18 +76,23 @@ export default function DashboardPage() {
   const load = React.useCallback(async (r: DateRange) => {
     setLoading(true);
     try {
-      const [o, f, s] = await Promise.all([
-        getAdminOverview(r.from, r.to),
-        getFinanceDashboard(r.from, r.to),
-        getFinanceSeries('totalTripIncludingTax', r.from, r.to),
-      ]);
-      setOv(o); setFin(f); setSeries(s);
+      const o = await getAdminOverview(r.from, r.to);
+      setOv(o);
+      if (canFinance) {
+        const [f, s] = await Promise.all([
+          getFinanceDashboard(r.from, r.to),
+          getFinanceSeries('totalTripIncludingTax', r.from, r.to),
+        ]);
+        setFin(f); setSeries(s);
+      } else {
+        setFin(null); setSeries(null);
+      }
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không tải được dashboard', description: err.message });
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, canFinance]);
 
   React.useEffect(() => { load(range); }, [range, load]);
 
@@ -100,7 +111,7 @@ export default function DashboardPage() {
 
       {loading && !ov ? (
         <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>
-      ) : ov && fin ? (
+      ) : ov ? (
         <>
           {/* A — Vận hành hiện tại */}
           <SectionTitle>Vận hành (hiện tại)</SectionTitle>
@@ -129,7 +140,8 @@ export default function DashboardPage() {
             <QueueTile icon={<Wallet className="h-5 w-5" />} label="Lệnh rút chờ duyệt" count={ov.queues.withdrawalsPending} href="/withdrawals" />
           </div>
 
-          {/* B — Kinh doanh theo kỳ */}
+          {/* B — Kinh doanh theo kỳ (chỉ role có quyền `finance`) */}
+          {canFinance && fin && (<>
           <SectionTitle>Kinh doanh (theo kỳ đã chọn)</SectionTitle>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Stat icon={<Banknote className="h-5 w-5" />} label="GMV (tổng tiền chuyến)" value={fmtVnd(fin.cashFlow.totalTripIncludingTax)} hint="Tiền khách trả (chuyến hoàn thành)" />
@@ -156,6 +168,7 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+          </>)}
 
           {/* C — Cung – cầu & tăng trưởng */}
           <SectionTitle>Cung – cầu & tăng trưởng</SectionTitle>
@@ -166,6 +179,7 @@ export default function DashboardPage() {
             <Stat icon={<Activity className="h-5 w-5" />} label="Khách hoạt động (kỳ)" value={fmtNum(ov.demand.activeCustomersInPeriod)} hint="Có chuyến hoàn thành trong kỳ" />
           </div>
 
+          {canFinance && fin && (
           <Card>
             <CardHeader className="pb-2 flex flex-row items-center gap-2 space-y-0">
               <Building2 className="h-4 w-4 text-muted-foreground" />
@@ -196,6 +210,7 @@ export default function DashboardPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </>
       ) : null}
     </div>
