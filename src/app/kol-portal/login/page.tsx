@@ -71,9 +71,8 @@ export default function KolLoginPage() {
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
           <CardHeader className="items-center text-center">
-            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-              <Crown className="h-6 w-6 text-primary" />
-            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-icon.png" alt="ViiGO" className="mb-3 h-14 w-14 rounded-xl" />
             <CardTitle className="text-2xl font-bold tracking-tight">Vigo KOL Portal</CardTitle>
             <CardDescription>Cổng dành cho KOL/KOC và thủ lĩnh</CardDescription>
           </CardHeader>

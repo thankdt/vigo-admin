@@ -44,9 +44,12 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="p-4">
-          <Link href="/agent-portal/dashboard" className="flex items-center gap-2 font-semibold">
-            <Store className="h-7 w-7 text-primary" />
-            <span className="duration-200 group-data-[collapsible=icon]:hidden">Vigo Đặt hộ</span>
+          <Link href="/agent-portal/dashboard" className="flex items-center gap-2">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-wordmark.png" alt="ViiGO" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-icon.png" alt="ViiGO" className="hidden h-8 w-8 shrink-0 rounded group-data-[collapsible=icon]:block" />
+            <span className="text-lg font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">Đại lý</span>
           </Link>
         </SidebarHeader>
         <SidebarContent>
@@ -87,7 +90,8 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
         <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background p-3 md:hidden">
           <SidebarTrigger />
           <Link href="/agent-portal/dashboard" className="flex items-center gap-2 font-semibold">
-            <Store className="h-5 w-5 text-primary" /> Vigo Đặt hộ
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-wordmark.png" alt="ViiGO" className="h-5 w-auto" /> Đại lý
           </Link>
         </header>
         <div className="p-6 max-w-5xl mx-auto w-full">{children}</div>
