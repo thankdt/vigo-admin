@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { LogOut, KeyRound, Loader2 } from 'lucide-react';
+import { LogOut, KeyRound, Loader2, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
@@ -30,10 +30,13 @@ export function SidebarIdentity({
         type="button"
         onClick={() => setPwOpen(true)}
         title="Đổi mật khẩu"
-        className="flex flex-col items-start rounded-md px-1 py-0.5 text-left hover:bg-muted"
+        className="flex items-center gap-2 rounded-md px-1 py-0.5 text-left hover:bg-muted"
       >
-        <span className="text-sm font-medium">{fullName || 'Quản trị viên'}</span>
-        <span className="text-xs text-muted-foreground">{phone || ''}</span>
+        <div className="flex min-w-0 flex-col">
+          <span className="truncate text-sm font-medium">{fullName || 'Quản trị viên'}</span>
+          <span className="truncate text-xs text-muted-foreground">{phone || ''}</span>
+        </div>
+        <Settings className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
       </button>
       <Button variant="ghost" size="sm" className="justify-start" onClick={onLogout}>
         <LogOut className="mr-2 h-4 w-4" /> Đăng xuất

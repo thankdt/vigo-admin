@@ -11,6 +11,9 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarGroupContent,
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
@@ -20,7 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
 import { SidebarIdentity } from '@/components/sidebar-identity';
 import React from 'react';
-import { navItems, type NavItem } from '@/lib/nav-items';
+import { navGroups, type NavItem } from '@/lib/nav-items';
 import { AuthProvider, useAuth } from '@/lib/auth-context';
 import { isMenuVisible, isRouteAllowed } from '@/lib/rbac';
 import { logout } from '@/lib/api';
@@ -120,8 +123,17 @@ function AppShell({ children }: { children: React.ReactNode }) {
     );
   }
 
-  const visibleNav = navItems.filter((item) => isMenuVisible(item.href, me));
-  if (me.isSuperAdmin) visibleNav.push(ROLES_NAV_ITEM);
+  // Lọc mục theo quyền, gom theo nhóm, bỏ nhóm rỗng. "Phân quyền" (super-only) gắn
+  // vào cuối nhóm "Hệ thống".
+  const visibleGroups = navGroups
+    .map((g) => ({
+      label: g.label,
+      items: [
+        ...g.items.filter((item) => isMenuVisible(item.href, me)),
+        ...(g.label === 'Hệ thống' && me.isSuperAdmin ? [ROLES_NAV_ITEM] : []),
+      ],
+    }))
+    .filter((g) => g.items.length > 0);
 
   // Route không có quyền: KHÔNG render children (chặn nội dung + effect fetch của trang
   // cấm chớp lên trước khi effect guard redirect). Sidebar vẫn hiện (menu đã lọc).
@@ -138,24 +150,31 @@ function AppShell({ children }: { children: React.ReactNode }) {
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>
-            {visibleNav.map((item) => (
-              <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton
-                  asChild
-                  // Exact match or a true sub-path (href + '/') — NOT a bare prefix, so sibling
-                  // routes that share a prefix (e.g. /agent vs /agent-orders) don't both highlight.
-                  isActive={pathname === item.href || pathname.startsWith(item.href + '/')}
-                  tooltip={item.label}
-                >
-                  <Link href={item.href}>
-                    <item.icon />
-                    <span>{item.label}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
-          </SidebarMenu>
+          {visibleGroups.map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel>{group.label}</SidebarGroupLabel>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {group.items.map((item) => (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton
+                        asChild
+                        // Exact match or a true sub-path (href + '/') — NOT a bare prefix, so sibling
+                        // routes that share a prefix (e.g. /agent vs /agent-orders) don't both highlight.
+                        isActive={pathname === item.href || pathname.startsWith(item.href + '/')}
+                        tooltip={item.label}
+                      >
+                        <Link href={item.href}>
+                          <item.icon />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+          ))}
         </SidebarContent>
         <SidebarFooter className="p-4">
           <SidebarIdentity
