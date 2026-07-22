@@ -284,6 +284,9 @@ export type Booking = {
   shareLink?: string;
   createdAt: string;
   updatedAt?: string;
+  // Thời điểm chuyến chuyển COMPLETED (nguồn thật cho "Ngày hoàn thành"). Null cho rows cũ trước
+  // khi có cột → UI fallback về updatedAt.
+  completedAt?: string | null;
   // Scheduled pickup time set by the customer (null/undefined = ride is "now").
   scheduledTime?: string | null;
   // Pickup-window [from, to] (null/undefined for legacy single-instant trips).

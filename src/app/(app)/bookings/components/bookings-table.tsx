@@ -983,12 +983,11 @@ export function BookingsTable() {
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
     setCurrentPage(1); // Reset to page 1 on tab change
-    // Tab Hoàn thành mặc định sắp theo thời gian hoàn thành (updatedAt của chuyến
-    // COMPLETED); các tab khác giữ mặc định theo ngày tạo. Người dùng vẫn bấm
-    // tiêu đề cột để đổi.
+    // Tab Hoàn thành mặc định sắp theo thời gian hoàn thành THẬT (completedAt; BE fallback
+    // COALESCE(completedAt, updatedAt) cho rows cũ). Các tab khác giữ mặc định theo ngày tạo.
     setSortConfig(
       value === 'COMPLETED'
-        ? { key: 'updatedAt', direction: 'descending' }
+        ? { key: 'completedAt', direction: 'descending' }
         : { key: 'createdAt', direction: 'descending' },
     );
   }
@@ -1180,11 +1179,10 @@ export function BookingsTable() {
                     </Button>
                   </TableHead>
                 )}
-                {/* Tab Hoàn thành: thêm cột thời gian hoàn thành (updatedAt của chuyến
-                    COMPLETED) và cho sắp xếp theo nó. */}
+                {/* Tab Hoàn thành: cột thời gian hoàn thành THẬT (completedAt, fallback updatedAt). */}
                 {activeTab === 'COMPLETED' && (
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('updatedAt')}>
+                    <Button variant="ghost" onClick={() => requestSort('completedAt')}>
                       Ngày hoàn thành
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
@@ -1273,12 +1271,13 @@ export function BookingsTable() {
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                     )}
-                    {/* Ngày hoàn thành = updatedAt của chuyến COMPLETED (hệ thống
-                        chưa lưu completedAt riêng). Chỉ hiện ở tab Hoàn thành. */}
+                    {/* Ngày hoàn thành = completedAt THẬT (fallback updatedAt cho rows cũ chưa có
+                        completedAt). Không dùng updatedAt trực tiếp vì nó bị bump bởi ghi sau hoàn
+                        thành (vd backfill distanceKm). Chỉ hiện ở tab Hoàn thành. */}
                     {activeTab === 'COMPLETED' && (
                       <TableCell>
-                        {booking.updatedAt
-                          ? format(new Date(booking.updatedAt), "dd/MM/yyyy HH:mm")
+                        {(booking.completedAt ?? booking.updatedAt)
+                          ? format(new Date(booking.completedAt ?? booking.updatedAt!), "dd/MM/yyyy HH:mm")
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                     )}
