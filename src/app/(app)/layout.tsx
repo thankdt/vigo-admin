@@ -143,10 +143,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
       <RadixPointerEventsWatchdog />
       <Sidebar>
         <SidebarHeader className="p-4">
-          <Link href="/dashboard" className="flex items-center gap-2 font-semibold">
+          <Link href="/dashboard" className="flex items-center">
+            {/* Wordmark Vigo (đỏ) khi sidebar mở; icon vuông đỏ khi thu gọn (rail). Bỏ chữ. */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/vigo-icon.png" alt="Vigo" className="h-8 w-8 shrink-0 rounded" />
-            <span className="duration-200 group-data-[collapsible=icon]:hidden">Vigo Admin</span>
+            <img src="/vigo-wordmark.png" alt="Vigo" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-icon.png" alt="Vigo" className="hidden h-8 w-8 shrink-0 rounded group-data-[collapsible=icon]:block" />
           </Link>
         </SidebarHeader>
         <SidebarContent>
