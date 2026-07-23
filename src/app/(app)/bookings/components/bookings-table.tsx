@@ -976,12 +976,15 @@ export function BookingsTable() {
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
     setCurrentPage(1); // Reset to page 1 on tab change
-    // Tab Hoàn thành mặc định sắp theo thời gian hoàn thành (updatedAt của chuyến
-    // COMPLETED); các tab khác giữ mặc định theo ngày tạo. Người dùng vẫn bấm
-    // tiêu đề cột để đổi.
+    // Tab Hoàn thành sắp theo completedAt — cùng cột với giá trị đang hiển thị. Trước đây sort
+    // updatedAt còn hiện completedAt: chuyến cũ nào bị ghi lại (backfill distanceKm) là nhảy lên
+    // đầu danh sách nhưng mang ngày hoàn thành cũ, nên tab "hôm nay" lẫn chuyến của tháng trước.
+    // Backfill (BE migration 1790200000000) điền completedAt cho TOÀN BỘ chuyến COMPLETED — 125 dòng
+    // lấy mốc từ ledger lúc hoàn thành, 121 dòng cũ (01–04/2026, chưa có ledger giữ thuế) lấy
+    // updatedAt; không còn dòng NULL nào. BE vẫn có NULLS LAST phòng chuyến mới lỡ thiếu.
     setSortConfig(
       value === 'COMPLETED'
-        ? { key: 'updatedAt', direction: 'descending' }
+        ? { key: 'completedAt', direction: 'descending' }
         : { key: 'createdAt', direction: 'descending' },
     );
   }
@@ -1173,11 +1176,11 @@ export function BookingsTable() {
                     </Button>
                   </TableHead>
                 )}
-                {/* Tab Hoàn thành: thêm cột thời gian hoàn thành (updatedAt của chuyến
-                    COMPLETED) và cho sắp xếp theo nó. */}
+                {/* Tab Hoàn thành: cột thời gian hoàn thành THẬT (completedAt, fallback updatedAt).
+                    Sort cùng cột với giá trị hiển thị — xem handleTabChange. */}
                 {activeTab === 'COMPLETED' && (
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('updatedAt')}>
+                    <Button variant="ghost" onClick={() => requestSort('completedAt')}>
                       Ngày hoàn thành
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
@@ -1266,12 +1269,13 @@ export function BookingsTable() {
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                     )}
-                    {/* Ngày hoàn thành = updatedAt của chuyến COMPLETED (hệ thống
-                        chưa lưu completedAt riêng). Chỉ hiện ở tab Hoàn thành. */}
+                    {/* Ngày hoàn thành = completedAt THẬT (fallback updatedAt cho rows cũ chưa có
+                        completedAt). Không dùng updatedAt trực tiếp vì nó bị bump bởi ghi sau hoàn
+                        thành (vd backfill distanceKm). Chỉ hiện ở tab Hoàn thành. */}
                     {activeTab === 'COMPLETED' && (
                       <TableCell>
-                        {booking.updatedAt
-                          ? format(new Date(booking.updatedAt), "dd/MM/yyyy HH:mm")
+                        {(booking.completedAt ?? booking.updatedAt)
+                          ? format(new Date(booking.completedAt ?? booking.updatedAt!), "dd/MM/yyyy HH:mm")
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                     )}

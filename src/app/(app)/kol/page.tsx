@@ -28,7 +28,9 @@ import {
   Ban,
   CheckCircle2,
   Clock,
+  Ticket,
 } from 'lucide-react';
+import { KolCodesDialog } from './kol-codes-dialog';
 import { useToast } from '@/hooks/use-toast';
 import {
   adminListKols,
@@ -82,6 +84,7 @@ export default function KolPage() {
   const [form, setForm] = React.useState<FormState | null>(null);
   const [submitting, setSubmitting] = React.useState(false);
   const [revokeTarget, setRevokeTarget] = React.useState<AdminKolRow | null>(null);
+  const [codesTarget, setCodesTarget] = React.useState<AdminKolRow | null>(null);
 
   // Add-by-phone flow.
   const [addOpen, setAddOpen] = React.useState(false);
@@ -382,6 +385,11 @@ export default function KolPage() {
                       )}
                       {r.status === 'ACTIVE' && (
                         <>
+                          {r.kind === 'STANDARD' && (
+                            <Button size="sm" variant="outline" className="h-8" onClick={() => setCodesTarget(r)}>
+                              <Ticket className="mr-1 h-3.5 w-3.5" /> Mã ưu đãi
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" className="h-8" onClick={() => openEdit(r)}>
                             <Pencil className="mr-1 h-3.5 w-3.5" /> Sửa
                           </Button>
@@ -554,6 +562,15 @@ export default function KolPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {codesTarget && (
+        <KolCodesDialog
+          open={!!codesTarget}
+          onOpenChange={(v) => !v && setCodesTarget(null)}
+          userId={codesTarget.userId}
+          userLabel={codesTarget.userFullName || codesTarget.userPhone || codesTarget.userId.slice(0, 8)}
+        />
+      )}
     </div>
   );
 }

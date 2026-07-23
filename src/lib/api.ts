@@ -1656,6 +1656,90 @@ export async function adminRevokeKol(userId: string): Promise<AdminKolRow> {
   return unwrap<AdminKolRow>(response);
 }
 
+// ── Mã ưu đãi của KOL (kol_code): khách dùng mã → khách được cộng điểm thưởng ──
+
+export type KolCodeRow = {
+  id: string;
+  code: string;
+  ownerUserId: string;
+  refereeRewardPoints: number;
+  isActive: boolean;
+  campaignName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  usageLimit: number;
+  dailyLimit: number;
+  usedCount: number;
+  createdAt: string;
+};
+
+export type KolCodeReport = {
+  code: string;
+  isActive: boolean;
+  usageLimit: number;
+  usedCount: number;
+  dailyLimit: number;
+  refereeRewardPoints: number;
+  totalReferees: number;
+  converted: number;
+  totalPointsCredited: number;
+};
+
+export async function adminListKolCodes(userId: string): Promise<KolCodeRow[]> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}/codes`);
+  return unwrap<KolCodeRow[]>(response);
+}
+
+export async function adminCreateKolCode(
+  userId: string,
+  body: {
+    code?: string;
+    refereeRewardPoints: number;
+    usageLimit: number;
+    dailyLimit?: number;
+    campaignName?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+): Promise<KolCodeRow> {
+  const response = await fetchWithAuth(`/kol/admin/kols/${userId}/codes`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<KolCodeRow>(response);
+}
+
+export async function adminUpdateKolCode(
+  id: string,
+  body: {
+    refereeRewardPoints?: number;
+    usageLimit?: number;
+    dailyLimit?: number;
+    isActive?: boolean;
+    campaignName?: string;
+    startDate?: string;
+    endDate?: string;
+  },
+): Promise<KolCodeRow> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  return unwrap<KolCodeRow>(response);
+}
+
+export async function adminDeactivateKolCode(id: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}/deactivate`, {
+    method: 'POST',
+  });
+  return unwrap<{ ok: true }>(response);
+}
+
+export async function adminKolCodeReport(id: string): Promise<KolCodeReport> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}/report`);
+  return unwrap<KolCodeReport>(response);
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Booking-agent (đại lý đặt hộ) — admin management
 // ─────────────────────────────────────────────────────────────────────
@@ -1841,6 +1925,10 @@ export type AgentMe = {
   displayName: string | null;
   commissionPercent: number | null;
   bankInfo: KolBankInfo | null;
+  // Số dư ví hoa hồng (additive — có thể undefined nếu backend cũ). walletType để UI đặt nhãn đúng:
+  // USER_REFERRAL = ví hoa hồng (đại lý là khách), DRIVER_MAIN = ví tài xế (đại lý là tài xế).
+  walletBalance?: number;
+  walletType?: 'USER_REFERRAL' | 'DRIVER_MAIN';
 };
 export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
 export type AgentPassenger = {
@@ -1889,6 +1977,65 @@ export async function agentLoginOtp(phone: string, otp: string): Promise<any> {
 export async function getAgentMe(): Promise<AgentMe> {
   return unwrap<AgentMe>(await fetchWithAuth('/agent/me'));
 }
+
+// ───────── Đăng ký tài khoản tự phục vụ (mirror app khách) + ứng tuyển đại lý ─────────
+// Cổng đại lý (backend) mở cho MỌI tài khoản đã đăng nhập, nên đăng ký = tạo tài khoản role
+// USER (đúng hợp đồng /auth/* mà app khách đang dùng) rồi tự đăng nhập thẳng vào cổng.
+
+// Bước 1: gửi OTP đăng ký (6 số, hết hạn 5 phút, gửi qua Zalo/SMS). Không cần auth.
+export async function sendRegistrationOtp(phone: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/send-registration-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Không gửi được OTP');
+  }
+  return response.json().then((b) => b.data ?? b);
+}
+
+// Bước 2: tạo tài khoản (role USER) + lưu token → đăng nhập luôn. Cùng body-shape app khách gửi
+// (role mặc định USER; referralCode tuỳ chọn — chỉ gửi khi có, tránh 400 do rỗng).
+export async function registerAccount(body: {
+  phone: string;
+  pass: string;
+  fullName?: string;
+  otp: string;
+  referralCode?: string;
+}): Promise<{ access_token?: string; refresh_token?: string; user?: any; requirePhoneUpdate?: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, role: 'USER' }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Đăng ký thất bại');
+  }
+  const data = await response.json();
+  const tokens = data?.data ?? data;
+  if (tokens?.access_token && typeof window !== 'undefined') {
+    localStorage.setItem('access_token', tokens.access_token);
+    if (tokens.refresh_token) localStorage.setItem('refresh_token', tokens.refresh_token);
+  }
+  return tokens;
+}
+
+// Ứng tuyển làm đại lý đặt hộ — CẦN đã đăng nhập (gọi sau register/login). Best-effort: tạo hồ sơ
+// PENDING để admin thấy trong danh sách đại lý và cấp % hoa hồng riêng. Server idempotent; nếu đã
+// ACTIVE nó ném lỗi → caller nuốt lỗi, đừng chặn UX.
+export async function applyAgent(note?: string): Promise<{ status?: string; commissionPercent?: number | null }> {
+  return unwrap(await fetchWithAuth('/agent/apply', { method: 'POST', body: JSON.stringify({ note }) }));
+}
+
+// CỔNG AN TOÀN TIỀN: ví hoa hồng đại lý chỉ TỰ RÚT được khi là ví USER_REFERRAL (đại lý là khách) —
+// luồng /referrals/me/withdrawals hard-code vào ví USER_REFERRAL. Đại lý là TÀI XẾ → hoa hồng vào ví
+// tài xế (DRIVER_MAIN), backend CHƯA có API tự rút → cổng chỉ hiển thị số dư, KHÔNG cho gửi lệnh rút.
+export function agentCanSelfWithdraw(walletType: AgentMe['walletType']): boolean {
+  return walletType === 'USER_REFERRAL';
+}
 export async function listAgentOrders(page = 1, limit = 20): Promise<{ data: AgentOrder[]; meta: any }> {
   return unwrap(await fetchWithAuth(`/agent/orders?page=${page}&limit=${limit}`));
 }
@@ -1903,6 +2050,8 @@ export type AgentBooking = {
   finalPrice: number | null;
   agentCommissionAmount: number | null;
   agentCommissionPercent: number | null;
+  // Hoa hồng "dự kiến" cho đơn CHƯA hoàn thành (null nếu đã có số thật / không phát sinh). additive.
+  agentCommissionEstimate?: number | null;
   customerName: string | null;
   customerPhone: string | null;
   passengerNames: string[] | null;

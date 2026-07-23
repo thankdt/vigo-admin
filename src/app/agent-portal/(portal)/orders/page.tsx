@@ -7,26 +7,40 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { listAgentBookings, cancelAgentBooking, AgentBooking } from '@/lib/api';
+import { agentCommissionDisplay } from '@/lib/agent-commission-display';
 import { RefreshCw, Loader2, MapPin, XCircle } from 'lucide-react';
 
-// Booking statuses (chuyến thường). Unknown → shown as-is (outline).
-const STATUS_META: Record<string, { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  PENDING: { label: 'Chờ xử lý', variant: 'outline' },
-  CREATED: { label: 'Đã tạo', variant: 'outline' },
-  SEARCHING: { label: 'Đang tìm xe', variant: 'secondary' },
+// Đủ 14 trạng thái BookingStatus backend có thể trả (raw), nhìn từ góc ĐẠI LÝ — nhãn rõ ràng, không
+// để lộ enum thô. `className` tô màu theo pha: chờ (xám), tài xế đang lo (xanh dương), xong (xanh lá),
+// huỷ/hỏng (đỏ). Unknown → hiện raw + outline.
+const STATUS_META: Record<
+  string,
+  { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string }
+> = {
+  CREATED: { label: 'Đang tạo', variant: 'secondary' },
+  SEARCHING: { label: 'Đang tìm tài xế', variant: 'secondary' },
+  PENDING_MATCHING: { label: 'Đang ghép chuyến', variant: 'secondary' },
+  PENDING_CONFIRMATION: { label: 'Chờ tài xế xác nhận', variant: 'secondary' },
+  AWAITING_CLAIM: { label: 'Chờ tiếp nhận', variant: 'secondary' },
+  PROCESSING: { label: 'Đang xử lý', variant: 'secondary' },
   SCHEDULED: { label: 'Đã hẹn giờ', variant: 'secondary' },
-  ACCEPTED: { label: 'Đã nhận', variant: 'default' },
-  ARRIVED: { label: 'Tài xế đã đến', variant: 'default' },
-  PICKED_UP: { label: 'Đã đón khách', variant: 'default' },
-  IN_PROGRESS: { label: 'Đang chạy', variant: 'default' },
-  COMPLETED: { label: 'Hoàn thành', variant: 'default' },
+  DELAYED_WAITING: { label: 'Tạm chờ tài xế', variant: 'secondary' },
+  ACCEPTED: { label: 'Tài xế đã nhận', variant: 'default', className: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300' },
+  ARRIVED: { label: 'Tài xế đã đến', variant: 'default', className: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300' },
+  PICKED_UP: { label: 'Đã đón khách', variant: 'default', className: 'bg-blue-100 text-blue-800 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300' },
+  COMPLETED: { label: 'Hoàn thành', variant: 'default', className: 'bg-green-100 text-green-800 hover:bg-green-100 dark:bg-green-900/40 dark:text-green-300' },
   CANCELLED: { label: 'Đã huỷ', variant: 'destructive' },
+  DELIVERY_FAILED: { label: 'Giao thất bại', variant: 'destructive' },
 };
-const statusMeta = (s: string) => STATUS_META[s] ?? { label: s, variant: 'outline' as const };
+const statusMeta = (
+  s: string,
+): { label: string; variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string } =>
+  STATUS_META[s] ?? { label: s, variant: 'outline' };
 
-// Có thể huỷ khi chưa hoàn thành / chưa đón khách. Backend là nguồn quyết định cuối (phí huỷ, chính sách).
+// Cho phép bấm "Huỷ" khi đơn chưa đón khách / chưa kết thúc. Backend là nguồn quyết định cuối (phí huỷ,
+// chính sách) — set này chỉ ẩn nút ở các trạng thái chắc chắn không huỷ được (đã đón/xong/huỷ/hỏng).
 const CANCELLABLE = new Set([
-  'CREATED', 'SEARCHING', 'PENDING', 'PENDING_MATCHING', 'PENDING_CONFIRMATION',
+  'CREATED', 'SEARCHING', 'PENDING_MATCHING', 'PENDING_CONFIRMATION',
   'AWAITING_CLAIM', 'PROCESSING', 'SCHEDULED', 'DELAYED_WAITING', 'ACCEPTED', 'ARRIVED',
 ]);
 
@@ -86,12 +100,13 @@ export default function AgentOrdersPage() {
         <div className="space-y-3">
           {bookings.map((b) => {
             const meta = statusMeta(b.status);
+            const c = agentCommissionDisplay(b);
             return (
               <Card key={b.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2">
-                      <Badge variant={meta.variant}>{meta.label}</Badge>
+                      <Badge variant={meta.variant} className={meta.className}>{meta.label}</Badge>
                       <span className="text-xs text-muted-foreground">
                         {new Date(b.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                       </span>
@@ -108,9 +123,20 @@ export default function AgentOrdersPage() {
                   </div>
                   <div className="text-right shrink-0 space-y-1">
                     <div className="text-sm font-semibold">{fmtVnd(b.finalPrice)}</div>
-                    {b.agentCommissionAmount != null && (
-                      <div className="text-xs font-medium text-green-600 dark:text-green-400">
-                        HH: {fmtVnd(b.agentCommissionAmount)}
+                    {/* Hoa hồng LUÔN hiện: hoàn thành → số THẬT (xanh); đang chạy khách thật → "dự kiến ~";
+                        không phát sinh (tự đặt/huỷ/dưới mức) → "0₫" kèm lý do — không để trống. */}
+                    {c.tone === 'earned' ? (
+                      <div className="text-xs font-semibold text-green-600 dark:text-green-400">
+                        Hoa hồng: {fmtVnd(c.amount)}
+                      </div>
+                    ) : c.tone === 'estimate' ? (
+                      <div className="text-xs font-medium text-muted-foreground">
+                        Hoa hồng dự kiến ~{fmtVnd(c.amount)}
+                      </div>
+                    ) : (
+                      <div className="text-xs font-medium text-muted-foreground">
+                        {c.label}: 0₫
+                        {c.reason && <span className="block text-[10px] text-muted-foreground/80">{c.reason}</span>}
                       </div>
                     )}
                     {CANCELLABLE.has(b.status) && (
@@ -152,6 +178,11 @@ export default function AgentOrdersPage() {
               </Card>
             );
           })}
+          {bookings.some((b) => b.agentCommissionAmount == null && (b.agentCommissionEstimate ?? 0) > 0) && (
+            <p className="pt-1 text-center text-[11px] text-muted-foreground">
+              * Hoa hồng dự kiến là mức tối đa — số thật chốt khi đơn hoàn thành (có thể giảm theo giới hạn tháng).
+            </p>
+          )}
         </div>
       )}
     </div>

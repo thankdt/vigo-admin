@@ -1594,6 +1594,17 @@ export function DriversTable() {
               ) : (
                 <p className="text-sm text-muted-foreground">Chưa cung cấp</p>
               )}
+              {/* Đổi/gán đơn vị vận tải ngay trong dialog chi tiết — mở lại đúng dialog picker
+                  "Gán đơn vị vận tải" sẵn có (đóng dialog chi tiết trước để tránh 2 dialog chồng). */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-1"
+                onClick={() => { const d = viewDriver; setViewDriver(null); openAssignDialog(d); }}
+              >
+                <Building2 className="mr-1.5 h-3.5 w-3.5" />
+                {viewDriver.transportCompany ? 'Đổi đơn vị vận tải' : 'Gán đơn vị vận tải'}
+              </Button>
             </div>
           )}
 
