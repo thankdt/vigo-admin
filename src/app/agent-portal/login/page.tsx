@@ -1,6 +1,7 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -96,6 +97,10 @@ export default function AgentLoginPage() {
               <Button className="w-full" onClick={requestOtp} disabled={isLoading}>
                 {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Gửi mã OTP'}
               </Button>
+              <p className="text-center text-sm text-muted-foreground">
+                Chưa có tài khoản?{' '}
+                <Link href="/agent-portal/register" className="font-medium text-primary hover:underline">Đăng ký</Link>
+              </p>
             </>
           ) : (
             <>
