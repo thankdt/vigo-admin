@@ -4,7 +4,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import {
   Activity, Users, Car, Wifi, Clock, CheckCircle2, XCircle, AlertTriangle,
-  Wallet, Banknote, DollarSign, Building2, UserPlus, Percent, Loader2, ChevronRight,
+  Wallet, Banknote, DollarSign, Building2, UserPlus, Loader2, ChevronRight,
 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -127,8 +127,10 @@ export default function DashboardPage() {
             <Stat icon={<UserPlus className="h-5 w-5" />} label="Người dùng mới hôm nay" value={fmtNum(ov.today.newUsers ?? 0)} hint="Tài khoản đăng ký mới (giờ VN)" accent="text-green-600 dark:text-green-400" />
             <Stat icon={<Banknote className="h-5 w-5" />} label="Chuyến tạo hôm nay" value={fmtNum(ov.today.created)} />
             <Stat icon={<CheckCircle2 className="h-5 w-5" />} label="Hoàn thành hôm nay" value={fmtNum(ov.today.completed)} accent="text-green-600 dark:text-green-400" />
+            {/* Card "Tỉ lệ hoàn thành" đã bỏ (quyết định 23/07/2026): "Hoàn thành hôm nay"
+                giờ đếm theo MỐC HOÀN THÀNH còn tỉ lệ theo cohort chuyến tạo — 2 mốc khác
+                nhau đặt cạnh nhau chỉ gây hiểu nhầm (4 hoàn thành / 2 tạo ≠ 200%). */}
             <Stat icon={<XCircle className="h-5 w-5" />} label="Huỷ hôm nay" value={fmtNum(ov.today.cancelled)} accent={ov.today.cancelled > 0 ? 'text-destructive' : ''} />
-            <Stat icon={<Percent className="h-5 w-5" />} label="Tỉ lệ hoàn thành" value={`${ov.today.completionRate}%`} hint="Hoàn thành / tạo (hôm nay)" />
           </div>
 
           {/* Hàng chờ cần xử lý */}
