@@ -47,6 +47,36 @@ describe('buildConfigGroups (settings RBAC gate)', () => {
     ]);
   });
 
+  it('regroup 2026-07-23: key rời misc về đúng nhóm mới', () => {
+    const configs = [
+      { key: 'KOL_TRIP_PERCENT', value: '5', description: '' },
+      { key: 'BOOKING_AGENT_MIN_FARE', value: '50000', description: '' },
+      { key: 'CARPOOL_SEAT_DISCOUNT_2', value: '10', description: '' },
+      { key: 'SCHEDULED_REFIRE_LEAD_MS', value: '600000', description: '' },
+      { key: 'SCHEDULE_MIN_LEAD_MINUTES', value: '30', description: '' },
+      { key: 'VINOW_CODE_TTL_MINUTES', value: '15', description: '' },
+      { key: 'HOTLINE', value: '1900', description: '' },
+      { key: 'HOTLINE_DRIVER', value: '1901', description: '' },
+      { key: 'ZALO_TOKEN_EXPIRES_AT', value: 'x', description: '' }, // giữ misc (chỉ super sửa)
+    ];
+    const byId = Object.fromEntries(
+      buildConfigGroups(configs, '', canFor(mkMe({ isSuperAdmin: true }))).map((e) => [
+        e.group.id,
+        e.items.map((c) => c.key).sort(),
+      ]),
+    );
+    expect(byId['kol']).toEqual(['KOL_TRIP_PERCENT']);
+    expect(byId['agent']).toEqual(['BOOKING_AGENT_MIN_FARE']);
+    expect(byId['pricing']).toEqual(['CARPOOL_SEAT_DISCOUNT_2']);
+    expect(byId['dispatch']).toEqual([
+      'SCHEDULED_REFIRE_LEAD_MS',
+      'SCHEDULE_MIN_LEAD_MINUTES',
+      'VINOW_CODE_TTL_MINUTES',
+    ]);
+    expect(byId['app']).toEqual(['HOTLINE', 'HOTLINE_DRIVER']);
+    expect(byId['misc']).toEqual(['ZALO_TOKEN_EXPIRES_AT']);
+  });
+
   it('applies the search filter within permitted groups', () => {
     const groups = buildConfigGroups(CONFIGS, 'radius', canFor(mkMe({ isSuperAdmin: true })));
     expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);

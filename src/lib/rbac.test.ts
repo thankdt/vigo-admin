@@ -41,7 +41,7 @@ describe('rbac catalog mirror', () => {
   it('SETTINGS_GROUP_FUNCTIONS mirrors CONFIG_GROUPS exactly (one settings.<id> per group)', () => {
     const expected = CONFIG_GROUPS.map((g) => `settings.${g.id}`).sort();
     expect([...SETTINGS_GROUP_FUNCTIONS].sort()).toEqual(expected);
-    expect(SETTINGS_GROUP_FUNCTIONS.length).toBe(8);
+    expect(SETTINGS_GROUP_FUNCTIONS.length).toBe(10); // 2026-07-23: +settings.kol, +settings.agent
   });
 
   it('every navItems href except /settings is declared in the catalog (no unmapped menu)', () => {

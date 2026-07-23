@@ -15,17 +15,17 @@ describe('buildFunctionCatalog', () => {
     expect(menu.items.map((i) => i.key)).toContain('finance');
   });
 
-  it('settings group lists all 8 settings.* with human labels', () => {
+  it('settings group lists all 10 settings.* with human labels', () => {
     const settings = buildFunctionCatalog()[1];
     expect(settings.items.map((i) => i.key).sort()).toEqual([...SETTINGS_GROUP_FUNCTIONS].sort());
     const pricing = settings.items.find((i) => i.key === 'settings.pricing');
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 25 menu + 8 settings = 33 unique keys', () => {
+  it('allFunctionKeys = 25 menu + 10 settings = 35 unique keys', () => {
     const keys = allFunctionKeys();
-    expect(keys).toHaveLength(33);
-    expect(new Set(keys).size).toBe(33);
+    expect(keys).toHaveLength(35); // 2026-07-23: +settings.kol, +settings.agent
+    expect(new Set(keys).size).toBe(35);
   });
 });
 
