@@ -31,9 +31,12 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/driver-cancel-review': 'driver-cancel-review',
 };
 
-// 8 nhóm cấu hình = đúng CONFIG_GROUPS.id trên `main` (system-config-groups.ts).
+// 10 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
+// 2026-07-23: thêm settings.kol + settings.agent (tách KOL_*/BOOKING_AGENT_* khỏi misc).
 export const SETTINGS_GROUP_FUNCTIONS = [
   'settings.app',
+  'settings.kol',
+  'settings.agent',
   'settings.pricing',
   'settings.dispatch',
   'settings.driver',

@@ -1,4 +1,4 @@
-import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, PhoneOff, type LucideIcon } from 'lucide-react';
+import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, PhoneOff, Megaphone, Briefcase, type LucideIcon } from 'lucide-react';
 
 // Group the flat system_config list by key prefix so the page stays scannable.
 // Order matters: keys are tested top-to-bottom and land in the FIRST match — so
@@ -7,13 +7,27 @@ import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, Phone
 export type ConfigGroup = { id: string; label: string; icon: LucideIcon; danger?: boolean; match: (key: string) => boolean };
 
 export const CONFIG_GROUPS: ConfigGroup[] = [
-  { id: 'app', label: 'Phiên bản App', icon: Smartphone, match: (k) => k.includes('_APP_') },
-  { id: 'pricing', label: 'Giá & Hoa hồng', icon: DollarSign, match: (k) => k.startsWith('PRICING_') || k.endsWith('COMMISSION_RATE') || k.startsWith('CARPOOL_SEAT_DISCOUNT') },
+  // Regroup 2026-07-23: dọn nhóm misc — HOTLINE về app, KOL_*/BOOKING_AGENT_* tách
+  // nhóm riêng, seat-discount về pricing, SCHEDULE(D)_*/VINOW TTL về dispatch.
+  // MỌI thay đổi match/id ở đây PHẢI đổi cùng mirror BE `rbac.constants.ts
+  // settingsGroupForKey` (thứ tự + rule giống hệt) — lệch là sai quyền ghi config.
+  {
+    id: 'app', label: 'App & Liên hệ', icon: Smartphone,
+    match: (k) => k.includes('_APP_') || k === 'HOTLINE' || k === 'HOTLINE_DRIVER',
+  },
+  // Trước pricing: phòng key tương lai BOOKING_AGENT_*_COMMISSION_RATE lọt nhầm nhóm giá.
+  { id: 'kol', label: 'KOL & Affiliate', icon: Megaphone, match: (k) => k.startsWith('KOL_') },
+  { id: 'agent', label: 'Đặt hộ & Đại lý', icon: Briefcase, match: (k) => k.startsWith('BOOKING_AGENT_') },
+  {
+    id: 'pricing', label: 'Giá & Hoa hồng', icon: DollarSign,
+    match: (k) => k.startsWith('PRICING_') || k.endsWith('COMMISSION_RATE') || k.startsWith('CARPOOL_SEAT_DISCOUNT'),
+  },
   {
     id: 'dispatch', label: 'Điều phối & Tuyến', icon: Navigation, danger: true,
     match: (k) =>
       k.startsWith('DISPATCH_') || k.startsWith('ROUTE_') || k.startsWith('CHAIN_') ||
-      ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED'].includes(k),
+      k.startsWith('SCHEDULED_') || k.startsWith('SCHEDULE_') ||
+      ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED', 'VINOW_CODE_TTL_MINUTES'].includes(k),
   },
   { id: 'driver', label: 'Tài xế', icon: Car, match: (k) => k.startsWith('DRIVER_') },
   {
@@ -25,8 +39,11 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
       k.startsWith('TIER_') || k.startsWith('REWARD_') || k === 'SIGNUP_LOYALTY_REWARD',
   },
   {
-    id: 'cancel', label: 'Chống huỷ chuyến (khoá tài xế)', icon: ShieldAlert, danger: true,
-    match: (k) => k.startsWith('CANCEL_'),
+    // Gộp CẢ 2 function chống gian lận sau-huỷ: khoá tài theo tỉ lệ/timing huỷ
+    // (CANCEL_*) + giám sát GPS tài đi qua điểm đón/trả (LEAKAGE_*). Giữ id
+    // 'cancel' nguyên — RBAC gate theo `settings.cancel`, đổi id là mất quyền đã cấp.
+    id: 'cancel', label: 'Chống gian lận huỷ chuyến (khoá tài + giám sát GPS)', icon: ShieldAlert, danger: true,
+    match: (k) => k.startsWith('CANCEL_') || k.startsWith('LEAKAGE_'),
   },
   {
     id: 'phone-reveal', label: 'Ẩn số điện thoại khách', icon: PhoneOff,
