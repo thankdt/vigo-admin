@@ -13,7 +13,7 @@ import { getLeakageTraces, updateLeakageTraceStatus } from '@/lib/api';
 import type { LeakageTraceRow, LeakageTraceStatus, LeakageVerdict } from '@/lib/types';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 import { STATUS_LABEL, VERDICT_LABEL, addressText, formatVnDateTime, statusBadgeVariant, verdictBadgeClass } from './leakage-labels';
-import { TraceDetailSheet } from './components/trace-detail-sheet';
+import { TraceDetailDialog } from './components/trace-detail-dialog';
 
 const COL_COUNT = 6;
 /** Backend caps the list; surface it rather than silently truncating. */
@@ -215,7 +215,7 @@ export default function LeakageReviewPage() {
         </Table>
       </Card>
 
-      <TraceDetailSheet
+      <TraceDetailDialog
         trace={selected}
         onOpenChange={(open) => !open && setSelected(null)}
         onUpdateStatus={handleUpdateStatus}

@@ -51,10 +51,11 @@ export default function HtxDetailPage() {
 
   const handleExport = async () => {
     if (trips.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
-    const { headerRows, merges } = buildHtxExportHeader(['STT', 'Mã chuyến', 'Ngày giờ', 'Tài xế', 'SĐT', 'Biển số xe', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
+    const { headerRows, merges } = buildHtxExportHeader(['STT', 'Mã chuyến', 'Ngày giờ hoàn thành', 'Tài xế', 'SĐT', 'Biển số xe', 'TÊN HTX/ĐVCCX', 'Hình thức TT']);
     const body: Array<Array<string | number>> = trips.map((t, i) => {
       const ex = expandHtxRow(t);
-      return [i + 1, t.bookingId, fmtVnTime(t.createdAt), t.driverName, t.driverPhone, t.plate, name, HTX_PAYMENT_LABEL, ...HTX_LEAF_COLS.map((c) => ex[c.key])];
+      // Mốc hoàn thành (chứng từ đối soát theo ngày tiền về); fallback createdAt khi backend cũ.
+      return [i + 1, t.bookingId, fmtVnTime(t.completedAt ?? t.createdAt), t.driverName, t.driverPhone, t.plate, name, HTX_PAYMENT_LABEL, ...HTX_LEAF_COLS.map((c) => ex[c.key])];
     });
     if (totals) {
       const ex = expandHtxRow(totals);
@@ -95,7 +96,7 @@ export default function HtxDetailPage() {
               <TableRow>
                 <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">STT</TableHead>
                 <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Mã chuyến</TableHead>
-                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Ngày giờ</TableHead>
+                <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Ngày giờ hoàn thành</TableHead>
                 <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Tài xế</TableHead>
                 <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">Biển số xe</TableHead>
                 <TableHead rowSpan={4} className="align-bottom whitespace-nowrap">TÊN HTX/ĐVCCX</TableHead>
@@ -114,7 +115,7 @@ export default function HtxDetailPage() {
                   <TableRow key={t.bookingId}>
                     <TableCell className="tabular-nums">{i + 1}</TableCell>
                     <TableCell className="font-mono text-xs whitespace-nowrap">{t.bookingId}</TableCell>
-                    <TableCell className="whitespace-nowrap">{fmtVnTime(t.createdAt)}</TableCell>
+                    <TableCell className="whitespace-nowrap">{fmtVnTime(t.completedAt ?? t.createdAt)}</TableCell>
                     <TableCell className="whitespace-nowrap">
                       <div className="font-medium">{t.driverName || '—'}</div>
                       <div className="text-xs text-muted-foreground">{t.driverPhone || '—'}</div>

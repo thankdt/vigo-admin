@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TraceDetailSheet } from './trace-detail-sheet';
+import { TraceDetailDialog } from './trace-detail-dialog';
 import type { LeakageTraceRow } from '@/lib/types';
 
 const trace: LeakageTraceRow = {
@@ -36,9 +36,9 @@ const trace: LeakageTraceRow = {
   },
 };
 
-describe('TraceDetailSheet', () => {
+describe('TraceDetailDialog', () => {
   it('shows the verdict, both parties and the evidence timeline', () => {
-    render(<TraceDetailSheet trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
+    render(<TraceDetailDialog trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
     expect(screen.getByText('Đi đón→đến, không giải thích được')).toBeInTheDocument();
     expect(screen.getByText(/Tài A/)).toBeInTheDocument();
     expect(screen.getByText(/Khách B/)).toBeInTheDocument();
@@ -48,31 +48,31 @@ describe('TraceDetailSheet', () => {
   });
 
   it('leads with the incident time (eventAt), and shows detection time separately', () => {
-    render(<TraceDetailSheet trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
+    render(<TraceDetailDialog trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
     expect(screen.getByText(/09:00 15\/07\/2026/)).toBeInTheDocument(); // eventAt, VN
     expect(screen.getByText(/12:00 15\/07\/2026/)).toBeInTheDocument(); // createdAt, VN
   });
 
   it('deep-links the driver to the real detail route (/users/detail?id=, not /drivers/{id} which 404s)', () => {
-    render(<TraceDetailSheet trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
+    render(<TraceDetailDialog trace={trace} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
     expect(screen.getByRole('link', { name: /Tài A/ })).toHaveAttribute('href', '/users/detail?id=du1');
   });
 
   it('renders a dash instead of a broken link when the driver is missing', () => {
-    render(<TraceDetailSheet trace={{ ...trace, driver: null }} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
+    render(<TraceDetailDialog trace={{ ...trace, driver: null }} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
     expect(screen.queryByRole('link', { name: /Tài A/ })).not.toBeInTheDocument();
   });
 
   it('confirming fraud calls onUpdateStatus once with CONFIRMED', async () => {
     const onUpdateStatus = vi.fn().mockResolvedValue(undefined);
-    render(<TraceDetailSheet trace={trace} onOpenChange={vi.fn()} onUpdateStatus={onUpdateStatus} />);
+    render(<TraceDetailDialog trace={trace} onOpenChange={vi.fn()} onUpdateStatus={onUpdateStatus} />);
     await userEvent.click(screen.getByRole('button', { name: 'Xác nhận gian lận' }));
     expect(onUpdateStatus).toHaveBeenCalledTimes(1);
     expect(onUpdateStatus).toHaveBeenCalledWith('t1', 'CONFIRMED');
   });
 
   it('renders nothing when there is no trace', () => {
-    const { container } = render(<TraceDetailSheet trace={null} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
+    const { container } = render(<TraceDetailDialog trace={null} onOpenChange={vi.fn()} onUpdateStatus={vi.fn()} />);
     expect(container).toBeEmptyDOMElement();
   });
 });

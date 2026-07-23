@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -2402,6 +2402,9 @@ export type HtxReconTotals = Omit<HtxReconRow, 'id' | 'name'>;
 export type HtxTripRow = {
   bookingId: string;
   createdAt: string;
+  /** Mốc hoàn thành chuyến — backend mới trả (additive); FE hiển thị mốc này,
+   *  fallback createdAt khi backend cũ chưa deploy. */
+  completedAt?: string;
   driverName: string;
   driverPhone: string;
   plate: string;
@@ -2547,6 +2550,24 @@ export async function getDriverCancelDetail(driverId: string, from?: string, to?
   const qs = q.toString();
   const res = await fetchWithAuth(`/admin/driver-cancel-stats/${driverId}/detail${qs ? `?${qs}` : ''}`);
   return unwrap<DriverCancelTrip[]>(res);
+}
+
+// Admin ghi nhận trạng thái xử lý case tỉ lệ huỷ: CHECKING ("tôi đang check") /
+// CHECKED ("đã check xong") + note nội bộ cho admin khác. Append-only phía backend.
+export async function upsertDriverCancelCheck(
+  driverEntityId: string,
+  body: { status: DriverCancelCheckStatus; note?: string },
+): Promise<void> {
+  await fetchWithAuth(`/admin/driver-cancel-stats/${driverEntityId}/check`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// Lịch sử check của 1 tài xế (mới nhất trước) — hiển thị trong dialog chi tiết.
+export async function getDriverCancelCheckHistory(driverEntityId: string): Promise<DriverCancelCheckEvent[]> {
+  const res = await fetchWithAuth(`/admin/driver-cancel-stats/${driverEntityId}/check-history`);
+  return unwrap<DriverCancelCheckEvent[]>(res);
 }
 
 // --- RBAC (phân quyền admin theo function) ---

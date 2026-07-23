@@ -1,12 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { DriverDetailSheet } from './driver-detail-sheet';
+import { DriverDetailDialog } from './driver-detail-dialog';
 import type { DriverCancelStat } from '@/lib/types';
 
 vi.mock('@/lib/api', () => ({
   getDriverCancelDetail: vi.fn(),
   getDriverApprovalHistory: vi.fn(),
+  getDriverCancelCheckHistory: vi.fn(),
+  upsertDriverCancelCheck: vi.fn(),
   banDriver: vi.fn(),
   unbanDriver: vi.fn(),
   suspendDriver: vi.fn(),
@@ -16,6 +18,8 @@ vi.mock('@/lib/api', () => ({
 import {
   getDriverCancelDetail,
   getDriverApprovalHistory,
+  getDriverCancelCheckHistory,
+  upsertDriverCancelCheck,
   banDriver,
   unbanDriver,
   suspendDriver,
@@ -70,21 +74,23 @@ beforeEach(() => {
       createdAt: '2026-07-10T02:00:00Z',
     },
   ]);
+  vi.mocked(getDriverCancelCheckHistory).mockResolvedValue([]);
+  vi.mocked(upsertDriverCancelCheck).mockResolvedValue(undefined);
   vi.mocked(banDriver).mockResolvedValue({} as any);
   vi.mocked(unbanDriver).mockResolvedValue({} as any);
   vi.mocked(suspendDriver).mockResolvedValue({} as any);
 });
 
-describe('DriverDetailSheet', () => {
+describe('DriverDetailDialog', () => {
   it('renders nothing when there is no stat', () => {
     const { container } = render(
-      <DriverDetailSheet stat={null} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />,
+      <DriverDetailDialog stat={null} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
   it('shows driver info, strike count, and deep-links to the full profile', async () => {
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     expect(screen.getByText(/Tài A/)).toBeInTheDocument();
     expect(screen.getByText('Số lần vi phạm')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Xem hồ sơ đầy đủ' })).toHaveAttribute(
@@ -94,7 +100,7 @@ describe('DriverDetailSheet', () => {
   });
 
   it('fetches and renders the cancelled-trip list with the F6 note', async () => {
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     await waitFor(() => expect(getDriverCancelDetail).toHaveBeenCalledWith('de1', range.from, range.to));
     expect(await screen.findByText(/Hà Nội/)).toBeInTheDocument();
     expect(screen.getByText(/Huỷ sau 10 phút/)).toBeInTheDocument();
@@ -119,7 +125,7 @@ describe('DriverDetailSheet', () => {
         isVinow: false,
       },
     ]);
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     // "45 giây" and "(từ lúc đặt)" sit in separate text nodes (the latter inside
     // its own <span> for muted styling), so RTL's default text matcher — which
     // only concatenates an element's OWN direct text-node children, not nested
@@ -130,12 +136,12 @@ describe('DriverDetailSheet', () => {
 
   it('shows an empty state when there are no cancelled trips', async () => {
     vi.mocked(getDriverCancelDetail).mockResolvedValue([]);
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     expect(await screen.findByText('Không có chuyến nào bị huỷ trong khoảng ngày.')).toBeInTheDocument();
   });
 
   it('fetches and translates the ban/unban history', async () => {
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     await waitFor(() => expect(getDriverApprovalHistory).toHaveBeenCalledWith('de1'));
     const adminName = await screen.findByText(/Admin B/);
     // "Khoá tài khoản (vĩnh viễn)" also appears as the (disabled) action button's own
@@ -146,7 +152,7 @@ describe('DriverDetailSheet', () => {
 
   it('bans the driver with the entered reason and refetches + calls onDone', async () => {
     const onDone = vi.fn();
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={onDone} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={onDone} />);
     await waitFor(() => expect(getDriverApprovalHistory).toHaveBeenCalledTimes(1));
 
     await userEvent.type(screen.getByPlaceholderText('Nhập lý do khoá / tạm khoá...'), 'Câu kéo khách');
@@ -158,19 +164,19 @@ describe('DriverDetailSheet', () => {
   });
 
   it('the ban/suspend buttons are disabled until a reason is entered', () => {
-    render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+    render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     expect(screen.getByRole('button', { name: /Khoá tài khoản \(vĩnh viễn\)/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Tạm khoá/ })).toBeDisabled();
   });
 
   it('shows "Gỡ khoá" only when the driver is currently banned or suspended', () => {
     const { rerender } = render(
-      <DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />,
+      <DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />,
     );
     expect(screen.queryByRole('button', { name: 'Gỡ khoá' })).not.toBeInTheDocument();
 
     rerender(
-      <DriverDetailSheet
+      <DriverDetailDialog
         stat={{ ...stat, isBanned: true }}
         range={range}
         onOpenChange={vi.fn()}
@@ -178,5 +184,54 @@ describe('DriverDetailSheet', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Gỡ khoá' })).toBeInTheDocument();
+  });
+
+  describe('khối admin check case', () => {
+    it('mặc định hiện "Chưa check" khi chưa có event nào', async () => {
+      render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+      await waitFor(() => expect(getDriverCancelCheckHistory).toHaveBeenCalledWith('de1'));
+      expect(screen.getByText('Chưa check')).toBeInTheDocument();
+    });
+
+    it('bấm "Đã check xong" gửi CHECKED + note (trim) rồi refetch + onDone', async () => {
+      const onDone = vi.fn();
+      render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={onDone} />);
+      await userEvent.type(screen.getByPlaceholderText(/Note nội bộ cho admin khác/), '  đã gọi tài xế  ');
+      await userEvent.click(screen.getByRole('button', { name: 'Đã check xong' }));
+
+      await waitFor(() =>
+        expect(upsertDriverCancelCheck).toHaveBeenCalledWith('de1', {
+          status: 'CHECKED',
+          note: 'đã gọi tài xế',
+        }),
+      );
+      expect(onDone).toHaveBeenCalled();
+      // Refetch lịch sử check sau khi lưu (lần mount + lần sau khi bấm).
+      expect(vi.mocked(getDriverCancelCheckHistory).mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('hiện trạng thái + note + người check từ lịch sử (event mới nhất trước)', async () => {
+      vi.mocked(getDriverCancelCheckHistory).mockResolvedValue([
+        { id: 'c2', status: 'CHECKED', note: 'ok, theo dõi thêm', createdAt: '2026-07-20T03:00:00Z', byAdminName: 'Admin C' },
+        { id: 'c1', status: 'CHECKING', note: null, createdAt: '2026-07-19T03:00:00Z', byAdminName: 'Admin C' },
+      ]);
+      render(<DriverDetailDialog stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
+
+      await waitFor(() => expect(screen.getAllByText('Đã check').length).toBeGreaterThan(0));
+      expect(screen.getByText('ok, theo dõi thêm')).toBeInTheDocument();
+      expect(screen.getAllByText(/Admin C/).length).toBeGreaterThan(0);
+    });
+
+    it('stat có hasNewCancelsSinceCheck → hiện cảnh báo "Có huỷ mới sau check"', async () => {
+      render(
+        <DriverDetailDialog
+          stat={{ ...stat, checkStatus: 'CHECKED', checkBy: 'Admin C', checkAt: '2026-07-20T03:00:00Z', hasNewCancelsSinceCheck: true }}
+          range={range}
+          onOpenChange={vi.fn()}
+          onDone={vi.fn()}
+        />,
+      );
+      expect(await screen.findByText('Có huỷ mới sau check')).toBeInTheDocument();
+    });
   });
 });

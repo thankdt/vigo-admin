@@ -15,9 +15,9 @@ import type { DriverCancelStat } from '@/lib/types';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 import { formatVnDateTime } from '../leakage-review/leakage-labels';
 import { rateBadgeClass, driverStatus } from './cancel-labels';
-import { DriverDetailSheet } from './components/driver-detail-sheet';
+import { DriverDetailDialog } from './components/driver-detail-dialog';
 
-const COL_COUNT = 7;
+const COL_COUNT = 8;
 const PAGE_SIZE = 20;
 
 /** Key-coupled, not index-coupled: reordering PRESETS must not desync the range
@@ -36,6 +36,31 @@ const LEVEL_TAB_LABEL: Record<LevelTab, string> = {
   '30': '30–49%',
   lt30: '<30%',
 };
+
+/** Filter theo trạng thái admin check — quản lý lọc ngay case tồn để nhắc.
+ *  "unchecked" GỘP cả "đã check nhưng có huỷ mới" (case cần check lại). */
+type CheckTab = 'all' | 'unchecked' | 'checking' | 'checked';
+
+const CHECK_TAB_LABEL: Record<CheckTab, string> = {
+  all: 'Check: tất cả',
+  unchecked: 'Chưa check',
+  checking: 'Đang check',
+  checked: 'Đã check',
+};
+
+function matchesCheck(s: DriverCancelStat, tab: CheckTab): boolean {
+  const needsWork = !s.checkStatus || s.hasNewCancelsSinceCheck === true;
+  switch (tab) {
+    case 'unchecked':
+      return needsWork;
+    case 'checking':
+      return s.checkStatus === 'CHECKING' && !s.hasNewCancelsSinceCheck;
+    case 'checked':
+      return s.checkStatus === 'CHECKED' && !s.hasNewCancelsSinceCheck;
+    default:
+      return true;
+  }
+}
 
 function matchesLevel(pct: number, tab: LevelTab): boolean {
   switch (tab) {
@@ -59,6 +84,7 @@ export default function DriverCancelReviewPage() {
   const [selected, setSelected] = React.useState<DriverCancelStat | null>(null);
   const [search, setSearch] = React.useState('');
   const [levelTab, setLevelTab] = React.useState<LevelTab>('all');
+  const [checkTab, setCheckTab] = React.useState<CheckTab>('all');
   const [page, setPage] = React.useState(0);
   const { toast } = useToast();
 
@@ -96,7 +122,7 @@ export default function DriverCancelReviewPage() {
   // số trang mới của tập đã lọc.
   React.useEffect(() => {
     setPage(0);
-  }, [search, levelTab, range.from, range.to]);
+  }, [search, levelTab, checkTab, range.from, range.to]);
 
   const filtered = React.useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -106,9 +132,9 @@ export default function DriverCancelReviewPage() {
         const phone = (s.phone || '').toLowerCase();
         if (!name.includes(q) && !phone.includes(q)) return false;
       }
-      return matchesLevel(s.ratePct, levelTab);
+      return matchesLevel(s.ratePct, levelTab) && matchesCheck(s, checkTab);
     });
-  }, [rows, search, levelTab]);
+  }, [rows, search, levelTab, checkTab]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const pageClamped = Math.min(page, totalPages - 1);
@@ -133,15 +159,26 @@ export default function DriverCancelReviewPage() {
 
       <Card className="space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Tabs value={levelTab} onValueChange={(v) => setLevelTab(v as LevelTab)}>
-            <TabsList className="flex-wrap h-auto">
-              {(Object.keys(LEVEL_TAB_LABEL) as LevelTab[]).map((key) => (
-                <TabsTrigger key={key} value={key}>
-                  {LEVEL_TAB_LABEL[key]}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <div className="flex flex-wrap items-center gap-2">
+            <Tabs value={levelTab} onValueChange={(v) => setLevelTab(v as LevelTab)}>
+              <TabsList className="flex-wrap h-auto">
+                {(Object.keys(LEVEL_TAB_LABEL) as LevelTab[]).map((key) => (
+                  <TabsTrigger key={key} value={key}>
+                    {LEVEL_TAB_LABEL[key]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+            <Tabs value={checkTab} onValueChange={(v) => setCheckTab(v as CheckTab)}>
+              <TabsList className="flex-wrap h-auto">
+                {(Object.keys(CHECK_TAB_LABEL) as CheckTab[]).map((key) => (
+                  <TabsTrigger key={key} value={key}>
+                    {CHECK_TAB_LABEL[key]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -164,6 +201,7 @@ export default function DriverCancelReviewPage() {
               <TableHead className="whitespace-nowrap">Tỉ lệ</TableHead>
               <TableHead className="whitespace-nowrap">Số lần vi phạm</TableHead>
               <TableHead className="whitespace-nowrap">Trạng thái</TableHead>
+              <TableHead className="whitespace-nowrap">Check</TableHead>
               <TableHead className="whitespace-nowrap">Cảnh báo gần nhất</TableHead>
             </TableRow>
           </TableHeader>
@@ -207,6 +245,19 @@ export default function DriverCancelReviewPage() {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell className="whitespace-nowrap">
+                      {/* "Cần check lại" đè lên "Đã check": có khách-huỷ mới sau mốc check. */}
+                      {s.hasNewCancelsSinceCheck ? (
+                        <Badge variant="outline" className="border-amber-500 text-amber-600">Cần check lại</Badge>
+                      ) : s.checkStatus === 'CHECKED' ? (
+                        <Badge className="bg-green-600 text-white hover:bg-green-600">Đã check</Badge>
+                      ) : s.checkStatus === 'CHECKING' ? (
+                        <Badge className="bg-amber-500 text-white hover:bg-amber-500">Đang check</Badge>
+                      ) : (
+                        <Badge variant="destructive">Chưa check</Badge>
+                      )}
+                      {s.checkBy && <div className="text-xs text-muted-foreground">{s.checkBy}</div>}
+                    </TableCell>
                     <TableCell className="max-w-[16rem] text-sm">
                       <span className="break-words">{s.lastAlertReason || '—'}</span>
                       <div className="text-xs text-muted-foreground">{formatVnDateTime(s.lastAlertAt)}</div>
@@ -245,7 +296,7 @@ export default function DriverCancelReviewPage() {
         )}
       </Card>
 
-      <DriverDetailSheet
+      <DriverDetailDialog
         stat={selected}
         range={range}
         onOpenChange={(open) => !open && setSelected(null)}

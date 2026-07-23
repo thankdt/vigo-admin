@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
-import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -19,9 +19,11 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-/** Detail + adjudication for one trace. `onUpdateStatus` is injected so this
- *  (the only mutating UI here) is testable without any fetch mocking. */
-export function TraceDetailSheet({
+/** Detail + adjudication for one trace — dialog GIỮA màn hình khổ to (đồng bộ
+ *  chi tiết tài xế bên Tỉ lệ huỷ/Quản lý tài xế; trước là side-sheet 512px chật).
+ *  `onUpdateStatus` is injected so this (the only mutating UI here) is testable
+ *  without any fetch mocking. */
+export function TraceDetailDialog({
   trace,
   onOpenChange,
   onUpdateStatus,
@@ -48,16 +50,16 @@ export function TraceDetailSheet({
     p ? `${p.fullName || 'Không tên'} · ${p.phone || 'Không SĐT'}` : '—';
 
   return (
-    <Sheet open={!!trace} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
-        <SheetHeader>
-          <SheetTitle className="flex flex-wrap items-center gap-2">
+    <Dialog open={!!trace} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogHeader>
+          <DialogTitle className="flex flex-wrap items-center gap-2">
             <Badge className={verdictBadgeClass(trace.verdict)}>{VERDICT_LABEL[trace.verdict] ?? trace.verdict}</Badge>
-          </SheetTitle>
-          <SheetDescription>
+          </DialogTitle>
+          <DialogDescription>
             Chuyến bị khách huỷ sau khi tài xế đã nhận. Xem bằng chứng rồi kết luận.
-          </SheetDescription>
-        </SheetHeader>
+          </DialogDescription>
+        </DialogHeader>
 
         <div className="space-y-4 py-4">
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -108,7 +110,7 @@ export function TraceDetailSheet({
           </div>
         </div>
 
-        <SheetFooter className="flex-col gap-2 sm:flex-row">
+        <DialogFooter className="flex-col gap-2 sm:flex-row">
           <Button variant="outline" disabled={!!saving} onClick={() => act('REVIEWED')}>
             {saving === 'REVIEWED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Đã xem
@@ -121,8 +123,8 @@ export function TraceDetailSheet({
             {saving === 'CONFIRMED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Xác nhận gian lận
           </Button>
-        </SheetFooter>
-      </SheetContent>
-    </Sheet>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
