@@ -976,12 +976,15 @@ export function BookingsTable() {
   const handleTabChange = (value: string) => {
     setActiveTab(value as string);
     setCurrentPage(1); // Reset to page 1 on tab change
-    // Tab Hoàn thành sắp theo updatedAt (≈ thời gian hoàn thành thật: đã hết bị bump bởi backfill
-    // distanceKm + 21 chuyến lỗi đã khôi phục về đúng). Cột hiển thị dùng completedAt ?? updatedAt.
-    // KHÔNG sort theo completedAt: đa số rows cũ completedAt=NULL → bị đẩy sai thứ tự.
+    // Tab Hoàn thành sắp theo completedAt — cùng cột với giá trị đang hiển thị. Trước đây sort
+    // updatedAt còn hiện completedAt: chuyến cũ nào bị ghi lại (backfill distanceKm) là nhảy lên
+    // đầu danh sách nhưng mang ngày hoàn thành cũ, nên tab "hôm nay" lẫn chuyến của tháng trước.
+    // Backfill (BE migration 1790200000000) điền completedAt cho TOÀN BỘ chuyến COMPLETED — 125 dòng
+    // lấy mốc từ ledger lúc hoàn thành, 121 dòng cũ (01–04/2026, chưa có ledger giữ thuế) lấy
+    // updatedAt; không còn dòng NULL nào. BE vẫn có NULLS LAST phòng chuyến mới lỡ thiếu.
     setSortConfig(
       value === 'COMPLETED'
-        ? { key: 'updatedAt', direction: 'descending' }
+        ? { key: 'completedAt', direction: 'descending' }
         : { key: 'createdAt', direction: 'descending' },
     );
   }
@@ -1173,10 +1176,11 @@ export function BookingsTable() {
                     </Button>
                   </TableHead>
                 )}
-                {/* Tab Hoàn thành: cột thời gian hoàn thành THẬT (completedAt, fallback updatedAt). */}
+                {/* Tab Hoàn thành: cột thời gian hoàn thành THẬT (completedAt, fallback updatedAt).
+                    Sort cùng cột với giá trị hiển thị — xem handleTabChange. */}
                 {activeTab === 'COMPLETED' && (
                   <TableHead>
-                    <Button variant="ghost" onClick={() => requestSort('updatedAt')}>
+                    <Button variant="ghost" onClick={() => requestSort('completedAt')}>
                       Ngày hoàn thành
                       <ArrowUpDown className="ml-2 h-4 w-4" />
                     </Button>
