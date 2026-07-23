@@ -12,8 +12,8 @@ export function rateBadgeClass(pct: number): string {
 export function driverStatus(s: Pick<DriverCancelStat, 'isBanned' | 'suspendedUntil'>): {
   label: string; variant: 'destructive' | 'secondary' | 'default';
 } {
-  if (s.isBanned) return { label: 'Đã khoá vĩnh viễn', variant: 'destructive' };
+  if (s.isBanned) return { label: 'Đã khoá tài khoản (vĩnh viễn)', variant: 'destructive' };
   if (s.suspendedUntil && new Date(s.suspendedUntil).getTime() > Date.now())
-    return { label: 'Tạm khoá', variant: 'secondary' };
+    return { label: 'Tạm khoá nhận chuyến', variant: 'secondary' };
   return { label: 'Hoạt động', variant: 'default' };
 }

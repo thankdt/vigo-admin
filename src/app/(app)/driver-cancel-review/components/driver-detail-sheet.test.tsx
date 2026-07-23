@@ -138,10 +138,10 @@ describe('DriverDetailSheet', () => {
     render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
     await waitFor(() => expect(getDriverApprovalHistory).toHaveBeenCalledWith('de1'));
     const adminName = await screen.findByText(/Admin B/);
-    // "Khoá vĩnh viễn" also appears as the (disabled) action button's own label,
-    // so scope the query to the history row itself rather than the whole document.
+    // "Khoá tài khoản (vĩnh viễn)" also appears as the (disabled) action button's own
+    // label, so scope the query to the history row itself rather than the whole document.
     const row = adminName.closest('li')!;
-    expect(within(row).getByText('Khoá vĩnh viễn')).toBeInTheDocument();
+    expect(within(row).getByText('Khoá tài khoản (vĩnh viễn)')).toBeInTheDocument();
   });
 
   it('bans the driver with the entered reason and refetches + calls onDone', async () => {
@@ -150,7 +150,7 @@ describe('DriverDetailSheet', () => {
     await waitFor(() => expect(getDriverApprovalHistory).toHaveBeenCalledTimes(1));
 
     await userEvent.type(screen.getByPlaceholderText('Nhập lý do khoá / tạm khoá...'), 'Câu kéo khách');
-    await userEvent.click(screen.getByRole('button', { name: /Khoá vĩnh viễn/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Khoá tài khoản \(vĩnh viễn\)/ }));
 
     await waitFor(() => expect(banDriver).toHaveBeenCalledWith('de1', 'Câu kéo khách'));
     expect(onDone).toHaveBeenCalledTimes(1);
@@ -159,7 +159,7 @@ describe('DriverDetailSheet', () => {
 
   it('the ban/suspend buttons are disabled until a reason is entered', () => {
     render(<DriverDetailSheet stat={stat} range={range} onOpenChange={vi.fn()} onDone={vi.fn()} />);
-    expect(screen.getByRole('button', { name: /Khoá vĩnh viễn/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Khoá tài khoản \(vĩnh viễn\)/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Tạm khoá/ })).toBeDisabled();
   });
 
