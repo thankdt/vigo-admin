@@ -192,6 +192,12 @@ export type Driver = {
   // Tạm khoá nhận chuyến có hẹn giờ (chỉ chặn dispatch). Đang khoá khi suspendedUntil > now.
   suspendedUntil?: string | null;
   suspendedReason?: string | null;
+  // CSKH theo dõi đã gọi điện tài xế + ghi chú nội bộ. Backend chỉ trả ở danh sách admin
+  // (select:false ở nơi khác). Additive → có thể undefined nếu backend chưa deploy.
+  csCalled?: boolean;
+  csCalledAt?: string | null;
+  csCalledByName?: string | null;
+  csNote?: string | null;
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PROCESSING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';

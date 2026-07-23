@@ -24,7 +24,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, updateDriverCsStatus } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
@@ -96,6 +96,11 @@ type TableTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false' | 'needsRev
 
 export function DriversTable() {
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
+  // CSKH: theo dõi đã gọi điện + ghi chú (cập nhật optimistic từng dòng, khỏi refetch cả list).
+  const [csBusyId, setCsBusyId] = React.useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = React.useState<string | null>(null);
+  const [noteDraft, setNoteDraft] = React.useState('');
+  const [savingNote, setSavingNote] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const { toast } = useToast();
@@ -463,6 +468,7 @@ export function DriversTable() {
         fixedRouteId: f.fixedRouteId || undefined,
         transportCompanyName: f.transportCompanyName || undefined,
         unconfirmedTransportCompany: f.unconfirmedTransportCompany ? 'true' : undefined,
+        csCalled: f.csCalled || undefined,
       };
       if (sort) {
         apiParams.sort = sort.key;
@@ -574,7 +580,8 @@ export function DriversTable() {
   // Extra column: approval status on the "Tất cả" tab (mixed states), live
   // online status on the "Đã duyệt" tab (all approved).
   const showStatusCol = activeTab === 'all' || activeTab === 'true';
-  const colCount = showStatusCol ? 8 : 7;
+  // +2 cột CSKH (Đã gọi điện, Ghi chú) luôn hiện.
+  const colCount = (showStatusCol ? 8 : 7) + 2;
 
   const openConfirmationDialog = (driver: Driver, action: 'approve' | 'reject') => {
     setDialogState({ open: true, driver, action });
@@ -677,6 +684,39 @@ export function DriversTable() {
     }
   };
 
+  // Vá 1 dòng tài xế tại chỗ (optimistic) — dùng cho tick "đã gọi" / lưu ghi chú CSKH.
+  const patchDriverRow = (id: string, patch: Partial<Driver>) =>
+    setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+
+  const toggleCsCalled = async (driver: Driver) => {
+    setCsBusyId(driver.id);
+    try {
+      const updated = await updateDriverCsStatus(driver.id, { csCalled: !driver.csCalled });
+      patchDriverRow(driver.id, {
+        csCalled: updated.csCalled,
+        csCalledAt: updated.csCalledAt,
+        csCalledByName: updated.csCalledByName,
+      });
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không cập nhật được', description: err.message });
+    } finally {
+      setCsBusyId(null);
+    }
+  };
+
+  const saveCsNote = async (driver: Driver) => {
+    setSavingNote(true);
+    try {
+      const updated = await updateDriverCsStatus(driver.id, { csNote: noteDraft.trim() });
+      patchDriverRow(driver.id, { csNote: updated.csNote });
+      setEditingNoteId(null);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không lưu được ghi chú', description: err.message });
+    } finally {
+      setSavingNote(false);
+    }
+  };
+
   const handleAssign = async () => {
     if (!assignDriver || !selectedCompanyId) return;
     setIsAssigning(true);
@@ -753,6 +793,8 @@ export function DriversTable() {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
+                <TableHead className="text-center">Đã gọi điện</TableHead>
+                <TableHead>Ghi chú</TableHead>
                 <TableHead>
                   <span className="sr-only">Thao tác</span>
                 </TableHead>
@@ -882,6 +924,71 @@ export function DriversTable() {
                       <span className="text-sm text-muted-foreground">
                         {driver.createdAt ? new Date(driver.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                       </span>
+                    </TableCell>
+                    {/* CSKH: đã gọi điện (tick nhanh, kèm ai/lúc nào) — stopPropagation để không mở dialog chi tiết. */}
+                    <TableCell onClick={(e) => e.stopPropagation()} className="text-center">
+                      <div className="flex flex-col items-center gap-1">
+                        {csBusyId === driver.id ? (
+                          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                        ) : (
+                          <Checkbox
+                            checked={!!driver.csCalled}
+                            onCheckedChange={() => toggleCsCalled(driver)}
+                            aria-label={`Đã gọi điện ${driverName}`}
+                          />
+                        )}
+                        {driver.csCalled && driver.csCalledByName && (
+                          <span
+                            className="text-[10px] leading-tight text-muted-foreground"
+                            title={driver.csCalledAt ? formatVnDateTime(driver.csCalledAt) : undefined}
+                          >
+                            {driver.csCalledByName}
+                            {driver.csCalledAt ? ` · ${formatVnDateTime(driver.csCalledAt)}` : ''}
+                          </span>
+                        )}
+                      </div>
+                    </TableCell>
+                    {/* CSKH: ghi chú nội bộ — click để sửa inline. */}
+                    <TableCell onClick={(e) => e.stopPropagation()} className="max-w-[220px] align-top">
+                      {editingNoteId === driver.id ? (
+                        <div className="flex items-center gap-1">
+                          <Input
+                            value={noteDraft}
+                            onChange={(e) => setNoteDraft(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') saveCsNote(driver);
+                              if (e.key === 'Escape') setEditingNoteId(null);
+                            }}
+                            disabled={savingNote}
+                            autoFocus
+                            placeholder="Ghi chú..."
+                            className="h-8 text-sm"
+                          />
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 shrink-0"
+                            onClick={() => saveCsNote(driver)}
+                            disabled={savingNote}
+                            aria-label="Lưu ghi chú"
+                          >
+                            {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckIcon className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => { setNoteDraft(driver.csNote || ''); setEditingNoteId(driver.id); }}
+                          className="group flex w-full items-start gap-1 text-left text-sm"
+                        >
+                          {driver.csNote ? (
+                            <span className="line-clamp-2 whitespace-pre-wrap break-words">{driver.csNote}</span>
+                          ) : (
+                            <span className="italic text-muted-foreground/60">+ Ghi chú</span>
+                          )}
+                          <Pencil className="mt-0.5 h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60" />
+                        </button>
+                      )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>

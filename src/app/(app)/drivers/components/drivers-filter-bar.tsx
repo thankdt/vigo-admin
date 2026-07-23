@@ -22,6 +22,8 @@ export type DriverFilters = {
   // True = only drivers who self-declared a transport company name but have no
   // confirmed transportCompanyId yet.
   unconfirmedTransportCompany: boolean;
+  // CSKH đã gọi điện: '' = tất cả, 'true' = đã gọi, 'false' = chưa gọi.
+  csCalled: '' | 'true' | 'false';
 };
 
 export const EMPTY_FILTERS: DriverFilters = {
@@ -31,13 +33,15 @@ export const EMPTY_FILTERS: DriverFilters = {
   fixedRouteId: '',
   transportCompanyName: '',
   unconfirmedTransportCompany: false,
+  csCalled: '',
 };
 
 export function hasAnyFilter(f: DriverFilters): boolean {
-  return Boolean(f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName || f.unconfirmedTransportCompany);
+  return Boolean(f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName || f.unconfirmedTransportCompany || f.csCalled);
 }
 
 const ALL_ROUTES_VALUE = '__all__';
+const ALL_CS_VALUE = '__all_cs__';
 
 function IconInput({
   icon: Icon,
@@ -100,7 +104,7 @@ export function DriversFilterBar({
           onChange={(e) => setField('plate', e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Combobox
           options={routeOptions}
           selectedValue={value.fixedRouteId || ALL_ROUTES_VALUE}
@@ -115,6 +119,20 @@ export function DriversFilterBar({
           value={value.transportCompanyName}
           disabled={value.unconfirmedTransportCompany}
           onChange={(e) => setField('transportCompanyName', e.target.value)}
+        />
+        <Combobox
+          options={[
+            { value: ALL_CS_VALUE, label: 'Gọi điện: tất cả' },
+            { value: 'false', label: 'Chưa gọi' },
+            { value: 'true', label: 'Đã gọi' },
+          ]}
+          selectedValue={value.csCalled || ALL_CS_VALUE}
+          onSelect={(v) =>
+            setField('csCalled', !v || v === ALL_CS_VALUE ? '' : (v as 'true' | 'false'))
+          }
+          placeholder="Gọi điện: tất cả"
+          searchPlaceholder="Lọc..."
+          noResultsText="Không có."
         />
         <div className="flex items-center gap-3 sm:justify-end">
           <div className="flex items-center gap-2">

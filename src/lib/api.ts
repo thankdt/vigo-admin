@@ -332,6 +332,7 @@ export async function getDrivers(params: {
   fixedRouteId?: string;
   needsReview?: 'true' | 'false';
   unconfirmedTransportCompany?: 'true' | 'false';
+  csCalled?: 'true' | 'false';
   sort?: 'name' | 'isApproved' | 'createdAt';
   order?: 'asc' | 'desc';
 } = {}): Promise<GetApiResponse<Driver>> {
@@ -349,11 +350,26 @@ export async function getDrivers(params: {
   if (params.fixedRouteId) query.set('fixedRouteId', params.fixedRouteId);
   if (params.needsReview) query.set('needsReview', params.needsReview);
   if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
+  if (params.csCalled) query.set('csCalled', params.csCalled);
   if (params.sort) query.set('sort', params.sort);
   if (params.order) query.set('order', params.order);
 
   const response = await fetchWithAuth(`/drivers/admin/list?${query.toString()}`);
   return response.json();
+}
+
+// CSKH đánh dấu đã gọi điện tài xế + ghi chú (theo dõi liên hệ). Chỉ gửi field muốn đổi:
+// csCalled true→backend stamp thời điểm+CSKH, false→xoá; csNote chuỗi rỗng = xoá ghi chú.
+export async function updateDriverCsStatus(
+  driverId: string,
+  body: { csCalled?: boolean; csNote?: string },
+): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${driverId}/cs-status`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  return result.data || result;
 }
 
 export async function approveDriver(id: string, enabledServices: string[], note?: string): Promise<Driver> {
