@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { listAgentBookings, cancelAgentBooking, AgentBooking } from '@/lib/api';
+import { agentCommissionDisplay } from '@/lib/agent-commission-display';
 import { RefreshCw, Loader2, MapPin, XCircle } from 'lucide-react';
 
 // Đủ 14 trạng thái BookingStatus backend có thể trả (raw), nhìn từ góc ĐẠI LÝ — nhãn rõ ràng, không
@@ -99,6 +100,7 @@ export default function AgentOrdersPage() {
         <div className="space-y-3">
           {bookings.map((b) => {
             const meta = statusMeta(b.status);
+            const c = agentCommissionDisplay(b);
             return (
               <Card key={b.id} className="p-4">
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -121,17 +123,22 @@ export default function AgentOrdersPage() {
                   </div>
                   <div className="text-right shrink-0 space-y-1">
                     <div className="text-sm font-semibold">{fmtVnd(b.finalPrice)}</div>
-                    {/* Hoa hồng: đơn đã hoàn thành → số THẬT đã nhận (xanh); đơn đang chạy → "dự kiến ~"
-                        (xám, có thể lệch do trần tháng/self-deal — nhãn rõ). */}
-                    {b.agentCommissionAmount != null ? (
+                    {/* Hoa hồng LUÔN hiện: hoàn thành → số THẬT (xanh); đang chạy khách thật → "dự kiến ~";
+                        không phát sinh (tự đặt/huỷ/dưới mức) → "0₫" kèm lý do — không để trống. */}
+                    {c.tone === 'earned' ? (
                       <div className="text-xs font-semibold text-green-600 dark:text-green-400">
-                        Hoa hồng: {fmtVnd(b.agentCommissionAmount)}
+                        Hoa hồng: {fmtVnd(c.amount)}
                       </div>
-                    ) : b.agentCommissionEstimate != null && b.agentCommissionEstimate > 0 ? (
+                    ) : c.tone === 'estimate' ? (
                       <div className="text-xs font-medium text-muted-foreground">
-                        Hoa hồng dự kiến ~{fmtVnd(b.agentCommissionEstimate)}
+                        Hoa hồng dự kiến ~{fmtVnd(c.amount)}
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="text-xs font-medium text-muted-foreground">
+                        {c.label}: 0₫
+                        {c.reason && <span className="block text-[10px] text-muted-foreground/80">{c.reason}</span>}
+                      </div>
+                    )}
                     {CANCELLABLE.has(b.status) && (
                       confirmId === b.id ? (
                         <div className="flex justify-end gap-1">
