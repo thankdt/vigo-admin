@@ -70,10 +70,10 @@ export function DriverActionDialog({
     run(
       'suspend',
       () => suspendDriver(stat.driverEntityId, { durationMinutes: suspendMinutes(days), reason }),
-      `Đã tạm khoá ${days} ngày.`,
+      `Đã tạm khoá nhận chuyến ${days} ngày.`,
     );
 
-  const handleBan = () => run('ban', () => banDriver(stat.driverEntityId, reason), 'Đã khoá vĩnh viễn.');
+  const handleBan = () => run('ban', () => banDriver(stat.driverEntityId, reason), 'Đã khoá tài khoản (vĩnh viễn).');
 
   const handleUnlock = () =>
     run(
@@ -126,11 +126,11 @@ export function DriverActionDialog({
             </div>
             <Button variant="secondary" disabled={!reasonOk || !!saving} onClick={handleSuspend}>
               {saving === 'suspend' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              Tạm khoá
+              Tạm khoá nhận chuyến
             </Button>
             <Button variant="destructive" disabled={!reasonOk || !!saving} onClick={handleBan}>
               {saving === 'ban' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-              Khoá vĩnh viễn
+              Khoá tài khoản (vĩnh viễn)
             </Button>
             {canUnlock && (
               <Button variant="outline" disabled={!!saving} onClick={handleUnlock}>

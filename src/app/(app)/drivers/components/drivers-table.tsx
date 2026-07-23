@@ -909,7 +909,7 @@ export function DriversTable() {
                               onSelect={() => setTimeout(() => { setBanReason(''); setBanNote(''); setBanTarget(driver); }, 0)}
                               className="text-destructive focus:text-destructive"
                             >
-                              <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
+                              <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản (vĩnh viễn)
                             </DropdownMenuItem>
                           )}
                           {!driver.isBanned && (
@@ -919,7 +919,7 @@ export function DriversTable() {
                               </DropdownMenuItem>
                             ) : (
                               <DropdownMenuItem onSelect={() => setTimeout(() => openSuspendDialog(driver), 0)}>
-                                <Clock className="mr-2 h-4 w-4" /> Khoá nhận chuyến (tạm)
+                                <Clock className="mr-2 h-4 w-4" /> Tạm khoá nhận chuyến
                               </DropdownMenuItem>
                             )
                           )}
@@ -1627,7 +1627,7 @@ export function DriversTable() {
                           setBanTarget(d);
                         }}
                       >
-                        <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản
+                        <Ban className="mr-2 h-4 w-4" /> Khoá tài khoản (vĩnh viễn)
                       </Button>
                       {!isSuspendedNow(viewDriver) && (
                         <Button
@@ -1640,7 +1640,7 @@ export function DriversTable() {
                             openSuspendDialog(d);
                           }}
                         >
-                          <Clock className="mr-2 h-4 w-4" /> Khoá nhận chuyến
+                          <Clock className="mr-2 h-4 w-4" /> Tạm khoá nhận chuyến
                         </Button>
                       )}
                     </div>
@@ -1790,7 +1790,7 @@ export function DriversTable() {
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <Ban className="h-5 w-5" /> Khoá tài khoản tài xế
+              <Ban className="h-5 w-5" /> Khoá tài khoản tài xế (vĩnh viễn)
             </AlertDialogTitle>
             <AlertDialogDescription>
               Tài xế <span className="font-semibold text-foreground">{banTarget?.name || banTarget?.user?.fullName || 'N/A'}</span> sẽ bị <span className="font-semibold">đăng xuất ngay</span> và <span className="font-semibold">không thể đăng nhập</span>, không nhận chuyến cho tới khi được mở khoá.

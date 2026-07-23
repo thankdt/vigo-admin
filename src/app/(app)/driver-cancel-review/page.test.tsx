@@ -63,7 +63,7 @@ describe('DriverCancelReviewPage — sheet re-sync after action', () => {
     vi.mocked(getDriverCancelStats).mockResolvedValue([{ ...baseStat, isBanned: true }]);
 
     await userEvent.type(screen.getByPlaceholderText('Nhập lý do khoá / tạm khoá...'), 'Câu kéo khách');
-    await userEvent.click(screen.getByRole('button', { name: /Khoá vĩnh viễn/ }));
+    await userEvent.click(screen.getByRole('button', { name: /Khoá tài khoản \(vĩnh viễn\)/ }));
 
     await waitFor(() => expect(banDriver).toHaveBeenCalledWith('de1', 'Câu kéo khách'));
 
@@ -74,7 +74,7 @@ describe('DriverCancelReviewPage — sheet re-sync after action', () => {
 
     const sheetTitle = screen.getByText('Tài A · 0900000001').closest('[data-slot="sheet-header"]') ??
       screen.getByText('Tài A · 0900000001').parentElement!;
-    expect(within(sheetTitle as HTMLElement).getByText('Đã khoá vĩnh viễn')).toBeInTheDocument();
+    expect(within(sheetTitle as HTMLElement).getByText('Đã khoá tài khoản (vĩnh viễn)')).toBeInTheDocument();
 
     // The detail sub-fetches (trips/history) must not refire from the re-sync —
     // same driverEntityId means the sheet's detail-loading effect shouldn't

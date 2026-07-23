@@ -60,7 +60,7 @@ const APPROVAL_ACTION_META: Record<
     icon: Undo2,
     tone: 'text-amber-600',
   },
-  BANNED: { label: 'Khoá tài khoản', icon: Ban, tone: 'text-red-600' },
+  BANNED: { label: 'Khoá tài khoản (vĩnh viễn)', icon: Ban, tone: 'text-red-600' },
   UNBANNED: { label: 'Mở khoá', icon: LockOpen, tone: 'text-emerald-600' },
   SUSPENDED: { label: 'Tạm khoá nhận chuyến', icon: Clock, tone: 'text-amber-600' },
   UNSUSPENDED: { label: 'Gỡ khoá nhận chuyến', icon: PlayCircle, tone: 'text-emerald-600' },
