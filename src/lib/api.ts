@@ -1977,6 +1977,65 @@ export async function agentLoginOtp(phone: string, otp: string): Promise<any> {
 export async function getAgentMe(): Promise<AgentMe> {
   return unwrap<AgentMe>(await fetchWithAuth('/agent/me'));
 }
+
+// ───────── Đăng ký tài khoản tự phục vụ (mirror app khách) + ứng tuyển đại lý ─────────
+// Cổng đại lý (backend) mở cho MỌI tài khoản đã đăng nhập, nên đăng ký = tạo tài khoản role
+// USER (đúng hợp đồng /auth/* mà app khách đang dùng) rồi tự đăng nhập thẳng vào cổng.
+
+// Bước 1: gửi OTP đăng ký (6 số, hết hạn 5 phút, gửi qua Zalo/SMS). Không cần auth.
+export async function sendRegistrationOtp(phone: string): Promise<{ message: string }> {
+  const response = await fetch(`${API_BASE_URL}/auth/send-registration-otp`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ phone }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Không gửi được OTP');
+  }
+  return response.json().then((b) => b.data ?? b);
+}
+
+// Bước 2: tạo tài khoản (role USER) + lưu token → đăng nhập luôn. Cùng body-shape app khách gửi
+// (role mặc định USER; referralCode tuỳ chọn — chỉ gửi khi có, tránh 400 do rỗng).
+export async function registerAccount(body: {
+  phone: string;
+  pass: string;
+  fullName?: string;
+  otp: string;
+  referralCode?: string;
+}): Promise<{ access_token?: string; refresh_token?: string; user?: any; requirePhoneUpdate?: boolean }> {
+  const response = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ...body, role: 'USER' }),
+  });
+  if (!response.ok) {
+    const e = await response.json().catch(() => ({}));
+    throw new Error(e?.error?.message || e?.message || 'Đăng ký thất bại');
+  }
+  const data = await response.json();
+  const tokens = data?.data ?? data;
+  if (tokens?.access_token && typeof window !== 'undefined') {
+    localStorage.setItem('access_token', tokens.access_token);
+    if (tokens.refresh_token) localStorage.setItem('refresh_token', tokens.refresh_token);
+  }
+  return tokens;
+}
+
+// Ứng tuyển làm đại lý đặt hộ — CẦN đã đăng nhập (gọi sau register/login). Best-effort: tạo hồ sơ
+// PENDING để admin thấy trong danh sách đại lý và cấp % hoa hồng riêng. Server idempotent; nếu đã
+// ACTIVE nó ném lỗi → caller nuốt lỗi, đừng chặn UX.
+export async function applyAgent(note?: string): Promise<{ status?: string; commissionPercent?: number | null }> {
+  return unwrap(await fetchWithAuth('/agent/apply', { method: 'POST', body: JSON.stringify({ note }) }));
+}
+
+// CỔNG AN TOÀN TIỀN: ví hoa hồng đại lý chỉ TỰ RÚT được khi là ví USER_REFERRAL (đại lý là khách) —
+// luồng /referrals/me/withdrawals hard-code vào ví USER_REFERRAL. Đại lý là TÀI XẾ → hoa hồng vào ví
+// tài xế (DRIVER_MAIN), backend CHƯA có API tự rút → cổng chỉ hiển thị số dư, KHÔNG cho gửi lệnh rút.
+export function agentCanSelfWithdraw(walletType: AgentMe['walletType']): boolean {
+  return walletType === 'USER_REFERRAL';
+}
 export async function listAgentOrders(page = 1, limit = 20): Promise<{ data: AgentOrder[]; meta: any }> {
   return unwrap(await fetchWithAuth(`/agent/orders?page=${page}&limit=${limit}`));
 }

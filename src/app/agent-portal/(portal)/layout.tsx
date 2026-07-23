@@ -27,6 +27,7 @@ const navItems = [
   { href: '/agent-portal/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
   { href: '/agent-portal/orders/new', label: 'Đặt hộ mới', icon: PlusCircle },
   { href: '/agent-portal/orders', label: 'Đơn của tôi', icon: ListOrdered },
+  { href: '/agent-portal/wallet', label: 'Ví & Rút tiền', icon: Wallet },
 ];
 
 /** Protected agent portal. Gates on /agent/me (AgentGuard → 403 for non-agents). */

@@ -81,6 +81,9 @@ export default function AgentDashboardPage() {
         <Button variant="outline" asChild>
           <Link href="/agent-portal/orders"><ListOrdered className="mr-2 h-4 w-4" /> Đơn của tôi</Link>
         </Button>
+        <Button variant="outline" asChild>
+          <Link href="/agent-portal/wallet"><Wallet className="mr-2 h-4 w-4" /> Ví & rút tiền</Link>
+        </Button>
       </div>
     </div>
   );
