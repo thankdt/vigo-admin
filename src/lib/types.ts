@@ -515,6 +515,9 @@ export type LeakageTraceRow = {
   } | null;
 };
 
+/** Trạng thái admin check tay 1 case tỉ lệ huỷ (auto-enforcement chưa bật). */
+export type DriverCancelCheckStatus = 'CHECKING' | 'CHECKED';
+
 export type DriverCancelStat = {
   driverEntityId: string;
   driverUserId: string;
@@ -529,6 +532,22 @@ export type DriverCancelStat = {
   depositForfeitFlagged: boolean;
   lastAlertReason: string | null;
   lastAlertAt: string | null;
+  // Check-workflow (optional — backend cũ chưa trả các field này).
+  checkStatus?: DriverCancelCheckStatus | null;
+  checkNote?: string | null;
+  checkBy?: string | null;
+  checkAt?: string | null;
+  /** Đã CHECKED nhưng có khách-huỷ MỚI sau mốc check → cần check lại. */
+  hasNewCancelsSinceCheck?: boolean;
+};
+
+/** Một dòng lịch sử check của admin (append-only, mới nhất trước). */
+export type DriverCancelCheckEvent = {
+  id: string;
+  status: DriverCancelCheckStatus;
+  note: string | null;
+  createdAt: string;
+  byAdminName: string | null;
 };
 
 /** One customer-cancelled trip for a driver, anchored on `cancelledAt` — NOT
