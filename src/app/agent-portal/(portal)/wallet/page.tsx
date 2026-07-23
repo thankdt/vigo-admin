@@ -21,6 +21,7 @@ import {
   type KolWithdrawal,
   type AgentBooking,
 } from '@/lib/api';
+import { agentCommissionDisplay } from '@/lib/agent-commission-display';
 
 const formatVND = (n: number | null | undefined) =>
   n == null
@@ -247,13 +248,19 @@ export default function AgentWalletPage() {
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  {b.agentCommissionAmount != null ? (
-                    <div className="text-sm font-semibold text-green-600 dark:text-green-400">+{formatVND(b.agentCommissionAmount)}</div>
-                  ) : b.agentCommissionEstimate != null && b.agentCommissionEstimate > 0 ? (
-                    <div className="text-xs font-medium text-muted-foreground">dự kiến ~{formatVND(b.agentCommissionEstimate)}</div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground">—</div>
-                  )}
+                  {(() => {
+                    const c = agentCommissionDisplay(b);
+                    if (c.tone === 'earned')
+                      return <div className="text-sm font-semibold text-green-600 dark:text-green-400">+{formatVND(c.amount)}</div>;
+                    if (c.tone === 'estimate')
+                      return <div className="text-xs font-medium text-muted-foreground">dự kiến ~{formatVND(c.amount)}</div>;
+                    return (
+                      <div className="text-xs font-medium text-muted-foreground">
+                        0₫
+                        {c.reason && <span className="block text-[10px] text-muted-foreground/80">{c.reason}</span>}
+                      </div>
+                    );
+                  })()}
                 </div>
               </li>
             ))}
