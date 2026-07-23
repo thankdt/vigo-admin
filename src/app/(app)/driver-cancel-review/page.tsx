@@ -123,8 +123,8 @@ export default function DriverCancelReviewPage() {
 
       <Card className="p-4 text-sm text-muted-foreground">
         Tài xế huỷ nghi ngờ (khách huỷ 10 giây–5 phút sau khi tài nhận) bị tạm khoá nhận chuyến 3 ngày; tái phạm khoá tài khoản vĩnh viễn.
-        Tỉ lệ khách huỷ ≥50% → tạm khoá 1 ngày; &gt;30% → theo dõi. Số ngày/ngưỡng cấu hình ở Cài đặt › Chống huỷ
-        chuyến.
+        Tỉ lệ khách huỷ ≥50% → tạm khoá 1 ngày; &gt;30% → theo dõi. Số ngày/ngưỡng cấu hình ở Cài đặt › Chống gian
+        lận huỷ chuyến.
       </Card>
 
       <Card className="space-y-3 p-4">

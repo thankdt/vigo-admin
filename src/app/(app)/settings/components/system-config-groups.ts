@@ -25,8 +25,11 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
       k.startsWith('TIER_') || k.startsWith('REWARD_') || k === 'SIGNUP_LOYALTY_REWARD',
   },
   {
-    id: 'cancel', label: 'Chống huỷ chuyến (khoá tài xế)', icon: ShieldAlert, danger: true,
-    match: (k) => k.startsWith('CANCEL_'),
+    // Gộp CẢ 2 function chống gian lận sau-huỷ: khoá tài theo tỉ lệ/timing huỷ
+    // (CANCEL_*) + giám sát GPS tài đi qua điểm đón/trả (LEAKAGE_*). Giữ id
+    // 'cancel' nguyên — RBAC gate theo `settings.cancel`, đổi id là mất quyền đã cấp.
+    id: 'cancel', label: 'Chống gian lận huỷ chuyến (khoá tài + giám sát GPS)', icon: ShieldAlert, danger: true,
+    match: (k) => k.startsWith('CANCEL_') || k.startsWith('LEAKAGE_'),
   },
   {
     id: 'phone-reveal', label: 'Ẩn số điện thoại khách', icon: PhoneOff,

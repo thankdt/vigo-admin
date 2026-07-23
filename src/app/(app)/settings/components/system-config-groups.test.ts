@@ -33,6 +33,20 @@ describe('buildConfigGroups (settings RBAC gate)', () => {
     expect(buildConfigGroups(CONFIGS, '', canFor(mkMe({ functions: ['users'] })))).toEqual([]);
   });
 
+  it('CANCEL_* và LEAKAGE_* nằm CHUNG nhóm cancel (2 function chống gian lận sau-huỷ)', () => {
+    const configs = [
+      { key: 'CANCEL_ENFORCEMENT_MODE', value: 'SHADOW', description: '' },
+      { key: 'LEAKAGE_DETECTION_ENABLED', value: 'true', description: '' },
+    ];
+    const groups = buildConfigGroups(configs, '', canFor(mkMe({ isSuperAdmin: true })));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].group.id).toBe('cancel'); // giữ id cũ — RBAC settings.cancel đã cấp không được vỡ
+    expect(groups[0].items.map((c) => c.key).sort()).toEqual([
+      'CANCEL_ENFORCEMENT_MODE',
+      'LEAKAGE_DETECTION_ENABLED',
+    ]);
+  });
+
   it('applies the search filter within permitted groups', () => {
     const groups = buildConfigGroups(CONFIGS, 'radius', canFor(mkMe({ isSuperAdmin: true })));
     expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);
