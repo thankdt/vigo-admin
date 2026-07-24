@@ -1735,6 +1735,15 @@ export async function adminDeactivateKolCode(id: string): Promise<{ ok: true }> 
   return unwrap<{ ok: true }>(response);
 }
 
+// Hard-delete — backend chỉ cho xoá mã SẠCH (chưa dùng / chưa referral); mã đã dùng trả 400,
+// buộc dùng deactivate. Toast lỗi backend cho người dùng.
+export async function adminDeleteKolCode(id: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/kol/admin/codes/${id}`, {
+    method: 'DELETE',
+  });
+  return unwrap<{ ok: true }>(response);
+}
+
 export async function adminKolCodeReport(id: string): Promise<KolCodeReport> {
   const response = await fetchWithAuth(`/kol/admin/codes/${id}/report`);
   return unwrap<KolCodeReport>(response);
