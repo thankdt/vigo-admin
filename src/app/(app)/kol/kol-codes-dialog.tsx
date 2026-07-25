@@ -8,17 +8,28 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Loader2, Ban, BarChart3, Plus } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, BarChart3, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
   adminListKolCodes,
   adminCreateKolCode,
-  adminDeactivateKolCode,
+  adminUpdateKolCode,
+  adminDeleteKolCode,
   adminKolCodeReport,
   type KolCodeRow,
   type KolCodeReport,
@@ -44,7 +55,7 @@ type Props = {
   userLabel: string;
 };
 
-type CreateForm = {
+type CodeForm = {
   code: string;
   refereeRewardPoints: string;
   usageLimit: string;
@@ -52,7 +63,7 @@ type CreateForm = {
   campaignName: string;
 };
 
-const emptyForm: CreateForm = {
+const emptyForm: CodeForm = {
   code: '',
   refereeRewardPoints: '',
   usageLimit: '',
@@ -64,10 +75,14 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
   const { toast } = useToast();
   const [rows, setRows] = React.useState<KolCodeRow[]>([]);
   const [loading, setLoading] = React.useState(false);
-  const [form, setForm] = React.useState<CreateForm>(emptyForm);
-  const [creating, setCreating] = React.useState(false);
+  const [form, setForm] = React.useState<CodeForm>(emptyForm);
+  const [saving, setSaving] = React.useState(false);
+  const [editingId, setEditingId] = React.useState<string | null>(null);
   const [reports, setReports] = React.useState<Record<string, KolCodeReport>>({});
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [togglingId, setTogglingId] = React.useState<string | null>(null);
+  const [deleting, setDeleting] = React.useState<KolCodeRow | null>(null);
+  const [deletingBusy, setDeletingBusy] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -83,12 +98,30 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
   React.useEffect(() => {
     if (open) {
       setForm(emptyForm);
+      setEditingId(null);
       setReports({});
       void load();
     }
   }, [open, load]);
 
-  const create = async () => {
+  const startEdit = (row: KolCodeRow) => {
+    setEditingId(row.id);
+    setForm({
+      code: row.code,
+      refereeRewardPoints: String(row.refereeRewardPoints),
+      usageLimit: String(row.usageLimit),
+      dailyLimit: row.dailyLimit ? String(row.dailyLimit) : '',
+      campaignName: row.campaignName ?? '',
+    });
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setForm(emptyForm);
+  };
+
+  // Tạo mã mới HOẶC lưu sửa mã đang chọn (editingId). Mã (code) KHÔNG đổi được khi sửa.
+  const save = async () => {
     const points = Number(form.refereeRewardPoints);
     const usage = Number(form.usageLimit);
     if (!Number.isFinite(points) || points < 1) {
@@ -99,35 +132,69 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
       toast({ variant: 'destructive', description: 'Giới hạn lượt (usageLimit) phải ≥ 1' });
       return;
     }
-    setCreating(true);
+    const dailyLimit = form.dailyLimit.trim() ? Number(form.dailyLimit) : undefined;
+    const campaignName = form.campaignName.trim() || undefined;
+    setSaving(true);
     try {
-      await adminCreateKolCode(userId, {
-        code: form.code.trim() ? form.code.trim().toUpperCase() : undefined,
-        refereeRewardPoints: points,
-        usageLimit: usage,
-        dailyLimit: form.dailyLimit.trim() ? Number(form.dailyLimit) : undefined,
-        campaignName: form.campaignName.trim() || undefined,
-      });
-      toast({ description: 'Đã tạo mã ưu đãi' });
+      if (editingId) {
+        await adminUpdateKolCode(editingId, {
+          refereeRewardPoints: points,
+          usageLimit: usage,
+          dailyLimit,
+          campaignName,
+        });
+        toast({ description: 'Đã lưu thay đổi' });
+      } else {
+        await adminCreateKolCode(userId, {
+          code: form.code.trim() ? form.code.trim().toUpperCase() : undefined,
+          refereeRewardPoints: points,
+          usageLimit: usage,
+          dailyLimit,
+          campaignName,
+        });
+        toast({ description: 'Đã tạo mã ưu đãi' });
+      }
       setForm(emptyForm);
+      setEditingId(null);
       await load();
     } catch (e) {
-      toast({ variant: 'destructive', description: parseErr(e) || 'Tạo mã thất bại' });
+      toast({ variant: 'destructive', description: parseErr(e) || 'Lưu mã thất bại' });
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   };
 
-  const deactivate = async (row: KolCodeRow) => {
-    setBusyId(row.id);
+  // Bật/tắt 2 chiều qua PATCH isActive (deactivate + reactivate cùng 1 đường).
+  const toggleActive = async (row: KolCodeRow) => {
+    const next = !row.isActive;
+    setTogglingId(row.id);
+    setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, isActive: next } : r)));
     try {
-      await adminDeactivateKolCode(row.id);
-      toast({ description: `Đã tắt mã ${row.code}` });
+      await adminUpdateKolCode(row.id, { isActive: next });
+      toast({ description: next ? `Đã bật mã ${row.code}` : `Đã tắt mã ${row.code}` });
+    } catch (e) {
+      // revert optimistic
+      setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, isActive: row.isActive } : r)));
+      toast({ variant: 'destructive', description: parseErr(e) || 'Đổi trạng thái thất bại' });
+    } finally {
+      setTogglingId(null);
+    }
+  };
+
+  const doDelete = async () => {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    try {
+      await adminDeleteKolCode(deleting.id);
+      toast({ description: `Đã xoá mã ${deleting.code}` });
+      setDeleting(null);
+      if (editingId === deleting.id) cancelEdit();
       await load();
     } catch (e) {
-      toast({ variant: 'destructive', description: parseErr(e) || 'Tắt mã thất bại' });
+      // Backend chặn xoá mã đã dùng → hiện đúng lý do, không đóng dialog.
+      toast({ variant: 'destructive', description: parseErr(e) || 'Xoá mã thất bại' });
     } finally {
-      setBusyId(null);
+      setDeletingBusy(false);
     }
   };
 
@@ -161,13 +228,14 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
           </DialogDescription>
         </DialogHeader>
 
-        {/* Tạo mã mới */}
+        {/* Tạo / sửa mã */}
         <div className="grid grid-cols-2 gap-3 rounded-md border p-3 sm:grid-cols-5">
           <div className="space-y-1">
-            <Label className="text-xs">Mã (trống = tự sinh)</Label>
+            <Label className="text-xs">Mã {editingId ? '(không đổi được)' : '(trống = tự sinh)'}</Label>
             <Input
               placeholder="VD TET2026"
               value={form.code}
+              disabled={!!editingId}
               onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
             />
           </div>
@@ -206,10 +274,22 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
               onChange={(e) => setForm((f) => ({ ...f, campaignName: e.target.value }))}
             />
           </div>
-          <div className="col-span-2 flex items-end sm:col-span-5">
-            <Button onClick={create} disabled={creating} className="ml-auto">
-              {creating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Plus className="mr-2 h-4 w-4" />}
-              Tạo mã
+          <div className="col-span-2 flex items-end gap-2 sm:col-span-5">
+            {editingId && (
+              <Button variant="outline" onClick={cancelEdit} disabled={saving} className="ml-auto">
+                <X className="mr-2 h-4 w-4" />
+                Huỷ
+              </Button>
+            )}
+            <Button onClick={save} disabled={saving} className={editingId ? '' : 'ml-auto'}>
+              {saving ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : editingId ? (
+                <Pencil className="mr-2 h-4 w-4" />
+              ) : (
+                <Plus className="mr-2 h-4 w-4" />
+              )}
+              {editingId ? 'Lưu thay đổi' : 'Tạo mã'}
             </Button>
           </div>
         </div>
@@ -231,14 +311,14 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                   <TableHead className="text-right">Đã dùng</TableHead>
                   <TableHead className="text-right">/ngày</TableHead>
                   <TableHead>Chiến dịch</TableHead>
-                  <TableHead>Trạng thái</TableHead>
+                  <TableHead>Bật</TableHead>
                   <TableHead className="text-right">Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rows.map((r) => (
                   <React.Fragment key={r.id}>
-                    <TableRow>
+                    <TableRow className={editingId === r.id ? 'bg-muted/50' : undefined}>
                       <TableCell className="font-mono font-medium">{r.code}</TableCell>
                       <TableCell className="text-right">{fmt(r.refereeRewardPoints)}</TableCell>
                       <TableCell className="text-right">
@@ -247,33 +327,42 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                       <TableCell className="text-right">{r.dailyLimit ? fmt(r.dailyLimit) : '∞'}</TableCell>
                       <TableCell className="text-muted-foreground">{r.campaignName || '—'}</TableCell>
                       <TableCell>
-                        {r.isActive ? (
-                          <Badge>Bật</Badge>
-                        ) : (
-                          <Badge variant="secondary">Tắt</Badge>
-                        )}
+                        <Switch
+                          checked={r.isActive}
+                          disabled={togglingId === r.id}
+                          onCheckedChange={() => toggleActive(r)}
+                          aria-label={r.isActive ? 'Tắt mã' : 'Bật mã'}
+                        />
                       </TableCell>
                       <TableCell className="text-right">
                         <Button
                           size="sm"
                           variant="ghost"
                           className="h-8"
+                          title="Báo cáo"
                           disabled={busyId === r.id}
                           onClick={() => toggleReport(r)}
                         >
                           <BarChart3 className="h-4 w-4" />
                         </Button>
-                        {r.isActive && (
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-8 text-destructive"
-                            disabled={busyId === r.id}
-                            onClick={() => deactivate(r)}
-                          >
-                            <Ban className="h-4 w-4" />
-                          </Button>
-                        )}
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8"
+                          title="Sửa mã"
+                          onClick={() => startEdit(r)}
+                        >
+                          <Pencil className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 text-destructive"
+                          title="Xoá mã (chỉ mã chưa dùng)"
+                          onClick={() => setDeleting(r)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </TableCell>
                     </TableRow>
                     {reports[r.id] && (
@@ -292,6 +381,33 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
           )}
         </div>
       </DialogContent>
+
+      {/* Xác nhận xoá */}
+      <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xoá mã {deleting?.code}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Chỉ xoá được mã CHƯA phát sinh lượt dùng / chưa có khách gắn. Mã đã dùng sẽ bị chặn —
+              hãy TẮT thay vì xoá để giữ báo cáo và điểm đã hứa cho khách. Hành động này không hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingBusy}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => {
+                e.preventDefault();
+                void doDelete();
+              }}
+              disabled={deletingBusy}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+              Xoá
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Dialog>
   );
 }
