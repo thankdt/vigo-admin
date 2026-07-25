@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap, CopyPlus } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
@@ -43,6 +43,7 @@ import { buildDiscountRows } from './price-breakdown-utils';
 import type { Route } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
+import { bookingToDraft, type BookingDraft } from './duplicate-utils';
 import type { Booking, BookingStatus, Driver } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
@@ -392,7 +393,12 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
 // unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
 // test mock getBookingDetails() and assert on badges (e.g.
 // switchedToWholeCar) without mounting the whole BookingsTable.
-export function BookingDetail({ bookingId, onClose }: { bookingId: string, onClose: () => void }) {
+export function BookingDetail({ bookingId, onClose, onDuplicate }: {
+  bookingId: string,
+  onClose: () => void,
+  // Bỏ trống (vd trong unit test) → không hiện nút "Nhân bản chuyến".
+  onDuplicate?: (booking: Booking) => void,
+}) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -655,6 +661,16 @@ export function BookingDetail({ bookingId, onClose }: { bookingId: string, onClo
             </>
           )}
         </div>
+        {booking && onDuplicate && (
+          <DialogFooter>
+            {/* Đặt lại chuyến giống hệt cho khách quen — mở form Tạo chuyến đã điền sẵn.
+                Chuyến đang xem KHÔNG bị thay đổi. */}
+            <Button variant="outline" onClick={() => onDuplicate(booking)}>
+              <CopyPlus className="mr-2 h-4 w-4" />
+              Nhân bản chuyến
+            </Button>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );
@@ -883,6 +899,11 @@ export function BookingsTable() {
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [reassigningBooking, setReassigningBooking] = React.useState<Booking | null>(null);
   const [voidBookingId, setVoidBookingId] = React.useState<string | null>(null);
+  // Nhân bản chuyến: bản nháp điền sẵn cho form Tạo chuyến (null = không nhân bản).
+  const [duplicateDraft, setDuplicateDraft] = React.useState<BookingDraft | null>(null);
+  // Tăng mỗi lần bấm "Nhân bản" → remount form để state luôn sạch. Không dùng
+  // draft làm key vì lúc đóng draft về null sẽ remount giữa chừng, cụt animation.
+  const [duplicateSeq, setDuplicateSeq] = React.useState(0);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; booking: Booking | null; newStatus: BookingStatus | null }>({ open: false, booking: null, newStatus: null });
   const [statusNote, setStatusNote] = React.useState('');
@@ -1019,6 +1040,16 @@ export function BookingsTable() {
   const openDetails = (bookingId: string) => {
     setSelectedBookingId(bookingId);
     setIsDetailOpen(true);
+  }
+
+  // Nhân bản: đóng chi tiết (nếu đang mở) rồi mở form Tạo chuyến đã điền sẵn.
+  const startDuplicate = (booking: Booking) => {
+    setSelectedBookingId(null);
+    setDuplicateSeq((n) => n + 1);
+    // Draft dựng MỘT LẦN rồi giữ trong state: form chỉ áp prefill khi identity của
+    // draft đổi. Đừng dựng inline ở JSX (bookingToDraft(...) trong prop) — object
+    // mới mỗi render sẽ đè liên tục lên phần admin đang gõ.
+    setDuplicateDraft(bookingToDraft(booking));
   }
 
   const handleStatusUpdate = async (e?: React.MouseEvent) => {
@@ -1363,6 +1394,12 @@ export function BookingsTable() {
                               🛎️ Nhận xử lý
                             </DropdownMenuItem>
                           )}
+                          {/* Không khoá theo trạng thái: nhân bản chuyến đã hoàn thành / đã huỷ
+                              chính là ca dùng chính (khách quen đặt lại tuyến cũ). */}
+                          <DropdownMenuItem onSelect={() => startDuplicate(booking)}>
+                            <CopyPlus className="mr-2 h-4 w-4" />
+                            Nhân bản chuyến
+                          </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => setReassigningBooking(booking)} disabled={booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}>
                             Chuyển quốc
                           </DropdownMenuItem>
@@ -1462,7 +1499,22 @@ export function BookingsTable() {
           </div>
         </Card>
       </Tabs>
-      {selectedBookingId && <BookingDetail bookingId={selectedBookingId} onClose={() => setSelectedBookingId(null)} />}
+      {selectedBookingId && (
+        <BookingDetail
+          bookingId={selectedBookingId}
+          onClose={() => setSelectedBookingId(null)}
+          onDuplicate={startDuplicate}
+        />
+      )}
+      {/* Form Tạo chuyến ở chế độ controlled — chỉ dùng cho luồng nhân bản (không có
+          nút trigger riêng). `key` theo chuyến gốc để mỗi lần nhân bản là state sạch. */}
+      <CreateBookingDialog
+        key={duplicateSeq}
+        open={!!duplicateDraft}
+        onOpenChange={(v) => { if (!v) setDuplicateDraft(null); }}
+        initial={duplicateDraft}
+        onSuccess={() => { setDuplicateDraft(null); reload(); }}
+      />
       <AlertDialog open={dialogState.open} onOpenChange={(open) => setDialogState(prev => ({ ...prev, open }))}>
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>

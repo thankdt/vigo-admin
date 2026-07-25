@@ -281,6 +281,12 @@ export type Booking = {
     role?: string;
   } | null;
   note?: string | null;
+  // Tên hành khách, index 0 = khách chính (khớp quy ước app khách + hợp đồng).
+  // null cho rows cũ trước khi có cột.
+  passengerNames?: string[] | null;
+  // Voucher đã áp cho chuyến. Backend chỉ trả id (không join promotion) — muốn
+  // biết chi tiết phải đối chiếu với danh sách khuyến mãi.
+  promotionId?: number | null;
   shareLink?: string;
   createdAt: string;
   updatedAt?: string;

@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, Users, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket } from 'lucide-react';
+import { Loader2, Plus, Phone, User, Users, MapPin, Car, FileText, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket, ArrowUpDown } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,14 +19,21 @@ import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
 import { fmtVnd, isVoucherSelectable, voucherLabel } from './voucher-utils';
-import { validateWindow, toIso } from './schedule-utils';
+import { validateWindow, toIso, formatLocal } from './schedule-utils';
 import { isVehicleTypeApplicable, resolveRequestedVehicleType } from './vehicle-type-utils';
+import type { BookingDraft } from './duplicate-utils';
 
 interface CreateBookingDialogProps {
   onSuccess: () => void;
   // 'agent' = đặt hộ portal: no admin customer-lookup / driver-assign; posts to /agent/bookings
   // (agentUserId from the JWT) → commission credited to the agent at COMPLETE.
   mode?: 'admin' | 'agent';
+  // Controlled mode — dùng khi mở từ "Nhân bản chuyến". Truyền `open` thì cha giữ
+  // state mở/đóng và dialog KHÔNG render nút trigger (tránh 2 nút "Tạo chuyến").
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  // Bản nháp điền sẵn (nhân bản chuyến). Áp đúng một lần cho mỗi lần mở dialog.
+  initial?: BookingDraft | null;
 }
 
 interface AddressData {
@@ -35,10 +42,25 @@ interface AddressData {
   long: number;
 }
 
-export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBookingDialogProps) {
-  const [open, setOpen] = React.useState(false);
+export function CreateBookingDialog({
+  onSuccess,
+  mode = 'admin',
+  open: controlledOpen,
+  onOpenChange,
+  initial = null,
+}: CreateBookingDialogProps) {
+  const isControlled = controlledOpen !== undefined;
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const open = isControlled ? controlledOpen : internalOpen;
+  const setOpen = React.useCallback((v: boolean) => {
+    if (isControlled) onOpenChange?.(v);
+    else setInternalOpen(v);
+  }, [isControlled, onOpenChange]);
   const [isSubmitting, setIsSubmitting] = React.useState(false);
   const { toast } = useToast();
+  // Chống response cũ đè kết quả mới (SĐT đổi giữa chừng / giá tính lại liên tiếp).
+  const lookupSeqRef = React.useRef(0);
+  const estimateSeqRef = React.useRef(0);
 
   // Form state
   const [customerPhone, setCustomerPhone] = React.useState('');
@@ -49,6 +71,10 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
   const [customerStatus, setCustomerStatus] = React.useState<'idle' | 'checking' | 'existing' | 'new'>(mode === 'agent' ? 'new' : 'idle');
   const [pickup, setPickup] = React.useState<AddressData | null>(null);
   const [dropoff, setDropoff] = React.useState<AddressData | null>(null);
+  // AddressAutocomplete trả lat/long = 0 khi không resolve được place detail (lỗi
+  // mạng/quota) → phải coi như CHƯA có toạ độ, nếu không chuyến sẽ được định vị
+  // ngoài vịnh Guinea (giá theo quãng đường + dispatch đều sai).
+  const hasCoords = (p: AddressData | null) => !!p && !(p.lat === 0 && p.long === 0);
   const [serviceType, setServiceType] = React.useState<'RIDE' | 'DELIVERY' | 'CARPOOL'>('CARPOOL');
   const [vehicleType, setVehicleType] = React.useState<'CAR_4' | 'CAR_7'>('CAR_4');
   const [note, setNote] = React.useState('');
@@ -92,28 +118,41 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
   // Promotion (voucher) — optional. Applied to both the estimate and the
   // created booking. Changing it invalidates a stale estimate.
   const [vouchers, setVouchers] = React.useState<Promotion[]>([]);
+  const [vouchersLoaded, setVouchersLoaded] = React.useState(false);
+  const [vouchersError, setVouchersError] = React.useState(false);
   const [selectedPromotionId, setSelectedPromotionId] = React.useState<number | null>(null);
   // Wrap the predicate — passing it straight to filter would feed the array
   // index in as the `now` argument and break the date-window check.
   const selectableVouchers = React.useMemo(() => vouchers.filter((v) => isVoucherSelectable(v)), [vouchers]);
   const clearEstimate = () => { setPriceEstimate(null); setEstimateOriginal(null); };
 
-  const checkCustomer = async () => {
-    if (!customerPhone || customerPhone.length < 10) {
+  // `phoneOverride` cho luồng nhân bản: state SĐT vừa set trong cùng tick nên
+  // closure chưa thấy giá trị mới → truyền thẳng vào.
+  // `fallbackName`: khách của chuyến gốc có thể đã bị xoá mềm → lookup trả "mới";
+  // giữ lại tên đã chép thay vì bắt admin gõ lại.
+  const checkCustomer = async (phoneOverride?: string, fallbackName?: string) => {
+    const phone = phoneOverride ?? customerPhone;
+    if (!phone || phone.length < 10) {
       toast({ variant: 'destructive', title: 'Lỗi', description: 'Nhập SĐT hợp lệ (≥10 số) trước khi kiểm tra.' });
       return;
     }
+    // Bỏ kết quả cũ: admin sửa SĐT trong lúc lookup đang bay thì response trước đó
+    // KHÔNG được đè tên/trạng thái của SĐT mới (đã từng tạo khách mới mang tên
+    // người khác lên hợp đồng).
+    const seq = ++lookupSeqRef.current;
     setCustomerStatus('checking');
     try {
-      const res = await lookupCustomerByPhone(customerPhone);
+      const res = await lookupCustomerByPhone(phone);
+      if (seq !== lookupSeqRef.current) return;
       if (res.exists) {
         setCustomerName(res.fullName ?? '');
         setCustomerStatus('existing');
       } else {
-        setCustomerName('');
+        setCustomerName(fallbackName ?? '');
         setCustomerStatus('new');
       }
     } catch (err: any) {
+      if (seq !== lookupSeqRef.current) return;
       setCustomerStatus('idle');
       toast({ variant: 'destructive', title: 'Không kiểm tra được SĐT', description: err.message });
     }
@@ -124,6 +163,9 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
       if (!silent) toast({ variant: 'destructive', title: 'Lỗi', description: 'Chọn điểm đón và điểm trả trước khi tính giá.' });
       return;
     }
+    // Debounce chỉ huỷ timer, không huỷ request đang bay → response chậm của cấu
+    // hình cũ có thể resolve sau và hiển thị giá sai để admin báo khách.
+    const seq = ++estimateSeqRef.current;
     setEstimating(true);
     try {
       const res = await estimateTripPrice({
@@ -137,14 +179,18 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
         // ngày đặt. Đi ngay → bỏ trống, backend dùng hiện tại.
         departureTime: isScheduled && scheduledFrom ? toIso(scheduledFrom) : undefined,
       });
+      if (seq !== estimateSeqRef.current) return;
       const final = res.finalPrice ?? res.price;
       setPriceEstimate(final);
       setEstimateOriginal(res.priceBeforeDiscount ?? final);
     } catch (err: any) {
+      if (seq !== estimateSeqRef.current) return;
       clearEstimate();
       if (!silent) toast({ variant: 'destructive', title: 'Tính giá thất bại', description: err.message });
     } finally {
-      setEstimating(false);
+      // Chỉ lần tính mới nhất được tắt spinner — lần cũ resolve sau không được
+      // báo "xong" trong khi lần mới còn đang chạy.
+      if (seq === estimateSeqRef.current) setEstimating(false);
     }
   };
 
@@ -189,15 +235,37 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
 
   React.useEffect(() => {
     if (!open) return;
-    getVouchers().then(setVouchers).catch(() => {
-      // Ignore — voucher list is optional; promo selector just stays empty.
-    });
+    setVouchersLoaded(false);
+    setVouchersError(false);
+    getVouchers()
+      .then(setVouchers)
+      .catch(() => {
+        // Ignore — voucher list is optional; promo selector just stays empty.
+        setVouchersError(true);
+      })
+      // Cờ "đã tải xong" (kể cả lỗi) để luồng nhân bản biết lúc nào chốt được
+      // voucher chép sang còn hiệu lực hay không.
+      .finally(() => setVouchersLoaded(true));
   }, [open]);
+
+  // ——— Nhân bản chuyến ———
+  // Nguồn + cảnh báo phát sinh khi chép; null = đang tạo chuyến mới bình thường.
+  const [duplicateInfo, setDuplicateInfo] = React.useState<
+    { sourceId: string; missingCoords: Array<'pickup' | 'dropoff'> } | null
+  >(null);
+  // Voucher của chuyến gốc, chờ danh sách voucher tải xong mới biết còn dùng được không.
+  const [pendingPromotionId, setPendingPromotionId] = React.useState<number | null>(null);
+  const [voucherDropped, setVoucherDropped] = React.useState(false);
+  // Draft đã áp — chặn effect ghi đè state admin vừa sửa ở các lần render sau.
+  const appliedDraftRef = React.useRef<BookingDraft | null>(null);
 
   const resetForm = () => {
     setCustomerPhone('');
     setCustomerName('');
-    setCustomerStatus('idle');
+    // Agent portal KHÔNG có nút "Kiểm tra" SĐT và onPhoneChange không đổi status
+    // → reset về 'idle' sẽ khoá ô tên và chặn submit vĩnh viễn cho đến khi F5.
+    // Phải trả về đúng trạng thái khởi tạo theo mode.
+    setCustomerStatus(mode === 'agent' ? 'new' : 'idle');
     setPickup(null);
     setDropoff(null);
     setServiceType('CARPOOL');
@@ -211,7 +279,69 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
     setIsScheduled(false);
     setScheduledFrom('');
     setScheduledTo('');
+    setDuplicateInfo(null);
+    setPendingPromotionId(null);
+    setVoucherDropped(false);
   };
+
+  // Cờ "đã áp draft" chỉ được xoá khi dialog ĐÓNG, không xoá trong resetForm:
+  // tạo chuyến xong resetForm chạy trong lúc dialog còn đang mở, xoá cờ ở đó sẽ
+  // khiến effect điền lại draft (và gọi lookup SĐT thừa) trước khi dialog kịp đóng.
+  React.useEffect(() => {
+    if (!open) appliedDraftRef.current = null;
+  }, [open]);
+
+  // Áp bản nháp nhân bản đúng MỘT LẦN mỗi lần dialog mở (so sánh theo identity của
+  // draft) — nếu chạy lại sẽ xoá mất phần admin vừa sửa tay.
+  React.useEffect(() => {
+    if (!open || !initial || appliedDraftRef.current === initial) return;
+    appliedDraftRef.current = initial;
+
+    setPickup(initial.pickup);
+    setDropoff(initial.dropoff);
+    setServiceType(initial.serviceType);
+    setVehicleType(initial.vehicleType);
+    setCoPassengers(initial.coPassengers);
+    setNote(initial.note);
+    setIsScheduled(initial.isScheduled);
+    setScheduledFrom(initial.scheduledFrom);
+    setScheduledTo(initial.scheduledTo);
+    // Tài xế và giá KHÔNG chép: chuyến mới tự dispatch, giá tự tính lại.
+    setSelectedDriverId(null);
+    setDriverSearch('');
+    clearEstimate();
+    setSelectedPromotionId(null);
+    setPendingPromotionId(initial.promotionId);
+    setVoucherDropped(false);
+    setDuplicateInfo({ sourceId: initial.sourceBookingId, missingCoords: initial.missingCoords });
+
+    setCustomerPhone(initial.customerPhone);
+    setCustomerName(initial.customerName);
+    if (mode === 'admin' && initial.customerPhone.length >= 10) {
+      // Tự kiểm tra SĐT: admin đỡ một cú bấm, đồng thời lấy tên mới nhất từ server
+      // (khách có thể đã đổi tên sau chuyến gốc).
+      checkCustomer(initial.customerPhone, initial.customerName);
+    } else {
+      setCustomerStatus(mode === 'agent' ? 'new' : 'idle');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial, mode]);
+
+  // Voucher chuyến gốc: chỉ chọn lại khi còn hiệu lực (còn hạn, còn lượt, đang bật).
+  React.useEffect(() => {
+    if (pendingPromotionId == null || !vouchersLoaded) return;
+    // Admin đã tự chọn voucher trong lúc danh sách còn đang tải → tôn trọng lựa chọn đó.
+    if (selectedPromotionId != null) {
+      setPendingPromotionId(null);
+      return;
+    }
+    if (selectableVouchers.some((v) => v.id === pendingPromotionId)) {
+      setSelectedPromotionId(pendingPromotionId);
+    } else {
+      setVoucherDropped(true);
+    }
+    setPendingPromotionId(null);
+  }, [pendingPromotionId, vouchersLoaded, selectableVouchers, selectedPromotionId]);
 
   // Editing the phone after a check invalidates the customer lookup → re-check.
   const onPhoneChange = (v: string) => {
@@ -221,15 +351,6 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
       setCustomerStatus('idle');
       setCustomerName('');
     }
-  };
-
-  // Build a `YYYY-MM-DDTHH:mm` string in *local* time. The native
-  // <input type="datetime-local"> rejects ISO strings with timezone suffixes,
-  // and toISOString().slice(0,16) would drift by the UTC offset (so VN ops
-  // would see -7h at minimum).
-  const formatLocal = (d: Date) => {
-    const pad = (n: number) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   };
 
   // Min-attr for the "from" datetime input — block "in the past" choices at the
@@ -270,6 +391,17 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
     }
     if (!dropoff) {
       toast({ variant: 'destructive', title: 'Lỗi', description: 'Vui lòng chọn địa chỉ trả.' });
+      return;
+    }
+    // Địa chỉ có chữ nhưng toạ độ 0/0 (place detail lỗi) → chặn, đừng gửi lên BE:
+    // giá tính theo quãng đường và dispatch đều dựa vào toạ độ này.
+    const noCoords = [!hasCoords(pickup) && 'đón', !hasCoords(dropoff) && 'trả'].filter(Boolean);
+    if (noCoords.length > 0) {
+      toast({
+        variant: 'destructive',
+        title: 'Thiếu toạ độ',
+        description: `Điểm ${noCoords.join(' và ')} chưa có toạ độ — chọn lại địa chỉ từ danh sách gợi ý.`,
+      });
       return;
     }
     // Pickup window [from, to] — undefined for an immediate trip.
@@ -361,14 +493,47 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
     return drivers.find(d => getDriverId(d) === selectedDriverId) || null;
   }, [selectedDriverId, drivers]);
 
+  // Đảo chiều đón ↔ trả (chuyến khứ hồi). AddressAutocomplete sync text theo prop
+  // `value` nên chỉ cần hoán đổi state; effect ước giá tự chạy lại.
+  const swapAddresses = () => {
+    setPickup(dropoff);
+    setDropoff(pickup);
+    clearEstimate();
+  };
+
+  // Tính theo trạng thái HIỆN TẠI của form (không theo vai trò ở chuyến gốc) để
+  // sau khi bấm đảo chiều nhãn vẫn chỉ đúng ô đang thiếu.
+  const missingCoordFields = React.useMemo(() => {
+    if (!duplicateInfo || duplicateInfo.missingCoords.length === 0) return [] as Array<'pickup' | 'dropoff'>;
+    const out: Array<'pickup' | 'dropoff'> = [];
+    if (!hasCoords(pickup)) out.push('pickup');
+    if (!hasCoords(dropoff)) out.push('dropoff');
+    return out;
+  }, [duplicateInfo, pickup, dropoff]);
+
+  // Giờ đón chép từ chuyến gốc có thể đã qua — cảnh báo sớm thay vì để admin
+  // bấm "Tạo chuyến" mới thấy lỗi (validateWindow vẫn là chốt chặn thật).
+  const scheduledFromInPast =
+    !!duplicateInfo && isScheduled && !!scheduledFrom && new Date(scheduledFrom).getTime() < Date.now() - 60_000;
+
+  // Đóng dialog ở đâu cũng phải dọn form (kể cả nút "Hủy" ở footer), nếu không
+  // lần mở sau còn dính dữ liệu chuyến vừa nhân bản.
+  const handleOpenChange = (v: boolean) => {
+    setOpen(v);
+    if (!v) resetForm();
+  };
+
   return (
-    <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetForm(); }}>
-      <DialogTrigger asChild>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          {mode === 'agent' ? 'Đặt hộ chuyến' : 'Tạo chuyến'}
-        </Button>
-      </DialogTrigger>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      {/* Controlled mode (nhân bản) do cha mở → không render nút trigger. */}
+      {!isControlled && (
+        <DialogTrigger asChild>
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            {mode === 'agent' ? 'Đặt hộ chuyến' : 'Tạo chuyến'}
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent
         className="sm:max-w-2xl max-h-[90dvh] overflow-y-auto"
         onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}
@@ -385,13 +550,29 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
         }}
       >
         <DialogHeader>
-          <DialogTitle>{mode === 'agent' ? 'Đặt hộ chuyến mới' : 'Tạo chuyến mới'}</DialogTitle>
+          <DialogTitle>
+            {duplicateInfo ? 'Nhân bản chuyến' : mode === 'agent' ? 'Đặt hộ chuyến mới' : 'Tạo chuyến mới'}
+          </DialogTitle>
           <DialogDescription>
-            Nhập thông tin khách hàng và chuyến đi. Nếu khách chưa có tài khoản, hệ thống sẽ tự tạo mới.
+            {duplicateInfo
+              ? `Từ chuyến #${duplicateInfo.sourceId.slice(0, 8)} — thông tin đã điền sẵn, sửa lại phần cần đổi rồi tạo chuyến MỚI. Chuyến gốc không thay đổi.`
+              : 'Nhập thông tin khách hàng và chuyến đi. Nếu khách chưa có tài khoản, hệ thống sẽ tự tạo mới.'}
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
+          {(missingCoordFields.length > 0 || scheduledFromInPast) && (
+            <div className="space-y-1.5 rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+              {missingCoordFields.length > 0 && (
+                <p>
+                  Chuyến gốc không có toạ độ cho{' '}
+                  {missingCoordFields.map((k) => (k === 'pickup' ? 'điểm đón' : 'điểm trả')).join(' và ')} — vui lòng
+                  chọn lại địa chỉ để tính giá và điều phối đúng.
+                </p>
+              )}
+              {scheduledFromInPast && <p>Giờ đón của chuyến gốc đã qua — vui lòng chọn lại giờ đón.</p>}
+            </div>
+          )}
           {/* Customer Section */}
           <div className="space-y-3">
             <h4 className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
@@ -414,7 +595,7 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
                     />
                   </div>
                   {mode === 'admin' && (
-                    <Button type="button" variant="outline" onClick={checkCustomer} disabled={customerStatus === 'checking' || customerPhone.length < 10}>
+                    <Button type="button" variant="outline" onClick={() => checkCustomer()} disabled={customerStatus === 'checking' || customerPhone.length < 10}>
                       {customerStatus === 'checking' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                       <span className="ml-1.5">Kiểm tra</span>
                     </Button>
@@ -469,6 +650,21 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
                   📍 {pickup.lat.toFixed(6)}, {pickup.long.toFixed(6)}
                 </div>
               )}
+            </div>
+            {/* Đảo chiều đón ↔ trả — chuyến khứ hồi khỏi phải gõ lại 2 địa chỉ. */}
+            <div className="flex justify-center -my-1">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground"
+                onClick={swapAddresses}
+                disabled={!pickup && !dropoff}
+                title="Đảo chiều điểm đón và điểm trả"
+                aria-label="Đảo chiều điểm đón và điểm trả"
+              >
+                <ArrowUpDown className="h-4 w-4" />
+              </Button>
             </div>
             {/* Dropoff */}
             <div className="space-y-2 p-3 rounded-lg border bg-red-50/50 dark:bg-red-950/20">
@@ -611,6 +807,13 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
                 ))}
               </SelectContent>
             </Select>
+            {voucherDropped && selectedPromotionId == null && (
+              <p className="text-xs text-amber-600">
+                {vouchersError
+                  ? 'Chưa tải được danh sách khuyến mãi nên chưa áp lại được khuyến mãi của chuyến gốc — đóng và mở lại form để thử lại.'
+                  : 'Khuyến mãi của chuyến gốc không còn dùng được (hết hạn / hết lượt / đã tắt / loại đổi điểm) — chọn khuyến mãi khác nếu cần.'}
+              </p>
+            )}
             {selectedPromotionId != null ? (
               <p className="text-xs text-muted-foreground">Giá dự kiến tự cập nhật sau khi áp khuyến mãi.</p>
             ) : selectableVouchers.length === 0 ? (
@@ -785,7 +988,7 @@ export function CreateBookingDialog({ onSuccess, mode = 'admin' }: CreateBooking
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={isSubmitting}>Hủy</Button>
+          <Button variant="outline" onClick={() => handleOpenChange(false)} disabled={isSubmitting}>Hủy</Button>
           <Button onClick={handleSubmit} disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Tạo chuyến
