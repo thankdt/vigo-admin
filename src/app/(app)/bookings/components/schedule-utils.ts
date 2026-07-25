@@ -30,3 +30,14 @@ export function validateWindow(fromStr: string, toStr: string, now: number = Dat
 export function toIso(str: string): string {
   return new Date(str).toISOString();
 }
+
+/**
+ * Build a `YYYY-MM-DDTHH:mm` string in *local* time — the only format the native
+ * `<input type="datetime-local">` accepts. It rejects ISO strings with timezone
+ * suffixes, and `toISOString().slice(0,16)` would drift by the UTC offset (VN ops
+ * would see -7h). Inverse of `toIso`, so an instant round-trips unchanged.
+ */
+export function formatLocal(d: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}

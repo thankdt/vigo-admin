@@ -111,8 +111,8 @@ Quy tắc từng trường:
 | `pickup` / `dropoff` | Object `{address, lat, long}`; đọc lat theo `lat \| latitude`, long theo `long \| lng \| longitude`. Address dạng string thuần hoặc thiếu toạ độ → field = `null` và ghi vào `missingCoords`. Toạ độ `0/0` coi như thiếu. |
 | `serviceType` | Validate theo union; lệch/thiếu → `'CARPOOL'` (mặc định hiện tại của form). |
 | `vehicleType` | `requestedVehicleType` nếu là `CAR_4`/`CAR_7`, ngược lại `'CAR_4'`. |
-| `coPassengers` | `passengerNames.slice(1)`, bỏ chuỗi rỗng. Mảng rỗng/null → `[]`. Form tự cắt theo giới hạn ghế (effect `maxExtras` sẵn có). |
-| `note` | `b.note ?? ''`. Chép nguyên, admin sửa được. |
+| `coPassengers` | `passengerNames.slice(1)`, bỏ chuỗi rỗng, **cắt theo trần ghế ngay trong draft** (RIDE CAR_4 → 3 khách đi cùng, CAR_7 → 5, CARPOOL/DELIVERY → 5). Effect `maxExtras` của form chỉ chạy khi cap ĐỔI nên không cắt được ca này. |
+| `note` | Bóc tiền tố backend tự gắn (`[Admin] ` / `[Đặt hộ] `, kể cả đã cộng dồn nhiều lớp) vì BE gắn lại khi tạo chuyến mới; note mặc định ("Tạo bởi admin" / "Tạo bởi đại lý") → rỗng. Phần còn lại chép nguyên, admin sửa được. |
 | Giờ đón | Có `scheduledFromTime` (hoặc `scheduledTime`) → `isScheduled = true`, `scheduledFrom = formatLocal(new Date(iso))`, `scheduledTo` = `scheduledToTime` nếu có, không thì `from + 30 phút`. Không có gì → `isScheduled = false`, hai chuỗi rỗng. |
 | `promotionId` | Chép nguyên số; **lọc hiệu lực làm ở dialog** (nơi có danh sách voucher). |
 | Tài xế | **Không chép.** |
@@ -213,7 +213,23 @@ Kiểm runtime trên DEV trước khi PR → main (cổng bắt buộc theo CLAU
 ## 7. Rủi ro & tương thích
 
 - Phân loại theo CLAUDE.md §0.5.b: đụng voucher + đường tạo chuyến → **rủi ro CAO**
-  → 1 lượt sub-agent review fresh-context (giữ Opus) sau khi code xong, trước PR.
+  → đã chạy 1 lượt sub-agent review fresh-context (Opus) sau khi code xong. Kết quả:
+  1 finding chặn + 2 nên sửa + 5 nhỏ, đã xử lý trong cùng nhánh:
+  - **Chặn** — `resetForm()` set `customerStatus='idle'` cho cả `mode='agent'`, mà agent
+    portal không có nút "Kiểm tra" → sau khi bấm Hủy thì kẹt, không đặt hộ được nữa
+    (nút Hủy nay gọi `resetForm`). Sửa: reset về `mode === 'agent' ? 'new' : 'idle'`.
+  - Lookup SĐT không sequencing → response của SĐT cũ đè tên lên SĐT mới (tạo khách mới
+    mang tên người khác). Sửa: `lookupSeqRef` bỏ kết quả cũ. Ước giá cũng thêm
+    `estimateSeqRef` (giá cũ đè giá mới → admin báo giá sai).
+  - `AddressAutocomplete` trả `lat/long = 0` khi place-detail lỗi → chặn ở `handleSubmit`
+    + banner tính theo `hasCoords()` thay vì chỉ `!= null` (banner cũng hết lệch nhãn
+    sau khi bấm đảo chiều).
+  - Note cộng dồn tiền tố `[Admin]`, `passengerNames` vượt trần ghế → xử lý trong draft.
+  - Voucher: phân biệt "lỗi tải danh sách" với "hết hiệu lực" trong dòng nhắc.
+- Còn tồn (chấp nhận, ngoài phạm vi): `getVouchers()` treo vô hạn (không resolve/reject)
+  thì voucher gốc không áp và cũng không có cảnh báo; `formatLocal` hiển thị theo TZ máy
+  admin — quy ước sẵn có của toàn bộ picker + bảng chuyến, muốn theo VN tuyệt đối phải
+  đổi cả cụm (PR riêng).
 - Tương thích client cũ: thay đổi **thuần FE admin**. Payload `createAdminBooking` /
   `createAgentBooking` giữ nguyên shape; không đụng endpoint dùng chung với app
   khách/tài xế. Thêm field optional vào type `Booking` của FE là additive.
