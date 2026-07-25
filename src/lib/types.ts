@@ -339,7 +339,31 @@ export type Booking = {
     fullName?: string | null;
     phone?: string | null;
   } | null;
+  // CSKH "gọi check khách" — trạng thái HIỆN TẠI (event mới nhất). null/undefined = chưa gọi.
+  // Additive: backend cũ chưa trả các field này.
+  customerCallStatus?: CustomerCallStatus | null;
+  customerCallCheckedAt?: string | null;
+  customerCallCheckedBy?: {
+    id: string;
+    fullName?: string | null;
+    phone?: string | null;
+  } | null;
 }
+
+/** Trạng thái CSKH gọi check khách: CALLED = gọi được, UNREACHED = không liên lạc được. */
+export type CustomerCallStatus = 'CALLED' | 'UNREACHED';
+
+/** Giá trị filter cột "Gọi check" ngoài danh sách. */
+export type CustomerCallFilter = 'called' | 'unreached' | 'uncalled';
+
+/** Một dòng lịch sử gọi check của 1 chuyến (append-only, mới nhất trước). */
+export type BookingCustomerCallEvent = {
+  id: string;
+  status: CustomerCallStatus;
+  note: string | null;
+  createdAt: string;
+  byAdminName: string | null;
+};
 
 // Permission/allPermissions mock cũ (action:resource string) đã bỏ — RBAC nay theo
 // function key (xem AdminRole.functions + src/lib/rbac.ts).
