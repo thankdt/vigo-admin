@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -596,6 +596,9 @@ export async function getBookings(params: {
   // Lọc loại chuyến cho 2 tab admin "Chuyến thường / Đặt lịch". true = đặt lịch
   // (scheduledTime IS NOT NULL), false = thường (IS NULL). undefined = không lọc (tab "Tất cả").
   scheduled?: boolean;
+  // Lọc "gọi check khách": 'called' = đã gọi được, 'unreached' = gọi không được,
+  // 'uncalled' = chưa gọi. undefined = không lọc.
+  customerCall?: CustomerCallFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -610,6 +613,7 @@ export async function getBookings(params: {
     ...(params.sortBy && { sortBy: params.sortBy }),
     ...(params.order && { order: params.order }),
     ...(params.scheduled !== undefined && { scheduled: String(params.scheduled) }),
+    ...(params.customerCall && { customerCall: params.customerCall }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -646,6 +650,24 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
   });
   const result = await response.json();
   return result.data;
+}
+
+// CSKH ghi nhận đã gọi check khách cho chuyến (append-only + denormalize trạng thái
+// mới nhất lên booking). note nội bộ, tách khỏi booking.note (không lộ cho tài/khách).
+export async function recordBookingCustomerCall(
+  bookingId: string,
+  body: { status: CustomerCallStatus; note?: string },
+): Promise<void> {
+  await fetchWithAuth(`/bookings/admin/${bookingId}/customer-call`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+}
+
+// Lịch sử gọi check của 1 chuyến (mới nhất trước) — hiển thị trong dialog chi tiết.
+export async function getBookingCustomerCallHistory(bookingId: string): Promise<BookingCustomerCallEvent[]> {
+  const response = await fetchWithAuth(`/bookings/admin/${bookingId}/customer-call-history`);
+  return unwrap<BookingCustomerCallEvent[]>(response);
 }
 
 // Void a COMPLETED booking (reverse commission + affiliate clawback + CANCELLED).
