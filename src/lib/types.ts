@@ -360,11 +360,12 @@ export type Booking = {
   } | null;
 }
 
-/** Trạng thái CSKH gọi check khách: CALLED = gọi được, UNREACHED = không liên lạc được. */
-export type CustomerCallStatus = 'CALLED' | 'UNREACHED';
+/** Trạng thái CSKH gọi check khách. Luồng: (chưa gọi) → CLAIMED (đã nhận gọi) →
+ *  CALLED (gọi được) / UNREACHED (không liên lạc được). */
+export type CustomerCallStatus = 'CLAIMED' | 'CALLED' | 'UNREACHED';
 
 /** Giá trị filter cột "Gọi check" ngoài danh sách. */
-export type CustomerCallFilter = 'called' | 'unreached' | 'uncalled';
+export type CustomerCallFilter = 'claimed' | 'called' | 'unreached' | 'uncalled';
 
 /** Một dòng lịch sử gọi check của 1 chuyến (append-only, mới nhất trước). */
 export type BookingCustomerCallEvent = {

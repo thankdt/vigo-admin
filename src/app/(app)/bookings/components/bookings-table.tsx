@@ -390,6 +390,26 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
   );
 }
 
+// Gọi check khách — nhãn + toast + badge dùng chung cho khối chi tiết lẫn cột danh sách.
+const CUSTOMER_CALL_LABEL: Record<CustomerCallStatus, string> = {
+  CLAIMED: 'Đã nhận gọi',
+  CALLED: 'Đã gọi',
+  UNREACHED: 'Không gọi được',
+};
+const CUSTOMER_CALL_TOAST: Record<CustomerCallStatus, string> = {
+  CLAIMED: 'Đã nhận gọi check khách.',
+  CALLED: 'Đã gọi được khách.',
+  UNREACHED: 'Đã ghi nhận không liên lạc được.',
+};
+// Badge 4 trạng thái: null = Chưa gọi (đỏ), CLAIMED = xanh dương, CALLED = xanh lá,
+// UNREACHED = hổ phách. Style thống nhất 2 nơi render.
+function CustomerCallBadge({ status }: { status?: CustomerCallStatus | null }) {
+  if (status === 'CALLED') return <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Đã gọi</Badge>;
+  if (status === 'UNREACHED') return <Badge className="bg-amber-500 text-white hover:bg-amber-500 text-[10px] px-1.5 py-0">Không gọi được</Badge>;
+  if (status === 'CLAIMED') return <Badge className="bg-blue-600 text-white hover:bg-blue-600 text-[10px] px-1.5 py-0">Đã nhận gọi</Badge>;
+  return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Chưa gọi</Badge>;
+}
+
 // Exported (only the keyword — no behavior/signature change) so it can be
 // unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
 // test mock getBookingDetails() and assert on badges (e.g.
@@ -447,7 +467,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
     setCallSaving(status);
     try {
       await recordBookingCustomerCall(booking.id, { status, note: callNote.trim() || undefined });
-      toast({ title: 'Đã lưu', description: status === 'CALLED' ? 'Đã gọi được khách.' : 'Đã ghi nhận không liên lạc được.' });
+      toast({ title: 'Đã lưu', description: CUSTOMER_CALL_TOAST[status] });
       setCallNote('');
       // Cập nhật trạng thái tại chỗ + reload lịch sử; báo danh sách ngoài refetch cột.
       setBooking((prev) => (prev ? { ...prev, customerCallStatus: status } : prev));
@@ -647,13 +667,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   <div className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300">
                     Gọi check khách <span className="normal-case font-normal text-muted-foreground">(nội bộ)</span>
                   </div>
-                  {booking.customerCallStatus === 'CALLED' ? (
-                    <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Đã gọi</Badge>
-                  ) : booking.customerCallStatus === 'UNREACHED' ? (
-                    <Badge className="bg-amber-500 text-white hover:bg-amber-500 text-[10px] px-1.5 py-0">Không liên lạc được</Badge>
-                  ) : (
-                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Chưa gọi</Badge>
-                  )}
+                  <CustomerCallBadge status={booking.customerCallStatus} />
                   {booking.customerCallCheckedBy && (
                     <span className="text-[11px] text-muted-foreground">
                       {booking.customerCallCheckedBy.fullName || booking.customerCallCheckedBy.phone || 'Admin'}
@@ -669,15 +683,26 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   className="text-sm"
                   disabled={!!callSaving}
                 />
+                {/* Chưa gọi → chỉ nút "Nhận gọi". Sau khi có người nhận (hoặc đã resolve)
+                    → hiện 2 nút kết quả (đổi lại được nếu bấm nhầm — event append-only). */}
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CALLED')}>
-                    {callSaving === 'CALLED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                    Đã gọi được
-                  </Button>
-                  <Button size="sm" variant="outline" className="border border-input" disabled={!!callSaving} onClick={() => handleRecordCall('UNREACHED')}>
-                    {callSaving === 'UNREACHED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                    Không liên lạc được
-                  </Button>
+                  {!booking.customerCallStatus ? (
+                    <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CLAIMED')}>
+                      {callSaving === 'CLAIMED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                      Nhận gọi
+                    </Button>
+                  ) : (
+                    <>
+                      <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CALLED')}>
+                        {callSaving === 'CALLED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                        Đã gọi được
+                      </Button>
+                      <Button size="sm" variant="outline" className="border border-input" disabled={!!callSaving} onClick={() => handleRecordCall('UNREACHED')}>
+                        {callSaving === 'UNREACHED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                        Không liên lạc được
+                      </Button>
+                    </>
+                  )}
                 </div>
                 {callHistory.length > 0 && (
                   <ul className="space-y-1.5 pt-1">
@@ -685,7 +710,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                       <li key={e.id} className="rounded-md border bg-background p-2 text-xs">
                         <div className="flex flex-wrap items-center justify-between gap-1">
                           <span className="font-medium">
-                            {e.status === 'CALLED' ? 'Đã gọi được' : 'Không liên lạc được'} · {e.byAdminName || '—'}
+                            {CUSTOMER_CALL_LABEL[e.status] ?? e.status} · {e.byAdminName || '—'}
                           </span>
                           <span className="text-muted-foreground">{format(new Date(e.createdAt), "dd/MM/yyyy HH:mm")}</span>
                         </div>
@@ -1282,6 +1307,7 @@ export function BookingsTable() {
             <SelectContent>
               <SelectItem value="ALL">Gọi check: tất cả</SelectItem>
               <SelectItem value="uncalled">Chưa gọi</SelectItem>
+              <SelectItem value="claimed">Đã nhận gọi</SelectItem>
               <SelectItem value="called">Đã gọi được</SelectItem>
               <SelectItem value="unreached">Không liên lạc được</SelectItem>
             </SelectContent>
@@ -1468,13 +1494,7 @@ export function BookingsTable() {
                         (khối "Gọi check khách" trong dialog chi tiết). */}
                     <TableCell>
                       <div className="flex flex-col gap-0.5 items-start">
-                        {booking.customerCallStatus === 'CALLED' ? (
-                          <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Đã gọi</Badge>
-                        ) : booking.customerCallStatus === 'UNREACHED' ? (
-                          <Badge className="bg-amber-500 text-white hover:bg-amber-500 text-[10px] px-1.5 py-0">Không liên lạc được</Badge>
-                        ) : (
-                          <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Chưa gọi</Badge>
-                        )}
+                        <CustomerCallBadge status={booking.customerCallStatus} />
                         {booking.customerCallCheckedBy && (
                           <span className="text-[11px] text-muted-foreground">
                             {booking.customerCallCheckedBy.fullName || booking.customerCallCheckedBy.phone || 'Admin'}
