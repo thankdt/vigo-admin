@@ -462,6 +462,43 @@ export async function getDriverApprovalHistory(id: string): Promise<DriverApprov
   return data.data || data;
 }
 
+// CSKH "lịch sử làm việc" với tài xế (timeline).
+export type DriverCallEventType =
+  | 'CALLED'      // Gọi được
+  | 'UNREACHED'   // Không nghe máy
+  | 'CALLBACK'    // Hẹn gọi lại
+  | 'HANDLED'     // Đã xử lý
+  | 'REMINDER'    // Nhắc nhở
+  | 'NOTE';       // Ghi chú
+
+export type DriverCallEvent = {
+  id: string;
+  type: DriverCallEventType;
+  note?: string | null;
+  byAdminUserId: string | null;
+  byAdmin?: { id: string; fullName?: string | null; phone?: string | null } | null;
+  createdAt: string;
+};
+
+export async function getDriverCallHistory(id: string): Promise<DriverCallEvent[]> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/customer-call-history`);
+  const data = await response.json();
+  return data.data || data;
+}
+
+// Loại liên hệ (CALLED/UNREACHED/CALLBACK) tự tick "đã gọi" phía backend.
+export async function recordDriverCall(
+  id: string,
+  body: { type: DriverCallEventType; note?: string },
+): Promise<DriverCallEvent> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/customer-call`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export async function updateDriverServices(id: string, enabledServices: string[]): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/services`, {
     method: 'PATCH',
