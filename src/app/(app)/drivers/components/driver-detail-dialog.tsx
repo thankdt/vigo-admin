@@ -190,7 +190,7 @@ const CALL_TYPE_ORDER: DriverCallEventType[] = ['CALLED', 'UNREACHED', 'CALLBACK
  * Loại liên hệ (Gọi được / Không nghe máy / Hẹn gọi lại) khi ghi sẽ tự tick "đã gọi" ở backend
  * (cột "đã gọi" trong bảng cập nhật ở lần tải danh sách kế tiếp).
  */
-function DriverCallTimeline({ driverId }: { driverId: string }) {
+export function DriverCallTimeline({ driverId }: { driverId: string }) {
   const { toast } = useToast();
   const [events, setEvents] = React.useState<DriverCallEvent[]>([]);
   const [loading, setLoading] = React.useState(true);

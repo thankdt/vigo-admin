@@ -55,7 +55,7 @@ import {
 import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { Textarea } from '@/components/ui/textarea';
-import { ApprovalTimeline, formatVnDateTime, isSuspendedNow } from './driver-detail-dialog';
+import { ApprovalTimeline, DriverCallTimeline, formatVnDateTime, isSuspendedNow } from './driver-detail-dialog';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
@@ -1612,6 +1612,18 @@ export function DriversTable() {
             <div className="border-t pt-4 space-y-2">
               <h4 className="font-semibold">Lịch sử duyệt</h4>
               <ApprovalTimeline driverId={viewDriver.id} showAdminNote />
+            </div>
+          )}
+
+          {viewDriver && (
+            <div className="border-t pt-4 space-y-3">
+              <div>
+                <h4 className="font-semibold">CSKH — Lịch sử làm việc</h4>
+                <p className="text-xs text-muted-foreground">
+                  Ghi lại việc đã làm với tài xế (gọi điện, nhắc nhở, xử lý…). Chỉ admin thấy.
+                </p>
+              </div>
+              <DriverCallTimeline driverId={viewDriver.id} />
             </div>
           )}
 
