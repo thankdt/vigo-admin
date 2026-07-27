@@ -172,7 +172,7 @@ export function ApprovalTimeline({ driverId, showAdminNote = false }: { driverId
   );
 }
 
-const CALL_TYPE_META: Record<
+export const CALL_TYPE_META: Record<
   DriverCallEventType,
   { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
 > = {

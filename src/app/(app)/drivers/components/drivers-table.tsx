@@ -55,7 +55,7 @@ import {
 import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { Textarea } from '@/components/ui/textarea';
-import { ApprovalTimeline, DriverCallTimeline, formatVnDateTime, isSuspendedNow } from './driver-detail-dialog';
+import { ApprovalTimeline, DriverCallTimeline, CALL_TYPE_META, formatVnDateTime, isSuspendedNow } from './driver-detail-dialog';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
@@ -808,6 +808,23 @@ export function DriversTable() {
                               <Clock className="h-3 w-3" /> Tạm khoá chuyến · {formatVnDateTime(driver.suspendedUntil)}
                             </Badge>
                           )}
+                          {/* Trạng thái CSKH cuối cùng (loại mốc gần nhất) — để CSKH nắm nhanh khỏi mở chi tiết. */}
+                          {(() => {
+                            const meta = driver.csLastCallType
+                              ? CALL_TYPE_META[driver.csLastCallType as keyof typeof CALL_TYPE_META]
+                              : null;
+                            if (!meta) return null;
+                            const Icon = meta.icon;
+                            return (
+                              <Badge
+                                variant="outline"
+                                className={`w-fit gap-1 mt-0.5 ${meta.tone}`}
+                                title={driver.csLastCallAt ? `CSKH · ${formatVnDateTime(driver.csLastCallAt)}` : 'CSKH'}
+                              >
+                                <Icon className="h-3 w-3" /> {meta.label}
+                              </Badge>
+                            );
+                          })()}
                         </div>
                       </div>
                     </TableCell>
