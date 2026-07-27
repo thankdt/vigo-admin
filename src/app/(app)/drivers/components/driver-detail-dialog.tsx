@@ -2,18 +2,26 @@
 
 import * as React from 'react';
 import { format } from 'date-fns';
-import { AlertTriangle, CheckCircle2, Send, Undo2, XCircle, Ban, LockOpen, Clock, PlayCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Send, Undo2, XCircle, Ban, LockOpen, Clock, PlayCircle, PhoneCall, PhoneOff, PhoneForwarded, Bell, StickyNote, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
+import { useToast } from '@/hooks/use-toast';
 import { getImageUrl } from '@/lib/utils';
 import type { Driver } from '@/lib/types';
 import {
   getDriverApprovalHistory,
+  getDriverCallHistory,
+  recordDriverCall,
   type DriverApprovalAction,
   type DriverApprovalEvent,
+  type DriverCallEvent,
+  type DriverCallEventType,
 } from '@/lib/api';
 
 // Same parser as drivers-table — handles legacy strings, PG arrays, JSON, csv.
@@ -161,6 +169,117 @@ export function ApprovalTimeline({ driverId, showAdminNote = false }: { driverId
         );
       })}
     </ol>
+  );
+}
+
+export const CALL_TYPE_META: Record<
+  DriverCallEventType,
+  { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
+> = {
+  CALLED: { label: 'Gọi được', icon: PhoneCall, tone: 'text-emerald-600' },
+  UNREACHED: { label: 'Không nghe máy', icon: PhoneOff, tone: 'text-red-600' },
+  CALLBACK: { label: 'Hẹn gọi lại', icon: PhoneForwarded, tone: 'text-amber-600' },
+  HANDLED: { label: 'Đã xử lý', icon: CheckCircle2, tone: 'text-emerald-600' },
+  REMINDER: { label: 'Nhắc nhở', icon: Bell, tone: 'text-blue-600' },
+  NOTE: { label: 'Ghi chú', icon: StickyNote, tone: 'text-muted-foreground' },
+};
+const CALL_TYPE_ORDER: DriverCallEventType[] = ['CALLED', 'UNREACHED', 'CALLBACK', 'HANDLED', 'REMINDER', 'NOTE'];
+
+/**
+ * Lịch sử làm việc CSKH với tài xế: ô ghi mốc mới (loại việc + ghi chú) + timeline mới→cũ.
+ * Loại liên hệ (Gọi được / Không nghe máy / Hẹn gọi lại) khi ghi sẽ tự tick "đã gọi" ở backend
+ * (cột "đã gọi" trong bảng cập nhật ở lần tải danh sách kế tiếp).
+ */
+export function DriverCallTimeline({ driverId }: { driverId: string }) {
+  const { toast } = useToast();
+  const [events, setEvents] = React.useState<DriverCallEvent[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+  const [reloadKey, setReloadKey] = React.useState(0);
+  const [type, setType] = React.useState<DriverCallEventType>('CALLED');
+  const [note, setNote] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    getDriverCallHistory(driverId)
+      .then((d) => { if (!cancelled) setEvents(d ?? []); })
+      .catch((e: any) => { if (!cancelled) setError(e?.message ?? 'Không tải được lịch sử.'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [driverId, reloadKey]);
+
+  const submit = async () => {
+    setSaving(true);
+    try {
+      await recordDriverCall(driverId, { type, note: note.trim() || undefined });
+      setNote('');
+      setReloadKey((k) => k + 1);
+      toast({ title: 'Đã ghi nhận' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Không ghi được', description: e?.message });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      {/* Ghi mốc mới */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <Select value={type} onValueChange={(v) => setType(v as DriverCallEventType)}>
+          <SelectTrigger className="sm:w-44 shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CALL_TYPE_ORDER.map((t) => (
+              <SelectItem key={t} value={t}>{CALL_TYPE_META[t].label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Textarea
+          placeholder="Ghi chú (không bắt buộc)"
+          rows={1}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="flex-1 min-h-[38px]"
+        />
+        <Button onClick={submit} disabled={saving} className="shrink-0">
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Ghi nhận
+        </Button>
+      </div>
+
+      {/* Timeline mới→cũ */}
+      {loading ? (
+        <p className="text-sm text-muted-foreground italic">Đang tải lịch sử…</p>
+      ) : error ? (
+        <p className="text-sm text-red-600">{error}</p>
+      ) : events.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic">Chưa có mốc làm việc nào.</p>
+      ) : (
+        <ol className="relative space-y-3 border-l-2 border-muted pl-4">
+          {events.map((e) => {
+            const meta = CALL_TYPE_META[e.type] ?? { label: e.type, icon: AlertTriangle, tone: 'text-muted-foreground' };
+            const Icon = meta.icon;
+            const who = e.byAdmin?.fullName || e.byAdmin?.phone || 'CSKH';
+            return (
+              <li key={e.id} className="space-y-1 -ml-[22px] pl-[22px] relative">
+                <span className={`absolute -left-[10px] top-0 inline-flex h-5 w-5 items-center justify-center rounded-full bg-background ring-2 ring-background ${meta.tone}`}>
+                  <Icon className="h-3.5 w-3.5" />
+                </span>
+                <div className="flex flex-wrap items-baseline gap-2">
+                  <span className={`text-sm font-semibold ${meta.tone}`}>{meta.label}</span>
+                  <span className="text-xs text-muted-foreground">{formatVnDateTime(e.createdAt)} · bởi {who}</span>
+                </div>
+                {e.note && (
+                  <p className="rounded bg-muted/60 px-2 py-1 text-sm text-foreground/90">{e.note}</p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
   );
 }
 
@@ -312,6 +431,14 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
               {/* Đơn vị vận tải là trang ADMIN → hiện ghi chú nội bộ. Cổng HTX
                   chủ đơn vị không dùng dialog này nên note không lộ ra ngoài. */}
               <ApprovalTimeline driverId={driver.id} showAdminNote />
+            </div>
+
+            <div className="space-y-3 border-t pt-4">
+              <h4 className="font-semibold">CSKH — Lịch sử làm việc</h4>
+              <p className="text-xs text-muted-foreground">
+                Ghi lại việc đã làm với tài xế (gọi điện, nhắc nhở, xử lý…). Chỉ admin thấy.
+              </p>
+              <DriverCallTimeline driverId={driver.id} />
             </div>
 
             <div className="space-y-2 border-t pt-4">

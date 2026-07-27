@@ -134,6 +134,9 @@ export type Driver = {
   // "Đã duyệt" tab so ops can see who's online right now.
   status?: 'ONLINE' | 'OFFLINE' | 'BUSY' | string;
   rejectionReason?: string | null;
+  // CSKH: loại mốc "lịch sử làm việc" gần nhất (trạng thái cuối) + thời điểm — hiện badge ở danh sách.
+  csLastCallType?: string | null;
+  csLastCallAt?: string | null;
   vehicle?: {
     id: number;
     plateNumber: string;
