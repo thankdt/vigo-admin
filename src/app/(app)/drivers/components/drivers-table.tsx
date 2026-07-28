@@ -574,7 +574,7 @@ export function DriversTable() {
   // Extra column: approval status on the "Tất cả" tab (mixed states), live
   // online status on the "Đã duyệt" tab (all approved).
   const showStatusCol = activeTab === 'all' || activeTab === 'true';
-  const colCount = showStatusCol ? 8 : 7;
+  const colCount = (showStatusCol ? 8 : 7) + 1; // +1 cột "Ngày làm việc" CSKH
 
   const openConfirmationDialog = (driver: Driver, action: 'approve' | 'reject') => {
     setDialogState({ open: true, driver, action });
@@ -753,6 +753,7 @@ export function DriversTable() {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
+                <TableHead>Ngày làm việc</TableHead>
                 <TableHead>
                   <span className="sr-only">Thao tác</span>
                 </TableHead>
@@ -899,6 +900,22 @@ export function DriversTable() {
                       <span className="text-sm text-muted-foreground">
                         {driver.createdAt ? new Date(driver.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                       </span>
+                    </TableCell>
+                    {/* Ngày làm việc CSKH gần nhất (từ lịch sử làm việc) — CSKH quét nhanh ai lâu chưa xử lý. */}
+                    <TableCell>
+                      {driver.csLastCallAt ? (
+                        <div className="text-sm">
+                          <div className="whitespace-nowrap">{formatVnDateTime(driver.csLastCallAt)}</div>
+                          {(() => {
+                            const meta = driver.csLastCallType
+                              ? CALL_TYPE_META[driver.csLastCallType as keyof typeof CALL_TYPE_META]
+                              : null;
+                            return meta ? <div className="text-xs text-muted-foreground">{meta.label}</div> : null;
+                          })()}
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">Chưa có</span>
+                      )}
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
