@@ -197,6 +197,7 @@ export function DriversFilterBar({
           placeholder="Mốc CSKH: tất cả"
           searchPlaceholder="Lọc mốc..."
           noResultsText="Không có."
+          disabled={value.csNeverWorked}
         />
         <div className="space-y-1">
           <Label className="text-xs text-muted-foreground">Ngày làm việc từ</Label>
