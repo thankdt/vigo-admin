@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap, CopyPlus } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
@@ -579,6 +579,22 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
                   </div>
                 </div>
               </Card>
+
+              {/* Đặt hộ: đại lý đã đặt chuyến hộ khách — chỉ hiện với chuyến đặt hộ (backend trả agentPhone). */}
+              {(booking.agentName || booking.agentPhone) && (
+                <Card className="p-3 space-y-1 border-purple-200 bg-purple-50/50 dark:border-purple-900/50 dark:bg-purple-950/20">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Người đặt hộ (đại lý)</div>
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                      <Store className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div className="flex-1 text-sm">
+                      <div className="font-semibold">{booking.agentName || '—'}</div>
+                      <div className="text-muted-foreground">{booking.agentPhone || '—'}</div>
+                    </div>
+                  </div>
+                </Card>
+              )}
 
               {/* Driver */}
               <Card className="p-3 space-y-1">
@@ -1411,6 +1427,11 @@ export function BookingsTable() {
                       <div className="flex flex-col">
                         <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
                         <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
+                        {booking.agentPhone && (
+                          <span className='inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400'>
+                            <Store className='h-3 w-3' /> Đặt hộ: {booking.agentPhone}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>

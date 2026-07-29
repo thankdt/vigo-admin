@@ -311,6 +311,10 @@ export type Booking = {
   // or be soft-deleted (relation becomes null).
   senderInfo?: { name?: string; phone?: string } | null;
   receiverInfo?: { name?: string; phone?: string } | null;
+  // Đặt hộ: tên + SĐT đại lý đã đặt chuyến hộ khách (backend chỉ trả ở endpoint admin list/detail).
+  // Null với chuyến thường. Additive → undefined nếu backend chưa deploy.
+  agentName?: string | null;
+  agentPhone?: string | null;
   driver?: {
     id: string;
     fullName?: string;
