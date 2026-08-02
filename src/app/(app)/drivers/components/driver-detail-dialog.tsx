@@ -283,6 +283,16 @@ export function DriverCallTimeline({ driverId }: { driverId: string }) {
   );
 }
 
+/**
+ * CHI TIẾT TÀI XẾ — bản B (read-only) dùng ở trang "Đơn vị vận tải" (transport-companies).
+ *
+ * ⚠️ CÓ BẢN SONG SONG: dialog chi tiết tài xế còn được render INLINE trong
+ * drivers-table.tsx (trang Quản lý tài xế) — bản A, đầy quyền (sửa xe/tuyến/dịch vụ,
+ * duyệt/khoá/tạm khoá, nạp ví, ghi CSKH). Hai bản TRÙNG các section chỉ-đọc
+ * (Đăng ký xe, ảnh CCCD/bằng lái, dịch vụ, timeline). Sửa field hiển thị ở một bên
+ * thì NHỚ sửa cả bên kia — đã quên 2 lần (5ffe97d: timeline CSKH; và ô "Số ghế").
+ * Bản B KHÔNG có: ví, sửa thông tin, duyệt/khoá, tuyến, và KHÔNG có khối CSKH (nội bộ team VIGO).
+ */
 export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null; onClose: () => void }) {
   return (
     <Dialog open={!!driver} onOpenChange={(open) => { if (!open) onClose(); }}>
@@ -441,13 +451,8 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
               <ApprovalTimeline driverId={driver.id} showAdminNote />
             </div>
 
-            <div className="space-y-3 border-t pt-4">
-              <h4 className="font-semibold">CSKH — Lịch sử làm việc</h4>
-              <p className="text-xs text-muted-foreground">
-                Ghi lại việc đã làm với tài xế (gọi điện, nhắc nhở, xử lý…). Chỉ admin thấy.
-              </p>
-              <DriverCallTimeline driverId={driver.id} />
-            </div>
+            {/* KHÔNG có khối "CSKH — Lịch sử làm việc" ở đây: ghi & xem CSKH là việc
+                nội bộ team VIGO (trang Quản lý tài xế), màn Đơn vị vận tải không cần. */}
 
             <div className="space-y-2 border-t pt-4">
               <h4 className="font-semibold">Đơn vị vận tải</h4>

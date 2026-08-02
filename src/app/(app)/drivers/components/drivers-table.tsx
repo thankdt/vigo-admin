@@ -1119,6 +1119,10 @@ export function DriversTable() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* CHI TIẾT TÀI XẾ — bản A (đầy quyền) render INLINE ở đây (trang Quản lý tài xế).
+          ⚠️ CÓ BẢN SONG SONG: component DriverDetailDialog trong driver-detail-dialog.tsx
+          (bản B, read-only) dùng ở trang "Đơn vị vận tải". Sửa field HIỂN THỊ ở bản này
+          nhớ sửa cả bản B — đã quên 2 lần (5ffe97d: timeline CSKH; ô "Số ghế"). */}
       <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); setEditingVehicle(false); } }}>
         <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
