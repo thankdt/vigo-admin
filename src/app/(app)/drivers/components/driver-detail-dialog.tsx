@@ -190,10 +190,7 @@ const CALL_TYPE_ORDER: DriverCallEventType[] = ['CALLED', 'UNREACHED', 'CALLBACK
  * Loại liên hệ (Gọi được / Không nghe máy / Hẹn gọi lại) khi ghi sẽ tự tick "đã gọi" ở backend
  * (cột "đã gọi" trong bảng cập nhật ở lần tải danh sách kế tiếp).
  */
-// readOnly: ẩn form "Ghi mốc mới" (hành động CSKH), chỉ hiển thị lịch sử. Dùng cho
-// nơi KHÔNG có quyền ghi CSKH — vd dialog chi tiết ở trang "Đơn vị vận tải". Ghi mốc
-// CSKH là việc của admin ở trang Quản lý tài xế, không phải màn quản lý đơn vị vận tải.
-export function DriverCallTimeline({ driverId, readOnly = false }: { driverId: string; readOnly?: boolean }) {
+export function DriverCallTimeline({ driverId }: { driverId: string }) {
   const { toast } = useToast();
   const [events, setEvents] = React.useState<DriverCallEvent[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -230,29 +227,27 @@ export function DriverCallTimeline({ driverId, readOnly = false }: { driverId: s
 
   return (
     <div className="space-y-3">
-      {/* Ghi mốc mới — hành động CSKH, chỉ nơi có quyền (trang Quản lý tài xế). */}
-      {!readOnly && (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
-          <Select value={type} onValueChange={(v) => setType(v as DriverCallEventType)}>
-            <SelectTrigger className="sm:w-44 shrink-0"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {CALL_TYPE_ORDER.map((t) => (
-                <SelectItem key={t} value={t}>{CALL_TYPE_META[t].label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Textarea
-            placeholder="Ghi chú (không bắt buộc)"
-            rows={1}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            className="flex-1 min-h-[38px]"
-          />
-          <Button onClick={submit} disabled={saving} className="shrink-0">
-            {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Ghi nhận
-          </Button>
-        </div>
-      )}
+      {/* Ghi mốc mới */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+        <Select value={type} onValueChange={(v) => setType(v as DriverCallEventType)}>
+          <SelectTrigger className="sm:w-44 shrink-0"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {CALL_TYPE_ORDER.map((t) => (
+              <SelectItem key={t} value={t}>{CALL_TYPE_META[t].label}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Textarea
+          placeholder="Ghi chú (không bắt buộc)"
+          rows={1}
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="flex-1 min-h-[38px]"
+        />
+        <Button onClick={submit} disabled={saving} className="shrink-0">
+          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Ghi nhận
+        </Button>
+      </div>
 
       {/* Timeline mới→cũ */}
       {loading ? (
@@ -296,7 +291,7 @@ export function DriverCallTimeline({ driverId, readOnly = false }: { driverId: s
  * duyệt/khoá/tạm khoá, nạp ví, ghi CSKH). Hai bản TRÙNG các section chỉ-đọc
  * (Đăng ký xe, ảnh CCCD/bằng lái, dịch vụ, timeline). Sửa field hiển thị ở một bên
  * thì NHỚ sửa cả bên kia — đã quên 2 lần (5ffe97d: timeline CSKH; và ô "Số ghế").
- * Bản B KHÔNG có: ví, sửa thông tin, duyệt/khoá, tuyến, và KHÔNG có hành động ghi CSKH.
+ * Bản B KHÔNG có: ví, sửa thông tin, duyệt/khoá, tuyến, và KHÔNG có khối CSKH (nội bộ team VIGO).
  */
 export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null; onClose: () => void }) {
   return (
@@ -456,13 +451,8 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
               <ApprovalTimeline driverId={driver.id} showAdminNote />
             </div>
 
-            <div className="space-y-3 border-t pt-4">
-              <h4 className="font-semibold">CSKH — Lịch sử làm việc</h4>
-              <p className="text-xs text-muted-foreground">
-                Chỉ xem. Ghi mốc CSKH mới thực hiện ở trang Quản lý tài xế (không phải màn Đơn vị vận tải).
-              </p>
-              <DriverCallTimeline driverId={driver.id} readOnly />
-            </div>
+            {/* KHÔNG có khối "CSKH — Lịch sử làm việc" ở đây: ghi & xem CSKH là việc
+                nội bộ team VIGO (trang Quản lý tài xế), màn Đơn vị vận tải không cần. */}
 
             <div className="space-y-2 border-t pt-4">
               <h4 className="font-semibold">Đơn vị vận tải</h4>
