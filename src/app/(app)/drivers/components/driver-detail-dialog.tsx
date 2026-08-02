@@ -261,6 +261,14 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                     <Label className="text-xs text-muted-foreground">Màu sắc</Label>
                     <p className="font-medium text-sm">{driver.vehicleRegistration.color}</p>
                   </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Số ghế</Label>
+                    <p className="font-medium text-sm">
+                      {driver.vehicleRegistration.seats
+                        ? `${driver.vehicleRegistration.seats} chỗ`
+                        : '—'}
+                    </p>
+                  </div>
                 </div>
                 {safeImageArray(driver.vehicleRegistration.images).length > 0 && (
                   <div className="space-y-2 pt-3">
