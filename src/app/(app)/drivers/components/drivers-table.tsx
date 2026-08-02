@@ -1333,6 +1333,17 @@ export function DriversTable() {
                         <p className="font-medium text-sm">{viewDriver.vehicleRegistration.color}</p>
                       )}
                     </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs text-muted-foreground">Số ghế</Label>
+                      {/* Read-only kể cả khi đang sửa: seats là nguồn tính sức chứa
+                          điều phối (dispatch capacity) — đổi ở đây sẽ lệch logic bắn
+                          chuyến, nằm ngoài phạm vi "sửa thông tin xe" của admin. */}
+                      <p className="font-medium text-sm">
+                        {viewDriver.vehicleRegistration.seats
+                          ? `${viewDriver.vehicleRegistration.seats} chỗ`
+                          : '—'}
+                      </p>
+                    </div>
                   </div>
                   {safeImageArray(viewDriver.vehicleRegistration.images).length > 0 && (
                     <div className="space-y-2 pt-3">
