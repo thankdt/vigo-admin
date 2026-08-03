@@ -1,0 +1,27 @@
+{
+  "name": "Vigo Admin",
+  "short_name": "Vigo Admin",
+  "description": "Trang quản trị nội bộ Vigo",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#f5f5f5",
+  "theme_color": "#3f51b5",
+  "lang": "vi",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-256.png",
+      "sizes": "256x256",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

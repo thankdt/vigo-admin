@@ -17,6 +17,7 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
+import { AddToHomeScreen } from '@/components/add-to-home-screen';
 import { ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Header } from '@/components/header';
@@ -141,6 +142,8 @@ function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <RadixPointerEventsWatchdog />
+      {/* Chỉ gắn trong khu admin nội bộ — portal HTX/đại lý/KOL không hiện gợi ý này. */}
+      <AddToHomeScreen />
       <Sidebar>
         <SidebarHeader className="p-4">
           <Link href="/dashboard" className="flex items-center gap-2">
