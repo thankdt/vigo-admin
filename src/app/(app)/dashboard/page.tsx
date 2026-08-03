@@ -122,15 +122,14 @@ export default function DashboardPage() {
             <Stat icon={<Car className="h-5 w-5" />} label="Tài xế đang bận" value={fmtNum(ov.realtime.busyDrivers)} hint="Đang trên chuyến" />
           </div>
 
-          {/* Hôm nay */}
+          {/* Theo kỳ đã chọn — đổi theo bộ lọc NGÀY ở trên (range = Hôm nay → ra số hôm nay). Đây là
+              phần phản ánh bộ lọc; "Vận hành (hiện tại)" bên trên là realtime nên không đổi. */}
+          <SectionTitle>Theo kỳ đã chọn</SectionTitle>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Stat icon={<UserPlus className="h-5 w-5" />} label="Người dùng mới hôm nay" value={fmtNum(ov.today.newUsers ?? 0)} hint="Tài khoản đăng ký mới (giờ VN)" accent="text-green-600 dark:text-green-400" />
-            <Stat icon={<Banknote className="h-5 w-5" />} label="Chuyến tạo hôm nay" value={fmtNum(ov.today.created)} />
-            <Stat icon={<CheckCircle2 className="h-5 w-5" />} label="Hoàn thành hôm nay" value={fmtNum(ov.today.completed)} accent="text-green-600 dark:text-green-400" />
-            {/* Card "Tỉ lệ hoàn thành" đã bỏ (quyết định 23/07/2026): "Hoàn thành hôm nay"
-                giờ đếm theo MỐC HOÀN THÀNH còn tỉ lệ theo cohort chuyến tạo — 2 mốc khác
-                nhau đặt cạnh nhau chỉ gây hiểu nhầm (4 hoàn thành / 2 tạo ≠ 200%). */}
-            <Stat icon={<XCircle className="h-5 w-5" />} label="Huỷ hôm nay" value={fmtNum(ov.today.cancelled)} accent={ov.today.cancelled > 0 ? 'text-destructive' : ''} />
+            <Stat icon={<Banknote className="h-5 w-5" />} label="Chuyến tạo (trong kỳ)" value={fmtNum(ov.business.createdInPeriod)} />
+            <Stat icon={<CheckCircle2 className="h-5 w-5" />} label="Chuyến hoàn thành (trong kỳ)" value={fmtNum(ov.business.completedTripsInPeriod)} accent="text-green-600 dark:text-green-400" />
+            <Stat icon={<XCircle className="h-5 w-5" />} label="Chuyến huỷ (trong kỳ)" value={fmtNum(ov.business.cancelledInPeriod)} accent={ov.business.cancelledInPeriod > 0 ? 'text-destructive' : ''} />
+            <Stat icon={<UserPlus className="h-5 w-5" />} label="Người dùng mới (trong kỳ)" value={fmtNum(ov.demand.newCustomersInPeriod)} accent="text-green-600 dark:text-green-400" />
           </div>
 
           {/* Hàng chờ cần xử lý */}
@@ -148,7 +147,6 @@ export default function DashboardPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Stat icon={<Banknote className="h-5 w-5" />} label="GMV (tổng tiền chuyến)" value={fmtVnd(fin.cashFlow.totalTripIncludingTax)} hint="Tiền khách trả (chuyến hoàn thành)" />
             <Stat icon={<DollarSign className="h-5 w-5" />} label="Doanh thu VIGO" value={fmtVnd(fin.breakdown.vigoRevenue)} accent="text-green-600 dark:text-green-400" hint="Hoa hồng VIGO giữ" />
-            <Stat icon={<CheckCircle2 className="h-5 w-5" />} label="Chuyến hoàn thành" value={fmtNum(ov.business.completedTripsInPeriod)} />
             <Stat icon={<Activity className="h-5 w-5" />} label="Giá TB / chuyến" value={fmtVnd(avgFare)} hint="GMV / chuyến hoàn thành" />
           </div>
 
