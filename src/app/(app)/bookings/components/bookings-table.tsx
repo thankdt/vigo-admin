@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap, CopyPlus } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, Zap, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
@@ -80,6 +80,8 @@ type FetchArgs = {
   sort: { key: SortKey; direction: 'ascending' | 'descending' };
   tripKind: TripKind;
   customerCall: CustomerCallFilter | 'ALL';
+  dateFrom: string;
+  dateTo: string;
 };
 
 const tabKeys: TabKey[] = [
@@ -594,6 +596,22 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                 </div>
               </Card>
 
+              {/* Đặt hộ: đại lý đã đặt chuyến hộ khách — chỉ hiện với chuyến đặt hộ (backend trả agentPhone). */}
+              {(booking.agentName || booking.agentPhone) && (
+                <Card className="p-3 space-y-1 border-purple-200 bg-purple-50/50 dark:border-purple-900/50 dark:bg-purple-950/20">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Người đặt hộ (đại lý)</div>
+                  <div className="flex items-center gap-3">
+                    <div className="h-9 w-9 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center">
+                      <Store className="h-4 w-4 text-purple-600" />
+                    </div>
+                    <div className="flex-1 text-sm">
+                      <div className="font-semibold">{booking.agentName || '—'}</div>
+                      <div className="text-muted-foreground">{booking.agentPhone || '—'}</div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
               {/* Driver */}
               <Card className="p-3 space-y-1">
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tài xế</div>
@@ -1009,6 +1027,9 @@ export function BookingsTable() {
   const [selectedRouteId, setSelectedRouteId] = React.useState<string>('ALL');
   // Lọc "gọi check khách": 'ALL' = không lọc; called/unreached/uncalled = trạng thái.
   const [customerCallFilter, setCustomerCallFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
+  // Lọc khoảng ngày ĐẶT chuyến (createdAt). VN-local YYYY-MM-DD; '' = không lọc.
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo] = React.useState('');
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
@@ -1035,7 +1056,7 @@ export function BookingsTable() {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall, dateFrom, dateTo }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -1077,6 +1098,8 @@ export function BookingsTable() {
       else if (tripKind === 'regular') params.scheduled = false;
       // Gọi check khách: 'ALL' bỏ param; còn lại truyền thẳng cho backend.
       if (customerCall !== 'ALL') params.customerCall = customerCall;
+      if (dateFrom) params.from = dateFrom;
+      if (dateTo) params.to = dateTo;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -1097,16 +1120,16 @@ export function BookingsTable() {
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, dateFrom, dateTo });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, dateFrom, dateTo]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, dateFrom, dateTo });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, dateFrom, dateTo]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -1330,6 +1353,32 @@ export function BookingsTable() {
               className="w-[240px] pl-8"
             />
           </div>
+          {/* Lọc khoảng ngày ĐẶT chuyến (createdAt, giờ VN). Đổi ngày → về trang 1. */}
+          <div className="flex items-center gap-1.5">
+            <Label className="whitespace-nowrap text-xs text-muted-foreground">Ngày đặt:</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+              className="w-[150px]"
+              aria-label="Từ ngày"
+            />
+            <span className="text-sm text-muted-foreground">→</span>
+            <Input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+              className="w-[150px]"
+              aria-label="Đến ngày"
+            />
+            {(dateFrom || dateTo) && (
+              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}>
+                Xóa
+              </Button>
+            )}
+          </div>
           <div className='ml-auto'>
             <CreateBookingDialog onSuccess={() => reload()} />
           </div>
@@ -1425,6 +1474,11 @@ export function BookingsTable() {
                       <div className="flex flex-col">
                         <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
                         <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
+                        {booking.agentPhone && (
+                          <span className='inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400'>
+                            <Store className='h-3 w-3' /> Đặt hộ: {booking.agentPhone}
+                          </span>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
