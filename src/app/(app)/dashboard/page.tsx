@@ -107,7 +107,7 @@ export default function DashboardPage() {
         <p className="text-sm text-muted-foreground">Tình hình vận hành hiện tại, hàng chờ cần xử lý và chỉ số kinh doanh theo kỳ.</p>
       </div>
 
-      <FinanceFilter value={range} onChange={setRange} isLoading={loading} />
+      <FinanceFilter value={range} onChange={setRange} isLoading={loading} alwaysShowCustom />
 
       {loading && !ov ? (
         <div className="flex items-center justify-center py-24"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>

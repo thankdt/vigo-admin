@@ -56,6 +56,7 @@ export function FinanceFilter({
   onChange,
   isLoading,
   initialPreset = 'today',
+  alwaysShowCustom = false,
 }: {
   value: DateRange;
   onChange: (next: DateRange) => void;
@@ -65,6 +66,9 @@ export function FinanceFilter({
    *  highlights "Hôm nay" while showing a different range. Defaults to 'today'
    *  so existing callers are unaffected. */
   initialPreset?: string;
+  /** Hiện luôn ô "Từ / Đến" (không giấu sau nút "Tùy chỉnh"). Default false để trang
+   *  Tài chính giữ nguyên; trang Tổng quan bật true cho dễ thấy. */
+  alwaysShowCustom?: boolean;
 }) {
   const [activePreset, setActivePreset] = React.useState<string | null>(initialPreset);
 
@@ -80,7 +84,7 @@ export function FinanceFilter({
     onChange({ ...value, [key]: v });
   };
 
-  const showCustom = activePreset === 'custom';
+  const showCustom = alwaysShowCustom || activePreset === 'custom';
 
   return (
     <div className="space-y-3">
@@ -96,14 +100,16 @@ export function FinanceFilter({
             {p.label}
           </Button>
         ))}
-        <Button
-          variant={showCustom ? 'default' : 'outline'}
-          size="sm"
-          onClick={() => setActivePreset('custom')}
-          disabled={isLoading}
-        >
-          Tùy chỉnh
-        </Button>
+        {!alwaysShowCustom && (
+          <Button
+            variant={showCustom ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => setActivePreset('custom')}
+            disabled={isLoading}
+          >
+            Tùy chỉnh
+          </Button>
+        )}
       </div>
       {showCustom && (
         <div className="flex flex-wrap items-end gap-3">
