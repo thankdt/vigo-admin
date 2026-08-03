@@ -22,6 +22,15 @@ export type DriverFilters = {
   // True = only drivers who self-declared a transport company name but have no
   // confirmed transportCompanyId yet.
   unconfirmedTransportCompany: boolean;
+  // CSKH đã gọi điện: '' = tất cả, 'true' = đã gọi, 'false' = chưa gọi.
+  csCalled: '' | 'true' | 'false';
+  // CSKH: loại mốc "lịch sử làm việc" gần nhất ('' = tất cả).
+  csLastCallType: '' | 'CALLED' | 'UNREACHED' | 'CALLBACK' | 'HANDLED' | 'REMINDER' | 'NOTE';
+  // CSKH: chỉ tài xế CHƯA có mốc làm việc nào.
+  csNeverWorked: boolean;
+  // CSKH: khoảng NGÀY LÀM VIỆC gần nhất (VN YYYY-MM-DD; '' = không lọc).
+  csWorkedFrom: string;
+  csWorkedTo: string;
 };
 
 export const EMPTY_FILTERS: DriverFilters = {
@@ -31,13 +40,33 @@ export const EMPTY_FILTERS: DriverFilters = {
   fixedRouteId: '',
   transportCompanyName: '',
   unconfirmedTransportCompany: false,
+  csCalled: '',
+  csLastCallType: '',
+  csNeverWorked: false,
+  csWorkedFrom: '',
+  csWorkedTo: '',
 };
 
 export function hasAnyFilter(f: DriverFilters): boolean {
-  return Boolean(f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName || f.unconfirmedTransportCompany);
+  return Boolean(
+    f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName ||
+    f.unconfirmedTransportCompany || f.csCalled || f.csLastCallType || f.csNeverWorked ||
+    f.csWorkedFrom || f.csWorkedTo,
+  );
 }
 
 const ALL_ROUTES_VALUE = '__all__';
+const ALL_CS_VALUE = '__all_cs__';
+const ALL_CS_TYPE_VALUE = '__all_cs_type__';
+const CS_TYPE_OPTIONS = [
+  { value: ALL_CS_TYPE_VALUE, label: 'Mốc CSKH: tất cả' },
+  { value: 'CALLED', label: 'Gọi được' },
+  { value: 'UNREACHED', label: 'Không nghe máy' },
+  { value: 'CALLBACK', label: 'Hẹn gọi lại' },
+  { value: 'HANDLED', label: 'Đã xử lý' },
+  { value: 'REMINDER', label: 'Nhắc nhở' },
+  { value: 'NOTE', label: 'Ghi chú' },
+];
 
 function IconInput({
   icon: Icon,
@@ -100,7 +129,7 @@ export function DriversFilterBar({
           onChange={(e) => setField('plate', e.target.value)}
         />
       </div>
-      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-3">
+      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Combobox
           options={routeOptions}
           selectedValue={value.fixedRouteId || ALL_ROUTES_VALUE}
@@ -115,6 +144,20 @@ export function DriversFilterBar({
           value={value.transportCompanyName}
           disabled={value.unconfirmedTransportCompany}
           onChange={(e) => setField('transportCompanyName', e.target.value)}
+        />
+        <Combobox
+          options={[
+            { value: ALL_CS_VALUE, label: 'Gọi điện: tất cả' },
+            { value: 'false', label: 'Chưa gọi' },
+            { value: 'true', label: 'Đã gọi' },
+          ]}
+          selectedValue={value.csCalled || ALL_CS_VALUE}
+          onSelect={(v) =>
+            setField('csCalled', !v || v === ALL_CS_VALUE ? '' : (v as 'true' | 'false'))
+          }
+          placeholder="Gọi điện: tất cả"
+          searchPlaceholder="Lọc..."
+          noResultsText="Không có."
         />
         <div className="flex items-center gap-3 sm:justify-end">
           <div className="flex items-center gap-2">
@@ -141,6 +184,59 @@ export function DriversFilterBar({
               Xóa lọc
             </Button>
           )}
+        </div>
+      </div>
+      {/* CSKH "lịch sử làm việc": lọc theo loại mốc gần nhất, khoảng ngày làm việc, hoặc chưa làm việc bao giờ. */}
+      <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Combobox
+          options={CS_TYPE_OPTIONS}
+          selectedValue={value.csLastCallType || ALL_CS_TYPE_VALUE}
+          onSelect={(v) =>
+            setField('csLastCallType', !v || v === ALL_CS_TYPE_VALUE ? '' : (v as DriverFilters['csLastCallType']))
+          }
+          placeholder="Mốc CSKH: tất cả"
+          searchPlaceholder="Lọc mốc..."
+          noResultsText="Không có."
+          disabled={value.csNeverWorked}
+        />
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">Ngày làm việc từ</Label>
+          <Input
+            type="date"
+            value={value.csWorkedFrom}
+            max={value.csWorkedTo || undefined}
+            disabled={value.csNeverWorked}
+            onChange={(e) => setField('csWorkedFrom', e.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs text-muted-foreground">đến ngày</Label>
+          <Input
+            type="date"
+            value={value.csWorkedTo}
+            min={value.csWorkedFrom || undefined}
+            disabled={value.csNeverWorked}
+            onChange={(e) => setField('csWorkedTo', e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 sm:justify-end">
+          <Checkbox
+            id="cs-never-worked"
+            checked={value.csNeverWorked}
+            onCheckedChange={(checked) =>
+              onChange({
+                ...value,
+                csNeverWorked: checked === true,
+                // "Chưa làm việc bao giờ" mâu thuẫn với lọc loại mốc / khoảng ngày → xoá chúng khi bật.
+                csLastCallType: checked === true ? '' : value.csLastCallType,
+                csWorkedFrom: checked === true ? '' : value.csWorkedFrom,
+                csWorkedTo: checked === true ? '' : value.csWorkedTo,
+              })
+            }
+          />
+          <Label htmlFor="cs-never-worked" className="text-sm font-normal cursor-pointer">
+            Chưa làm việc bao giờ
+          </Label>
         </div>
       </div>
     </div>

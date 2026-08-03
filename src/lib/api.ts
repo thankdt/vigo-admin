@@ -332,7 +332,13 @@ export async function getDrivers(params: {
   fixedRouteId?: string;
   needsReview?: 'true' | 'false';
   unconfirmedTransportCompany?: 'true' | 'false';
-  sort?: 'name' | 'isApproved' | 'createdAt';
+  csCalled?: 'true' | 'false';
+  // CSKH: lọc theo mốc "lịch sử làm việc" gần nhất + khoảng ngày làm việc (VN YYYY-MM-DD).
+  csLastCallType?: 'CALLED' | 'UNREACHED' | 'CALLBACK' | 'HANDLED' | 'REMINDER' | 'NOTE';
+  csNeverWorked?: 'true';
+  csWorkedFrom?: string;
+  csWorkedTo?: string;
+  sort?: 'name' | 'isApproved' | 'createdAt' | 'csLastCallAt';
   order?: 'asc' | 'desc';
 } = {}): Promise<GetApiResponse<Driver>> {
   const query = new URLSearchParams({
@@ -349,11 +355,30 @@ export async function getDrivers(params: {
   if (params.fixedRouteId) query.set('fixedRouteId', params.fixedRouteId);
   if (params.needsReview) query.set('needsReview', params.needsReview);
   if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
+  if (params.csCalled) query.set('csCalled', params.csCalled);
+  if (params.csLastCallType) query.set('csLastCallType', params.csLastCallType);
+  if (params.csNeverWorked) query.set('csNeverWorked', params.csNeverWorked);
+  if (params.csWorkedFrom) query.set('csWorkedFrom', params.csWorkedFrom);
+  if (params.csWorkedTo) query.set('csWorkedTo', params.csWorkedTo);
   if (params.sort) query.set('sort', params.sort);
   if (params.order) query.set('order', params.order);
 
   const response = await fetchWithAuth(`/drivers/admin/list?${query.toString()}`);
   return response.json();
+}
+
+// CSKH đánh dấu đã gọi điện tài xế + ghi chú (theo dõi liên hệ). Chỉ gửi field muốn đổi:
+// csCalled true→backend stamp thời điểm+CSKH, false→xoá; csNote chuỗi rỗng = xoá ghi chú.
+export async function updateDriverCsStatus(
+  driverId: string,
+  body: { csCalled?: boolean; csNote?: string },
+): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${driverId}/cs-status`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  const result = await response.json();
+  return result.data || result;
 }
 
 export async function approveDriver(id: string, enabledServices: string[], note?: string): Promise<Driver> {
@@ -636,6 +661,9 @@ export async function getBookings(params: {
   // Lọc "gọi check khách": 'called' = đã gọi được, 'unreached' = gọi không được,
   // 'uncalled' = chưa gọi. undefined = không lọc.
   customerCall?: CustomerCallFilter;
+  // Lọc khoảng ngày ĐẶT chuyến (createdAt) — VN-local YYYY-MM-DD. Backend hiểu ranh giới VN (+07:00).
+  from?: string;
+  to?: string;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -651,6 +679,8 @@ export async function getBookings(params: {
     ...(params.order && { order: params.order }),
     ...(params.scheduled !== undefined && { scheduled: String(params.scheduled) }),
     ...(params.customerCall && { customerCall: params.customerCall }),
+    ...(params.from && { from: params.from }),
+    ...(params.to && { to: params.to }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
