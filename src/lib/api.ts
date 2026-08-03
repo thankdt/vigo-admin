@@ -661,6 +661,9 @@ export async function getBookings(params: {
   // Lọc "gọi check khách": 'called' = đã gọi được, 'unreached' = gọi không được,
   // 'uncalled' = chưa gọi. undefined = không lọc.
   customerCall?: CustomerCallFilter;
+  // Lọc khoảng ngày ĐẶT chuyến (createdAt) — VN-local YYYY-MM-DD. Backend hiểu ranh giới VN (+07:00).
+  from?: string;
+  to?: string;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -676,6 +679,8 @@ export async function getBookings(params: {
     ...(params.order && { order: params.order }),
     ...(params.scheduled !== undefined && { scheduled: String(params.scheduled) }),
     ...(params.customerCall && { customerCall: params.customerCall }),
+    ...(params.from && { from: params.from }),
+    ...(params.to && { to: params.to }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);

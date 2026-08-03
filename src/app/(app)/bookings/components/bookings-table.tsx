@@ -79,6 +79,8 @@ type FetchArgs = {
   sort: { key: SortKey; direction: 'ascending' | 'descending' };
   tripKind: TripKind;
   customerCall: CustomerCallFilter | 'ALL';
+  dateFrom: string;
+  dateTo: string;
 };
 
 const tabKeys: TabKey[] = [
@@ -1011,6 +1013,9 @@ export function BookingsTable() {
   const [selectedRouteId, setSelectedRouteId] = React.useState<string>('ALL');
   // Lọc "gọi check khách": 'ALL' = không lọc; called/unreached/uncalled = trạng thái.
   const [customerCallFilter, setCustomerCallFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
+  // Lọc khoảng ngày ĐẶT chuyến (createdAt). VN-local YYYY-MM-DD; '' = không lọc.
+  const [dateFrom, setDateFrom] = React.useState('');
+  const [dateTo, setDateTo] = React.useState('');
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
@@ -1037,7 +1042,7 @@ export function BookingsTable() {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall, dateFrom, dateTo }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -1079,6 +1084,8 @@ export function BookingsTable() {
       else if (tripKind === 'regular') params.scheduled = false;
       // Gọi check khách: 'ALL' bỏ param; còn lại truyền thẳng cho backend.
       if (customerCall !== 'ALL') params.customerCall = customerCall;
+      if (dateFrom) params.from = dateFrom;
+      if (dateTo) params.to = dateTo;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -1099,16 +1106,16 @@ export function BookingsTable() {
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, dateFrom, dateTo });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, dateFrom, dateTo]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, dateFrom, dateTo });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, dateFrom, dateTo]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -1331,6 +1338,32 @@ export function BookingsTable() {
               onChange={(e) => handleBookingIdChange(e.target.value)}
               className="w-[240px] pl-8"
             />
+          </div>
+          {/* Lọc khoảng ngày ĐẶT chuyến (createdAt, giờ VN). Đổi ngày → về trang 1. */}
+          <div className="flex items-center gap-1.5">
+            <Label className="whitespace-nowrap text-xs text-muted-foreground">Ngày đặt:</Label>
+            <Input
+              type="date"
+              value={dateFrom}
+              max={dateTo || undefined}
+              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+              className="w-[150px]"
+              aria-label="Từ ngày"
+            />
+            <span className="text-sm text-muted-foreground">→</span>
+            <Input
+              type="date"
+              value={dateTo}
+              min={dateFrom || undefined}
+              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+              className="w-[150px]"
+              aria-label="Đến ngày"
+            />
+            {(dateFrom || dateTo) && (
+              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}>
+                Xóa
+              </Button>
+            )}
           </div>
           <div className='ml-auto'>
             <CreateBookingDialog onSuccess={() => reload()} />
