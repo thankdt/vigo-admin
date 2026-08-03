@@ -4,11 +4,18 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { getScheduledNotifications, createScheduledNotification, cancelScheduledNotification } from '@/lib/api';
-import type { ScheduledNotification, GetApiResponse } from '@/lib/types';
+import {
+    getScheduledNotifications,
+    createScheduledNotification,
+    cancelScheduledNotification,
+    broadcastNotificationNow,
+    previewNotificationAudience,
+    type NotificationPayload,
+} from '@/lib/api';
+import type { ScheduledNotification, GetApiResponse, NotificationAudience } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
     Dialog,
@@ -22,20 +29,36 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { dateTimeInputValue, parseDateTimeInput } from '@/lib/date-input-utils';
-import { Loader2, PlusCircle, Trash2, Clock, Repeat, Bell, ExternalLink } from 'lucide-react';
+import { parseVnDateTimeInput, vnDateTimeInputValue } from '@/lib/date-input-utils';
+import { Loader2, PlusCircle, Trash2, Clock, Repeat, Bell, ExternalLink, Send, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import Image from 'next/image';
+
+/**
+ * Hiển thị mốc UTC từ backend theo giờ VN. Toàn bộ ngày/giờ nghiệp vụ của Vigo
+ * là giờ Việt Nam, không phụ thuộc timezone máy admin.
+ */
+function formatVn(iso: string | null | undefined, withTime = true): string {
+    if (!iso) return 'N/A';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleString('vi-VN', {
+        timeZone: 'Asia/Ho_Chi_Minh',
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+        ...(withTime ? { hour: '2-digit', minute: '2-digit' } : {}),
+    });
+}
 
 const notificationSchema = z.object({
     title: z.string().min(1, { message: "Tiêu đề là bắt buộc" }),
     body: z.string().min(1, { message: "Nội dung là bắt buộc" }),
     imageUrl: z.string().url({ message: "URL không hợp lệ" }).optional().or(z.literal('')),
-    targetType: z.enum(['ALL', 'ROLE', 'SPECIFIC_USERS']),
-    targetRole: z.enum(['DRIVER', 'USER']).optional(),
+    targetType: z.enum(['ALL', 'APP', 'SPECIFIC_USERS']),
+    targetApp: z.enum(['DRIVER', 'CUSTOMER']).optional(),
     loyaltyTier: z.enum(['MEMBER', 'SILVER', 'GOLD', 'DIAMOND']).optional(),
     userIds: z.string().optional(), // Comma-separated user IDs
-    scheduleType: z.enum(['ONE_TIME', 'RECURRING']),
+    scheduleType: z.enum(['NOW', 'ONE_TIME', 'RECURRING']),
     scheduleTime: z.date().optional(),
     cronExpression: z.string().optional(),
 }).refine((data) => {
@@ -55,13 +78,13 @@ const notificationSchema = z.object({
     message: "Biểu thức Cron là bắt buộc cho thông báo lặp lại",
     path: ["cronExpression"],
 }).refine((data) => {
-    if (data.targetType === 'ROLE' && !data.targetRole) {
+    if (data.targetType === 'APP' && !data.targetApp) {
         return false;
     }
     return true;
 }, {
-    message: "Vui lòng chọn vai trò",
-    path: ["targetRole"],
+    message: "Vui lòng chọn app nhận",
+    path: ["targetApp"],
 }).refine((data) => {
     if (data.targetType === 'SPECIFIC_USERS' && !data.userIds?.trim()) {
         return false;
@@ -74,48 +97,78 @@ const notificationSchema = z.object({
 
 type NotificationFormValues = z.infer<typeof notificationSchema>;
 
+/** Gom nội dung + đối tượng nhận thành payload chung cho cả 2 đường gửi. */
+function buildPayload(data: NotificationFormValues): NotificationPayload {
+    const payload: NotificationPayload = {
+        title: data.title,
+        body: data.body,
+        imageUrl: data.imageUrl || undefined,
+        targetType: data.targetType,
+    };
+
+    if (data.targetType === 'APP') {
+        payload.targetData = { appId: data.targetApp };
+        if (data.targetApp === 'CUSTOMER' && data.loyaltyTier) {
+            payload.targetData.loyaltyTier = data.loyaltyTier;
+        }
+    } else if (data.targetType === 'SPECIFIC_USERS' && data.userIds) {
+        payload.targetData = {
+            userIds: data.userIds.split(',').map(id => id.trim()).filter(Boolean),
+        };
+    }
+
+    return payload;
+}
+
 function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => void, onCancel: () => void }) {
     const { toast } = useToast();
+    const [pendingNow, setPendingNow] = React.useState<{
+        payload: NotificationPayload;
+        audience: NotificationAudience | null;
+    } | null>(null);
+    const [sendingNow, setSendingNow] = React.useState(false);
+
     const { register, handleSubmit, control, watch, setValue, formState: { errors, isSubmitting }, reset } = useForm<NotificationFormValues>({
         resolver: zodResolver(notificationSchema),
         defaultValues: {
-            scheduleType: 'ONE_TIME',
+            scheduleType: 'NOW',
             targetType: 'ALL',
         },
     });
 
     const scheduleType = watch('scheduleType');
     const targetType = watch('targetType');
-    const targetRole = watch('targetRole');
+    const targetApp = watch('targetApp');
 
     const onSubmit = async (data: NotificationFormValues) => {
+        const payload = buildPayload(data);
+
+        // Bắn ngay là hành động KHÔNG hoàn tác được (có thể chạm hàng chục nghìn
+        // thiết bị) → luôn qua dialog xác nhận kèm số người nhận ước tính.
+        if (data.scheduleType === 'NOW') {
+            let audience: NotificationAudience | null = null;
+            try {
+                audience = await previewNotificationAudience({
+                    targetType: payload.targetType,
+                    targetData: payload.targetData,
+                });
+            } catch {
+                // Đếm trước hỏng thì vẫn cho gửi, chỉ là không hiện được con số.
+            }
+            setPendingNow({ payload, audience });
+            return;
+        }
+
         try {
-            const payload: any = {
-                title: data.title,
-                body: data.body,
-                imageUrl: data.imageUrl,
-                targetType: data.targetType,
-            };
-
-            // Build targetData based on targetType
-            if (data.targetType === 'ROLE') {
-                payload.targetData = { role: data.targetRole };
-                if (data.targetRole === 'USER' && data.loyaltyTier) {
-                    payload.targetData.loyaltyTier = data.loyaltyTier;
-                }
-            } else if (data.targetType === 'SPECIFIC_USERS' && data.userIds) {
-                payload.targetData = {
-                    userIds: data.userIds.split(',').map(id => id.trim()).filter(Boolean)
-                };
-            }
-
-            if (data.scheduleType === 'ONE_TIME' && data.scheduleTime) {
-                payload.scheduleTime = data.scheduleTime.toISOString();
-            } else if (data.scheduleType === 'RECURRING' && data.cronExpression) {
-                payload.cronExpression = data.cronExpression;
-            }
-
-            await createScheduledNotification(payload);
+            await createScheduledNotification({
+                ...payload,
+                ...(data.scheduleType === 'ONE_TIME' && data.scheduleTime
+                    ? { scheduleTime: data.scheduleTime.toISOString() }
+                    : {}),
+                ...(data.scheduleType === 'RECURRING' && data.cronExpression
+                    ? { cronExpression: data.cronExpression }
+                    : {}),
+            });
             toast({ title: "Thành công", description: "Đã lên lịch thông báo thành công." });
             onSaveSuccess();
             reset();
@@ -124,11 +177,28 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
         }
     };
 
+    const confirmSendNow = async () => {
+        if (!pendingNow) return;
+        setSendingNow(true);
+        try {
+            await broadcastNotificationNow(pendingNow.payload);
+            toast({ title: 'Đã gửi', description: 'Thông báo đang được bắn tới người nhận.' });
+            setPendingNow(null);
+            onSaveSuccess();
+            reset();
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Không gửi được', description: err.message });
+        } finally {
+            setSendingNow(false);
+        }
+    };
+
     return (
+        <>
         <form onSubmit={handleSubmit(onSubmit)}>
             <DialogHeader>
-                <DialogTitle>Lên lịch thông báo</DialogTitle>
-                <DialogDescription>Tạo lịch thông báo đẩy mới.</DialogDescription>
+                <DialogTitle>Tạo thông báo</DialogTitle>
+                <DialogDescription>Bắn ngay hoặc hẹn lịch thông báo đẩy.</DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto p-1">
                 <div className="space-y-2">
@@ -164,8 +234,8 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                     <Label htmlFor="target-all" className="font-normal cursor-pointer">📢 Tất cả người dùng (Phát sóng)</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
-                                    <RadioGroupItem value="ROLE" id="target-role" />
-                                    <Label htmlFor="target-role" className="font-normal cursor-pointer">👥 Theo vai trò</Label>
+                                    <RadioGroupItem value="APP" id="target-app" />
+                                    <Label htmlFor="target-app" className="font-normal cursor-pointer">📱 Theo app</Label>
                                 </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="SPECIFIC_USERS" id="target-specific" />
@@ -175,13 +245,12 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                         )}
                     />
 
-                    {/* Role Selection (when ROLE is selected) */}
-                    {targetType === 'ROLE' && (
+                    {targetType === 'APP' && (
                         <div className="space-y-3 pl-6 border-l-2 border-primary/30">
                             <div className="space-y-2">
-                                <Label>Chọn vai trò</Label>
+                                <Label>Chọn app nhận</Label>
                                 <Controller
-                                    name="targetRole"
+                                    name="targetApp"
                                     control={control}
                                     render={({ field }) => (
                                         <RadioGroup
@@ -190,21 +259,26 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                             className="flex gap-4"
                                         >
                                             <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="DRIVER" id="role-driver" />
-                                                <Label htmlFor="role-driver" className="font-normal cursor-pointer">🚗 Tài xế</Label>
+                                                <RadioGroupItem value="DRIVER" id="app-driver" />
+                                                <Label htmlFor="app-driver" className="font-normal cursor-pointer">🚗 App tài xế</Label>
                                             </div>
                                             <div className="flex items-center space-x-2">
-                                                <RadioGroupItem value="USER" id="role-user" />
-                                                <Label htmlFor="role-user" className="font-normal cursor-pointer">👤 Khách hàng</Label>
+                                                <RadioGroupItem value="CUSTOMER" id="app-customer" />
+                                                <Label htmlFor="app-customer" className="font-normal cursor-pointer">👤 App khách hàng</Label>
                                             </div>
                                         </RadioGroup>
                                     )}
                                 />
-                                {errors.targetRole && <p className="text-sm text-destructive">{errors.targetRole.message}</p>}
+                                {errors.targetApp && <p className="text-sm text-destructive">{errors.targetApp.message}</p>}
+                                <p className="text-xs text-muted-foreground">
+                                    Thiết bị chưa cập nhật app mới vẫn lọc theo vai trò tài khoản như trước.
+                                    Nên tới khi người dùng cập nhật app: chọn &ldquo;App tài xế&rdquo; có thể lọt sang app
+                                    khách của tài xế, còn chọn &ldquo;App khách hàng&rdquo; sẽ bỏ sót những tài xế chỉ
+                                    dùng app khách.
+                                </p>
                             </div>
 
-                            {/* Loyalty Tier (when USER role is selected) */}
-                            {targetRole === 'USER' && (
+                            {targetApp === 'CUSTOMER' && (
                                 <div className="space-y-2">
                                     <Label>Hạng thành viên (Tùy chọn)</Label>
                                     <Controller
@@ -255,7 +329,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                 </div>
 
                 <div className="space-y-2">
-                    <Label>Loại lịch</Label>
+                    <Label>Thời điểm gửi</Label>
                     <Controller
                         name="scheduleType"
                         control={control}
@@ -265,6 +339,10 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                                 defaultValue={field.value}
                                 className="flex flex-col space-y-1"
                             >
+                                <div className="flex items-center space-x-2">
+                                    <RadioGroupItem value="NOW" id="send-now" />
+                                    <Label htmlFor="send-now" className="font-normal cursor-pointer">⚡ Bắn ngay</Label>
+                                </div>
                                 <div className="flex items-center space-x-2">
                                     <RadioGroupItem value="ONE_TIME" id="one-time" />
                                     <Label htmlFor="one-time" className="font-normal cursor-pointer">Một lần (Ngày cụ thể)</Label>
@@ -280,15 +358,17 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
 
                 {scheduleType === 'ONE_TIME' && (
                     <div className="space-y-2">
-                        <Label>Thời gian lên lịch (UTC)</Label>
+                        <Label>Thời gian lên lịch (giờ VN)</Label>
                         <Controller
                             name="scheduleTime"
                             control={control}
                             render={({ field }) => (
                                 <Input
                                     type="datetime-local"
-                                    value={dateTimeInputValue(field.value)}
-                                    onChange={(e) => field.onChange(parseDateTimeInput(e.target.value))}
+                                    // Ghim giờ VN cả hai chiều — nhãn ghi "giờ VN" thì
+                                    // phải đúng kể cả khi máy admin ở múi giờ khác.
+                                    value={vnDateTimeInputValue(field.value)}
+                                    onChange={(e) => field.onChange(parseVnDateTimeInput(e.target.value))}
                                 />
                             )}
                         />
@@ -301,12 +381,14 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                     <div className="space-y-3">
                         <Label>Mẫu nhanh</Label>
                         <div className="flex flex-wrap gap-2">
+                            {/* Cron kiểu Unix 5 trường — backend tự chuyển sang định dạng 6 trường
+                                của AWS. Các mẫu cũ ở đây từng bị AWS từ chối và lỗi bị nuốt mất. */}
                             {[
                                 { label: '🌅 Hàng ngày 9h', value: '0 9 * * *' },
-                                { label: '🏢 Ngày thường 9h', value: '0 9 ? * MON-FRI' },
+                                { label: '🏢 Ngày thường 9h', value: '0 9 * * MON-FRI' },
                                 { label: '🔄 Mỗi giờ', value: '0 * * * *' },
-                                { label: '⏱️ Mỗi 30 phút', value: '0/30 * * * ? *' },
-                                { label: '📅 Hàng tuần T2', value: '0 9 ? * MON' },
+                                { label: '⏱️ Mỗi 30 phút', value: '*/30 * * * *' },
+                                { label: '📅 Hàng tuần T2', value: '0 9 * * MON' },
                             ].map((preset) => (
                                 <Button
                                     key={preset.value}
@@ -327,8 +409,8 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                             {errors.cronExpression && <p className="text-sm text-destructive">{errors.cronExpression.message}</p>}
                         </div>
 
-                        <div className="text-xs text-muted-foreground flex items-center gap-1">
-                            <span>Định dạng: Phút Giờ Ngày Tháng NgàyTrongTuần.</span>
+                        <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-1">
+                            <span>Định dạng: Phút Giờ Ngày Tháng ThứTrongTuần — chạy theo <b>giờ VN</b>.</span>
                             <a href="https://docs.aws.amazon.com/eventbridge/latest/userguide/eb-cron-expressions.html" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline flex items-center gap-1">
                                 Hướng dẫn AWS Cron <ExternalLink className="w-3 h-3" />
                             </a>
@@ -340,11 +422,86 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                 <Button variant="outline" onClick={onCancel} type="button">Hủy</Button>
                 <Button type="submit" disabled={isSubmitting}>
                     {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Lên lịch
+                    {scheduleType === 'NOW' ? (<><Send className="mr-2 h-4 w-4" /> Bắn ngay</>) : 'Lên lịch'}
                 </Button>
             </DialogFooter>
         </form>
+
+        <ConfirmSendDialog
+            pending={pendingNow}
+            sending={sendingNow}
+            onCancel={() => setPendingNow(null)}
+            onConfirm={confirmSendNow}
+        />
+        </>
     );
+}
+
+function ConfirmSendDialog({
+    pending,
+    sending,
+    onCancel,
+    onConfirm,
+}: {
+    pending: { payload: NotificationPayload; audience: NotificationAudience | null } | null;
+    sending: boolean;
+    onCancel: () => void;
+    onConfirm: () => void;
+}) {
+    return (
+        <Dialog open={!!pending} onOpenChange={(open) => { if (!open && !sending) onCancel(); }}>
+            <DialogContent className="sm:max-w-md">
+                {pending && (
+                    <>
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-destructive" /> Xác nhận bắn ngay
+                            </DialogTitle>
+                            <DialogDescription>
+                                Thông báo sẽ được gửi ngay lập tức và <b>không thể thu hồi</b>.
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-3 text-sm">
+                            <div className="rounded-md border p-3">
+                                <p className="font-medium">{pending.payload.title}</p>
+                                <p className="mt-1 whitespace-pre-wrap text-muted-foreground">{pending.payload.body}</p>
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground">Người nhận ước tính: </span>
+                                {pending.audience ? (
+                                    <b>{pending.audience.devices.toLocaleString('vi-VN')} thiết bị / {pending.audience.users.toLocaleString('vi-VN')} người</b>
+                                ) : (
+                                    <span className="text-muted-foreground">không đếm được</span>
+                                )}
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={onCancel} disabled={sending}>Huỷ</Button>
+                            <Button onClick={onConfirm} disabled={sending}>
+                                {sending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 h-4 w-4" />}
+                                Gửi ngay
+                            </Button>
+                        </DialogFooter>
+                    </>
+                )}
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/** Mô tả đối tượng nhận cho bảng + dialog chi tiết. */
+function describeTarget(notif: ScheduledNotification): string {
+    switch (notif.targetType) {
+        case 'APP':
+            return notif.targetData?.appId === 'DRIVER' ? '🚗 App tài xế' : '👤 App khách hàng';
+        case 'ROLE':
+            // Lịch cũ. Giữ hiển thị để tra lại lịch sử; form không tạo mới kiểu này nữa.
+            return notif.targetData?.role === 'DRIVER' ? '🚗 Vai trò tài xế (cũ)' : '👤 Vai trò khách (cũ)';
+        case 'SPECIFIC_USERS':
+            return `🎯 ${notif.targetData?.userIds?.length ?? 0} người`;
+        default:
+            return '📢 Tất cả';
+    }
 }
 
 export function NotificationsManager() {
@@ -353,6 +510,11 @@ export function NotificationsManager() {
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [deletingId, setDeletingId] = React.useState<number | null>(null);
     const [detailNotif, setDetailNotif] = React.useState<ScheduledNotification | null>(null);
+    const [resend, setResend] = React.useState<{
+        payload: NotificationPayload;
+        audience: NotificationAudience | null;
+    } | null>(null);
+    const [resending, setResending] = React.useState(false);
     const { toast } = useToast();
 
     const fetchData = React.useCallback(async () => {
@@ -400,27 +562,76 @@ export function NotificationsManager() {
         }
     };
 
+    /** Bắn lại nguyên nội dung + đối tượng của một dòng đã có. */
+    const openResend = async (notif: ScheduledNotification) => {
+        const payload: NotificationPayload = {
+            title: notif.title,
+            body: notif.body,
+            imageUrl: notif.imageUrl || undefined,
+            targetType: notif.targetType ?? 'ALL',
+            targetData: notif.targetData ?? undefined,
+        };
+        let audience: NotificationAudience | null = null;
+        try {
+            audience = await previewNotificationAudience({
+                targetType: payload.targetType,
+                targetData: payload.targetData,
+            });
+        } catch {
+            // vẫn cho gửi, chỉ không hiện được số
+        }
+        setResend({ payload, audience });
+    };
+
+    const confirmResend = async () => {
+        if (!resend) return;
+        setResending(true);
+        try {
+            await broadcastNotificationNow(resend.payload);
+            toast({ title: 'Đã gửi', description: 'Thông báo đang được bắn tới người nhận.' });
+            setResend(null);
+            fetchData();
+        } catch (err: any) {
+            toast({ variant: 'destructive', title: 'Không gửi được', description: err.message });
+        } finally {
+            setResending(false);
+        }
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'ACTIVE': return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Hoạt động</Badge>;
             case 'COMPLETED': return <Badge variant="secondary">Hoàn thành</Badge>;
             case 'CANCELLED': return <Badge variant="destructive">Đã hủy</Badge>;
+            case 'FAILED': return <Badge variant="destructive">Lỗi lịch</Badge>;
             default: return <Badge variant="outline">{status}</Badge>;
         }
+    };
+
+    const getKindLabel = (notif: ScheduledNotification) => {
+        if (notif.cronExpression) {
+            return <div className="flex items-center text-xs text-muted-foreground"><Repeat className="w-3 h-3 mr-1" /> Lặp lại</div>;
+        }
+        // Lịch lỗi cũng có scheduleArn = null (createSchedule xoá ARN khi AWS từ
+        // chối) nên phải loại ra, không thì hiện nhầm là "Bắn ngay".
+        if (!notif.scheduleArn && notif.status === 'COMPLETED') {
+            return <div className="flex items-center text-xs text-muted-foreground"><Send className="w-3 h-3 mr-1" /> Bắn ngay</div>;
+        }
+        return <div className="flex items-center text-xs text-muted-foreground"><Clock className="w-3 h-3 mr-1" /> Một lần</div>;
     };
 
     return (
         <>
             <Card>
                 <CardHeader>
-                    <CardTitle>Thông báo đã lên lịch</CardTitle>
-                    <CardDescription>Quản lý thông báo đẩy tự động qua AWS EventBridge.</CardDescription>
+                    <CardTitle>Thông báo đẩy</CardTitle>
+                    <CardDescription>Bắn ngay hoặc hẹn lịch qua AWS EventBridge. Mọi mốc thời gian hiển thị theo giờ VN.</CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="mb-4 flex justify-end">
                         <Button onClick={() => setIsFormOpen(true)}>
                             <PlusCircle className="mr-2 h-4 w-4" />
-                            Lên lịch mới
+                            Tạo thông báo
                         </Button>
                     </div>
 
@@ -428,6 +639,7 @@ export function NotificationsManager() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Tiêu đề</TableHead>
+                                <TableHead>Đối tượng</TableHead>
                                 <TableHead>Loại</TableHead>
                                 <TableHead>Lịch / Cron</TableHead>
                                 <TableHead>Trạng thái</TableHead>
@@ -438,14 +650,14 @@ export function NotificationsManager() {
                         <TableBody>
                             {isLoading ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center">
+                                    <TableCell colSpan={7} className="h-24 text-center">
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
                             ) : notifications.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center">
-                                        Không tìm thấy thông báo đã lên lịch.
+                                    <TableCell colSpan={7} className="h-24 text-center">
+                                        Chưa có thông báo nào.
                                     </TableCell>
                                 </TableRow>
                             ) : (
@@ -461,27 +673,31 @@ export function NotificationsManager() {
                                                 <span className="text-xs text-muted-foreground truncate max-w-[200px]">{notif.body}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell>
-                                            {notif.cronExpression ? (
-                                                <div className="flex items-center text-xs text-muted-foreground"><Repeat className="w-3 h-3 mr-1" /> Lặp lại</div>
-                                            ) : (
-                                                <div className="flex items-center text-xs text-muted-foreground"><Clock className="w-3 h-3 mr-1" /> Một lần</div>
-                                            )}
-                                        </TableCell>
+                                        <TableCell className="text-xs">{describeTarget(notif)}</TableCell>
+                                        <TableCell>{getKindLabel(notif)}</TableCell>
                                         <TableCell>
                                             <code className="text-xs bg-muted p-1 rounded">
-                                                {notif.cronExpression || (notif.scheduleTime ? format(new Date(notif.scheduleTime), 'PP p') : 'N/A')}
+                                                {notif.cronExpression || formatVn(notif.scheduleTime)}
                                             </code>
                                         </TableCell>
                                         <TableCell>{getStatusBadge(notif.status)}</TableCell>
                                         <TableCell className="text-xs text-muted-foreground">
-                                            {format(new Date(notif.createdAt), 'dd/MM/yy HH:mm')}
+                                            {formatVn(notif.createdAt)}
                                         </TableCell>
                                         <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                title="Bắn lại ngay"
+                                                onClick={() => openResend(notif)}
+                                            >
+                                                <Send className="h-4 w-4" />
+                                            </Button>
                                             {notif.status === 'ACTIVE' && (
                                                 <Button
                                                     variant="ghost"
                                                     size="icon"
+                                                    title="Huỷ lịch"
                                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
                                                     disabled={deletingId === notif.id}
                                                     onClick={() => handleCancel(notif.id)}
@@ -507,6 +723,13 @@ export function NotificationsManager() {
                 </DialogContent>
             </Dialog>
 
+            <ConfirmSendDialog
+                pending={resend}
+                sending={resending}
+                onCancel={() => setResend(null)}
+                onConfirm={confirmResend}
+            />
+
             <Dialog open={!!detailNotif} onOpenChange={(open) => { if (!open) setDetailNotif(null); }}>
                 <DialogContent className="sm:max-w-lg">
                     {detailNotif && (
@@ -515,7 +738,7 @@ export function NotificationsManager() {
                                 <DialogTitle className="flex items-center gap-2">
                                     <Bell className="h-5 w-5" /> {detailNotif.title}
                                 </DialogTitle>
-                                <DialogDescription>Chi tiết thông báo đã lên lịch</DialogDescription>
+                                <DialogDescription>Chi tiết thông báo</DialogDescription>
                             </DialogHeader>
                             <div className="space-y-4">
                                 {detailNotif.imageUrl && (
@@ -537,32 +760,31 @@ export function NotificationsManager() {
                                     </div>
                                     <div>
                                         <Label className="text-xs text-muted-foreground">Loại</Label>
-                                        <div className="mt-1 flex items-center text-muted-foreground">
-                                            {detailNotif.cronExpression
-                                                ? (<><Repeat className="mr-1 h-3 w-3" /> Lặp lại</>)
-                                                : (<><Clock className="mr-1 h-3 w-3" /> Một lần</>)}
-                                        </div>
+                                        <div className="mt-1">{getKindLabel(detailNotif)}</div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Đối tượng nhận</Label>
+                                        <div className="mt-1 text-muted-foreground">{describeTarget(detailNotif)}</div>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">ID</Label>
+                                        <div className="mt-1 text-muted-foreground">#{detailNotif.id}</div>
                                     </div>
                                     <div className="col-span-2">
                                         <Label className="text-xs text-muted-foreground">
-                                            {detailNotif.cronExpression ? 'Biểu thức Cron' : 'Thời gian gửi'}
+                                            {detailNotif.cronExpression ? 'Biểu thức Cron (giờ VN)' : 'Thời gian gửi (giờ VN)'}
                                         </Label>
                                         <div className="mt-1">
                                             <code className="rounded bg-muted p-1 text-xs">
-                                                {detailNotif.cronExpression
-                                                    || (detailNotif.scheduleTime ? format(new Date(detailNotif.scheduleTime), 'PP p') : 'N/A')}
+                                                {detailNotif.cronExpression || formatVn(detailNotif.scheduleTime)}
                                             </code>
                                         </div>
                                     </div>
                                     <div>
                                         <Label className="text-xs text-muted-foreground">Ngày tạo</Label>
                                         <div className="mt-1 text-muted-foreground">
-                                            {format(new Date(detailNotif.createdAt), 'dd/MM/yyyy HH:mm')}
+                                            {formatVn(detailNotif.createdAt)}
                                         </div>
-                                    </div>
-                                    <div>
-                                        <Label className="text-xs text-muted-foreground">ID</Label>
-                                        <div className="mt-1 text-muted-foreground">#{detailNotif.id}</div>
                                     </div>
                                 </div>
                                 {detailNotif.scheduleArn && (
