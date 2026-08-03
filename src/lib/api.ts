@@ -2396,7 +2396,7 @@ export type AdminOverview = {
   realtime: { activeTrips: number; waitingCustomers: number; onlineDrivers: number; busyDrivers: number };
   today: { created: number; completed: number; cancelled: number; completionRate: number; newUsers: number };
   queues: { awaitingClaim: number; processing: number; driversPendingApproval: number; withdrawalsPending: number };
-  business: { completedTripsInPeriod: number };
+  business: { completedTripsInPeriod: number; createdInPeriod: number; cancelledInPeriod: number };
   supply: { totalDrivers: number; onlineDrivers: number; pendingApproval: number; newDriversInPeriod: number };
   demand: { totalCustomers: number; newCustomersInPeriod: number; activeCustomersInPeriod: number };
 };
