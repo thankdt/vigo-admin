@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -1066,32 +1066,52 @@ export async function getScheduledNotifications(params: { page?: number; limit?:
   return response.json();
 }
 
-export async function createScheduledNotification(data: { title: string; body: string; imageUrl?: string; scheduleTime?: string; cronExpression?: string }): Promise<ScheduledNotification> {
+/** Nội dung + đối tượng nhận, dùng chung cho lên lịch và bắn ngay. */
+export type NotificationPayload = {
+  title: string;
+  body: string;
+  imageUrl?: string;
+  targetType?: NotificationTargetType;
+  targetData?: NotificationTargetData;
+};
+
+export async function createScheduledNotification(
+  data: NotificationPayload & { scheduleTime?: string; cronExpression?: string },
+): Promise<ScheduledNotification> {
   const response = await fetchWithAuth('/notifications/schedule', {
     method: 'POST',
     body: JSON.stringify(data),
   });
   const result = await response.json();
-  return result; // API returns the object directly usually, or wrapped. Based on user request "Response" section, it returns the object directly (or we assume standard wrapper).
-  // Wait, the user guide says response is { id: 12, ... }. 
-  // However, traditionally this codebase wraps in `data`. The user guide example might be simplified.
-  // I'll check `getVouchers` above. it uses `result.data`.
-  // I will return `result` for now but if it's wrapped I might need `result.data`.
-  // User guide says:
-  // {
-  //   "id": 12,
-  //   ...
-  // }
-  // So likely it is NOT wrapped in `data` for the CREATE response based on the text.
-  // BUT the LIST response says "Returns a list...".
-  // Let's assume consistent API wrapper unless stated otherwise, but the user example was explicit.
-  // Actually, usually my `fetchWithAuth` wrapper throws if error.
-  // Let's look at `createVoucher`: `return result.data`.
-  // I will tread carefully. If the user provided example is exact, it's not wrapped.
-  // But standard Vigo API seems to be wrapped.
-  // The user wrote the guide, maybe they copied backend docs.
-  // I'll assume standard `result.data` or `result` depending on if `data` key exists.
-  // SAFEST: `return result.data || result;`
+  return result.data ?? result;
+}
+
+/**
+ * Bắn ngay, không qua AWS Scheduler. Không hoàn tác được — luôn hỏi xác nhận
+ * kèm số người nhận từ `previewNotificationAudience` trước khi gọi.
+ */
+export async function broadcastNotificationNow(
+  data: NotificationPayload,
+): Promise<ScheduledNotification & { estimated: NotificationAudience }> {
+  const response = await fetchWithAuth('/notifications/broadcast-now', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+/** Đếm trước số người nhận theo đúng bộ lọc backend sẽ dùng lúc bắn. */
+export async function previewNotificationAudience(data: {
+  targetType?: NotificationTargetType;
+  targetData?: NotificationTargetData;
+}): Promise<NotificationAudience> {
+  const response = await fetchWithAuth('/notifications/broadcast-preview', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data ?? result;
 }
 
 export async function cancelScheduledNotification(id: number): Promise<ScheduledNotification> {

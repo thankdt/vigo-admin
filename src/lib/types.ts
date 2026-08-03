@@ -457,16 +457,42 @@ export type Promotion = {
   dailyUsageLimit?: number;
 }
 
+/** App nào nhận thông báo. Lọc theo BẢN CÀI APP, không theo vai trò tài khoản. */
+export type NotificationAppTarget = 'CUSTOMER' | 'DRIVER';
+
+export type NotificationTargetType = 'ALL' | 'APP' | 'ROLE' | 'SPECIFIC_USERS';
+
+export type NotificationTargetData = {
+  /** targetType=APP */
+  appId?: NotificationAppTarget;
+  /** targetType=ROLE — chỉ còn ở các lịch cũ, form không tạo mới nữa. */
+  role?: 'USER' | 'DRIVER';
+  loyaltyTier?: 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
+  /** targetType=SPECIFIC_USERS */
+  userIds?: string[];
+}
+
 export type ScheduledNotification = {
   id: number;
   title: string;
   body: string;
   imageUrl?: string;
-  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-  scheduleArn?: string;
-  scheduleTime?: string; // ISO String
-  cronExpression?: string;
+  // FAILED = backend đã tạo dòng nhưng AWS từ chối lịch. Trước đây trường hợp này
+  // bị ghi ACTIVE kèm ARN giả 'local-sched-*' nên không ai biết lịch không chạy.
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
+  scheduleArn?: string | null;
+  scheduleTime?: string | null; // ISO String (UTC) — hiển thị theo giờ VN
+  cronExpression?: string | null;
+  targetType?: NotificationTargetType;
+  targetData?: NotificationTargetData | null;
   createdAt: string;
+}
+
+export type NotificationAudience = {
+  /** Số thiết bị nhận được push (có endpoint SNS). */
+  devices: number;
+  /** Số người nhận (dòng trong tab thông báo). */
+  users: number;
 }
 
 export type GetApiResponse<T> = {
