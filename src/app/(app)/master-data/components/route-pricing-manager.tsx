@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { getRoutes, getPricingByRoute, createPricing, updatePricing, deletePricing, getAdminUnits } from '@/lib/api';
 import type { Route, RoutePricing, AdminUnit } from '@/lib/types';
-import { Loader2, PlusCircle, Trash2, Edit, Star, MapPin, Info, Building2, Sparkles, X, Plane } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2, Edit, Star, MapPin, Info, Building2, Sparkles, X, Plane, Search } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
@@ -56,17 +56,42 @@ export function RoutePricingManager() {
     const [bulkConfirm, setBulkConfirm] = React.useState<{ ids: number[]; scope: 'selected' | 'all' } | null>(null);
     const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
     const [deleteAllText, setDeleteAllText] = React.useState('');
+    const [pricingSearch, setPricingSearch] = React.useState('');
+    const [pricingSort, setPricingSort] = React.useState<'name-asc' | 'name-desc' | 'price-asc' | 'price-desc'>('name-asc');
     const { toast } = useToast();
 
     const selectedRoute = React.useMemo(() => routes.find(r => r.id === selectedRouteId), [routes, selectedRouteId]);
 
+    // Tìm kiếm + sắp xếp áp TRƯỚC khi chẻ 3 khối, để cả tỉnh/huyện/POI cùng lọc theo
+    // một tiêu chí (prod đang có ~19.300 dòng giá nên cuộn tay là không khả thi).
+    const visiblePricing = React.useMemo(() => {
+        const term = pricingSearch.trim().toLowerCase();
+        const rows = term
+            ? pricing.filter(p =>
+                (p.adminUnit?.name ?? '').toLowerCase().includes(term) ||
+                (p.startDistrict?.name ?? '').toLowerCase().includes(term) ||
+                String(p.price ?? '').includes(term),
+            )
+            : pricing;
+        const sorted = [...rows];
+        sorted.sort((a, b) => {
+            switch (pricingSort) {
+                case 'price-asc': return (a.price ?? 0) - (b.price ?? 0);
+                case 'price-desc': return (b.price ?? 0) - (a.price ?? 0);
+                case 'name-desc': return (b.adminUnit?.name ?? '').localeCompare(a.adminUnit?.name ?? '', 'vi');
+                default: return (a.adminUnit?.name ?? '').localeCompare(b.adminUnit?.name ?? '', 'vi');
+            }
+        });
+        return sorted;
+    }, [pricing, pricingSearch, pricingSort]);
+
     // Derived: split pricing into province / district / POI (WARD-level e.g. sân bay) buckets.
     const provincePricing = React.useMemo(() =>
-        pricing.filter(p => p.adminUnit?.level === 'PROVINCE'), [pricing]);
+        visiblePricing.filter(p => p.adminUnit?.level === 'PROVINCE'), [visiblePricing]);
     const districtPricing = React.useMemo(() =>
-        pricing.filter(p => p.adminUnit?.level === 'DISTRICT'), [pricing]);
+        visiblePricing.filter(p => p.adminUnit?.level === 'DISTRICT'), [visiblePricing]);
     const poiPricing = React.useMemo(() =>
-        pricing.filter(p => p.adminUnit?.level === 'WARD'), [pricing]);
+        visiblePricing.filter(p => p.adminUnit?.level === 'WARD'), [visiblePricing]);
 
     const fetchInitialData = React.useCallback(async () => {
         setIsLoading(true);
@@ -172,7 +197,10 @@ export function RoutePricingManager() {
     }, [selectedRoute, districtPricing]);
 
     // ── Bulk-delete helpers (all 3 sections share one selection Set) ──
-    const allPricingIds = React.useMemo(() => pricing.map(p => p.id), [pricing]);
+    // Bám theo danh sách ĐANG HIỂN THỊ, không phải toàn bộ `pricing`. Xoá bảng giá là
+    // xoá CỨNG, không hoàn tác được; nếu "chọn tất cả" ôm luôn những dòng đang bị ô tìm
+    // kiếm ẩn đi thì admin thấy 5 dòng mà xoá mất cả nghìn dòng.
+    const allPricingIds = React.useMemo(() => visiblePricing.map(p => p.id), [visiblePricing]);
     const allPricingSelected = allPricingIds.length > 0 && allPricingIds.every(id => selectedPricingIds.has(id));
     const togglePricingSel = (id: number) => setSelectedPricingIds(prev => {
         const n = new Set(prev);
@@ -238,6 +266,34 @@ export function RoutePricingManager() {
                                 </SelectContent>
                             </Select>
                         </div>
+                        <div className="relative w-72">
+                            <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                            <Input
+                                placeholder="Tìm theo địa danh, điểm đi, mức giá…"
+                                value={pricingSearch}
+                                onChange={(e) => setPricingSearch(e.target.value)}
+                                className="pl-8"
+                            />
+                        </div>
+                        <div className="flex items-center space-x-2">
+                            <Label className="shrink-0">Sắp xếp:</Label>
+                            <Select value={pricingSort} onValueChange={(v) => setPricingSort(v as typeof pricingSort)}>
+                                <SelectTrigger className="w-[180px]">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="name-asc">Tên A → Z</SelectItem>
+                                    <SelectItem value="name-desc">Tên Z → A</SelectItem>
+                                    <SelectItem value="price-asc">Giá tăng dần</SelectItem>
+                                    <SelectItem value="price-desc">Giá giảm dần</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        {pricingSearch.trim() && (
+                            <div className="text-sm text-muted-foreground">
+                                {visiblePricing.length} / {pricing.length} mức giá
+                            </div>
+                        )}
                     </div>
 
                     {!isPricingLoading && pricing.length > 0 && (
@@ -262,7 +318,10 @@ export function RoutePricingManager() {
                                 className="text-destructive border-destructive/40 hover:bg-destructive/10"
                                 onClick={() => { setDeleteAllText(''); setBulkConfirm({ ids: allPricingIds, scope: 'all' }); }}
                             >
-                                <Trash2 className="mr-2 h-4 w-4" /> Xóa tất cả giá tuyến này
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                {pricingSearch.trim()
+                                    ? `Xóa ${allPricingIds.length} dòng đang lọc`
+                                    : 'Xóa tất cả giá tuyến này'}
                             </Button>
                         </div>
                     )}

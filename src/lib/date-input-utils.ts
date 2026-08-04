@@ -31,3 +31,31 @@ export function dateTimeInputValue(date: Date | null | undefined): string {
 export function parseDateTimeInput(value: string): Date | undefined {
   return value ? new Date(value) : undefined;
 }
+
+/**
+ * Cặp helper GHIM CỨNG giờ Việt Nam cho `<input type="datetime-local">`.
+ *
+ * Khác `parseDateTimeInput`/`dateTimeInputValue` ở trên: hai hàm kia đọc/ghi
+ * theo đồng hồ MÁY ADMIN. Chỗ nào nhãn ghi "giờ VN" mà lại dùng chúng thì admin
+ * ngồi máy set UTC+9 nhập 09:00 sẽ thành 07:00 VN — lệch 2h, im lặng, và AWS bắn
+ * sai giờ. Dùng cặp này ở những form mà mốc thời gian là giờ VN theo nghiệp vụ
+ * (CLAUDE.md), bất kể máy admin đang ở múi nào.
+ */
+const VN_OFFSET = '+07:00';
+
+/** `'yyyy-MM-ddTHH:mm'` (hiểu là giờ VN) → Date; undefined khi rỗng. */
+export function parseVnDateTimeInput(value: string): Date | undefined {
+  if (!value) return undefined;
+  // `datetime-local` có thể kèm giây (`HH:mm:ss`) ở một số trình duyệt.
+  const withSeconds = value.length === 16 ? `${value}:00` : value;
+  const parsed = new Date(`${withSeconds}.000${VN_OFFSET}`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+/** Date → `'yyyy-MM-ddTHH:mm'` biểu diễn theo giờ VN; '' khi rỗng. */
+export function vnDateTimeInputValue(date: Date | null | undefined): string {
+  if (!date || Number.isNaN(date.getTime())) return '';
+  // `sv-SE` cho ra đúng dạng `YYYY-MM-DD HH:mm:ss` — chỉ cần đổi dấu cách thành 'T'.
+  const vn = date.toLocaleString('sv-SE', { timeZone: 'Asia/Ho_Chi_Minh' });
+  return vn.slice(0, 16).replace(' ', 'T');
+}

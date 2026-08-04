@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -664,6 +664,14 @@ export async function getBookings(params: {
   // Lọc khoảng ngày ĐẶT chuyến (createdAt) — VN-local YYYY-MM-DD. Backend hiểu ranh giới VN (+07:00).
   from?: string;
   to?: string;
+  // true = chỉ chuyến do ĐẠI LÝ đặt hộ (booking.agentUserId IS NOT NULL). Nguồn của trang
+  // "Đơn đặt hộ" — trước đây trang đó đọc bảng multi_stop_order (rỗng trên prod) nên hiện trắng.
+  // undefined = không lọc.
+  agentOnly?: boolean;
+  // Lọc riêng từng pha gọi CSKH. Hai pha độc lập nên dùng đồng thời được, vd
+  // callBefore='called' + callAfter='uncalled' = "đã gọi trước, CHƯA gọi lại sau hoàn thành".
+  callBefore?: CustomerCallFilter;
+  callAfter?: CustomerCallFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -681,6 +689,9 @@ export async function getBookings(params: {
     ...(params.customerCall && { customerCall: params.customerCall }),
     ...(params.from && { from: params.from }),
     ...(params.to && { to: params.to }),
+    ...(params.agentOnly && { agentOnly: 'true' }),
+    ...(params.callBefore && { callBefore: params.callBefore }),
+    ...(params.callAfter && { callAfter: params.callAfter }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -723,12 +734,21 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
 // mới nhất lên booking). note nội bộ, tách khỏi booking.note (không lộ cho tài/khách).
 export async function recordBookingCustomerCall(
   bookingId: string,
-  body: { status: CustomerCallStatus; note?: string },
+  body: { status: CustomerCallStatus; note?: string; reason?: string },
 ): Promise<void> {
   await fetchWithAuth(`/bookings/admin/${bookingId}/customer-call`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Danh mục lý do cho dropdown "gọi check khách". Đọc từ system_config ở backend nên
+ * ops sửa được qua trang Cài đặt mà không cần deploy lại admin.
+ */
+export async function getCustomerCallReasons(): Promise<string[]> {
+  const response = await fetchWithAuth('/bookings/admin/customer-call-reasons');
+  return unwrap<string[]>(response);
 }
 
 // Lịch sử gọi check của 1 chuyến (mới nhất trước) — hiển thị trong dialog chi tiết.
@@ -913,11 +933,28 @@ export async function createAdminUnit(data: {
   return response.json();
 }
 
-export async function getRoutes(includeDeleted = false): Promise<Route[]> {
-  const url = includeDeleted
-    ? '/master-data/routes?includeDeleted=true'
-    : '/master-data/routes';
-  const response = await fetchWithAuth(url);
+/**
+ * Danh sách tuyến đường.
+ *
+ * BẮT BUỘC truyền `limit`: backend `GET /master-data/routes` mặc định `limit = 20`
+ * (master-data.controller.ts). Trước đây hàm này không gửi param nào nên admin CHỈ
+ * bao giờ nhận 20 tuyến — prod đang có 27, tức 7 tuyến vô hình ở mọi nơi dùng hàm
+ * này (quản lý tuyến, combobox chọn tuyến ở bảng giá, bộ lọc tài xế, bộ lọc chuyến),
+ * và nút phân trang trong routes-manager vĩnh viễn disabled vì `27 → 20 ≤ 50`.
+ *
+ * Mặc định 1000 để mọi call-site cũ tự khỏi bệnh mà không phải sửa. Số tuyến là dữ
+ * liệu danh mục (hàng chục, không phải hàng vạn) nên tải hết một lần là hợp lý.
+ */
+export async function getRoutes(
+  includeDeleted = false,
+  opts?: { search?: string; page?: number; limit?: number },
+): Promise<Route[]> {
+  const q = new URLSearchParams();
+  if (includeDeleted) q.set('includeDeleted', 'true');
+  if (opts?.search) q.set('search', opts.search);
+  if (opts?.page) q.set('page', String(opts.page));
+  q.set('limit', String(opts?.limit ?? 1000));
+  const response = await fetchWithAuth(`/master-data/routes?${q.toString()}`);
   const result = await response.json();
   return result.data;
 }
@@ -1066,32 +1103,52 @@ export async function getScheduledNotifications(params: { page?: number; limit?:
   return response.json();
 }
 
-export async function createScheduledNotification(data: { title: string; body: string; imageUrl?: string; scheduleTime?: string; cronExpression?: string }): Promise<ScheduledNotification> {
+/** Nội dung + đối tượng nhận, dùng chung cho lên lịch và bắn ngay. */
+export type NotificationPayload = {
+  title: string;
+  body: string;
+  imageUrl?: string;
+  targetType?: NotificationTargetType;
+  targetData?: NotificationTargetData;
+};
+
+export async function createScheduledNotification(
+  data: NotificationPayload & { scheduleTime?: string; cronExpression?: string },
+): Promise<ScheduledNotification> {
   const response = await fetchWithAuth('/notifications/schedule', {
     method: 'POST',
     body: JSON.stringify(data),
   });
   const result = await response.json();
-  return result; // API returns the object directly usually, or wrapped. Based on user request "Response" section, it returns the object directly (or we assume standard wrapper).
-  // Wait, the user guide says response is { id: 12, ... }. 
-  // However, traditionally this codebase wraps in `data`. The user guide example might be simplified.
-  // I'll check `getVouchers` above. it uses `result.data`.
-  // I will return `result` for now but if it's wrapped I might need `result.data`.
-  // User guide says:
-  // {
-  //   "id": 12,
-  //   ...
-  // }
-  // So likely it is NOT wrapped in `data` for the CREATE response based on the text.
-  // BUT the LIST response says "Returns a list...".
-  // Let's assume consistent API wrapper unless stated otherwise, but the user example was explicit.
-  // Actually, usually my `fetchWithAuth` wrapper throws if error.
-  // Let's look at `createVoucher`: `return result.data`.
-  // I will tread carefully. If the user provided example is exact, it's not wrapped.
-  // But standard Vigo API seems to be wrapped.
-  // The user wrote the guide, maybe they copied backend docs.
-  // I'll assume standard `result.data` or `result` depending on if `data` key exists.
-  // SAFEST: `return result.data || result;`
+  return result.data ?? result;
+}
+
+/**
+ * Bắn ngay, không qua AWS Scheduler. Không hoàn tác được — luôn hỏi xác nhận
+ * kèm số người nhận từ `previewNotificationAudience` trước khi gọi.
+ */
+export async function broadcastNotificationNow(
+  data: NotificationPayload,
+): Promise<ScheduledNotification & { estimated: NotificationAudience }> {
+  const response = await fetchWithAuth('/notifications/broadcast-now', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+/** Đếm trước số người nhận theo đúng bộ lọc backend sẽ dùng lúc bắn. */
+export async function previewNotificationAudience(data: {
+  targetType?: NotificationTargetType;
+  targetData?: NotificationTargetData;
+}): Promise<NotificationAudience> {
+  const response = await fetchWithAuth('/notifications/broadcast-preview', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data ?? result;
 }
 
 export async function cancelScheduledNotification(id: number): Promise<ScheduledNotification> {

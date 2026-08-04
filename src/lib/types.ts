@@ -365,6 +365,12 @@ export type Booking = {
   // CSKH "gọi check khách" — trạng thái HIỆN TẠI (event mới nhất). null/undefined = chưa gọi.
   // Additive: backend cũ chưa trả các field này.
   customerCallStatus?: CustomerCallStatus | null;
+  // Hai việc gọi ĐỘC LẬP của CSKH: trước và sau khi chuyến hoàn thành. Tách khỏi
+  // customerCallStatus (chỉ giữ lần gọi mới nhất) để gọi lần 2 không đè mất dấu lần 1.
+  callBeforeStatus?: CustomerCallStatus | null;
+  callBeforeAt?: string | null;
+  callAfterStatus?: CustomerCallStatus | null;
+  callAfterAt?: string | null;
   customerCallCheckedAt?: string | null;
   customerCallCheckedBy?: {
     id: string;
@@ -384,6 +390,8 @@ export type CustomerCallFilter = 'claimed' | 'called' | 'unreached' | 'uncalled'
 export type BookingCustomerCallEvent = {
   id: string;
   status: CustomerCallStatus;
+  /** Lý do đã chuẩn hoá, chọn từ danh mục CSKH_CALL_REASONS. Null = CSKH không chọn. */
+  reason: string | null;
   note: string | null;
   createdAt: string;
   byAdminName: string | null;
@@ -467,16 +475,42 @@ export type Promotion = {
   dailyUsageLimit?: number;
 }
 
+/** App nào nhận thông báo. Lọc theo BẢN CÀI APP, không theo vai trò tài khoản. */
+export type NotificationAppTarget = 'CUSTOMER' | 'DRIVER';
+
+export type NotificationTargetType = 'ALL' | 'APP' | 'ROLE' | 'SPECIFIC_USERS';
+
+export type NotificationTargetData = {
+  /** targetType=APP */
+  appId?: NotificationAppTarget;
+  /** targetType=ROLE — chỉ còn ở các lịch cũ, form không tạo mới nữa. */
+  role?: 'USER' | 'DRIVER';
+  loyaltyTier?: 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
+  /** targetType=SPECIFIC_USERS */
+  userIds?: string[];
+}
+
 export type ScheduledNotification = {
   id: number;
   title: string;
   body: string;
   imageUrl?: string;
-  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-  scheduleArn?: string;
-  scheduleTime?: string; // ISO String
-  cronExpression?: string;
+  // FAILED = backend đã tạo dòng nhưng AWS từ chối lịch. Trước đây trường hợp này
+  // bị ghi ACTIVE kèm ARN giả 'local-sched-*' nên không ai biết lịch không chạy.
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED' | 'FAILED';
+  scheduleArn?: string | null;
+  scheduleTime?: string | null; // ISO String (UTC) — hiển thị theo giờ VN
+  cronExpression?: string | null;
+  targetType?: NotificationTargetType;
+  targetData?: NotificationTargetData | null;
   createdAt: string;
+}
+
+export type NotificationAudience = {
+  /** Số thiết bị nhận được push (có endpoint SNS). */
+  devices: number;
+  /** Số người nhận (dòng trong tab thông báo). */
+  users: number;
 }
 
 export type GetApiResponse<T> = {
