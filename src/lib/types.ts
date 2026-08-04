@@ -355,6 +355,12 @@ export type Booking = {
   // CSKH "gọi check khách" — trạng thái HIỆN TẠI (event mới nhất). null/undefined = chưa gọi.
   // Additive: backend cũ chưa trả các field này.
   customerCallStatus?: CustomerCallStatus | null;
+  // Hai việc gọi ĐỘC LẬP của CSKH: trước và sau khi chuyến hoàn thành. Tách khỏi
+  // customerCallStatus (chỉ giữ lần gọi mới nhất) để gọi lần 2 không đè mất dấu lần 1.
+  callBeforeStatus?: CustomerCallStatus | null;
+  callBeforeAt?: string | null;
+  callAfterStatus?: CustomerCallStatus | null;
+  callAfterAt?: string | null;
   customerCallCheckedAt?: string | null;
   customerCallCheckedBy?: {
     id: string;

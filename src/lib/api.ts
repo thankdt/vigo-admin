@@ -668,6 +668,10 @@ export async function getBookings(params: {
   // "Đơn đặt hộ" — trước đây trang đó đọc bảng multi_stop_order (rỗng trên prod) nên hiện trắng.
   // undefined = không lọc.
   agentOnly?: boolean;
+  // Lọc riêng từng pha gọi CSKH. Hai pha độc lập nên dùng đồng thời được, vd
+  // callBefore='called' + callAfter='uncalled' = "đã gọi trước, CHƯA gọi lại sau hoàn thành".
+  callBefore?: CustomerCallFilter;
+  callAfter?: CustomerCallFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -686,6 +690,8 @@ export async function getBookings(params: {
     ...(params.from && { from: params.from }),
     ...(params.to && { to: params.to }),
     ...(params.agentOnly && { agentOnly: 'true' }),
+    ...(params.callBefore && { callBefore: params.callBefore }),
+    ...(params.callAfter && { callAfter: params.callAfter }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
