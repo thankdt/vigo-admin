@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { getRoutes, createRoute, getAdminUnits, updateRoute, deleteRoute, restoreRoute, getRouteUsage, getPresignedUrl, uploadToS3, type RouteUsage } from '@/lib/api';
 import type { Route, AdminUnit } from '@/lib/types';
-import { Loader2, PlusCircle, MoreHorizontal, Edit, Trash2, Upload } from 'lucide-react';
+import { Loader2, PlusCircle, MoreHorizontal, Edit, Trash2, Upload, Search, ArrowUpDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog"
@@ -31,7 +31,21 @@ export function RoutesManager() {
     const [isLoadingUsage, setIsLoadingUsage] = React.useState(false);
     const [showDeleted, setShowDeleted] = React.useState(false);
     const [currentPage, setCurrentPage] = React.useState(1);
+    const [search, setSearch] = React.useState('');
+    const [sortConfig, setSortConfig] = React.useState<{ key: 'id' | 'name'; direction: 'asc' | 'desc' }>(
+        { key: 'id', direction: 'asc' },
+    );
     const itemsPerPage = 50;
+
+    // Bấm lại cùng cột thì đảo chiều; đổi cột thì về tăng dần. Về trang 1 để không
+    // đứng ở trang trống sau khi sắp xếp lại.
+    const requestSort = (key: 'id' | 'name') => {
+        setSortConfig(prev => ({
+            key,
+            direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc',
+        }));
+        setCurrentPage(1);
+    };
     const { toast } = useToast();
 
     // Bulk-deactivate (soft delete) of ACTIVE routes only.
@@ -136,7 +150,32 @@ export function RoutesManager() {
 
     // Active routes (across ALL pages) + current-page selection helpers.
     const activeRoutes = React.useMemo(() => routes.filter(r => !r.deletedAt), [routes]);
-    const pageRoutes = routes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+    // MỘT nguồn duy nhất: lọc → sắp xếp → cắt trang. Trước đây phép cắt trang bị lặp ở
+    // hai nơi (biến pageRoutes và ngay trong JSX); nếu thêm tìm kiếm mà để nguyên thì ô
+    // chọn "tất cả trong trang" sẽ lệch với hàng đang hiển thị.
+    const filteredRoutes = React.useMemo(() => {
+        const term = search.trim().toLowerCase();
+        if (!term) return routes;
+        return routes.filter(r =>
+            (r.name ?? '').toLowerCase().includes(term) ||
+            String(r.id).includes(term) ||
+            (r.districts ?? []).some((u) => (u?.name ?? '').toLowerCase().includes(term)),
+        );
+    }, [routes, search]);
+
+    const sortedRoutes = React.useMemo(() => {
+        const rows = [...filteredRoutes];
+        const dir = sortConfig.direction === 'asc' ? 1 : -1;
+        rows.sort((a, b) => {
+            if (sortConfig.key === 'id') return (a.id - b.id) * dir;
+            // localeCompare 'vi' để dấu tiếng Việt xếp đúng thứ tự.
+            return (a.name ?? '').localeCompare(b.name ?? '', 'vi') * dir;
+        });
+        return rows;
+    }, [filteredRoutes, sortConfig]);
+
+    const pageRoutes = sortedRoutes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
     const pageActiveIds = pageRoutes.filter(r => !r.deletedAt).map(r => r.id);
     const allPageActiveSelected = pageActiveIds.length > 0 && pageActiveIds.every(id => selectedIds.has(id));
 
@@ -182,8 +221,18 @@ export function RoutesManager() {
                 <CardContent>
                     <div className="mb-4 flex items-center justify-between gap-3">
                         <div className="flex items-center gap-4">
+                            <div className="relative w-64">
+                                <Search className="absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                                <Input
+                                    placeholder="Tìm theo tên, ID, quận/huyện…"
+                                    value={search}
+                                    onChange={(e) => { setSearch(e.target.value); setCurrentPage(1); }}
+                                    className="pl-8"
+                                />
+                            </div>
                             <div className="text-sm text-muted-foreground">
-                                Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, routes.length)}-{Math.min(currentPage * itemsPerPage, routes.length)} / {routes.length} tuyến đường
+                                Hiển thị {Math.min((currentPage - 1) * itemsPerPage + 1, sortedRoutes.length)}-{Math.min(currentPage * itemsPerPage, sortedRoutes.length)} / {sortedRoutes.length} tuyến đường
+                                {search.trim() && ` (lọc từ ${routes.length})`}
                             </div>
                             <label className="flex items-center gap-2 text-sm text-muted-foreground">
                                 <Checkbox
@@ -224,8 +273,8 @@ export function RoutesManager() {
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(routes.length / itemsPerPage), p + 1))}
-                                disabled={currentPage >= Math.ceil(routes.length / itemsPerPage)}
+                                onClick={() => setCurrentPage(p => Math.min(Math.ceil(sortedRoutes.length / itemsPerPage), p + 1))}
+                                disabled={currentPage >= Math.ceil(sortedRoutes.length / itemsPerPage)}
                             >
                                 Sau
                             </Button>
@@ -242,9 +291,17 @@ export function RoutesManager() {
                                         aria-label="Chọn tất cả tuyến trong trang"
                                     />
                                 </TableHead>
-                                <TableHead>ID</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => requestSort('id')}>
+                                        ID <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                                    </Button>
+                                </TableHead>
                                 <TableHead>Ảnh</TableHead>
-                                <TableHead>Tên</TableHead>
+                                <TableHead>
+                                    <Button variant="ghost" size="sm" className="-ml-3 h-8" onClick={() => requestSort('name')}>
+                                        Tên <ArrowUpDown className="ml-1 h-3.5 w-3.5" />
+                                    </Button>
+                                </TableHead>
                                 <TableHead>Quận/Huyện</TableHead>
                                 <TableHead className="text-right">Thao tác</TableHead>
                             </TableRow>
@@ -256,7 +313,7 @@ export function RoutesManager() {
                                         <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                                     </TableCell>
                                 </TableRow>
-                            ) : routes.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage).map(route => (
+                            ) : pageRoutes.map(route => (
                                 <TableRow
                                     key={route.id}
                                     className="cursor-pointer hover:bg-muted/50"
@@ -333,7 +390,7 @@ export function RoutesManager() {
                 </CardContent>
                 <CardFooter className="justify-between">
                     <div className="text-xs text-muted-foreground">
-                        Trang {currentPage} / {Math.max(1, Math.ceil(routes.length / itemsPerPage))}
+                        Trang {currentPage} / {Math.max(1, Math.ceil(sortedRoutes.length / itemsPerPage))}
                     </div>
                     <Button onClick={() => handleOpenForm(null)}>
                         <PlusCircle className="mr-2 h-4 w-4" />

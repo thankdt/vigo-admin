@@ -918,11 +918,28 @@ export async function createAdminUnit(data: {
   return response.json();
 }
 
-export async function getRoutes(includeDeleted = false): Promise<Route[]> {
-  const url = includeDeleted
-    ? '/master-data/routes?includeDeleted=true'
-    : '/master-data/routes';
-  const response = await fetchWithAuth(url);
+/**
+ * Danh sách tuyến đường.
+ *
+ * BẮT BUỘC truyền `limit`: backend `GET /master-data/routes` mặc định `limit = 20`
+ * (master-data.controller.ts). Trước đây hàm này không gửi param nào nên admin CHỈ
+ * bao giờ nhận 20 tuyến — prod đang có 27, tức 7 tuyến vô hình ở mọi nơi dùng hàm
+ * này (quản lý tuyến, combobox chọn tuyến ở bảng giá, bộ lọc tài xế, bộ lọc chuyến),
+ * và nút phân trang trong routes-manager vĩnh viễn disabled vì `27 → 20 ≤ 50`.
+ *
+ * Mặc định 1000 để mọi call-site cũ tự khỏi bệnh mà không phải sửa. Số tuyến là dữ
+ * liệu danh mục (hàng chục, không phải hàng vạn) nên tải hết một lần là hợp lý.
+ */
+export async function getRoutes(
+  includeDeleted = false,
+  opts?: { search?: string; page?: number; limit?: number },
+): Promise<Route[]> {
+  const q = new URLSearchParams();
+  if (includeDeleted) q.set('includeDeleted', 'true');
+  if (opts?.search) q.set('search', opts.search);
+  if (opts?.page) q.set('page', String(opts.page));
+  q.set('limit', String(opts?.limit ?? 1000));
+  const response = await fetchWithAuth(`/master-data/routes?${q.toString()}`);
   const result = await response.json();
   return result.data;
 }
