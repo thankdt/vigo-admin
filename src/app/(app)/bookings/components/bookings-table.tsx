@@ -990,7 +990,13 @@ function getStatusBadge(booking: Pick<Booking, 'status' | 'adminClaimedAt'>) {
   }
 };
 
-export function BookingsTable() {
+/**
+ * `agentOnly` — chỉ hiện chuyến do ĐẠI LÝ đặt hộ. Dùng cho trang "Đơn đặt hộ",
+ * vốn trước đây đọc bảng multi_stop_order (rỗng trên prod) nên hiện trắng dù đại
+ * lý vẫn đặt đều. Bỏ trống (mặc định) → không lọc, trang "Quản lý chuyến đi"
+ * giữ nguyên hành vi cũ.
+ */
+export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [bookings, setBookings] = React.useState<Booking[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -1086,6 +1092,7 @@ export function BookingsTable() {
       if (customerCall !== 'ALL') params.customerCall = customerCall;
       if (dateFrom) params.from = dateFrom;
       if (dateTo) params.to = dateTo;
+      if (agentOnly) params.agentOnly = true;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -1101,7 +1108,7 @@ export function BookingsTable() {
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, agentOnly]);
 
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.

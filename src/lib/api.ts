@@ -664,6 +664,10 @@ export async function getBookings(params: {
   // Lọc khoảng ngày ĐẶT chuyến (createdAt) — VN-local YYYY-MM-DD. Backend hiểu ranh giới VN (+07:00).
   from?: string;
   to?: string;
+  // true = chỉ chuyến do ĐẠI LÝ đặt hộ (booking.agentUserId IS NOT NULL). Nguồn của trang
+  // "Đơn đặt hộ" — trước đây trang đó đọc bảng multi_stop_order (rỗng trên prod) nên hiện trắng.
+  // undefined = không lọc.
+  agentOnly?: boolean;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -681,6 +685,7 @@ export async function getBookings(params: {
     ...(params.customerCall && { customerCall: params.customerCall }),
     ...(params.from && { from: params.from }),
     ...(params.to && { to: params.to }),
+    ...(params.agentOnly && { agentOnly: 'true' }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
