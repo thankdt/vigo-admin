@@ -664,6 +664,14 @@ export async function getBookings(params: {
   // Lọc khoảng ngày ĐẶT chuyến (createdAt) — VN-local YYYY-MM-DD. Backend hiểu ranh giới VN (+07:00).
   from?: string;
   to?: string;
+  // true = chỉ chuyến do ĐẠI LÝ đặt hộ (booking.agentUserId IS NOT NULL). Nguồn của trang
+  // "Đơn đặt hộ" — trước đây trang đó đọc bảng multi_stop_order (rỗng trên prod) nên hiện trắng.
+  // undefined = không lọc.
+  agentOnly?: boolean;
+  // Lọc riêng từng pha gọi CSKH. Hai pha độc lập nên dùng đồng thời được, vd
+  // callBefore='called' + callAfter='uncalled' = "đã gọi trước, CHƯA gọi lại sau hoàn thành".
+  callBefore?: CustomerCallFilter;
+  callAfter?: CustomerCallFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -681,6 +689,9 @@ export async function getBookings(params: {
     ...(params.customerCall && { customerCall: params.customerCall }),
     ...(params.from && { from: params.from }),
     ...(params.to && { to: params.to }),
+    ...(params.agentOnly && { agentOnly: 'true' }),
+    ...(params.callBefore && { callBefore: params.callBefore }),
+    ...(params.callAfter && { callAfter: params.callAfter }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -723,12 +734,21 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
 // mới nhất lên booking). note nội bộ, tách khỏi booking.note (không lộ cho tài/khách).
 export async function recordBookingCustomerCall(
   bookingId: string,
-  body: { status: CustomerCallStatus; note?: string },
+  body: { status: CustomerCallStatus; note?: string; reason?: string },
 ): Promise<void> {
   await fetchWithAuth(`/bookings/admin/${bookingId}/customer-call`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Danh mục lý do cho dropdown "gọi check khách". Đọc từ system_config ở backend nên
+ * ops sửa được qua trang Cài đặt mà không cần deploy lại admin.
+ */
+export async function getCustomerCallReasons(): Promise<string[]> {
+  const response = await fetchWithAuth('/bookings/admin/customer-call-reasons');
+  return unwrap<string[]>(response);
 }
 
 // Lịch sử gọi check của 1 chuyến (mới nhất trước) — hiển thị trong dialog chi tiết.
@@ -913,11 +933,28 @@ export async function createAdminUnit(data: {
   return response.json();
 }
 
-export async function getRoutes(includeDeleted = false): Promise<Route[]> {
-  const url = includeDeleted
-    ? '/master-data/routes?includeDeleted=true'
-    : '/master-data/routes';
-  const response = await fetchWithAuth(url);
+/**
+ * Danh sách tuyến đường.
+ *
+ * BẮT BUỘC truyền `limit`: backend `GET /master-data/routes` mặc định `limit = 20`
+ * (master-data.controller.ts). Trước đây hàm này không gửi param nào nên admin CHỈ
+ * bao giờ nhận 20 tuyến — prod đang có 27, tức 7 tuyến vô hình ở mọi nơi dùng hàm
+ * này (quản lý tuyến, combobox chọn tuyến ở bảng giá, bộ lọc tài xế, bộ lọc chuyến),
+ * và nút phân trang trong routes-manager vĩnh viễn disabled vì `27 → 20 ≤ 50`.
+ *
+ * Mặc định 1000 để mọi call-site cũ tự khỏi bệnh mà không phải sửa. Số tuyến là dữ
+ * liệu danh mục (hàng chục, không phải hàng vạn) nên tải hết một lần là hợp lý.
+ */
+export async function getRoutes(
+  includeDeleted = false,
+  opts?: { search?: string; page?: number; limit?: number },
+): Promise<Route[]> {
+  const q = new URLSearchParams();
+  if (includeDeleted) q.set('includeDeleted', 'true');
+  if (opts?.search) q.set('search', opts.search);
+  if (opts?.page) q.set('page', String(opts.page));
+  q.set('limit', String(opts?.limit ?? 1000));
+  const response = await fetchWithAuth(`/master-data/routes?${q.toString()}`);
   const result = await response.json();
   return result.data;
 }
