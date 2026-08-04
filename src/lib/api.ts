@@ -728,12 +728,21 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
 // mới nhất lên booking). note nội bộ, tách khỏi booking.note (không lộ cho tài/khách).
 export async function recordBookingCustomerCall(
   bookingId: string,
-  body: { status: CustomerCallStatus; note?: string },
+  body: { status: CustomerCallStatus; note?: string; reason?: string },
 ): Promise<void> {
   await fetchWithAuth(`/bookings/admin/${bookingId}/customer-call`, {
     method: 'POST',
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * Danh mục lý do cho dropdown "gọi check khách". Đọc từ system_config ở backend nên
+ * ops sửa được qua trang Cài đặt mà không cần deploy lại admin.
+ */
+export async function getCustomerCallReasons(): Promise<string[]> {
+  const response = await fetchWithAuth('/bookings/admin/customer-call-reasons');
+  return unwrap<string[]>(response);
 }
 
 // Lịch sử gọi check của 1 chuyến (mới nhất trước) — hiển thị trong dialog chi tiết.

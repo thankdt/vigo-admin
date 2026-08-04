@@ -374,6 +374,8 @@ export type CustomerCallFilter = 'claimed' | 'called' | 'unreached' | 'uncalled'
 export type BookingCustomerCallEvent = {
   id: string;
   status: CustomerCallStatus;
+  /** Lý do đã chuẩn hoá, chọn từ danh mục CSKH_CALL_REASONS. Null = CSKH không chọn. */
+  reason: string | null;
   note: string | null;
   createdAt: string;
   byAdminName: string | null;

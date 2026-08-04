@@ -37,7 +37,7 @@ import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, recordBookingCustomerCall, getBookingCustomerCallHistory } from '@/lib/api';
+import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons } from '@/lib/api';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
@@ -424,6 +424,14 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
   const [callNote, setCallNote] = React.useState('');
   const [callSaving, setCallSaving] = React.useState<CustomerCallStatus | null>(null);
   const [callHistory, setCallHistory] = React.useState<BookingCustomerCallEvent[]>([]);
+  // Lý do chuẩn hoá — danh mục lấy từ backend (system_config) nên ops sửa được, không hardcode.
+  const [callReason, setCallReason] = React.useState<string>('');
+  const [reasonOptions, setReasonOptions] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    // Phần phụ: lỗi thì dropdown rỗng, không chặn thao tác ghi nhận cuộc gọi.
+    getCustomerCallReasons().then(setReasonOptions).catch(() => setReasonOptions([]));
+  }, []);
 
   const loadCallHistory = React.useCallback(async () => {
     if (!bookingId) return;
@@ -459,9 +467,14 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
     if (!booking) return;
     setCallSaving(status);
     try {
-      await recordBookingCustomerCall(booking.id, { status, note: callNote.trim() || undefined });
+      await recordBookingCustomerCall(booking.id, {
+        status,
+        note: callNote.trim() || undefined,
+        reason: callReason || undefined,
+      });
       toast({ title: 'Đã lưu', description: CUSTOMER_CALL_TOAST[status] });
       setCallNote('');
+      setCallReason('');
       // Cập nhật trạng thái tại chỗ + reload lịch sử; báo danh sách ngoài refetch cột.
       setBooking((prev) => (prev ? { ...prev, customerCallStatus: status } : prev));
       await loadCallHistory();
@@ -618,7 +631,14 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
 
               {/* Addresses */}
               <Card className="p-3 space-y-3">
-                <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tuyến đường</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tuyến đường</div>
+                  {booking.route?.name ? (
+                    <Badge variant="outline" className="text-xs font-medium">{booking.route.name}</Badge>
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">Chưa gắn tuyến</span>
+                  )}
+                </div>
                 <div className="space-y-2">
                   <div className="flex gap-3">
                     <div className="flex flex-col items-center">
@@ -718,6 +738,11 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
                           </span>
                           <span className="text-muted-foreground">{format(new Date(e.createdAt), "dd/MM/yyyy HH:mm")}</span>
                         </div>
+                        {e.reason && (
+                          <div className="mt-1">
+                            <Badge variant="secondary" className="text-[10px] font-normal">{e.reason}</Badge>
+                          </div>
+                        )}
                         {e.note && <div className="text-muted-foreground whitespace-pre-wrap">{e.note}</div>}
                       </li>
                     ))}
