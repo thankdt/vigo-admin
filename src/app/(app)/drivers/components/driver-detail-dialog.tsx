@@ -14,6 +14,7 @@ import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { useToast } from '@/hooks/use-toast';
 import { getImageUrl } from '@/lib/utils';
 import type { Driver } from '@/lib/types';
+import { DRIVER_CALL_TYPE_LABEL, DRIVER_CALL_TYPE_ORDER } from '@/lib/cskh-call-labels';
 import {
   getDriverApprovalHistory,
   getDriverCallHistory,
@@ -172,18 +173,28 @@ export function ApprovalTimeline({ driverId, showAdminNote = false }: { driverId
   );
 }
 
+// Icon + tông màu ở lại đây (thuần trình bày); NHÃN chữ lấy từ nguồn chung
+// src/lib/cskh-call-labels.ts để không lệch với bộ lọc danh sách và trang giám sát CSKH.
+const CALL_TYPE_VISUAL: Record<
+  DriverCallEventType,
+  { icon: React.ComponentType<{ className?: string }>; tone: string }
+> = {
+  CALLED: { icon: PhoneCall, tone: 'text-emerald-600' },
+  UNREACHED: { icon: PhoneOff, tone: 'text-red-600' },
+  CALLBACK: { icon: PhoneForwarded, tone: 'text-amber-600' },
+  HANDLED: { icon: CheckCircle2, tone: 'text-emerald-600' },
+  REMINDER: { icon: Bell, tone: 'text-blue-600' },
+  NOTE: { icon: StickyNote, tone: 'text-muted-foreground' },
+};
+
 export const CALL_TYPE_META: Record<
   DriverCallEventType,
   { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }
-> = {
-  CALLED: { label: 'Gọi được', icon: PhoneCall, tone: 'text-emerald-600' },
-  UNREACHED: { label: 'Không nghe máy', icon: PhoneOff, tone: 'text-red-600' },
-  CALLBACK: { label: 'Hẹn gọi lại', icon: PhoneForwarded, tone: 'text-amber-600' },
-  HANDLED: { label: 'Đã xử lý', icon: CheckCircle2, tone: 'text-emerald-600' },
-  REMINDER: { label: 'Nhắc nhở', icon: Bell, tone: 'text-blue-600' },
-  NOTE: { label: 'Ghi chú', icon: StickyNote, tone: 'text-muted-foreground' },
-};
-const CALL_TYPE_ORDER: DriverCallEventType[] = ['CALLED', 'UNREACHED', 'CALLBACK', 'HANDLED', 'REMINDER', 'NOTE'];
+> = Object.fromEntries(
+  DRIVER_CALL_TYPE_ORDER.map((t) => [t, { label: DRIVER_CALL_TYPE_LABEL[t], ...CALL_TYPE_VISUAL[t] }]),
+) as Record<DriverCallEventType, { label: string; icon: React.ComponentType<{ className?: string }>; tone: string }>;
+
+const CALL_TYPE_ORDER = DRIVER_CALL_TYPE_ORDER;
 
 /**
  * Lịch sử làm việc CSKH với tài xế: ô ghi mốc mới (loại việc + ghi chú) + timeline mới→cũ.

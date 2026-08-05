@@ -25,6 +25,7 @@ import {
   ShieldAlert,
   TrendingDown,
   PieChart,
+  Headset,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -53,6 +54,7 @@ export const navGroups: NavGroup[] = [
       { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
       { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
       { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
+      { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
     ],
   },
