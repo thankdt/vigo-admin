@@ -3,9 +3,15 @@
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Loader2, Save, Undo2 } from 'lucide-react';
+import { ExternalLink, Loader2, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SystemConfig } from '@/lib/types';
+import { MAP_STYLE_KEY_RE, normalizeConfigValue, validateConfigValue } from './config-value-validate';
+
+// URL bản đồ được trả qua endpoint PUBLIC `GET /master-data/app/config`, nên khoá
+// nhúng trong query string coi như đã công khai. Cảnh báo để người vận hành không
+// dán nhầm khoá bí mật vào đây.
+const API_KEY_IN_URL_RE = /(apikey|api_key)=/i;
 
 // Shared grid template so the header row and every field row line up on desktop.
 // Fixed 96px actions track (NOT `auto`): each row is its OWN grid container, so an
@@ -33,6 +39,15 @@ export function ConfigFieldRow({
   onSave: () => void;
   onRevert: () => void;
 }) {
+  // Chỉ key *_MAP_STYLE_URL mới có validate/hint/mở-thử. Mọi row khác giữ nguyên
+  // hành vi cũ — `isMapStyle` false ⇒ không render thêm gì, layout không đổi.
+  const isMapStyle = MAP_STYLE_KEY_RE.test(config.key);
+  const error = isMapStyle ? validateConfigValue(config.key, value) : null;
+  const isEmpty = isMapStyle && value.trim() === '';
+  const canOpen = isMapStyle && !error && !isEmpty;
+  const hasApiKey = isMapStyle && API_KEY_IN_URL_RE.test(value);
+  const errorId = `${config.key}-error`;
+
   return (
     <div
       className={cn(
@@ -61,13 +76,50 @@ export function ConfigFieldRow({
 
       {/* Giá trị — always full width so the value is visible on every screen size */}
       <div className="min-w-0">
+        {/* aria-invalid dùng undefined (không phải false) để ~150 row config khác
+            giữ nguyên DOM như trước thay đổi này. */}
         <Input
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={saving}
-          className="h-8 w-full"
+          className={cn(
+            'h-8 w-full',
+            error && 'border-destructive focus-visible:ring-destructive',
+          )}
           aria-label={`Giá trị ${config.key}`}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? errorId : undefined}
         />
+        {error && (
+          // Không dùng role="alert": message đổi theo TỪNG phím gõ, screen reader
+          // sẽ đọc liên tục. aria-describedby ở trên đã đủ để đọc khi focus vào ô.
+          <p id={errorId} className="mt-1 break-words text-xs text-destructive">
+            {error}
+          </p>
+        )}
+        {isEmpty && (
+          <p className="mt-1 text-xs text-amber-600 dark:text-amber-500">
+            Để trống: app sẽ dùng bản đồ mặc định cài sẵn.
+          </p>
+        )}
+        {canOpen && (
+          <a
+            // href dùng chuỗi đã chuẩn hoá — value có thể còn space đầu/cuối (hợp
+            // lệ, backend tự trim) và ta không muốn nhét khoảng trắng vào href.
+            href={normalizeConfigValue(config.key, value)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-xs text-primary underline underline-offset-2 hover:opacity-80"
+          >
+            <ExternalLink className="h-3 w-3" />
+            Mở thử
+          </a>
+        )}
+        {hasApiKey && (
+          <p className="mt-1 break-words text-xs text-muted-foreground">
+            URL này được trả qua endpoint công khai — coi như khoá đã công khai.
+          </p>
+        )}
       </div>
 
       {/* Hành động — chỉ hiện khi field đã đổi */}
@@ -91,9 +143,9 @@ export function ConfigFieldRow({
               size="icon"
               className="h-8 w-8 shrink-0"
               onClick={onSave}
-              disabled={saving}
+              disabled={saving || !!error}
               aria-busy={saving}
-              title="Lưu ô này"
+              title={error ? 'Giá trị không hợp lệ — sửa trước khi lưu' : 'Lưu ô này'}
               aria-label={`Lưu ${config.key}`}
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

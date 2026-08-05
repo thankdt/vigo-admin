@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { buildConfigGroups } from './system-config-groups';
 import { ConfigFieldRow, CONFIG_GRID } from './config-field-row';
 import { applyEdit, normalizeValue, summarizeSaveResults } from './system-config-edits';
+import { normalizeConfigValue, validateConfigValue } from './config-value-validate';
 import { useAuth } from '@/lib/auth-context';
 
 export function SystemConfigManager() {
@@ -108,8 +109,18 @@ export function SystemConfigManager() {
   };
 
   const handleSaveOne = async (key: string) => {
-    const value = edits[key];
-    if (value === undefined) return;
+    const raw = edits[key];
+    if (raw === undefined) return;
+    // Cổng chặn cuối ở FE (nút Lưu của row đã disable, nhưng phím tắt / race vẫn
+    // có thể tới đây). Backend vẫn validate độc lập — đây chỉ là fail-fast.
+    const invalid = validateConfigValue(key, raw);
+    if (invalid) {
+      toast({ variant: 'destructive', title: `Giá trị không hợp lệ: ${key}`, description: invalid });
+      return;
+    }
+    // Gửi + commit vào snapshot local ĐÚNG chuỗi backend sẽ ghi (đã trim), nếu
+    // không thì DB một đằng, `original` một nẻo cho tới lần refetch sau.
+    const value = normalizeConfigValue(key, raw);
     const description = originalByKey.get(key)?.description ?? '';
     setIsSaving((prev) => ({ ...prev, [key]: true }));
     try {
@@ -127,12 +138,32 @@ export function SystemConfigManager() {
 
   const handleSaveAll = async () => {
     // Snapshot the batch BEFORE awaiting so post-await state reads can't corrupt it.
-    const batch = dirtyKeys.map((key) => ({
+    const all = dirtyKeys.map((key) => ({
       key,
-      value: edits[key],
+      // `value` = chuỗi ĐÃ chuẩn hoá (giống backend ghi xuống DB) — dùng cho cả
+      // request lẫn commitOriginal. Validate cũng tự trim nên 2 bên nhất quán.
+      value: normalizeConfigValue(key, edits[key]),
       description: originalByKey.get(key)?.description ?? '',
+      invalid: validateConfigValue(key, edits[key]),
     }));
-    if (batch.length === 0) return;
+    // Ô không hợp lệ bị BỎ QUA (không chặn cả lượt) và vẫn ở lại `edits` để người
+    // vận hành sửa tiếp — sticky bar do đó không biến mất.
+    const skippedKeys = all.filter((b) => b.invalid).map((b) => b.key);
+    const batch = all.filter((b) => !b.invalid);
+    const skippedNote = skippedKeys.length
+      ? ` Đã bỏ qua ${skippedKeys.length} ô không hợp lệ: ${skippedKeys.join(', ')}.`
+      : '';
+
+    if (batch.length === 0) {
+      if (skippedKeys.length > 0) {
+        toast({
+          variant: 'destructive',
+          title: `Không lưu được: ${skippedKeys.length} ô có giá trị không hợp lệ`,
+          description: `Chưa lưu: ${skippedKeys.join(', ')}. Sửa giá trị rồi thử lại.`,
+        });
+      }
+      return;
+    }
 
     setSavingAll(true);
     setIsSaving((prev) => {
@@ -153,14 +184,21 @@ export function SystemConfigManager() {
       }
 
       if (failKeys.length === 0) {
-        toast({ title: 'Đã lưu', description: `${okKeys.length} mục đã được cập nhật.` });
-        // Bar unmounts (dirty→0) and had focus; move it somewhere sensible.
-        searchRef.current?.focus();
+        toast({
+          variant: skippedKeys.length ? 'destructive' : undefined,
+          title: skippedKeys.length
+            ? `Đã lưu ${okKeys.length} mục, bỏ qua ${skippedKeys.length} ô không hợp lệ`
+            : 'Đã lưu',
+          description: `${okKeys.length} mục đã được cập nhật.${skippedNote}`,
+        });
+        // Bar unmounts (dirty→0) and had focus; move it somewhere sensible. Nếu còn
+        // ô bị bỏ qua thì bar VẪN đứng đó — đừng cướp focus khỏi nó.
+        if (skippedKeys.length === 0) searchRef.current?.focus();
       } else {
         toast({
           variant: 'destructive',
           title: `Lưu thất bại ${failKeys.length}/${batch.length} mục`,
-          description: `Chưa lưu: ${failKeys.join(', ')}. Đã lưu ${okKeys.length} mục.`,
+          description: `Chưa lưu: ${failKeys.join(', ')}. Đã lưu ${okKeys.length} mục.${skippedNote}`,
         });
       }
     } finally {
