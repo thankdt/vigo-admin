@@ -716,6 +716,31 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                     </span>
                   )}
                 </div>
+                {/* Lý do chuẩn hoá — danh mục lấy từ backend (system_config CSKH_CALL_REASONS)
+                    nên ops sửa được, không hardcode ở FE. Không bắt buộc chọn. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="shrink-0 text-xs text-muted-foreground">Lý do:</span>
+                  <Select value={callReason} onValueChange={setCallReason} disabled={!!callSaving}>
+                    <SelectTrigger className="h-8 w-[240px] text-sm">
+                      <SelectValue placeholder="Chọn lý do (không bắt buộc)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {reasonOptions.map((r) => (
+                        <SelectItem key={r} value={r}>{r}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {callReason && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 px-2 text-xs"
+                      onClick={() => setCallReason('')}
+                    >
+                      Bỏ chọn
+                    </Button>
+                  )}
+                </div>
                 <Textarea
                   value={callNote}
                   onChange={(e) => setCallNote(e.target.value)}

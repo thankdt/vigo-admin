@@ -693,14 +693,23 @@ export function DriversTable() {
     setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
 
   const toggleCsCalled = async (driver: Driver) => {
+    // Giá trị ĐÍCH do client quyết, không phụ thuộc shape response. Trước đây hàm này
+    // vá thẳng `updated.csCalled`; chỉ cần response thiếu/đổi tên field là thành
+    // `undefined` → `!!undefined` = false → ô tick không đổi, phải F5 mới thấy.
+    const next = !driver.csCalled;
     setCsBusyId(driver.id);
     try {
-      const updated = await updateDriverCsStatus(driver.id, { csCalled: !driver.csCalled });
+      const updated = await updateDriverCsStatus(driver.id, { csCalled: next });
       patchDriverRow(driver.id, {
-        csCalled: updated.csCalled,
-        csCalledAt: updated.csCalledAt,
-        csCalledByName: updated.csCalledByName,
+        csCalled: updated?.csCalled ?? next,
+        csCalledAt: updated?.csCalledAt ?? (next ? new Date().toISOString() : null),
+        csCalledByName: updated?.csCalledByName ?? null,
       });
+      // Response không mang đủ field (tên CSKH / mốc giờ) → nạp lại danh sách để hàng
+      // hiển thị đúng, thay vì bắt người dùng tự F5.
+      if (updated?.csCalled === undefined || (next && !updated?.csCalledByName)) {
+        void fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+      }
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không cập nhật được', description: err.message });
     } finally {

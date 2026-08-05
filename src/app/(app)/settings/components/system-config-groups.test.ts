@@ -77,6 +77,25 @@ describe('buildConfigGroups (settings RBAC gate)', () => {
     expect(byId['misc']).toEqual(['ZALO_TOKEN_EXPIRES_AT']);
   });
 
+  // Map style remote config: 2 key mới phải rơi nhóm 'app' (quyền settings.app) —
+  // chúng chứa '_APP_' nên KHÔNG được rơi catch-all 'misc' (chỉ super sửa được).
+  it('CUSTOMER_APP_MAP_STYLE_URL / DRIVER_APP_MAP_STYLE_URL rơi nhóm app, không rơi misc', () => {
+    const configs = [
+      { key: 'CUSTOMER_APP_MAP_STYLE_URL', value: 'https://maps.vietmap.vn/s.json', description: '' },
+      { key: 'DRIVER_APP_MAP_STYLE_URL', value: 'https://maps.vietmap.vn/s.json', description: '' },
+    ];
+    const groups = buildConfigGroups(configs, '', canFor(mkMe({ isSuperAdmin: true })));
+    expect(groups).toHaveLength(1);
+    expect(groups[0].group.id).toBe('app');
+    expect(groups[0].items.map((c) => c.key).sort()).toEqual([
+      'CUSTOMER_APP_MAP_STYLE_URL',
+      'DRIVER_APP_MAP_STYLE_URL',
+    ]);
+    // và user chỉ có settings.app vẫn thấy chúng
+    const asAppEditor = buildConfigGroups(configs, '', canFor(mkMe({ functions: ['settings.app'] })));
+    expect(asAppEditor.map((g) => g.group.id)).toEqual(['app']);
+  });
+
   it('applies the search filter within permitted groups', () => {
     const groups = buildConfigGroups(CONFIGS, 'radius', canFor(mkMe({ isSuperAdmin: true })));
     expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);
