@@ -2787,3 +2787,106 @@ export async function adminSetUserOverrides(userId: string, overrides: FunctionO
 export async function adminSetUserSuper(userId: string, value: boolean): Promise<void> {
   await fetchWithAuth(`/admin/users/${userId}/super`, { method: 'PATCH', body: JSON.stringify({ value }) });
 }
+
+// --- Giám sát hoạt động CSKH (/cskh-activity) ---
+// Gộp 2 log cuộc gọi có sẵn (gọi check khách theo chuyến + làm việc với tài xế) thành
+// một nhật ký chung. Chỉ đọc; quyền riêng 'cskh-activity' ở backend.
+
+export type CskhActivityKind = 'BOOKING' | 'DRIVER';
+
+/** Một mốc CSKH đã chuẩn hoá từ 1 trong 2 bảng nguồn. */
+export type CskhCallRow = {
+  id: string;
+  kind: CskhActivityKind;
+  createdAt: string;
+  byAdminUserId: string | null;
+  byAdminName: string | null;
+  /** Mã kết quả: CLAIMED/CALLED/UNREACHED (khách) hoặc CALLED/…/NOTE (tài xế). */
+  outcome: string;
+  /** Có được tính là CUỘC GỌI THẬT không (backend quyết, xem cskh-call-labels.ts). */
+  isContact: boolean;
+  /** Chỉ luồng khách — bảng sự kiện tài xế không có cột lý do. */
+  reason: string | null;
+  /** Chỉ luồng khách: BEFORE_COMPLETE / AFTER_COMPLETE. */
+  phase: string | null;
+  note: string | null;
+  /** bookingId hoặc driverId tuỳ `kind`. */
+  targetId: string;
+  personId: string | null;
+  targetName: string | null;
+  targetPhone: string | null;
+};
+
+export type CskhStaffStat = {
+  adminUserId: string | null;
+  adminName: string | null;
+  total: number;
+  contactCalls: number;
+  called: number;
+  unreached: number;
+  callback: number;
+  claimed: number;
+  bookingEvents: number;
+  driverEvents: number;
+  /** Số khách/tài xế KHÁC NHAU đã thực sự gọi được/gọi tới. */
+  distinctTargets: number;
+  firstAt: string | null;
+  lastAt: string | null;
+};
+
+export type CskhActivitySummary = {
+  range: { from: string; to: string };
+  totals: {
+    total: number;
+    contactCalls: number;
+    staffCount: number;
+    distinctTargets: number;
+    activeStaff: number;
+    staffListed: number;
+  };
+  byStaff: CskhStaffStat[];
+  byDay: Array<{ date: string; label: string; total: number; contactCalls: number }>;
+  byHour: Array<{ hour: number; label: string; total: number; contactCalls: number }>;
+  byReason: Array<{ reason: string; total: number }>;
+  byOutcome: Array<{ kind: CskhActivityKind; outcome: string; total: number }>;
+};
+
+export type CskhActivityFilters = {
+  from: string;
+  to: string;
+  adminUserId?: string;
+  kind?: CskhActivityKind;
+  outcome?: string;
+  contactOnly?: boolean;
+};
+
+/** Chỉ đẩy lên query những filter thực sự có giá trị — tránh `?kind=undefined`. */
+function cskhActivityQuery(f: CskhActivityFilters): URLSearchParams {
+  const qs = new URLSearchParams({ from: f.from, to: f.to });
+  if (f.adminUserId) qs.set('adminUserId', f.adminUserId);
+  if (f.kind) qs.set('kind', f.kind);
+  if (f.outcome) qs.set('outcome', f.outcome);
+  if (f.contactOnly) qs.set('contactOnly', 'true');
+  return qs;
+}
+
+export async function getCskhActivityFeed(
+  f: CskhActivityFilters & { page?: number; limit?: number },
+): Promise<{ data: CskhCallRow[]; meta: { total: number; page: number; limit: number; totalPages: number } }> {
+  const qs = cskhActivityQuery(f);
+  if (f.page) qs.set('page', String(f.page));
+  if (f.limit) qs.set('limit', String(f.limit));
+  const res = await fetchWithAuth(`/admin/cskh-activity?${qs.toString()}`);
+  return unwrap(res);
+}
+
+export async function getCskhActivitySummary(f: CskhActivityFilters): Promise<CskhActivitySummary> {
+  const res = await fetchWithAuth(`/admin/cskh-activity/summary?${cskhActivityQuery(f).toString()}`);
+  return unwrap<CskhActivitySummary>(res);
+}
+
+/** Danh sách nhân viên admin (id + tên) cho dropdown lọc. */
+export async function getCskhActivityStaff(): Promise<Array<{ id: string; fullName: string | null }>> {
+  const res = await fetchWithAuth('/admin/cskh-activity/staff');
+  return unwrap<Array<{ id: string; fullName: string | null }>>(res);
+}

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { getRoutes } from '@/lib/api';
 import type { Route } from '@/lib/types';
+import { DRIVER_CALL_TYPE_LABEL, DRIVER_CALL_TYPE_ORDER } from '@/lib/cskh-call-labels';
 
 export type DriverFilters = {
   name: string;
@@ -58,14 +59,11 @@ export function hasAnyFilter(f: DriverFilters): boolean {
 const ALL_ROUTES_VALUE = '__all__';
 const ALL_CS_VALUE = '__all_cs__';
 const ALL_CS_TYPE_VALUE = '__all_cs_type__';
+// Nhãn suy từ nguồn chung (src/lib/cskh-call-labels.ts) — trước đây chép tay ở đây và
+// ở driver-detail-dialog, sửa chữ một nơi là lệch nơi kia.
 const CS_TYPE_OPTIONS = [
   { value: ALL_CS_TYPE_VALUE, label: 'Mốc CSKH: tất cả' },
-  { value: 'CALLED', label: 'Gọi được' },
-  { value: 'UNREACHED', label: 'Không nghe máy' },
-  { value: 'CALLBACK', label: 'Hẹn gọi lại' },
-  { value: 'HANDLED', label: 'Đã xử lý' },
-  { value: 'REMINDER', label: 'Nhắc nhở' },
-  { value: 'NOTE', label: 'Ghi chú' },
+  ...DRIVER_CALL_TYPE_ORDER.map((t) => ({ value: t, label: DRIVER_CALL_TYPE_LABEL[t] })),
 ];
 
 function IconInput({
