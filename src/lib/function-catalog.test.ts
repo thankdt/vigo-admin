@@ -22,10 +22,10 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 25 menu + 10 settings = 35 unique keys', () => {
+  it('allFunctionKeys = 26 menu + 10 settings = 36 unique keys', () => {
     const keys = allFunctionKeys();
-    expect(keys).toHaveLength(35); // 2026-07-23: +settings.kol, +settings.agent
-    expect(new Set(keys).size).toBe(35);
+    expect(keys).toHaveLength(36); // 2026-08-05: +cskh-activity
+    expect(new Set(keys).size).toBe(36);
   });
 });
 

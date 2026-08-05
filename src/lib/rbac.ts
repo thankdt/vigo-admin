@@ -1,7 +1,7 @@
 // RBAC catalog mirror (frontend). MUST stay in sync with backend rbac.constants.ts.
 // Function key của mỗi mục menu = href bỏ dấu '/' đầu (spec §2.1). `/settings` KHÔNG
-// nằm ở đây: nó nở thành 8 function con `settings.*` và được gate riêng (any-of).
-// Test đồng bộ (rbac.test.ts) khoá số 25 + 8 để thêm menu/nhóm mà quên khai báo -> fail.
+// nằm ở đây: nó nở thành 10 function con `settings.*` và được gate riêng (any-of).
+// Test đồng bộ (rbac.test.ts) khoá số 26 + 10 để thêm menu/nhóm mà quên khai báo -> fail.
 
 export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/dashboard': 'dashboard',
@@ -29,6 +29,7 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/feedback': 'feedback',
   '/leakage-review': 'leakage-review',
   '/driver-cancel-review': 'driver-cancel-review',
+  '/cskh-activity': 'cskh-activity',
 };
 
 // 10 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
