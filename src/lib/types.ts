@@ -293,6 +293,10 @@ export type Booking = {
   // Tên hành khách, index 0 = khách chính (khớp quy ước app khách + hợp đồng).
   // null cho rows cũ trước khi có cột.
   passengerNames?: string[] | null;
+  // SĐT người đi cùng (tuỳ chọn) — để tài xế biết gọi cho ai. Backend chuẩn hoá
+  // và STRIP field này khỏi feed/offer (tài chưa nhận chuyến không thấy) →
+  // null ở đa số response ngoài màn chi tiết chuyến.
+  companionPhone?: string | null;
   // Voucher đã áp cho chuyến. Backend chỉ trả id (không join promotion) — muốn
   // biết chi tiết phải đối chiếu với danh sách khuyến mãi.
   promotionId?: number | null;
