@@ -8,7 +8,7 @@ describe('buildFunctionCatalog', () => {
     expect(cat.map((g) => g.group)).toEqual(['Chức năng (menu)', 'Cài đặt hệ thống']);
   });
 
-  it('menu group covers all 25 menu functions with labels', () => {
+  it('menu group covers all menu functions with labels', () => {
     const menu = buildFunctionCatalog()[0];
     expect(menu.items).toHaveLength(Object.keys(MENU_FUNCTION_BY_HREF).length);
     expect(menu.items.every((i) => i.label.length > 0)).toBe(true);
@@ -22,10 +22,10 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 26 menu + 10 settings = 36 unique keys', () => {
+  it('allFunctionKeys = 27 menu + 10 settings = 37 unique keys', () => {
     const keys = allFunctionKeys();
-    expect(keys).toHaveLength(36); // 2026-08-05: +cskh-activity
-    expect(new Set(keys).size).toBe(36);
+    expect(keys).toHaveLength(37); // 2026-08-06: +driver-reputation
+    expect(new Set(keys).size).toBe(37);
   });
 });
 
