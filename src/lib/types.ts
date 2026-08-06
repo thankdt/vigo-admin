@@ -648,3 +648,52 @@ export type DriverCancelTrip = {
   dropoffAddress: any;
   isVinow: boolean;
 };
+
+/** Chỉ số vận hành. `null` = CHƯA CÓ DỮ LIỆU (không phải 0) — xem
+ *  src/lib/driver-reputation-format.ts, hiển thị "Đang thu thập". */
+export type DriverReputationOps = {
+  /** 0..1 */
+  acceptRate: number | null;
+  /** 0..1 */
+  onTimeRate: number | null;
+  /** 0..1 */
+  completionRate: number | null;
+};
+
+/** Điểm uy tín + đánh giá của một tài xế (bản đầy đủ — admin & chính tài xế). */
+export type DriverReputation = {
+  driverId: string;
+  /** 0..100 */
+  score: number;
+  /** 0..5 — dùng để xếp hạng ở BACKEND. Client giai đoạn 1 CHỈ hiển thị. */
+  bayesStars: number;
+  /** null = CHƯA ĐỦ đánh giá để công khai → hiện "Chưa có đánh giá", KHÔNG hiện 0. */
+  displayStars: number | null;
+  ratingCount: number;
+  hasEnoughRatings: boolean;
+  /** { "1": n, "2": n, "3": n, "4": n, "5": n } */
+  distribution: Record<string, number>;
+  ops: DriverReputationOps;
+  /** Chỉ số CHƯA CÓ DỮ LIỆU: 'accept' | 'onTime' | 'completion' | 'star'. */
+  collecting: string[];
+  usedComponents: string[];
+  lastRatingAt: string | null;
+};
+
+/** Một lượt khách đánh giá chuyến. */
+export type DriverTripRating = {
+  id: string;
+  bookingId: string;
+  driverId: string;
+  customerId: string;
+  /** 1..5 */
+  stars: number;
+  comment: string | null;
+  tags: string[] | null;
+  serviceType: string | null;
+  /** false = KHÔNG tính vào điểm; lý do loại trừ nằm ở `excludeReason`. */
+  isCounted: boolean;
+  excludeReason: string | null;
+  tripCompletedAt: string | null;
+  createdAt: string;
+};
