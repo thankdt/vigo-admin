@@ -1497,6 +1497,62 @@ export async function htxGetDashboard(range: HtxDashboardRange): Promise<HtxDash
   return unwrap<HtxDashboard>(response);
 }
 
+// Một chuyến trong lịch sử HTX. Backend CỐ Ý không trả SĐT / ghi chú của khách
+// (xem HtxService.listTrips) — đừng thêm field khách vào type này khi backend chưa
+// đổi, sẽ chỉ nhận undefined.
+export type HtxOwnerTripRow = {
+  id: string;
+  status: 'COMPLETED' | 'CANCELLED';
+  serviceType: string;
+  isVinow: boolean;
+  createdAt: string;
+  acceptedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  /** Mốc hiển thị: chuyến huỷ = lúc huỷ, còn lại = lúc hoàn thành. Cũng là mốc lọc + sắp xếp. */
+  eventAt: string;
+  pickup: string | null;
+  dropoff: string | null;
+  distanceKm: number | null;
+  customerName: string | null;
+  driver: { id: string; name: string | null; phone: string | null; plate: string | null };
+  price: number | null;
+  finalPrice: number | null;
+  cancelledByRole: 'CUSTOMER' | 'DRIVER' | 'ADMIN' | 'SYSTEM' | null;
+  /** null khi admin huỷ (ô này dùng chung với ghi chú nội bộ) → hiện nhãn theo vai trò. */
+  cancelReason: string | null;
+};
+
+export type HtxOwnerTripListResponse = {
+  data: HtxOwnerTripRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export async function htxListTrips(
+  params: {
+    page?: number;
+    limit?: number;
+    /** Ngày VN (YYYY-MM-DD). Bỏ trống → backend lấy 30 ngày gần nhất. */
+    from?: string;
+    to?: string;
+    status?: 'completed' | 'cancelled' | 'all';
+    driverId?: string;
+    search?: string;
+  } = {},
+): Promise<HtxOwnerTripListResponse> {
+  const q = new URLSearchParams({
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 20),
+  });
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  if (params.status) q.set('status', params.status);
+  if (params.driverId) q.set('driverId', params.driverId);
+  if (params.search) q.set('search', params.search);
+  const response = await fetchWithAuth(`/htx/trips?${q.toString()}`);
+  return unwrap<HtxOwnerTripListResponse>(response);
+}
+
 // Admin view of a company's stats (same numbers the HTX owner dashboard shows)
 // plus the driver approval-state breakdown. Reuses the HTX dashboard shape +
 // range model so the two stay in sync.
