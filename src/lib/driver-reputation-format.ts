@@ -21,6 +21,28 @@ export const NO_RATING_LABEL = 'Chưa có đánh giá';
 export type OpsMetricKey = 'accept' | 'onTime' | 'completion';
 
 /**
+ * Giá trị JSON → số dùng được, hoặc `null` khi KHÔNG CÓ DỮ LIỆU.
+ *
+ * Hai hướng sai phải chặn cùng lúc:
+ *  - `Number('')`/`Number(null)`/`Number([])` đều ra `0`. Ép kiểu ngây thơ biến
+ *    "không có gì" thành 0% — đúng cái LUẬT 1 cấm.
+ *  - Ngược lại, vứt bỏ mọi thứ không phải `number` thì một `"0.87"` (JSON lỏng,
+ *    số qua serializer khác) bị gắn nhãn "Đang thu thập" trong khi chỉ số ĐANG
+ *    CÓ số — nói dối theo chiều kia và cũng xoá mất phân biệt 0 / null.
+ * Chỉ chuỗi KHÔNG RỖNG và parse ra số hữu hạn mới được coi là có dữ liệu.
+ */
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') return null;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+/**
  * Chỉ số vận hành 0..1 → "87%". null/NaN, hoặc `key` nằm trong `collecting`
  * → "Đang thu thập" (LUẬT 1). Kẹp về 0..100% để số lệch từ backend không
  * hiện ra thành "-12%" / "140%".
@@ -31,10 +53,9 @@ export function formatOpsRate(
   collecting?: string[] | null,
 ): string {
   if (collecting?.includes(key)) return COLLECTING_LABEL;
-  if (value == null || typeof value !== 'number' || !Number.isFinite(value)) {
-    return COLLECTING_LABEL;
-  }
-  const pct = Math.round(value * 100);
+  const n = toFiniteNumber(value);
+  if (n === null) return COLLECTING_LABEL;
+  const pct = Math.round(n * 100);
   return `${Math.min(100, Math.max(0, pct))}%`;
 }
 
@@ -52,17 +73,32 @@ export function formatDisplayStars(
   collecting?: string[] | null,
 ): string {
   if (collecting?.includes('star')) return NO_RATING_LABEL;
-  if (displayStars == null || typeof displayStars !== 'number' || !Number.isFinite(displayStars)) {
-    return NO_RATING_LABEL;
-  }
-  if (displayStars <= 0) return NO_RATING_LABEL;
-  return displayStars.toFixed(1);
+  const n = toFiniteNumber(displayStars);
+  if (n === null || n <= 0) return NO_RATING_LABEL;
+  // Kẹp về 5: thang sao là 1..5, "7.2" cạnh hàng 5 sao là vô nghĩa.
+  return Math.min(5, n).toFixed(1);
+}
+
+/**
+ * Có sao CÔNG KHAI để vẽ hay không.
+ *
+ * Nơi gọi PHẢI dùng hàm này thay vì tự viết `displayStars !== null`: hai định
+ * nghĩa lệch nhau là có input (0, số âm, NaN) rơi vào nhánh "vẽ hàng sao" trong
+ * khi [formatDisplayStars] trả "Chưa có đánh giá" — ra đúng giao diện 5 sao
+ * rỗng, tức "0 sao", mà LUẬT 2 cấm.
+ */
+export function hasDisplayStars(
+  displayStars: number | null | undefined,
+  collecting?: string[] | null,
+): boolean {
+  return formatDisplayStars(displayStars, collecting) !== NO_RATING_LABEL;
 }
 
 /** Điểm tổng 0..100 → "72". Thiếu số → "—" (không hiện 0). */
 export function formatScore(score: number | null | undefined): string {
-  if (score == null || typeof score !== 'number' || !Number.isFinite(score)) return '—';
-  return String(Math.min(100, Math.max(0, Math.round(score))));
+  const n = toFiniteNumber(score);
+  if (n === null) return '—';
+  return String(Math.min(100, Math.max(0, Math.round(n))));
 }
 
 /** Phân bố sao trả về từ backend: { "1": n, … "5": n }. */
@@ -73,8 +109,8 @@ export function distributionTotal(distribution: StarDistribution | null | undefi
   if (!distribution) return 0;
   let total = 0;
   for (const star of [1, 2, 3, 4, 5]) {
-    const n = distribution[String(star)];
-    if (typeof n === 'number' && Number.isFinite(n) && n > 0) total += n;
+    const n = toFiniteNumber(distribution[String(star)]);
+    if (n !== null && n > 0) total += n;
   }
   return total;
 }
@@ -89,8 +125,8 @@ export function distributionPercent(
 ): number {
   const total = distributionTotal(distribution);
   if (total <= 0) return 0;
-  const n = distribution?.[String(star)];
-  if (typeof n !== 'number' || !Number.isFinite(n) || n <= 0) return 0;
+  const n = toFiniteNumber(distribution?.[String(star)]);
+  if (n === null || n <= 0) return 0;
   return (n / total) * 100;
 }
 
@@ -99,6 +135,6 @@ export function distributionCount(
   distribution: StarDistribution | null | undefined,
   star: 1 | 2 | 3 | 4 | 5,
 ): number {
-  const n = distribution?.[String(star)];
-  return typeof n === 'number' && Number.isFinite(n) && n > 0 ? n : 0;
+  const n = toFiniteNumber(distribution?.[String(star)]);
+  return n !== null && n > 0 ? n : 0;
 }

@@ -13,6 +13,7 @@ import {
   NO_RATING_LABEL,
   formatOpsRate,
   formatDisplayStars,
+  hasDisplayStars,
   formatScore,
   distributionCount,
   distributionPercent,
@@ -138,12 +139,14 @@ export function DriverReputationSection({ driverId }: { driverId: string }) {
   }
 
   const starsText = formatDisplayStars(rep.displayStars, rep.collecting);
-  // Gate THẲNG trên null thay vì so chuỗi nhãn: `hasStars` cũ suy ra từ
-  // `starsText !== NO_RATING_LABEL`, nên đổi nhãn một cái là `displayStars`
-  // null vẫn lọt vào nhánh vẽ sao và hiện 0 sao — đúng thứ luật cấm.
-  // Kiểm null trực tiếp còn giúp TS thu hẹp kiểu, bỏ được `?? 0`.
-  const stars = rep.displayStars;
-  const hasStars = stars !== null && stars !== undefined;
+  // Cổng "có sao hay không" PHẢI dùng chung định nghĩa với formatDisplayStars
+  // (hasDisplayStars gọi thẳng vào nó). Bản cũ tự kiểm `!== null` nên lệch:
+  // displayStars = 0 / NaN / số âm vẫn lọt vào nhánh vẽ sao, và admin thấy chữ
+  // "Chưa có đánh giá" in đậm cỡ 2xl nằm cạnh 5 ngôi sao RỖNG — nhìn ra đúng
+  // "0 sao", thứ LUẬT 2 cấm.
+  const hasStars = hasDisplayStars(rep.displayStars, rep.collecting);
+  // Chỉ dùng để vẽ số sao đặc; hasStars ở trên đã loại null/0/NaN.
+  const stars = rep.displayStars ?? 0;
   const distTotal = distributionTotal(rep.distribution);
   const canPrev = offset > 0;
   const canNext = offset + RATINGS_PAGE_SIZE < total;
