@@ -845,6 +845,9 @@ export async function createAdminBooking(data: {
   requestedSeats?: number;
   // Tên các hành khách đi cùng (nếu có) — in lên hợp đồng/hoá đơn.
   passengerNames?: string[];
+  // SĐT người đi cùng (tuỳ chọn). Gửi số đã chuẩn hoá; backend âm thầm bỏ số sai
+  // định dạng và lưu null nếu trùng SĐT khách → không bao giờ làm hỏng việc tạo chuyến.
+  companionPhone?: string;
   note?: string;
   driverId?: string;
   // ISO 8601 timestamp (e.g. new Date(...).toISOString()). Omit for an
@@ -883,6 +886,8 @@ export async function createAgentBooking(data: {
   requestedVehicleType?: 'CAR_4' | 'CAR_7';
   requestedSeats?: number;
   passengerNames?: string[];
+  // SĐT người đi cùng (tuỳ chọn) — y hệt createAdminBooking.
+  companionPhone?: string;
   note?: string;
   scheduledTime?: string;
   scheduledFromTime?: string;

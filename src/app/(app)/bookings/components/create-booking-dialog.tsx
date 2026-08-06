@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { createAdminBooking, createAgentBooking, getAvailableDrivers, lookupCustomerByPhone, estimateTripPrice, getVouchers } from '@/lib/api';
 import type { Driver, Promotion } from '@/lib/types';
+import { isValidVnPhoneOrEmpty, normalizeVnPhone, sameVnPhone } from '@/lib/phone';
 import { getImageUrl } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
@@ -84,6 +85,12 @@ export function CreateBookingDialog({
   // passengerNames = [customerName, ...coPassengers] (index 0 = primary, the
   // convention the customer app + contract/booking-detail screens rely on).
   const [coPassengers, setCoPassengers] = React.useState<string[]>([]);
+  // SĐT người đi cùng (tuỳ chọn, MỘT số / chuyến) — để tài xế biết gọi cho ai.
+  // KHÔNG chặn submit khi sai: backend âm thầm bỏ số sai định dạng và lưu null
+  // khi trùng SĐT khách, nên ở đây chỉ cảnh báo tại chỗ.
+  const [companionPhone, setCompanionPhone] = React.useState('');
+  const companionPhoneValid = isValidVnPhoneOrEmpty(companionPhone);
+  const companionPhoneIsCustomer = sameVnPhone(companionPhone, customerPhone);
 
   // Passenger fields don't apply to DELIVERY. Total-seat cap matches the
   // customer app: CAR_4 → 4, CAR_7 → 6, CARPOOL → 6. maxExtras excludes the
@@ -270,6 +277,7 @@ export function CreateBookingDialog({
     setServiceType('CARPOOL');
     setVehicleType('CAR_4');
     setCoPassengers([]);
+    setCompanionPhone('');
     clearEstimate();
     setSelectedPromotionId(null);
     setNote('');
@@ -301,6 +309,7 @@ export function CreateBookingDialog({
     setServiceType(initial.serviceType);
     setVehicleType(initial.vehicleType);
     setCoPassengers(initial.coPassengers);
+    setCompanionPhone(initial.companionPhone);
     setNote(initial.note);
     setIsScheduled(initial.isScheduled);
     setScheduledFrom(initial.scheduledFrom);
@@ -440,6 +449,14 @@ export function CreateBookingDialog({
           const extras = coPassengers.map((n) => n.trim()).filter(Boolean);
           return extras.length > 0 ? [customerName.trim(), ...extras] : undefined;
         })(),
+        // SĐT người đi cùng — gửi số ĐÃ chuẩn hoá, bỏ trống thì không gửi field.
+        // Số sai định dạng vẫn gửi: backend là chốt chặn duy nhất (âm thầm bỏ,
+        // trùng SĐT khách → lưu null) và tuyệt đối không được chặn tạo chuyến.
+        // Gate theo `showPassengerFields` y như passengerNames/requestedSeats: ô
+        // nhập nằm trong khối "Hành khách" (ẩn với DELIVERY), gõ số ở CARPOOL rồi
+        // đổi sang Giao hàng mà vẫn gửi = lưu dữ liệu admin không còn nhìn thấy
+        // và không xoá được.
+        companionPhone: showPassengerFields ? normalizeVnPhone(companionPhone) || undefined : undefined,
         note: note || undefined,
         // Pickup window. Send scheduledTime = from too: a backend without window
         // support (whitelist:true strips the unknown from/to fields) then still
@@ -776,6 +793,31 @@ export function CreateBookingDialog({
                       ? 'Đi chung tính giá theo số khách'
                       : `Tối đa ${maxTotal} khách`}
                 </span>
+              </div>
+
+              {/* SĐT người đi cùng — MỘT số cho cả chuyến, để tài xế biết gọi cho ai.
+                  Không ảnh hưởng giá → không clearEstimate(). Sai định dạng chỉ cảnh
+                  báo, KHÔNG khoá nút "Tạo chuyến" (backend tự bỏ số sai). */}
+              <div className="space-y-1.5 border-t pt-3">
+                <Label htmlFor="cb-companion-phone">SĐT người đi cùng (không bắt buộc)</Label>
+                <div className="relative">
+                  <Phone className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="cb-companion-phone"
+                    inputMode="tel"
+                    placeholder="0912345678"
+                    value={companionPhone}
+                    onChange={(e) => setCompanionPhone(e.target.value)}
+                    aria-invalid={!companionPhoneValid}
+                    className={cn('pl-8', !companionPhoneValid && 'border-destructive focus-visible:ring-destructive')}
+                  />
+                </div>
+                {!companionPhoneValid && (
+                  <p className="text-xs text-destructive">SĐT không hợp lệ (10 số, bắt đầu bằng 0)</p>
+                )}
+                {companionPhoneValid && companionPhoneIsCustomer && (
+                  <p className="text-xs text-amber-600">Trùng SĐT khách — sẽ không được lưu.</p>
+                )}
               </div>
             </div>
           )}

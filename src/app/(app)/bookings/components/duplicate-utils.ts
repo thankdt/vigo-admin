@@ -3,6 +3,7 @@
 // toạ độ jsonb đa dạng key và khung giờ đón.
 
 import type { Booking } from '@/lib/types';
+import { normalizeVnPhone } from '@/lib/phone';
 import { formatLocal } from './schedule-utils';
 
 export type DraftPoint = { address: string; lat: number; long: number };
@@ -19,6 +20,9 @@ export type BookingDraft = {
   serviceType: 'RIDE' | 'DELIVERY' | 'CARPOOL';
   vehicleType: 'CAR_4' | 'CAR_7';
   coPassengers: string[];
+  // SĐT người đi cùng — '' khi chuyến gốc không có (hoặc backend đã strip khỏi
+  // response). Quên chép field này thì nhân bản chuyến sẽ ÂM THẦM MẤT số.
+  companionPhone: string;
   note: string;
   isScheduled: boolean;
   // 'YYYY-MM-DDTHH:mm' theo giờ máy — khớp <input type="datetime-local">.
@@ -128,6 +132,9 @@ export function bookingToDraft(b: Booking): BookingDraft {
     serviceType,
     vehicleType,
     coPassengers,
+    // Chuẩn hoá luôn: rows cũ / dữ liệu import có thể còn dạng '+84…' hay có
+    // khoảng trắng, điền thô vào form sẽ bị gắn cờ "không hợp lệ" oan.
+    companionPhone: normalizeVnPhone(b.companionPhone),
     note: cleanNote(b.note),
     isScheduled,
     scheduledFrom: fromMs != null ? formatLocal(new Date(fromMs)) : '',
