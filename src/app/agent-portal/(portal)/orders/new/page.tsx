@@ -16,6 +16,7 @@ import {
 } from '@/lib/api';
 import { Plus, Trash2, MapPin, User, Loader2, ArrowLeft, Send, Car, Users } from 'lucide-react';
 import { GhepComposer } from './ghep-composer';
+import { AGENT_MULTI_STOP_ENABLED, AGENT_PORTAL_HOME } from '../../../agent-portal-flags';
 
 type Mode = 'rieng' | 'ghep';
 
@@ -49,6 +50,14 @@ const emptyPx = (): PX => ({ name: '', phone: '', pickupIdx: 0, dropoffIdx: 1, n
 export default function NewAgentOrderPage() {
   const router = useRouter();
   const { toast } = useToast();
+
+  // TẮT TẠM: mục "Đặt hộ mới" đã bị gỡ khỏi sidebar, nhưng deep-link / bookmark
+  // vẫn vào được URL này. Đá về Tổng quan thay vì để đại lý điền hết form rồi
+  // hỏng ở bước submit. Hook đặt TRƯỚC mọi return để không vi phạm rules-of-hooks.
+  // Bật lại: đổi AGENT_MULTI_STOP_ENABLED trong agent-portal-flags.ts.
+  React.useEffect(() => {
+    if (!AGENT_MULTI_STOP_ENABLED) router.replace(AGENT_PORTAL_HOME);
+  }, [router]);
 
   const [mode, setMode] = React.useState<Mode>('rieng');
   const [billingMode, setBillingMode] = React.useState<'BAO' | 'GHEP'>('BAO');
@@ -174,6 +183,11 @@ export default function NewAgentOrderPage() {
       toast({ variant: 'destructive', title: 'Không gửi được', description: e?.message });
     } finally { setBusy(false); }
   };
+
+  // TẮT TẠM (xem agent-portal-flags.ts): không vẽ gì trong lúc chờ router.replace,
+  // nếu không đại lý sẽ thấy form nháy lên một khung hình rồi biến mất.
+  // Đặt SAU toàn bộ hook để không vi phạm rules-of-hooks.
+  if (!AGENT_MULTI_STOP_ENABLED) return null;
 
   // ─────────────────────── ghép-tuyến mode (fully separate flow) ───────────────────────
   if (mode === 'ghep') {
