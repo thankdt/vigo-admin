@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildConfigGroups } from './system-config-groups';
+import { buildConfigGroups, groupIdFor } from './system-config-groups';
 import type { AdminMe } from '@/lib/types';
 
 const CONFIGS = [
@@ -100,5 +100,22 @@ describe('buildConfigGroups (settings RBAC gate)', () => {
     const groups = buildConfigGroups(CONFIGS, 'radius', canFor(mkMe({ isSuperAdmin: true })));
     expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);
     expect(groups[0].items).toHaveLength(1);
+  });
+});
+
+describe('groupIdFor — CARPOOL seat discount keys', () => {
+  const seatDiscountKeys = [
+    'CARPOOL_SEAT_DISCOUNT_2',
+    'CARPOOL_SEAT_DISCOUNT_3',
+    'CARPOOL_SEAT_DISCOUNT_4',
+    'CARPOOL_SEAT_DISCOUNT_5',
+  ];
+
+  it.each(seatDiscountKeys)('routes %s to the pricing group', (key) => {
+    expect(groupIdFor(key)).toBe('pricing');
+  });
+
+  it('does not fall through to misc (catch-all)', () => {
+    expect(groupIdFor('CARPOOL_SEAT_DISCOUNT_2')).not.toBe('misc');
   });
 });

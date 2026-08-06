@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -562,6 +562,33 @@ export async function updateDriverRoutes(id: string, routeIds: number[]): Promis
     method: 'PUT',
     body: JSON.stringify({ routeIds }),
   });
+  const json = await response.json();
+  return json.data || json;
+}
+
+// ── Điểm uy tín & đánh giá tài xế ────────────────────────────────────────────
+// ⚠️ Đường dẫn là `/admin/driver-reputation/...` (KHÁC mẫu `/drivers/admin/...`
+// ở trên) — theo đúng hợp đồng API, đừng "sửa cho đồng bộ".
+// Chỉ số `null` nghĩa là CHƯA CÓ DỮ LIỆU, không phải 0 — xem
+// src/lib/driver-reputation-format.ts trước khi render.
+
+export async function getDriverReputation(driverId: string): Promise<DriverReputation> {
+  const response = await fetchWithAuth(`/admin/driver-reputation/${driverId}`);
+  const json = await response.json();
+  return json.data || json;
+}
+
+export async function getDriverRatings(
+  driverId: string,
+  params: { limit?: number; offset?: number } = {},
+): Promise<{ items: DriverTripRating[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.limit != null) query.set('limit', String(params.limit));
+  if (params.offset != null) query.set('offset', String(params.offset));
+  const qs = query.toString();
+  const response = await fetchWithAuth(
+    `/admin/driver-reputation/${driverId}/ratings${qs ? `?${qs}` : ''}`,
+  );
   const json = await response.json();
   return json.data || json;
 }
@@ -1495,6 +1522,62 @@ export async function htxGetDashboard(range: HtxDashboardRange): Promise<HtxDash
   }
   const response = await fetchWithAuth(`/htx/dashboard?${query.toString()}`);
   return unwrap<HtxDashboard>(response);
+}
+
+// Một chuyến trong lịch sử HTX. Backend CỐ Ý không trả SĐT / ghi chú của khách
+// (xem HtxService.listTrips) — đừng thêm field khách vào type này khi backend chưa
+// đổi, sẽ chỉ nhận undefined.
+export type HtxOwnerTripRow = {
+  id: string;
+  status: 'COMPLETED' | 'CANCELLED';
+  serviceType: string;
+  isVinow: boolean;
+  createdAt: string;
+  acceptedAt: string | null;
+  completedAt: string | null;
+  cancelledAt: string | null;
+  /** Mốc hiển thị: chuyến huỷ = lúc huỷ, còn lại = lúc hoàn thành. Cũng là mốc lọc + sắp xếp. */
+  eventAt: string;
+  pickup: string | null;
+  dropoff: string | null;
+  distanceKm: number | null;
+  customerName: string | null;
+  driver: { id: string; name: string | null; phone: string | null; plate: string | null };
+  price: number | null;
+  finalPrice: number | null;
+  cancelledByRole: 'CUSTOMER' | 'DRIVER' | 'ADMIN' | 'SYSTEM' | null;
+  /** null khi admin huỷ (ô này dùng chung với ghi chú nội bộ) → hiện nhãn theo vai trò. */
+  cancelReason: string | null;
+};
+
+export type HtxOwnerTripListResponse = {
+  data: HtxOwnerTripRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+};
+
+export async function htxListTrips(
+  params: {
+    page?: number;
+    limit?: number;
+    /** Ngày VN (YYYY-MM-DD). Bỏ trống → backend lấy 30 ngày gần nhất. */
+    from?: string;
+    to?: string;
+    status?: 'completed' | 'cancelled' | 'all';
+    driverId?: string;
+    search?: string;
+  } = {},
+): Promise<HtxOwnerTripListResponse> {
+  const q = new URLSearchParams({
+    page: String(params.page ?? 1),
+    limit: String(params.limit ?? 20),
+  });
+  if (params.from) q.set('from', params.from);
+  if (params.to) q.set('to', params.to);
+  if (params.status) q.set('status', params.status);
+  if (params.driverId) q.set('driverId', params.driverId);
+  if (params.search) q.set('search', params.search);
+  const response = await fetchWithAuth(`/htx/trips?${q.toString()}`);
+  return unwrap<HtxOwnerTripListResponse>(response);
 }
 
 // Admin view of a company's stats (same numbers the HTX owner dashboard shows)

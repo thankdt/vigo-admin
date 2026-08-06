@@ -39,6 +39,7 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons } from '@/lib/api';
 import { VoidBookingDialog } from './void-booking-dialog';
+import { buildDiscountRows } from './price-breakdown-utils';
 import type { Route } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
@@ -132,7 +133,7 @@ const CANCELLED_BY_ROLE_LABEL: Record<string, string> = {
   SYSTEM: 'Hệ thống',
 };
 
-function PriceBreakdownCard({ booking }: { booking: Booking }) {
+export function PriceBreakdownCard({ booking }: { booking: Booking }) {
   const fmtVnd = (v: number | string | null | undefined) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
 
@@ -150,10 +151,7 @@ function PriceBreakdownCard({ booking }: { booking: Booking }) {
     { label: 'Phí dịch vụ', value: Number(breakdown.serviceFee ?? 0) },
   ].filter(r => r.value > 0) : [];
 
-  const discounts: Array<{ label: string; value: number }> = breakdown ? [
-    { label: 'Khách thân thiết', value: Number(breakdown.loyaltyDiscount ?? 0) },
-    { label: 'Mã khuyến mãi', value: Number(breakdown.promotionDiscount ?? 0) },
-  ].filter(r => r.value > 0) : [];
+  const discounts = buildDiscountRows(breakdown);
 
   const vatAmount = Number(breakdown?.vatAmount ?? 0);
   const totalDiscount = discounts.reduce((sum, d) => sum + d.value, 0);
@@ -417,7 +415,18 @@ function CustomerCallBadge({ status }: { status?: CustomerCallStatus | null }) {
   return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Chưa gọi</Badge>;
 }
 
-function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bookingId: string, onClose: () => void, onDuplicate: (booking: Booking) => void, onCallRecorded?: () => void }) {
+// Exported (only the keyword — no behavior/signature change) so it can be
+// unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
+// test mock getBookingDetails() and assert on badges (e.g.
+// switchedToWholeCar) without mounting the whole BookingsTable.
+export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: {
+  bookingId: string,
+  onClose: () => void,
+  // Bỏ trống (vd trong unit test) → không hiện nút "Nhân bản chuyến".
+  onDuplicate?: (booking: Booking) => void,
+  // CSKH gọi check khách xong → báo danh sách refetch cột "Gọi check".
+  onCallRecorded?: () => void,
+}) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -535,6 +544,11 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
                 {booking.serviceType && (
                   <Badge variant="outline" className="text-xs">
                     {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
+                  </Badge>
+                )}
+                {booking.switchedToWholeCar && (
+                  <Badge className="text-xs bg-amber-600 text-white hover:bg-amber-600">
+                    🔁 Đã tự chuyển sang Bao xe
                   </Badge>
                 )}
                 {booking.isPooled && <Badge variant="secondary" className="text-xs">Đi chung</Badge>}
@@ -843,7 +857,7 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
             </>
           )}
         </div>
-        {booking && (
+        {booking && onDuplicate && (
           <DialogFooter>
             {/* Đặt lại chuyến giống hệt cho khách quen — mở form Tạo chuyến đã điền sẵn.
                 Chuyến đang xem KHÔNG bị thay đổi. */}
