@@ -4,8 +4,13 @@ import { PriceBreakdownCard, BookingDetail } from './bookings-table';
 import { getBookingDetails } from '@/lib/api';
 import type { Booking, PriceBreakdown } from '@/lib/types';
 
+// Mock phải khai MỌI export mà component import, kể cả thứ không dùng trong
+// test này — vitest ném "No X export is defined on the mock" ngay lúc nạp
+// module, trước cả khi render. `getCustomerCallReasons` đến từ tính năng giám
+// sát CSKH; thiếu nó làm đỏ cả 2 test badge vốn không liên quan gì.
 vi.mock('@/lib/api', () => ({
   getBookingDetails: vi.fn(),
+  getCustomerCallReasons: vi.fn(async () => []),
 }));
 
 const breakdown: PriceBreakdown = {
