@@ -1,5 +1,5 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating } from '@/lib/types';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -562,6 +562,33 @@ export async function updateDriverRoutes(id: string, routeIds: number[]): Promis
     method: 'PUT',
     body: JSON.stringify({ routeIds }),
   });
+  const json = await response.json();
+  return json.data || json;
+}
+
+// ── Điểm uy tín & đánh giá tài xế ────────────────────────────────────────────
+// ⚠️ Đường dẫn là `/admin/driver-reputation/...` (KHÁC mẫu `/drivers/admin/...`
+// ở trên) — theo đúng hợp đồng API, đừng "sửa cho đồng bộ".
+// Chỉ số `null` nghĩa là CHƯA CÓ DỮ LIỆU, không phải 0 — xem
+// src/lib/driver-reputation-format.ts trước khi render.
+
+export async function getDriverReputation(driverId: string): Promise<DriverReputation> {
+  const response = await fetchWithAuth(`/admin/driver-reputation/${driverId}`);
+  const json = await response.json();
+  return json.data || json;
+}
+
+export async function getDriverRatings(
+  driverId: string,
+  params: { limit?: number; offset?: number } = {},
+): Promise<{ items: DriverTripRating[]; total: number }> {
+  const query = new URLSearchParams();
+  if (params.limit != null) query.set('limit', String(params.limit));
+  if (params.offset != null) query.set('offset', String(params.offset));
+  const qs = query.toString();
+  const response = await fetchWithAuth(
+    `/admin/driver-reputation/${driverId}/ratings${qs ? `?${qs}` : ''}`,
+  );
   const json = await response.json();
   return json.data || json;
 }

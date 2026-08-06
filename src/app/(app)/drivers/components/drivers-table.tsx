@@ -56,6 +56,7 @@ import { getImageUrl, cn } from '@/lib/utils';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { Textarea } from '@/components/ui/textarea';
 import { ApprovalTimeline, DriverCallTimeline, CALL_TYPE_META, formatVnDateTime, isSuspendedNow } from './driver-detail-dialog';
+import { DriverReputationSection } from './driver-reputation-section';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { WalletAdjustDialog } from './wallet-adjust-dialog';
 import { Wallet as WalletIcon } from 'lucide-react';
@@ -1781,6 +1782,10 @@ export function DriversTable() {
               </Button>
             </div>
           )}
+
+          {/* Tự bọc tiêu đề + đường kẻ, tự ẩn khi tài khoản không có function
+              'driver-reputation' (khác function 'drivers' gác trang này). */}
+          {viewDriver && <DriverReputationSection driverId={viewDriver.id} />}
 
           {viewDriver && (
             <div className="border-t pt-4 space-y-2">
