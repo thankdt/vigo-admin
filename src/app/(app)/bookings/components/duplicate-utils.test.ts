@@ -160,6 +160,22 @@ describe('bookingToDraft — hành khách', () => {
   });
 });
 
+describe('bookingToDraft — SĐT người đi cùng', () => {
+  it('chép sang bản nháp (quên chép = nhân bản mất số)', () => {
+    expect(bookingToDraft(base({ companionPhone: '0912345678' } as any)).companionPhone).toBe('0912345678');
+  });
+
+  it('chuẩn hoá dạng +84 / có khoảng trắng của rows cũ', () => {
+    expect(bookingToDraft(base({ companionPhone: '+84912345678' } as any)).companionPhone).toBe('0912345678');
+    expect(bookingToDraft(base({ companionPhone: '0912 345 678' } as any)).companionPhone).toBe('0912345678');
+  });
+
+  it('null/undefined (chuyến cũ hoặc backend đã strip) → chuỗi rỗng', () => {
+    expect(bookingToDraft(base({ companionPhone: null } as any)).companionPhone).toBe('');
+    expect(bookingToDraft(base()).companionPhone).toBe('');
+  });
+});
+
 describe('bookingToDraft — ghi chú: bỏ tiền tố backend tự thêm', () => {
   it('bỏ "[Admin] " để không cộng dồn qua mỗi đời nhân bản', () => {
     expect(bookingToDraft(base({ note: '[Admin] Khách VIP' })).note).toBe('Khách VIP');

@@ -594,6 +594,11 @@ function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: { bo
                   <div className="flex-1 text-sm">
                     <div className="font-semibold">{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</div>
                     <div className="text-muted-foreground">{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</div>
+                    {/* SĐT người đi cùng — chỉ hiện khi chuyến có (backend strip khỏi
+                        feed/offer nên tài chưa nhận chuyến không thấy). */}
+                    {booking.companionPhone && (
+                      <div className="text-muted-foreground">Người đi cùng: {booking.companionPhone}</div>
+                    )}
                   </div>
                 </div>
               </Card>
