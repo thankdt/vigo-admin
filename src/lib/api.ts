@@ -1,5 +1,11 @@
 'use client';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating } from '@/lib/types';
+import {
+  buildRankingQuery,
+  buildRecentRatingsQuery,
+  type RankingQueryInput,
+  type RecentRatingsQueryInput,
+} from '@/lib/driver-reputation-query';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -591,6 +597,50 @@ export async function getDriverRatings(
   );
   const json = await response.json();
   return json.data || json;
+}
+
+/**
+ * Bảng xếp hạng điểm uy tín (trang /driver-reputation, tab "Bảng xếp hạng").
+ *
+ * Phân trang Ở BACKEND (limit/offset) chứ không tải hết rồi cắt ở client như
+ * vài màn cũ: bảng này quét toàn bộ tài xế (~11.7k dòng).
+ *
+ * `minRatings` mặc định 1 — xem `buildRankingQuery`. Muốn xem cả tài chưa có
+ * đánh giá thì truyền THẲNG 0.
+ */
+export async function getDriverReputationRanking(
+  params: RankingQueryInput = {},
+): Promise<DriverReputationRanking> {
+  const qs = buildRankingQuery(params);
+  const response = await fetchWithAuth(`/admin/driver-reputation${qs ? `?${qs}` : ''}`);
+  const json = await response.json();
+  const data = json.data || json;
+  // Backend cũ (chưa có endpoint) hoặc payload lạ ⇒ danh sách rỗng, KHÔNG undefined:
+  // nơi gọi map thẳng `items` nên undefined là màn hình trắng kèm lỗi runtime.
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    total: Number(data?.total) || 0,
+    minRatingsToShow: Number(data?.minRatingsToShow) || 0,
+  };
+}
+
+/**
+ * Đánh giá mới nhất TOÀN HỆ THỐNG (tab "Đánh giá gần đây").
+ * `maxStars` = lọc "chỉ xem đánh giá thấp" — thứ admin cần theo dõi hằng ngày.
+ */
+export async function getRecentDriverRatings(
+  params: RecentRatingsQueryInput = {},
+): Promise<{ items: RecentDriverRating[]; total: number }> {
+  const qs = buildRecentRatingsQuery(params);
+  const response = await fetchWithAuth(
+    `/admin/driver-reputation/ratings/recent${qs ? `?${qs}` : ''}`,
+  );
+  const json = await response.json();
+  const data = json.data || json;
+  return {
+    items: Array.isArray(data?.items) ? data.items : [],
+    total: Number(data?.total) || 0,
+  };
 }
 
 export type AdminInvoiceRow = {

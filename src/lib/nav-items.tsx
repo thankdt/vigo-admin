@@ -26,6 +26,7 @@ import {
   TrendingDown,
   PieChart,
   Headset,
+  Star,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -51,6 +52,8 @@ export const navGroups: NavGroup[] = [
       { href: '/bookings', label: 'Chuyến đi', icon: Book },
       { href: '/agent-orders', label: 'Đơn đặt hộ', icon: PackageOpen },
       { href: '/drivers', label: 'Tài xế', icon: Car },
+      // Cạnh mục tài xế, cùng cụm "chất lượng tài xế" với Tỉ lệ huỷ / Góp ý.
+      { href: '/driver-reputation', label: 'Điểm & đánh giá tài xế', icon: Star },
       { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
       { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
       { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
