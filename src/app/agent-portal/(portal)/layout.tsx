@@ -6,8 +6,9 @@ import {
   SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter,
   SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, LogOut, ListOrdered, PlusCircle, Wallet } from 'lucide-react';
+import { LogOut, Wallet } from 'lucide-react';
 import { getAgentMe, type AgentMe } from '@/lib/api';
+import { visibleNavItems } from '../agent-portal-nav';
 import React from 'react';
 
 /** Số dư ví hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
@@ -23,12 +24,9 @@ function WalletChip({ me }: { me: AgentMe | null }) {
   );
 }
 
-const navItems = [
-  { href: '/agent-portal/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
-  { href: '/agent-portal/orders/new', label: 'Đặt hộ mới', icon: PlusCircle },
-  { href: '/agent-portal/orders', label: 'Đơn của tôi', icon: ListOrdered },
-  { href: '/agent-portal/wallet', label: 'Ví & Rút tiền', icon: Wallet },
-];
+// Sidebar khai ở `agent-portal-nav.ts` — Next App Router cấm layout.tsx export
+// thêm thứ gì ngoài default/metadata/…
+const navItems = visibleNavItems();
 
 /** Protected agent portal. Gates on /agent/me (AgentGuard → 403 for non-agents). */
 export default function AgentPortalLayout({ children }: { children: React.ReactNode }) {
