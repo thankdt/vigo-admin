@@ -2222,6 +2222,12 @@ export type AgentMe = {
   // USER_REFERRAL = ví hoa hồng (đại lý là khách), DRIVER_MAIN = ví tài xế (đại lý là tài xế).
   walletBalance?: number;
   walletType?: 'USER_REFERRAL' | 'DRIVER_MAIN';
+  // Số dư ví affiliate (USER_REFERRAL) — additive, backend LUÔN trả kể cả khi
+  // walletType là DRIVER_MAIN. Tài xế kiếm hoa hồng đặt hộ lúc CHƯA DUYỆT thì
+  // tiền nằm ở ví này; sau khi được duyệt walletType đổi sang DRIVER_MAIN, nếu
+  // gate phần rút chỉ theo walletType thì số tiền đó biến mất khỏi màn hình và
+  // không rút được nữa dù vẫn là tiền của họ.
+  referralBalance?: number;
 };
 export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
 export type AgentPassenger = {
@@ -2328,6 +2334,22 @@ export async function applyAgent(note?: string): Promise<{ status?: string; comm
 // tài xế (DRIVER_MAIN), backend CHƯA có API tự rút → cổng chỉ hiển thị số dư, KHÔNG cho gửi lệnh rút.
 export function agentCanSelfWithdraw(walletType: AgentMe['walletType']): boolean {
   return walletType === 'USER_REFERRAL';
+}
+
+/**
+ * Có được gửi lệnh rút không — dùng cho CỔNG UI (phần "Tạo lệnh rút" + tài khoản
+ * nhận tiền). Rộng hơn `agentCanSelfWithdraw` đúng một ca:
+ *
+ * Tài xế kiếm hoa hồng đặt hộ lúc CHƯA DUYỆT → tiền vào ví affiliate. Sau khi
+ * admin duyệt, walletType chuyển sang DRIVER_MAIN và gate cũ sẽ ẩn phần rút —
+ * khoá luôn số tiền họ đã kiếm. Nên còn tiền trong ví affiliate thì vẫn cho rút,
+ * bất kể walletType hiện là gì.
+ *
+ * Vẫn KHÔNG mở đường rút cho ví tài xế: /referrals/me/withdrawals hard-code ví
+ * USER_REFERRAL, nên lệnh rút chỉ động vào đúng số dư affiliate này.
+ */
+export function agentCanRequestWithdrawal(me: Pick<AgentMe, 'walletType' | 'referralBalance'>): boolean {
+  return agentCanSelfWithdraw(me.walletType) || (me.referralBalance ?? 0) > 0;
 }
 export async function listAgentOrders(page = 1, limit = 20): Promise<{ data: AgentOrder[]; meta: any }> {
   return unwrap(await fetchWithAuth(`/agent/orders?page=${page}&limit=${limit}`));

@@ -16,6 +16,7 @@ import {
   submitMyWithdrawal,
   listAgentBookings,
   agentCanSelfWithdraw,
+  agentCanRequestWithdrawal,
   parseApiError,
   type AgentMe,
   type KolWithdrawal,
@@ -66,7 +67,7 @@ export default function AgentWalletPage() {
       const b = await listAgentBookings(1, 50).catch(() => ({ data: [] as AgentBooking[] }));
       setBookings(b.data ?? []);
       // Lịch sử rút chỉ có nghĩa với ví tự rút được (USER_REFERRAL). Ví tài xế không có luồng này.
-      if (agentCanSelfWithdraw(m.walletType)) {
+      if (agentCanRequestWithdrawal(m)) {
         setList(await getMyWithdrawals().catch(() => []));
       } else {
         setList([]);
@@ -83,7 +84,7 @@ export default function AgentWalletPage() {
   const saveBank = async () => {
     // Cổng an toàn tiền (defense-in-depth): chỉ ví USER_REFERRAL mới có tài khoản nhận tiền để rút.
     // Không dựa duy nhất vào render có điều kiện — guard ở đây sống sót qua mọi refactor JSX sau này.
-    if (!me || !agentCanSelfWithdraw(me.walletType)) return;
+    if (!me || !agentCanRequestWithdrawal(me)) return;
     if (!bankName.trim() || !accountNumber.trim() || !accountHolder.trim()) {
       toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Điền đủ ngân hàng, số tài khoản và chủ tài khoản.' });
       return;
@@ -103,7 +104,7 @@ export default function AgentWalletPage() {
   const submit = async () => {
     // Cổng an toàn tiền (defense-in-depth): /referrals/me/withdrawals hard-code ví USER_REFERRAL.
     // Chặn triệt để ví tài xế (DRIVER_MAIN) ngay cả khi UI bị refactor lộ nút ra ngoài nhánh gate.
-    if (!me || !agentCanSelfWithdraw(me.walletType)) return;
+    if (!me || !agentCanRequestWithdrawal(me)) return;
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) {
       toast({ variant: 'destructive', title: 'Số tiền không hợp lệ' });
@@ -126,7 +127,10 @@ export default function AgentWalletPage() {
     return <div className="py-24 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const canWithdraw = me ? agentCanSelfWithdraw(me.walletType) : false;
+  // Rộng hơn agentCanSelfWithdraw đúng một ca: tài xế ĐÃ DUYỆT nhưng còn tiền
+  // kiếm được từ hồi CHƯA DUYỆT nằm trong ví affiliate. Gate chỉ theo walletType
+  // sẽ khoá luôn số tiền đó — nó vẫn là tiền của họ.
+  const canWithdraw = me ? agentCanRequestWithdrawal(me) : false;
   const hasBank = !!me?.bankInfo?.accountNumber;
   const hasInFlight = list.some((w) => w.status === 'PENDING' || w.status === 'APPROVED');
   const walletLabel = me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng';
