@@ -16,6 +16,7 @@ import {
   submitMyWithdrawal,
   listAgentBookings,
   agentCanSelfWithdraw,
+  agentCanRequestWithdrawal,
   parseApiError,
   type AgentMe,
   type KolWithdrawal,
@@ -65,12 +66,10 @@ export default function AgentWalletPage() {
       // Lịch sử hoa hồng theo chuyến — mọi loại ví đều xem được ("tiền cộng từ chuyến nào").
       const b = await listAgentBookings(1, 50).catch(() => ({ data: [] as AgentBooking[] }));
       setBookings(b.data ?? []);
-      // Lịch sử rút chỉ có nghĩa với ví tự rút được (USER_REFERRAL). Ví tài xế không có luồng này.
-      if (agentCanSelfWithdraw(m.walletType)) {
-        setList(await getMyWithdrawals().catch(() => []));
-      } else {
-        setList([]);
-      }
+      // LUÔN nạp lịch sử rút (endpoint chỉ cần JWT). Trước đây gate theo loại ví,
+      // nên đúng lúc tiền đang bị giữ cho lệnh rút thì lịch sử biến mất cùng khối
+      // rút — người dùng mất dấu số tiền đang chờ chuyển khoản.
+      setList(await getMyWithdrawals().catch(() => []));
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không tải được dữ liệu', description: parseApiError(err.message) });
     } finally {
@@ -83,7 +82,7 @@ export default function AgentWalletPage() {
   const saveBank = async () => {
     // Cổng an toàn tiền (defense-in-depth): chỉ ví USER_REFERRAL mới có tài khoản nhận tiền để rút.
     // Không dựa duy nhất vào render có điều kiện — guard ở đây sống sót qua mọi refactor JSX sau này.
-    if (!me || !agentCanSelfWithdraw(me.walletType)) return;
+    if (!me || !agentCanRequestWithdrawal(me)) return;
     if (!bankName.trim() || !accountNumber.trim() || !accountHolder.trim()) {
       toast({ variant: 'destructive', title: 'Thiếu thông tin', description: 'Điền đủ ngân hàng, số tài khoản và chủ tài khoản.' });
       return;
@@ -103,7 +102,7 @@ export default function AgentWalletPage() {
   const submit = async () => {
     // Cổng an toàn tiền (defense-in-depth): /referrals/me/withdrawals hard-code ví USER_REFERRAL.
     // Chặn triệt để ví tài xế (DRIVER_MAIN) ngay cả khi UI bị refactor lộ nút ra ngoài nhánh gate.
-    if (!me || !agentCanSelfWithdraw(me.walletType)) return;
+    if (!me || !agentCanRequestWithdrawal(me)) return;
     const n = Number(amount);
     if (!Number.isFinite(n) || n <= 0) {
       toast({ variant: 'destructive', title: 'Số tiền không hợp lệ' });
@@ -126,7 +125,10 @@ export default function AgentWalletPage() {
     return <div className="py-24 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" /></div>;
   }
 
-  const canWithdraw = me ? agentCanSelfWithdraw(me.walletType) : false;
+  // Rộng hơn agentCanSelfWithdraw đúng một ca: tài xế ĐÃ DUYỆT nhưng còn tiền
+  // kiếm được từ hồi CHƯA DUYỆT nằm trong ví affiliate. Gate chỉ theo walletType
+  // sẽ khoá luôn số tiền đó — nó vẫn là tiền của họ.
+  const canWithdraw = me ? agentCanRequestWithdrawal(me) : false;
   const hasBank = !!me?.bankInfo?.accountNumber;
   const hasInFlight = list.some((w) => w.status === 'PENDING' || w.status === 'APPROVED');
   const walletLabel = me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng';
@@ -142,6 +144,27 @@ export default function AgentWalletPage() {
         <p className="mt-1 text-xs text-muted-foreground">
           Hoa hồng {me?.commissionPercent != null ? `${me.commissionPercent}%` : '—'} trên cước (trước VAT) mỗi đơn hoàn thành.
         </p>
+        {/* Ví affiliate hiện RIÊNG khi nó khác ví chính đang hiển thị.
+            Ca thật: tài xế kiếm hoa hồng hồi CHƯA DUYỆT (tiền vào ví affiliate),
+            sau khi duyệt thì card này hiện số dư VÍ TÀI XẾ — nhưng nút rút bên
+            dưới chỉ rút được ví affiliate. Không tách ra thì người dùng nhìn 5 triệu
+            ví tài xế rồi gõ rút 1 triệu và ăn lỗi "số dư không đủ". */}
+        {me?.walletType === 'DRIVER_MAIN' &&
+          ((me?.referralBalance ?? 0) > 0 || (me?.referralHeld ?? 0) > 0) && (
+            <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
+              <div className="text-xs text-amber-900">Ví hoa hồng đặt hộ — RÚT ĐƯỢC</div>
+              <div className="text-lg font-bold text-amber-900">{formatVND(me?.referralBalance ?? 0)}</div>
+              {(me?.referralHeld ?? 0) > 0 && (
+                <div className="text-xs text-amber-800">
+                  Đang chờ chuyển khoản: {formatVND(me?.referralHeld ?? 0)}
+                </div>
+              )}
+              <p className="mt-1 text-xs text-amber-800">
+                Đây là hoa hồng bạn kiếm được khi tài khoản chưa được duyệt. Số dư ví tài xế ở
+                trên dùng trong app tài xế, không rút ở đây.
+              </p>
+            </div>
+          )}
       </Card>
 
       {canWithdraw ? (
@@ -178,7 +201,25 @@ export default function AgentWalletPage() {
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
               <div className="flex-1 space-y-1.5">
                 <Label>Số tiền (VND)</Label>
-                <Input type="number" inputMode="numeric" min={0} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Tối thiểu 50.000" />
+                {/* min/max + gợi ý lấy TỪ BACKEND, không hard-code: mức tối thiểu
+                    đọc từ config REFERRAL_MIN_WITHDRAWAL_AMOUNT, trần là số dư ví
+                    affiliate — thứ lệnh rút thực sự trừ vào. Trước đây placeholder
+                    ghi cứng "Tối thiểu 50.000" nên đổi config là chữ nói sai. */}
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={me?.referralMinWithdrawal ?? 0}
+                  max={me?.referralBalance ?? undefined}
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  placeholder={`Tối thiểu ${formatVND(me?.referralMinWithdrawal ?? 50000)}`}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Rút được tối đa {formatVND(me?.referralBalance ?? 0)}
+                  {me?.referralMinWithdrawal != null
+                    ? ` · tối thiểu mỗi lần ${formatVND(me.referralMinWithdrawal)}`
+                    : ''}
+                </p>
               </div>
               <Button onClick={submit} disabled={submitting || !hasBank || hasInFlight}>
                 {submitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
