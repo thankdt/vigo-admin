@@ -19,8 +19,8 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 26 menu functions (navItems minus /settings)', () => {
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(26); // 2026-08-05: +cskh-activity
+  it('has exactly 27 menu functions (navItems minus /settings)', () => {
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(27); // 2026-08-06: +driver-reputation
   });
 
   it('each menu function key = its href without the leading slash', () => {

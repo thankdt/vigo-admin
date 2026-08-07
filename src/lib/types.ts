@@ -707,3 +707,45 @@ export type DriverTripRating = {
   tripCompletedAt: string | null;
   createdAt: string;
 };
+
+/** Một dòng bảng xếp hạng điểm uy tín (GET /admin/driver-reputation).
+ *  Bản RÚT GỌN — cố ý KHÔNG có 3 chỉ số vận hành: mỗi tài cần 3 truy vấn riêng
+ *  nên một trang 20 dòng là 60 truy vấn (xem comment ở controller backend).
+ *  Xem chỉ số vận hành ở khối "Điểm & đánh giá" trong chi tiết tài xế. */
+export type DriverReputationRankRow = {
+  driverId: string;
+  fullName: string | null;
+  phone: string | null;
+  ratingCount: number;
+  /** null = CHƯA đủ đánh giá để công khai → "Chưa có đánh giá", KHÔNG hiện 0 sao. */
+  displayStars: number | null;
+  /** Sao Bayes — backend dùng để XẾP HẠNG. Client chỉ hiển thị/không xếp lại. */
+  bayesStars: number | null;
+  lastRatingAt: string | null;
+};
+
+export type DriverReputationRanking = {
+  items: DriverReputationRankRow[];
+  total: number;
+  /** Ngưỡng số đánh giá tối thiểu để công khai sao (từ system_config). */
+  minRatingsToShow: number;
+};
+
+/** Một đánh giá trong feed "Đánh giá gần đây" toàn hệ thống
+ *  (GET /admin/driver-reputation/ratings/recent) — DriverTripRating rút gọn,
+ *  KHÔNG có customerId/tags/tripCompletedAt, nhưng kèm tên + SĐT tài xế. */
+export type RecentDriverRating = {
+  id: string;
+  bookingId: string;
+  driverId: string;
+  /** 1..5 */
+  stars: number;
+  comment: string | null;
+  serviceType: string | null;
+  /** false = KHÔNG tính vào điểm; lý do ở `excludeReason`. */
+  isCounted: boolean;
+  excludeReason: string | null;
+  createdAt: string;
+  driverName: string | null;
+  driverPhone: string | null;
+};

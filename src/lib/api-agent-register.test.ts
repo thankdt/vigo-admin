@@ -4,6 +4,7 @@ import {
   registerAccount,
   applyAgent,
   agentCanSelfWithdraw,
+  agentCanRequestWithdrawal,
   API_BASE_URL,
 } from './api';
 
@@ -75,5 +76,53 @@ describe('agent self-service registration + withdrawal gate', () => {
     expect(agentCanSelfWithdraw('USER_REFERRAL')).toBe(true);
     expect(agentCanSelfWithdraw('DRIVER_MAIN')).toBe(false);
     expect(agentCanSelfWithdraw(undefined)).toBe(false);
+  });
+});
+
+describe('agentCanRequestWithdrawal — giữ đường rút cho tiền kiếm lúc chưa duyệt', () => {
+  it('ví affiliate → cho rút (như cũ)', () => {
+    expect(agentCanRequestWithdrawal({ walletType: 'USER_REFERRAL' })).toBe(true);
+  });
+
+  it('tài xế đã duyệt mà CÒN tiền trong ví affiliate → VẪN cho rút', () => {
+    // Đây là ca cả bản vá sinh ra để cứu: tiền kiếm lúc chưa duyệt nằm ở ví
+    // affiliate, sau khi duyệt walletType đổi sang DRIVER_MAIN. Gate cũ sẽ ẩn
+    // phần rút và khoá luôn số tiền đó.
+    expect(
+      agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: 15000 }),
+    ).toBe(true);
+  });
+
+  it('tài xế đã duyệt, ví affiliate RỖNG → không hiện phần rút', () => {
+    expect(agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: 0 })).toBe(false);
+    expect(agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN' })).toBe(false);
+  });
+
+  it('backend cũ không trả referralBalance → không suy đoán bừa', () => {
+    // undefined ≠ "có tiền". Đoán bừa là hiện nút rút rồi để người dùng ăn lỗi.
+    expect(agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: undefined })).toBe(false);
+  });
+
+  it('KHÔNG mở đường rút cho ví tài xế: số dư âm/không hợp lệ vẫn là không', () => {
+    expect(agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: -1 })).toBe(false);
+  });
+
+  it('tiền ĐANG BỊ GIỮ cho lệnh rút → vẫn hiện khối rút (referralBalance đã về 0)', () => {
+    // holdReferralForWithdrawal trừ hẳn tiền khỏi ví affiliate lúc gửi lệnh. Gate
+    // chỉ theo referralBalance sẽ ẩn cả khối rút lẫn lịch sử đúng lúc người dùng
+    // đang chờ chuyển khoản — họ mất dấu số tiền của mình.
+    expect(
+      agentCanRequestWithdrawal({
+        walletType: 'DRIVER_MAIN',
+        referralBalance: 0,
+        referralHeld: 200000,
+      }),
+    ).toBe(true);
+  });
+
+  it('ví affiliate rỗng VÀ không có lệnh nào đang chờ → không hiện', () => {
+    expect(
+      agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: 0, referralHeld: 0 }),
+    ).toBe(false);
   });
 });
