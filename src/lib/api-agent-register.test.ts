@@ -106,4 +106,23 @@ describe('agentCanRequestWithdrawal — giữ đường rút cho tiền kiếm l
   it('KHÔNG mở đường rút cho ví tài xế: số dư âm/không hợp lệ vẫn là không', () => {
     expect(agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: -1 })).toBe(false);
   });
+
+  it('tiền ĐANG BỊ GIỮ cho lệnh rút → vẫn hiện khối rút (referralBalance đã về 0)', () => {
+    // holdReferralForWithdrawal trừ hẳn tiền khỏi ví affiliate lúc gửi lệnh. Gate
+    // chỉ theo referralBalance sẽ ẩn cả khối rút lẫn lịch sử đúng lúc người dùng
+    // đang chờ chuyển khoản — họ mất dấu số tiền của mình.
+    expect(
+      agentCanRequestWithdrawal({
+        walletType: 'DRIVER_MAIN',
+        referralBalance: 0,
+        referralHeld: 200000,
+      }),
+    ).toBe(true);
+  });
+
+  it('ví affiliate rỗng VÀ không có lệnh nào đang chờ → không hiện', () => {
+    expect(
+      agentCanRequestWithdrawal({ walletType: 'DRIVER_MAIN', referralBalance: 0, referralHeld: 0 }),
+    ).toBe(false);
+  });
 });

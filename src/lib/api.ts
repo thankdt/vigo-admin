@@ -2228,6 +2228,14 @@ export type AgentMe = {
   // gate phần rút chỉ theo walletType thì số tiền đó biến mất khỏi màn hình và
   // không rút được nữa dù vẫn là tiền của họ.
   referralBalance?: number;
+  // Tiền ĐANG BỊ GIỮ cho lệnh rút chưa xong (PENDING/APPROVED). Lúc gửi lệnh,
+  // backend TRỪ HẲN tiền khỏi ví affiliate sang ví trung gian ⇒ referralBalance
+  // về 0. Không có field này thì gate `referralBalance > 0` sẽ ẩn cả khối rút
+  // lẫn lịch sử đúng lúc người dùng đang chờ chuyển khoản — mất dấu tiền.
+  referralHeld?: number;
+  // Mức rút tối thiểu (BOK_004 nếu gửi thấp hơn). Hiện trước thay vì để người
+  // dùng bấm rồi ăn lỗi.
+  referralMinWithdrawal?: number;
 };
 export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
 export type AgentPassenger = {
@@ -2348,8 +2356,11 @@ export function agentCanSelfWithdraw(walletType: AgentMe['walletType']): boolean
  * Vẫn KHÔNG mở đường rút cho ví tài xế: /referrals/me/withdrawals hard-code ví
  * USER_REFERRAL, nên lệnh rút chỉ động vào đúng số dư affiliate này.
  */
-export function agentCanRequestWithdrawal(me: Pick<AgentMe, 'walletType' | 'referralBalance'>): boolean {
-  return agentCanSelfWithdraw(me.walletType) || (me.referralBalance ?? 0) > 0;
+export function agentCanRequestWithdrawal(
+  me: Pick<AgentMe, 'walletType' | 'referralBalance' | 'referralHeld'>,
+): boolean {
+  const coTien = (me.referralBalance ?? 0) > 0 || (me.referralHeld ?? 0) > 0;
+  return agentCanSelfWithdraw(me.walletType) || coTien;
 }
 export async function listAgentOrders(page = 1, limit = 20): Promise<{ data: AgentOrder[]; meta: any }> {
   return unwrap(await fetchWithAuth(`/agent/orders?page=${page}&limit=${limit}`));
