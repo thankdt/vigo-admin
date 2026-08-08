@@ -1869,6 +1869,13 @@ export type AdminKolRow = {
   leaderName: string | null;
   displayName: string | null;
   note: string | null;
+  // Mức điểm khách nhận khi đăng ký qua MÃ CÁ NHÂN của KOL này (link chia sẻ
+  // mang mã cá nhân, KHÔNG mang kol_code). 0 = tắt → khách nhận welcome bonus
+  // chung. Additive — backend cũ không trả thì coi như 0.
+  refereeRewardPoints?: number;
+  // Trần số lượt được thưởng qua mã cá nhân. 0 = không giới hạn. Đường mã cá
+  // nhân không có kol_code để bump usedCount nên đây là trần DUY NHẤT của nó.
+  refereeRewardUsageLimit?: number;
   createdAt: string;
 };
 
@@ -1899,6 +1906,8 @@ export async function adminListKols(params: {
 export async function adminPromoteKol(userId: string, body: {
   kind: KolKind;
   commissionPercent?: number | null;
+  refereeRewardPoints?: number;
+  refereeRewardUsageLimit?: number;
   leaderId?: string;
   displayName?: string;
   note?: string;
@@ -1913,6 +1922,8 @@ export async function adminPromoteKol(userId: string, body: {
 export async function adminUpdateKol(userId: string, body: {
   kind?: KolKind;
   commissionPercent?: number | null;
+  refereeRewardPoints?: number;
+  refereeRewardUsageLimit?: number;
   leaderId?: string | null;
   displayName?: string;
   note?: string;
