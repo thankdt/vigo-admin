@@ -57,14 +57,33 @@ const formatVnDateTime = (iso: string | null | undefined): string => {
   return d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
-type SortKey = 'amount' | 'trips' | 'referees' | 'clicks' | 'installs';
+/**
+ * Tiền là số nguyên đồng. `adjustment` là hiệu của các float64 nên về lý có thể ra 1e-10 →
+ * xét "khác 0" theo nửa đồng để không đẻ ra dòng "Khác 0 đ" vô nghĩa. `undefined` (BE cũ) = 0.
+ */
+const khac0 = (v?: number) => Math.abs(v ?? 0) >= 0.5;
+
+/**
+ * Tiền giới thiệu dùng để HIỂN THỊ và khép số: cộng hai phân vùng ĐÃ CLAMP mà BE trả.
+ * KHÔNG dùng `totalReward` (thô, có thể âm) — nếu dùng thì khi một phân vùng bị âm do thu hồi
+ * trùng, bảng admin và màn hình app sẽ hiện hai bộ số khác hẳn nhau. Fallback về `totalReward`
+ * cho BE cũ chưa trả hai cột này.
+ */
+const refTong = (r: AdminReferrerSummary) =>
+  r.signupReward != null || r.tripReward != null
+    ? (r.signupReward ?? 0) + (r.tripReward ?? 0)
+    : r.totalReward;
+
+// 'lifetime' = lũy kế thật của ví affiliate (gồm đặt hộ / thủ lĩnh KOL / khoản bù).
+// 'amount' vẫn là nghĩa cũ (chỉ thưởng giới thiệu + hoa hồng chuyến) — giữ để đối chiếu.
+type SortKey = 'lifetime' | 'amount' | 'trips' | 'referees' | 'clicks' | 'installs';
 
 export default function ReferralsPage() {
   const { toast } = useToast();
 
   const [referrers, setReferrers] = React.useState<AdminReferrerSummary[]>([]);
   const [search, setSearch] = React.useState('');
-  const [sort, setSort] = React.useState<SortKey>('amount');
+  const [sort, setSort] = React.useState<SortKey>('lifetime');
   const [page, setPage] = React.useState(1);
   const [totalPages, setTotalPages] = React.useState(1);
   const [total, setTotal] = React.useState(0);
@@ -224,7 +243,9 @@ export default function ReferralsPage() {
   // Aggregate stats banner — uses what's already loaded in current page.
   const pageStats = React.useMemo(() => {
     const sumTrips = referrers.reduce((s, r) => s + r.tripCount, 0);
-    const sumAmount = referrers.reduce((s, r) => s + r.totalReward, 0);
+    // Cộng theo LŨY KẾ THẬT của ví, không phải chỉ referral_event — nếu không thì con số này
+    // lại lệch với ví y như bug 69k/37k. `?? totalReward` để BE cũ (chưa ship field) không ra NaN.
+    const sumAmount = referrers.reduce((s, r) => s + (r.lifetimeTotal ?? r.totalReward), 0);
     const sumReferees = referrers.reduce((s, r) => s + r.refereeCount, 0);
     return { sumTrips, sumAmount, sumReferees };
   }, [referrers]);
@@ -263,7 +284,8 @@ export default function ReferralsPage() {
           <Select value={sort} onValueChange={(v) => { setSort(v as SortKey); setPage(1); }}>
             <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="amount">Tổng tiền giảm dần</SelectItem>
+              <SelectItem value="lifetime">Tổng tiền giảm dần</SelectItem>
+              <SelectItem value="amount">Riêng tiền giới thiệu giảm dần</SelectItem>
               <SelectItem value="trips">Số chuyến giảm dần</SelectItem>
               <SelectItem value="referees">Số người mời giảm dần</SelectItem>
               <SelectItem value="clicks">Lượt nhấn nhiều nhất</SelectItem>
@@ -374,7 +396,25 @@ export default function ReferralsPage() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{r.refereeCount}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.tripCount}</TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold text-primary">{formatVND(r.totalReward)}</TableCell>
+                  {/* Số lớn = LŨY KẾ THẬT của ví. Dòng nhỏ tách các nguồn KHÔNG đi qua
+                      referral_event, chỉ hiện phần khác 0 — đó chính là phần trước đây
+                      admin không nhìn thấy nên số của admin lệch với số user thấy trong app. */}
+                  <TableCell className="text-right tabular-nums">
+                    <div className="font-semibold text-primary">{formatVND(r.lifetimeTotal ?? r.totalReward)}</div>
+                    {(khac0(r.agentReward) || khac0(r.kolOverride) || khac0(r.adjustment)) ? (
+                      <div className="text-[10px] text-muted-foreground">
+                        {[
+                          // Cộng hai phân vùng ĐÃ CLAMP, không dùng totalReward thô — có vậy
+                          // dòng này mới khép đúng về số lớn bên trên, và mới khớp con số user
+                          // thấy trong app khi một phân vùng bị âm do thu hồi trùng.
+                          `GT ${formatVND(refTong(r))}`,
+                          khac0(r.agentReward) ? `Đặt hộ ${formatVND(r.agentReward!)}` : null,
+                          khac0(r.kolOverride) ? `Thủ lĩnh ${formatVND(r.kolOverride!)}` : null,
+                          khac0(r.adjustment) ? `Khác ${formatVND(r.adjustment!)}` : null,
+                        ].filter(Boolean).join(' · ')}
+                      </div>
+                    ) : null}
+                  </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{formatVnDateTime(r.analyticsSyncedAt)}</TableCell>
                   <TableCell className="text-right">
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReferrerDrilldown(r); }}>
@@ -408,8 +448,23 @@ export default function ReferralsPage() {
             </DialogTitle>
             {selectedReferrer && (
               <DialogDescription>
-                {selectedReferrer.refereeCount} người được mời · {selectedReferrer.tripCount} chuyến · tổng{' '}
-                <span className="font-medium text-foreground">{formatVND(selectedReferrer.totalReward)}</span>
+                {selectedReferrer.refereeCount} người được mời · {selectedReferrer.tripCount} chuyến · lũy kế{' '}
+                <span className="font-medium text-foreground">
+                  {formatVND(selectedReferrer.lifetimeTotal ?? selectedReferrer.totalReward)}
+                </span>
+                {/* Liệt kê đủ nguồn để admin đối chiếu được với màn hình user, và để thấy
+                    tiền đã rời ví — nếu chỉ hiện số dư thì lại không giải thích được chênh lệch. */}
+                <span className="block text-xs">
+                  {[
+                    `Giới thiệu ${formatVND(refTong(selectedReferrer))}`,
+                    khac0(selectedReferrer.agentReward) ? `Đặt hộ ${formatVND(selectedReferrer.agentReward!)}` : null,
+                    khac0(selectedReferrer.kolOverride) ? `Thủ lĩnh ${formatVND(selectedReferrer.kolOverride!)}` : null,
+                    khac0(selectedReferrer.adjustment) ? `Khác ${formatVND(selectedReferrer.adjustment!)}` : null,
+                    selectedReferrer.walletBalance != null ? `Số dư ${formatVND(selectedReferrer.walletBalance)}` : null,
+                    khac0(selectedReferrer.withdrawalHeld) ? `Đang chờ chuyển ${formatVND(selectedReferrer.withdrawalHeld!)}` : null,
+                    khac0(selectedReferrer.withdrawn) ? `Đã rút ${formatVND(selectedReferrer.withdrawn!)}` : null,
+                  ].filter(Boolean).join(' · ')}
+                </span>
               </DialogDescription>
             )}
           </DialogHeader>
