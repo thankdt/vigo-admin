@@ -58,6 +58,8 @@ type FormState = {
   leaderName?: string; // label for leaderId when that leader falls outside the top-100 dropdown list
   displayName: string;
   note: string;
+  refereeRewardPoints: string;
+  refereeRewardUsageLimit: string;
 };
 
 export default function KolPage() {
@@ -144,6 +146,8 @@ export default function KolPage() {
       mode: 'promote',
       kind: existing?.kind ?? 'STANDARD',
       commissionPercent: existing?.commissionPercent != null ? String(existing.commissionPercent) : '',
+      refereeRewardPoints: String(existing?.refereeRewardPoints ?? 0),
+      refereeRewardUsageLimit: String(existing?.refereeRewardUsageLimit ?? 0),
       leaderId: existing?.leaderId ?? '',
       leaderName: existing?.leaderName ?? undefined,
       displayName: existing?.displayName ?? '',
@@ -158,6 +162,8 @@ export default function KolPage() {
       mode: 'edit',
       kind: row.kind,
       commissionPercent: row.commissionPercent != null ? String(row.commissionPercent) : '',
+      refereeRewardPoints: String(row.refereeRewardPoints ?? 0),
+      refereeRewardUsageLimit: String(row.refereeRewardUsageLimit ?? 0),
       leaderId: row.leaderId ?? '',
       leaderName: row.leaderName ?? undefined,
       displayName: row.displayName ?? '',
@@ -180,12 +186,23 @@ export default function KolPage() {
     const leaderId = form.kind === 'STANDARD' && form.leaderId ? form.leaderId : undefined;
     // A LEADER never earns direct commission — never persist a stale % on it.
     const pctToSend = form.kind === 'LEADER' ? null : commissionPercent;
+
+    // Điểm/trần cho MÃ CÁ NHÂN. Ô rỗng = 0 = tắt (khách nhận welcome bonus
+    // chung), KHÔNG phải "giữ nguyên" — gửi tường minh để admin xoá về 0 được.
+    const pts = Number(form.refereeRewardPoints.trim() || '0');
+    const lim = Number(form.refereeRewardUsageLimit.trim() || '0');
+    if (!Number.isInteger(pts) || pts < 0 || !Number.isInteger(lim) || lim < 0) {
+      toast({ variant: 'destructive', description: 'Điểm và trần phải là số nguyên ≥ 0' });
+      return;
+    }
     setSubmitting(true);
     try {
       if (form.mode === 'promote') {
         await adminPromoteKol(form.userId, {
           kind: form.kind,
           commissionPercent: pctToSend,
+          refereeRewardPoints: pts,
+          refereeRewardUsageLimit: lim,
           ...(leaderId ? { leaderId } : {}),
           displayName: form.displayName.trim() || undefined,
           note: form.note.trim() || undefined,
@@ -195,6 +212,8 @@ export default function KolPage() {
         await adminUpdateKol(form.userId, {
           kind: form.kind,
           commissionPercent: pctToSend,
+          refereeRewardPoints: pts,
+          refereeRewardUsageLimit: lim,
           leaderId: form.kind === 'STANDARD' ? (form.leaderId || null) : null,
           displayName: form.displayName.trim() || undefined,
           note: form.note.trim() || undefined,
@@ -482,6 +501,41 @@ export default function KolPage() {
                   </div>
                 </>
               )}
+
+              <div className="space-y-1.5">
+                <Label>Điểm khách nhận qua LINK CHIA SẺ</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1000}
+                  value={form.refereeRewardPoints}
+                  onChange={(e) => setForm({ ...form, refereeRewardPoints: e.target.value })}
+                  placeholder="0 = dùng thưởng đăng ký chung"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Áp cho MÃ CÁ NHÂN — tức link chia sẻ trong app của KOL này. Khác với
+                  &ldquo;Điểm khách nhận&rdquo; của từng mã ưu đãi gõ tay. Để 0 thì khách nhận
+                  thưởng đăng ký chung như mọi người.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label>Trần lượt thưởng qua link</Label>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  step={1}
+                  value={form.refereeRewardUsageLimit}
+                  onChange={(e) => setForm({ ...form, refereeRewardUsageLimit: e.target.value })}
+                  placeholder="0 = không giới hạn"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Số lượt tối đa được cộng điểm qua link chia sẻ. Link cá nhân không có bộ đếm
+                  riêng như mã ưu đãi, nên đây là trần duy nhất — để 0 là không chặn.
+                </p>
+              </div>
 
               <div className="space-y-1.5">
                 <Label>Tên hiển thị (tuỳ chọn)</Label>
