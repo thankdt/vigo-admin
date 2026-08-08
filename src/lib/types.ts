@@ -289,7 +289,12 @@ export type Booking = {
     phone?: string | null;
     role?: string;
   } | null;
+  // Ghi chú của KHÁCH. Cột này ĐI RA APP TÀI XẾ (hiện dưới nhãn "Ghi chú của
+  // khách"). Đừng nhét nội dung vận hành nội bộ vào đây — dùng adminNote.
   note?: string | null;
+  // Ghi chú vận hành NỘI BỘ. Backend để select:false nên chỉ endpoint admin trả
+  // về; không bao giờ ra app tài/khách.
+  adminNote?: string | null;
   // Tên hành khách, index 0 = khách chính (khớp quy ước app khách + hợp đồng).
   // null cho rows cũ trước khi có cột.
   passengerNames?: string[] | null;

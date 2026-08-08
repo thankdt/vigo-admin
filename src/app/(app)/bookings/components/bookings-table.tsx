@@ -697,11 +697,23 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
               {/* Pricing */}
               <PriceBreakdownCard booking={booking} />
 
-              {/* Note */}
+              {/* Ghi chú của KHÁCH — tài xế ĐỌC ĐƯỢC ô này trên app. */}
               {booking.note && (
                 <Card className="p-3 space-y-1">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ghi chú</div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ghi chú của khách</div>
                   <p className="text-sm whitespace-pre-wrap">{booking.note}</p>
+                </Card>
+              )}
+
+              {/* Ghi chú vận hành NỘI BỘ (admin đổi trạng thái kèm ghi chú).
+                  Trước đây phần này bị nối vào "Ghi chú của khách" nên mọi tài xế
+                  được chào chuyến đọc được. Nay tách cột riêng, chỉ hiện ở đây. */}
+              {booking.adminNote && (
+                <Card className="p-3 space-y-1 border-amber-300/60 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20">
+                  <div className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                    Ghi chú nội bộ · không lộ cho tài/khách
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{booking.adminNote}</p>
                 </Card>
               )}
 
