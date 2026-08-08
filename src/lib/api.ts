@@ -1686,10 +1686,19 @@ export type AdminReferrerSummary = {
   referralCode?: string | null;
   refereeCount: number;
   tripCount: number;
-  /** CHỈ tiền đi qua referral_event (thưởng đăng ký + hoa hồng chuyến). Không phải tổng thật. */
+  /**
+   * CHỈ tiền đi qua referral_event (thưởng đăng ký + hoa hồng chuyến), giá trị THÔ — có thể ÂM
+   * nếu bị thu hồi vượt. Không phải tổng thật, và KHÔNG dùng để khép số (dùng signupReward +
+   * tripReward). Giữ nguyên vì `sort=amount` sắp theo đúng cột này.
+   */
   totalReward: number;
-  // ── Nguồn tiền KHÔNG đi qua referral_event (additive; BE cũ không trả → undefined) ──
-  // Bất biến BE bảo đảm: totalReward + agentReward + kolOverride + adjustment = lifetimeTotal.
+  // ── Additive; BE cũ không trả → undefined ──
+  // Bất biến BE bảo đảm:
+  //   signupReward + tripReward + agentReward + kolOverride + adjustment = lifetimeTotal
+  /** Thưởng đăng ký, ĐÃ clamp về ≥ 0 — cùng công thức app dùng, để hai màn hình khớp nhau. */
+  signupReward?: number;
+  /** Hoa hồng chuyến, ĐÃ clamp về ≥ 0. */
+  tripReward?: number;
   /** Hoa hồng đặt hộ (agent_commission_event, phần vào ví USER_REFERRAL). */
   agentReward?: number;
   /** Thưởng thủ lĩnh KOL: % trên hoa hồng KOL tuyến dưới kiếm được (kol_override_event). */

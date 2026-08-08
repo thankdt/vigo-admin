@@ -57,6 +57,23 @@ const formatVnDateTime = (iso: string | null | undefined): string => {
   return d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 };
 
+/**
+ * Tiền là số nguyên đồng. `adjustment` là hiệu của các float64 nên về lý có thể ra 1e-10 →
+ * xét "khác 0" theo nửa đồng để không đẻ ra dòng "Khác 0 đ" vô nghĩa. `undefined` (BE cũ) = 0.
+ */
+const khac0 = (v?: number) => Math.abs(v ?? 0) >= 0.5;
+
+/**
+ * Tiền giới thiệu dùng để HIỂN THỊ và khép số: cộng hai phân vùng ĐÃ CLAMP mà BE trả.
+ * KHÔNG dùng `totalReward` (thô, có thể âm) — nếu dùng thì khi một phân vùng bị âm do thu hồi
+ * trùng, bảng admin và màn hình app sẽ hiện hai bộ số khác hẳn nhau. Fallback về `totalReward`
+ * cho BE cũ chưa trả hai cột này.
+ */
+const refTong = (r: AdminReferrerSummary) =>
+  r.signupReward != null || r.tripReward != null
+    ? (r.signupReward ?? 0) + (r.tripReward ?? 0)
+    : r.totalReward;
+
 // 'lifetime' = lũy kế thật của ví affiliate (gồm đặt hộ / thủ lĩnh KOL / khoản bù).
 // 'amount' vẫn là nghĩa cũ (chỉ thưởng giới thiệu + hoa hồng chuyến) — giữ để đối chiếu.
 type SortKey = 'lifetime' | 'amount' | 'trips' | 'referees' | 'clicks' | 'installs';
@@ -384,13 +401,16 @@ export default function ReferralsPage() {
                       admin không nhìn thấy nên số của admin lệch với số user thấy trong app. */}
                   <TableCell className="text-right tabular-nums">
                     <div className="font-semibold text-primary">{formatVND(r.lifetimeTotal ?? r.totalReward)}</div>
-                    {(r.agentReward || r.kolOverride || r.adjustment) ? (
+                    {(khac0(r.agentReward) || khac0(r.kolOverride) || khac0(r.adjustment)) ? (
                       <div className="text-[10px] text-muted-foreground">
                         {[
-                          `GT ${formatVND(r.totalReward)}`,
-                          r.agentReward ? `Đặt hộ ${formatVND(r.agentReward)}` : null,
-                          r.kolOverride ? `Thủ lĩnh ${formatVND(r.kolOverride)}` : null,
-                          r.adjustment ? `Khác ${formatVND(r.adjustment)}` : null,
+                          // Cộng hai phân vùng ĐÃ CLAMP, không dùng totalReward thô — có vậy
+                          // dòng này mới khép đúng về số lớn bên trên, và mới khớp con số user
+                          // thấy trong app khi một phân vùng bị âm do thu hồi trùng.
+                          `GT ${formatVND(refTong(r))}`,
+                          khac0(r.agentReward) ? `Đặt hộ ${formatVND(r.agentReward!)}` : null,
+                          khac0(r.kolOverride) ? `Thủ lĩnh ${formatVND(r.kolOverride!)}` : null,
+                          khac0(r.adjustment) ? `Khác ${formatVND(r.adjustment!)}` : null,
                         ].filter(Boolean).join(' · ')}
                       </div>
                     ) : null}
@@ -436,13 +456,13 @@ export default function ReferralsPage() {
                     tiền đã rời ví — nếu chỉ hiện số dư thì lại không giải thích được chênh lệch. */}
                 <span className="block text-xs">
                   {[
-                    `Giới thiệu ${formatVND(selectedReferrer.totalReward)}`,
-                    selectedReferrer.agentReward ? `Đặt hộ ${formatVND(selectedReferrer.agentReward)}` : null,
-                    selectedReferrer.kolOverride ? `Thủ lĩnh ${formatVND(selectedReferrer.kolOverride)}` : null,
-                    selectedReferrer.adjustment ? `Khác ${formatVND(selectedReferrer.adjustment)}` : null,
+                    `Giới thiệu ${formatVND(refTong(selectedReferrer))}`,
+                    khac0(selectedReferrer.agentReward) ? `Đặt hộ ${formatVND(selectedReferrer.agentReward!)}` : null,
+                    khac0(selectedReferrer.kolOverride) ? `Thủ lĩnh ${formatVND(selectedReferrer.kolOverride!)}` : null,
+                    khac0(selectedReferrer.adjustment) ? `Khác ${formatVND(selectedReferrer.adjustment!)}` : null,
                     selectedReferrer.walletBalance != null ? `Số dư ${formatVND(selectedReferrer.walletBalance)}` : null,
-                    selectedReferrer.withdrawalHeld ? `Đang chờ chuyển ${formatVND(selectedReferrer.withdrawalHeld)}` : null,
-                    selectedReferrer.withdrawn ? `Đã rút ${formatVND(selectedReferrer.withdrawn)}` : null,
+                    khac0(selectedReferrer.withdrawalHeld) ? `Đang chờ chuyển ${formatVND(selectedReferrer.withdrawalHeld!)}` : null,
+                    khac0(selectedReferrer.withdrawn) ? `Đã rút ${formatVND(selectedReferrer.withdrawn!)}` : null,
                   ].filter(Boolean).join(' · ')}
                 </span>
               </DialogDescription>
