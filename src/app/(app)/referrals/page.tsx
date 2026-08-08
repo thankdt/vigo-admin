@@ -64,15 +64,28 @@ const formatVnDateTime = (iso: string | null | undefined): string => {
 const khac0 = (v?: number) => Math.abs(v ?? 0) >= 0.5;
 
 /**
- * Tiền giới thiệu dùng để HIỂN THỊ và khép số: cộng hai phân vùng ĐÃ CLAMP mà BE trả.
- * KHÔNG dùng `totalReward` (thô, có thể âm) — nếu dùng thì khi một phân vùng bị âm do thu hồi
- * trùng, bảng admin và màn hình app sẽ hiện hai bộ số khác hẳn nhau. Fallback về `totalReward`
- * cho BE cũ chưa trả hai cột này.
+ * Tách TỪNG nguồn tiền, không gộp — admin phải nhìn ra ngay tiền đến từ đâu.
+ *
+ * Dùng hai phân vùng ĐÃ CLAMP (`signupReward`/`tripReward`) mà BE trả, KHÔNG dùng
+ * `totalReward` (thô, có thể âm): dùng thô thì khi một phân vùng bị âm do thu hồi trùng, bảng
+ * admin và màn hình app hiện hai bộ số khác hẳn nhau. BE cũ chưa trả hai cột này ⇒ lùi về
+ * `totalReward` gộp, có nhãn "Giới thiệu+chuyến" để không nói dối là số của riêng giới thiệu.
  */
-const refTong = (r: AdminReferrerSummary) =>
-  r.signupReward != null || r.tripReward != null
-    ? (r.signupReward ?? 0) + (r.tripReward ?? 0)
-    : r.totalReward;
+const nguonTien = (r: AdminReferrerSummary): Array<{ nhan: string; tien: number }> => {
+  const ds =
+    r.signupReward != null || r.tripReward != null
+      ? [
+          { nhan: 'Giới thiệu', tien: r.signupReward ?? 0 },
+          { nhan: 'Chuyến', tien: r.tripReward ?? 0 },
+        ]
+      : [{ nhan: 'Giới thiệu+chuyến', tien: r.totalReward }];
+  return [
+    ...ds,
+    { nhan: 'Đặt hộ', tien: r.agentReward ?? 0 },
+    { nhan: 'Thủ lĩnh KOL', tien: r.kolOverride ?? 0 },
+    { nhan: 'Khác', tien: r.adjustment ?? 0 },
+  ].filter((x) => khac0(x.tien));
+};
 
 // 'lifetime' = lũy kế thật của ví affiliate (gồm đặt hộ / thủ lĩnh KOL / khoản bù).
 // 'amount' vẫn là nghĩa cũ (chỉ thưởng giới thiệu + hoa hồng chuyến) — giữ để đối chiếu.
@@ -399,19 +412,18 @@ export default function ReferralsPage() {
                   {/* Số lớn = LŨY KẾ THẬT của ví. Dòng nhỏ tách các nguồn KHÔNG đi qua
                       referral_event, chỉ hiện phần khác 0 — đó chính là phần trước đây
                       admin không nhìn thấy nên số của admin lệch với số user thấy trong app. */}
+                  {/* Số lớn = LŨY KẾ THẬT của ví; bên dưới liệt kê TỪNG nguồn (giới thiệu /
+                      chuyến / đặt hộ / thủ lĩnh KOL / khác), mỗi nguồn một dòng, chỉ hiện phần
+                      khác 0. Cộng các dòng lại đúng bằng số lớn. */}
                   <TableCell className="text-right tabular-nums">
                     <div className="font-semibold text-primary">{formatVND(r.lifetimeTotal ?? r.totalReward)}</div>
-                    {(khac0(r.agentReward) || khac0(r.kolOverride) || khac0(r.adjustment)) ? (
-                      <div className="text-[10px] text-muted-foreground">
-                        {[
-                          // Cộng hai phân vùng ĐÃ CLAMP, không dùng totalReward thô — có vậy
-                          // dòng này mới khép đúng về số lớn bên trên, và mới khớp con số user
-                          // thấy trong app khi một phân vùng bị âm do thu hồi trùng.
-                          `GT ${formatVND(refTong(r))}`,
-                          khac0(r.agentReward) ? `Đặt hộ ${formatVND(r.agentReward!)}` : null,
-                          khac0(r.kolOverride) ? `Thủ lĩnh ${formatVND(r.kolOverride!)}` : null,
-                          khac0(r.adjustment) ? `Khác ${formatVND(r.adjustment!)}` : null,
-                        ].filter(Boolean).join(' · ')}
+                    {/* Hiện cả khi chỉ có MỘT nguồn: nếu ẩn đi thì nhìn số 583.000đ không biết
+                        là tiền giới thiệu hay tiền đặt hộ — đúng thứ đang cần phân biệt. */}
+                    {nguonTien(r).length > 0 ? (
+                      <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">
+                        {nguonTien(r).map((n) => (
+                          <div key={n.nhan}>{n.nhan} {formatVND(n.tien)}</div>
+                        ))}
                       </div>
                     ) : null}
                   </TableCell>
@@ -456,10 +468,8 @@ export default function ReferralsPage() {
                     tiền đã rời ví — nếu chỉ hiện số dư thì lại không giải thích được chênh lệch. */}
                 <span className="block text-xs">
                   {[
-                    `Giới thiệu ${formatVND(refTong(selectedReferrer))}`,
-                    khac0(selectedReferrer.agentReward) ? `Đặt hộ ${formatVND(selectedReferrer.agentReward!)}` : null,
-                    khac0(selectedReferrer.kolOverride) ? `Thủ lĩnh ${formatVND(selectedReferrer.kolOverride!)}` : null,
-                    khac0(selectedReferrer.adjustment) ? `Khác ${formatVND(selectedReferrer.adjustment!)}` : null,
+                    // Từng nguồn một, không gộp.
+                    ...nguonTien(selectedReferrer).map((n) => `${n.nhan} ${formatVND(n.tien)}`),
                     selectedReferrer.walletBalance != null ? `Số dư ${formatVND(selectedReferrer.walletBalance)}` : null,
                     khac0(selectedReferrer.withdrawalHeld) ? `Đang chờ chuyển ${formatVND(selectedReferrer.withdrawalHeld!)}` : null,
                     khac0(selectedReferrer.withdrawn) ? `Đã rút ${formatVND(selectedReferrer.withdrawn!)}` : null,
