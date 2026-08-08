@@ -195,14 +195,20 @@ export default function KolPage() {
       toast({ variant: 'destructive', description: 'Điểm và trần phải là số nguyên ≥ 0' });
       return;
     }
+    // LEADER: mã cá nhân của Thủ lĩnh đi đường TUYỂN DỤNG (tạo KOL pending dưới
+    // trướng), redeem() return sớm nên mức điểm không bao giờ được đọc. Gửi 0 để
+    // hồ sơ không giữ một con số vô nghĩa mà admin tưởng đang có hiệu lực —
+    // giống cách hoa hồng % gửi null cho LEADER.
+    const ptsToSend = form.kind === 'LEADER' ? 0 : pts;
+    const limToSend = form.kind === 'LEADER' ? 0 : lim;
     setSubmitting(true);
     try {
       if (form.mode === 'promote') {
         await adminPromoteKol(form.userId, {
           kind: form.kind,
           commissionPercent: pctToSend,
-          refereeRewardPoints: pts,
-          refereeRewardUsageLimit: lim,
+          refereeRewardPoints: ptsToSend,
+          refereeRewardUsageLimit: limToSend,
           ...(leaderId ? { leaderId } : {}),
           displayName: form.displayName.trim() || undefined,
           note: form.note.trim() || undefined,
@@ -212,8 +218,8 @@ export default function KolPage() {
         await adminUpdateKol(form.userId, {
           kind: form.kind,
           commissionPercent: pctToSend,
-          refereeRewardPoints: pts,
-          refereeRewardUsageLimit: lim,
+          refereeRewardPoints: ptsToSend,
+          refereeRewardUsageLimit: limToSend,
           leaderId: form.kind === 'STANDARD' ? (form.leaderId || null) : null,
           displayName: form.displayName.trim() || undefined,
           note: form.note.trim() || undefined,
@@ -502,40 +508,44 @@ export default function KolPage() {
                 </>
               )}
 
-              <div className="space-y-1.5">
-                <Label>Điểm khách nhận qua LINK CHIA SẺ</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  step={1000}
-                  value={form.refereeRewardPoints}
-                  onChange={(e) => setForm({ ...form, refereeRewardPoints: e.target.value })}
-                  placeholder="0 = dùng thưởng đăng ký chung"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Áp cho MÃ CÁ NHÂN — tức link chia sẻ trong app của KOL này. Khác với
-                  &ldquo;Điểm khách nhận&rdquo; của từng mã ưu đãi gõ tay. Để 0 thì khách nhận
-                  thưởng đăng ký chung như mọi người.
-                </p>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label>Trần lượt thưởng qua link</Label>
-                <Input
-                  type="number"
-                  inputMode="numeric"
-                  min={0}
-                  step={1}
-                  value={form.refereeRewardUsageLimit}
-                  onChange={(e) => setForm({ ...form, refereeRewardUsageLimit: e.target.value })}
-                  placeholder="0 = không giới hạn"
-                />
-                <p className="text-xs text-muted-foreground">
-                  Số lượt tối đa được cộng điểm qua link chia sẻ. Link cá nhân không có bộ đếm
-                  riêng như mã ưu đãi, nên đây là trần duy nhất — để 0 là không chặn.
-                </p>
-              </div>
+              {form.kind === 'STANDARD' && (
+                <>
+                  <div className="space-y-1.5">
+                  <Label>Điểm khách nhận qua LINK CHIA SẺ</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1000}
+                    value={form.refereeRewardPoints}
+                    onChange={(e) => setForm({ ...form, refereeRewardPoints: e.target.value })}
+                    placeholder="0 = dùng thưởng đăng ký chung"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Áp cho MÃ CÁ NHÂN — tức link chia sẻ trong app của KOL này. Khác với
+                    &ldquo;Điểm khách nhận&rdquo; của từng mã ưu đãi gõ tay. Để 0 thì khách nhận
+                    thưởng đăng ký chung như mọi người.
+                  </p>
+                </div>
+  
+                <div className="space-y-1.5">
+                  <Label>Trần lượt thưởng qua link</Label>
+                  <Input
+                    type="number"
+                    inputMode="numeric"
+                    min={0}
+                    step={1}
+                    value={form.refereeRewardUsageLimit}
+                    onChange={(e) => setForm({ ...form, refereeRewardUsageLimit: e.target.value })}
+                    placeholder="0 = không giới hạn"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Số lượt tối đa được cộng điểm qua link chia sẻ. Link cá nhân không có bộ đếm
+                    riêng như mã ưu đãi, nên đây là trần duy nhất — để 0 là không chặn.
+                  </p>
+                </div>
+                </>
+              )}
 
               <div className="space-y-1.5">
                 <Label>Tên hiển thị (tuỳ chọn)</Label>
