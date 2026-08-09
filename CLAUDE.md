@@ -116,3 +116,21 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
 - backend (`vigo-backend`): `npx tsc --noEmit` + `npx jest`
 - app khách/tài xế (`vigo`, `vigo-driver`): `dart analyze` (+ `dart run build_runner build` nếu đổi model/DTO)
 - admin (`vigo-admin`): `npx tsc --noEmit` + `npx vitest run`
+
+## 💸 Độ dài session — KHUYẾN NGHỊ (cảnh báo, KHÔNG bắt buộc)
+
+Session càng dài thì context càng phình, mà mỗi lượt phải gửi lại toàn bộ lịch sử
+→ token tốn tăng nhanh theo thời gian chạy, đồng thời chất lượng phán đoán loãng
+dần (thông tin cũ lấn thông tin đang cần). Đây là **cảnh báo để cân nhắc, không
+phải luật cứng** — có việc thật sự cần chạy dài (refactor lớn, debug nhiều tầng,
+rollout đa repo) thì cứ làm tiếp, đừng cắt ngang giữa chừng.
+
+Khuyến nghị khi thấy session đã kéo dài:
+- Chia việc theo **đơn vị hoàn chỉnh** (1 feature/fix = 1 session). Xong việc thì
+  mở session mới, đừng nối thêm việc không liên quan vào session cũ.
+- Cần tiếp tục trong cùng session → chạy `/compact` ở **ranh giới tự nhiên** (sau
+  khi commit, sau khi review xong, trước khi sang phase mới), đừng đợi context đầy.
+- Trước khi compact hoặc mở session mới, chốt trạng thái ra **file** (plan/review
+  trong `docs/` hoặc scratchpad) — đừng để thông tin sống duy nhất trong hội thoại.
+- Việc tra cứu / quét rộng → đẩy sang sub-agent, chỉ mang kết luận về session
+  chính (cùng lý do với 0.5.g).
