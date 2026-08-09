@@ -98,7 +98,9 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
    - c. Reviewer độc lập **CHỈ cho thay đổi rủi ro CAO** (0.5.b): fresh-context, đọc file đụng + call-site trực tiếp, handoff bằng file (scratchpad), giữ model mạnh. **Tối đa 1 lượt reviewer cho cả thay đổi** (đếm toàn cục, không reset khi quay lại a). Cơ học → dừng ở a+b.
    - d. Sửa theo review → quay lại (a).
 3. **Commit sạch** — `git add` NGAY trước `git commit` (hoặc `git commit -a`) để đảm bảo phần staged == bản cuối (tránh commit sót do stage rồi mới sửa). Commit theo đơn vị hoàn chỉnh. Message kết bằng:
-   `Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>`
+   `Co-Authored-By: Claude <model đang chạy> <noreply@anthropic.com>` — điền ĐÚNG model của
+   session hiện tại (vd `Claude Opus 5`). Commit cũ ghi `Claude Opus 4.8` là dấu vết lịch
+   sử của model thời điểm đó — KHÔNG sửa lại.
 4. **Kiểm tương thích ngược với CLIENT CŨ** (BẮT BUỘC trước mọi rollout — backend deploy trước app nên app cũ vẫn gọi API shape cũ):
    - Không xoá/đổi tên field response client cũ đang đọc (chỉ được THÊM — additive).
    - Giữ field `required` client cũ cần + field mirror/deprecated (vd giá trị hiển thị cũ).
