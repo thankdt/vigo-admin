@@ -402,7 +402,7 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                     <p className="font-medium text-sm">{driver.vehicleRegistration.color}</p>
                   </div>
                   <div className="space-y-1">
-                    <Label className="text-xs text-muted-foreground">Số ghế</Label>
+                    <Label className="text-xs text-muted-foreground">Số ghế (kể cả ghế lái)</Label>
                     <p className="font-medium text-sm">
                       {driver.vehicleRegistration.seats
                         ? `${driver.vehicleRegistration.seats} chỗ`

@@ -548,6 +548,8 @@ export async function updateDriverProfile(
       brand?: string;
       model?: string;
       color?: string;
+      /** TỔNG ghế kể cả ghế lái. BE chỉ nhận 5 hoặc 7 (`@IsIn([5,7])`). */
+      seats?: number;
     };
     // S3 key ảnh giấy xác nhận HTX (admin upload hộ). Gửi = tải lên/thay ảnh.
     htxConfirmationImage?: string;

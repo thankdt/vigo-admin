@@ -967,7 +967,7 @@ export function CreateBookingDialog({
                   <div className="text-muted-foreground">
                     {selectedDriver.phone}
                     {selectedDriver.fixedRoute?.name ? ` • ${selectedDriver.fixedRoute.name}` : ''}
-                    {(selectedDriver as any).availableSeats != null ? ` • ${(selectedDriver as any).availableSeats} ghế trống` : ''}
+                    {(selectedDriver as any).availableSeats != null ? ` • còn ${(selectedDriver as any).availableSeats} ghế khách` : ''}
                   </div>
                 </div>
               </Card>
@@ -1011,7 +1011,7 @@ export function CreateBookingDialog({
                           <div className="flex items-center gap-1.5">
                             {(driver as any).availableSeats != null && (
                               <Badge variant="outline" className="text-xs">
-                                {(driver as any).availableSeats} ghế
+                                còn {(driver as any).availableSeats} ghế khách
                               </Badge>
                             )}
                             {driver.fixedRoute?.name && (
