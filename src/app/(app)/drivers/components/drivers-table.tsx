@@ -295,7 +295,9 @@ export function DriversTable() {
     brand: string;
     model: string;
     color: string;
-  }>({ plateNumber: '', brand: '', model: '', color: '' });
+    /** TỔNG ghế kể ghế lái. '' = chưa khai; chỉ nhận '5' | '7'. */
+    seats: string;
+  }>({ plateNumber: '', brand: '', model: '', color: '', seats: '' });
   const [savingVehicle, setSavingVehicle] = React.useState(false);
 
   // Upload giấy xác nhận HTX (admin upload hộ tài xế).
@@ -370,7 +372,9 @@ export function DriversTable() {
     const current = viewDriver.vehicleRegistration;
     // Only send fields that actually changed; lets backend skip the write
     // entirely if the admin opened edit mode but didn't touch anything.
-    const patch: { plateNumber?: string; brand?: string; model?: string; color?: string } = {};
+    const patch: {
+      plateNumber?: string; brand?: string; model?: string; color?: string; seats?: number;
+    } = {};
     if (vehicleDraft.plateNumber.trim() !== (current?.plateNumber ?? '')) {
       patch.plateNumber = vehicleDraft.plateNumber.trim();
     }
@@ -382,6 +386,12 @@ export function DriversTable() {
     }
     if (vehicleDraft.color.trim() !== (current?.color ?? '')) {
       patch.color = vehicleDraft.color.trim();
+    }
+    // Số ghế: BE chỉ nhận 5 hoặc 7. Trước 09/08/2026 ô này read-only nên khi tài xế khai
+    // sai (VinFast Limo Green 7 chỗ khai "6 chỗ") admin phải đợi dev chạy script mới gán
+    // được chuyến. Nay sửa tại chỗ.
+    if (vehicleDraft.seats && vehicleDraft.seats !== (current?.seats?.toString() ?? '')) {
+      patch.seats = Number(vehicleDraft.seats);
     }
     if (Object.keys(patch).length === 0) {
       setEditingVehicle(false);
@@ -1412,6 +1422,7 @@ export function DriversTable() {
                             brand: viewDriver.vehicleRegistration?.brand ?? '',
                             model: viewDriver.vehicleRegistration?.model ?? '',
                             color: viewDriver.vehicleRegistration?.color ?? '',
+                            seats: viewDriver.vehicleRegistration?.seats?.toString() ?? '',
                           });
                           setEditingVehicle(true);
                         }}
@@ -1498,15 +1509,30 @@ export function DriversTable() {
                       )}
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">Số ghế</Label>
-                      {/* Read-only kể cả khi đang sửa: seats là nguồn tính sức chứa
-                          điều phối (dispatch capacity) — đổi ở đây sẽ lệch logic bắn
-                          chuyến, nằm ngoài phạm vi "sửa thông tin xe" của admin. */}
-                      <p className="font-medium text-sm">
-                        {viewDriver.vehicleRegistration.seats
-                          ? `${viewDriver.vehicleRegistration.seats} chỗ`
-                          : '—'}
-                      </p>
+                      <Label className="text-xs text-muted-foreground">
+                        Số ghế (kể cả ghế lái)
+                      </Label>
+                      {/* Sửa được từ 09/08/2026. Đây là nguồn tính sức chứa điều phối, nên
+                          giới hạn đúng 2 lựa chọn — nhập tự do chính là thứ đã đẻ ra "6 chỗ"
+                          (tài khai số ghế KHÁCH) khiến admin không gán được chuyến 7 chỗ. */}
+                      {editingVehicle ? (
+                        <Select
+                          value={vehicleDraft.seats}
+                          onValueChange={(v) => setVehicleDraft((d) => ({ ...d, seats: v }))}
+                        >
+                          <SelectTrigger className="h-8"><SelectValue placeholder="Chọn số ghế" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="5">5 chỗ (4 khách)</SelectItem>
+                            <SelectItem value="7">7 chỗ (6 khách)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <p className="font-medium text-sm">
+                          {viewDriver.vehicleRegistration.seats
+                            ? `${viewDriver.vehicleRegistration.seats} chỗ`
+                            : '—'}
+                        </p>
+                      )}
                     </div>
                   </div>
                   {safeImageArray(viewDriver.vehicleRegistration.images).length > 0 && (

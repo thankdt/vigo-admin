@@ -1016,7 +1016,9 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                     <div className="flex items-center gap-2 justify-end">
                       {(driver as any).availableSeats != null && (
                         <Badge variant="outline" className="text-xs">
-                          {(driver as any).availableSeats} ghế trống
+                          {/* "ghế KHÁCH": số này là chỗ chở khách, KHÁC "xe N chỗ" (tổng
+                              ghế kể ghế lái) trong thông báo BOK_013. Ghi tắt là gây hiểu nhầm. */}
+                          còn {(driver as any).availableSeats} ghế khách
                         </Badge>
                       )}
                     </div>
