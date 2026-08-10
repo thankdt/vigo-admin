@@ -147,6 +147,8 @@ export default function HtxTripsPage() {
         <Table>
           <TableHeader>
             <TableRow>
+              {/* Bề rộng cố định để mã luôn xuống dòng cùng một chỗ ở mọi dòng, mọi màn hình. */}
+              <TableHead className="w-[11rem]">Mã chuyến</TableHead>
               <TableHead>Thời gian</TableHead>
               <TableHead>Hành trình</TableHead>
               <TableHead>Khách</TableHead>
@@ -159,13 +161,13 @@ export default function HtxTripsPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : trips.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
+                <TableCell colSpan={8} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <RouteIcon className="h-8 w-8 text-muted-foreground" />
                     <span className="text-muted-foreground">Không có chuyến nào trong khoảng đã chọn.</span>
@@ -175,9 +177,13 @@ export default function HtxTripsPage() {
             ) : (
               trips.map((t) => (
                 <TableRow key={t.id}>
+                  {/* Mã chuyến ĐẦY ĐỦ, y hệt cột "Mã chuyến" của bảng + file Excel đối soát
+                      (htx-reconciliation/detail) để HTX tra thẳng, khỏi đoán. Ngắt dòng bằng CSS
+                      (break-all) chứ KHÔNG cắt chuỗi trong code: cắt thì lúc copy sẽ dính ký tự
+                      xuống dòng vào giữa mã, dán sang ô tìm kiếm Excel là không ra kết quả. */}
+                  <TableCell className="align-top font-mono text-xs break-all">{t.id}</TableCell>
                   <TableCell className="whitespace-nowrap align-top">
                     <div className="text-sm">{formatVnDateTime(t.eventAt)}</div>
-                    <div className="text-xs text-muted-foreground">#{t.id.slice(0, 8)}</div>
                   </TableCell>
                   <TableCell className="align-top">
                     <div className="max-w-[22rem] text-sm">
