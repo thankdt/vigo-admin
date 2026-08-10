@@ -119,10 +119,15 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_booking_completed_route_driver"
   ON "booking" ("status", "completedAt", "routeId", "driverId");
 ```
 
-**`CONCURRENTLY`** để không khoá ghi trên bảng booking prod. Lưu ý: TypeORM migration chạy trong
-transaction mặc định, mà `CREATE INDEX CONCURRENTLY` **không chạy được trong transaction** →
-migration này phải tắt transaction (`transaction = false` hoặc `queryRunner` riêng). Đây là điểm
-bắt buộc reviewer kiểm.
+**`CONCURRENTLY`** để không khoá ghi trên bảng booking prod. TypeORM bọc `up()` trong transaction
+mặc định, mà `CREATE INDEX CONCURRENTLY` **không chạy được trong transaction** → migration phải
+khai `transaction = false as const`.
+
+Repo đã có 8 tiền lệ, mẫu đầy đủ nhất kèm giải thích:
+`vigo-backend/src/database/migrations/1791600000000-AddCskhActivityIndexes.ts`. **Copy đúng mẫu đó.**
+
+Hai bảng `driver_team_member` / `driver_team_event` là bảng mới chưa có traffic → **không** cần
+`CONCURRENTLY`, migration thường là đủ.
 
 > ⚠️ **Rủi ro CAO theo CLAUDE.md §0.5.b** (migration + đụng bảng booking prod) → bước plan phải có
 > sub-agent fresh-context review, giữ model mạnh.
@@ -322,7 +327,16 @@ từng phần.
 - `rbac.test.ts:23`: sửa `toBe(27)` → `toBe(28)` (test cố ý khoá cứng để bắt việc quên khai báo).
 - `function-catalog.ts`: **không phải sửa** — catalog dựng tự động từ `navItems`.
 
-**Backend:** thêm key `driver-team` vào `rbac.constants.ts`; controller gắn `@RequireFunction('driver-team')`.
+**Backend:** thêm `'driver-team'` vào `MENU_FUNCTIONS` (`src/rbac/rbac.constants.ts`) — 1 dòng,
+`MENU_FUNCTIONS` **không** bị test khoá số lượng (chỉ `SETTINGS_FUNCTIONS` bị khoá = 10). Controller
+gắn nguyên guard chain của `driver-reputation-admin.controller.ts`:
+`@UseGuards(JwtAuthGuard, RolesGuard, FunctionAccessGuard)` + `@Roles(UserRole.ADMIN)` +
+`@RequireFunction('driver-team')` ở mức **class**.
+
+**Cố ý KHÔNG viết migration grant quyền cho role sẵn có.** Repo có tiền lệ
+`1791700000000-GrantCskhActivityToManagerRoles.ts` cấp key mới cho các role quản lý — ở đây thì
+làm ngược lại là đúng: quyền này cấp **thủ công qua UI `/roles`** cho đúng vài tài khoản. Cấp
+hàng loạt là phá chính mục tiêu riêng tư của D4.
 
 Role vận hành/CSKH không được cấp function này → menu ẩn (`isMenuVisible`), route guard đá về
 `/no-access` (`isRouteAllowed`), BE trả 403. Ba tầng độc lập, không dựa vào tầng nào một mình —
@@ -332,8 +346,15 @@ admin là static export nên che ở FE chỉ là UX, chốt an ninh nằm ở B
 
 ## 8. Timezone (CLAUDE.md — bắt buộc VN +07:00)
 
-- `from` / `to` gửi **VN-local `YYYY-MM-DD`**, BE hiểu ranh giới `+07:00`. Dùng lại `todayVn`,
+- `from` / `to` gửi **VN-local `YYYY-MM-DD`**, BE hiểu ranh giới `+07:00`. FE dùng lại `todayVn`,
   `daysAgoVn`, `PRESETS` của `finance-filter.tsx` — không hand-roll.
+- **BE BẮT BUỘC dùng `src/common/vn-time.util.ts`**, không tự viết lại:
+  - `vnRangeToUtc(from, to)` → `{ startUtc, endUtc, daySpan }`, đã validate NaN / đảo ngược /
+    quá 365 ngày và ném `BadRequestException`. `booking.completedAt` là `timestamp without time
+    zone` chứa byte UTC nên **so sánh thẳng** với `startUtc`/`endUtc`, không cần `AT TIME ZONE`.
+  - `vnTimestampSql(col)` chỉ dùng khi cần **gom nhóm theo ngày VN**. Comment trong file cảnh
+    báo: viết `AT TIME ZONE 'Asia/Ho_Chi_Minh'` một lần là **sai 14 tiếng, âm thầm** — phải
+    double conversion.
 - Gom nhóm & so sánh ngày ở BE tính theo VN.
 - `nextFollowUpAt`: người dùng nhập **ngày VN** → gửi ISO; hiển thị bằng `formatVnDateTime`.
 - "Cần gọi lại hôm nay" và "quá hạn" tính theo mốc ngày VN, không theo timezone trình duyệt.
@@ -378,7 +399,14 @@ Thứ tự rollout: **BE trước, FE sau**. Nếu FE lên trước thì endpoin
 - Summary §5.0 đếm DISTINCT: tài chạy 3 tuyến chỉ tính **1** lần ở cả 4 con số.
 - Unit `PATCH`: upsert tạo row khi chưa có; sinh đúng loại event; `note: ""` xoá ghi chú.
 - `limit` vượt 200 bị BE kẹp về 200.
-- e2e RBAC: thiếu function `driver-team` → **403** trên cả 6 endpoint.
+- **RBAC không test bằng e2e HTTP** — repo không có hạ tầng đó (`test/` chỉ có `app.e2e-spec.ts`
+  tối giản). Lưới an toàn thật là `src/rbac/route-coverage.spec.ts`: nó quét TĨNH mọi
+  `*.controller.ts` và fail nếu route có `@Roles(UserRole.ADMIN)` mà thiếu `@RequireFunction`
+  hoặc thiếu `FunctionAccessGuard`. Controller `driver-team` copy đúng pattern của
+  `driver-reputation-admin.controller.ts` là tự pass. Hành vi 403 đã được
+  `function-access.guard.spec.ts` phủ, **không viết lại**.
+- Unit test controller phải **mock `RbacService`** (super admin), vì `FunctionAccessGuard` gắn ở
+  class-level nên Nest vẫn khởi tạo guard khi build testing module dù không gọi HTTP.
 
 **Frontend (`npx tsc --noEmit` + `npx vitest run`):**
 - Bộ dựng query param (theo mẫu `driver-reputation-query.ts`).
