@@ -25,7 +25,7 @@ bản ghi cần xem.
 - Xếp hạng tài xế theo **số chuyến `COMPLETED` thực chạy trên từng tuyến**, trong khoảng ngày (giờ VN).
 - Pipeline tuyển team: trạng thái, người phụ trách, tuyến phân công, hẹn gọi lại, ghi chú.
 - Nhật ký liên hệ **riêng tư**, tách khỏi log CSKH của vận hành.
-- Export CSV.
+- Export ra Excel (`.xlsx`).
 
 ### Ngoài phạm vi (đợt 2+)
 
@@ -45,7 +45,7 @@ Hai thứ này chỉ nên làm khi pipeline đã có dữ liệu thật để đ
 | `/driver-reputation` — sao Bayes, tỉ lệ nhận/đúng giờ/hoàn thành | Gọi `getDriverReputation(driverId)` **lazy trong drawer chi tiết** |
 | `/driver-cancel-review` — tỉ lệ huỷ | Link sang, không nhúng |
 | Log CSKH `customer-call-history` + `csNote` | **Chỉ đọc** trong drawer, để biết ops đã gọi chưa |
-| `csv.ts` | Export |
+| `csv.ts` — thực chất là helper **xlsx** (`downloadXlsx`) | Export |
 | `FinanceFilter` + `PRESETS` (`finance/components/finance-filter.tsx`) | Bộ chọn khoảng ngày chuẩn VN |
 | `getRoutes()` | Danh mục tuyến — prod hiện ~27 tuyến (api.ts:1025) |
 
@@ -168,8 +168,8 @@ Query: `from`, `to` (VN-local `YYYY-MM-DD`), `q?` (lọc tên tuyến), `sort?` 
       "routeId": 12,
       "routeName": "Hà Nội – Hải Phòng",
       "driverCount": 8,            // số tài xế duy nhất có ≥1 chuyến COMPLETED
-      "completedTrips": 143,
-      "totalBookings": 190,        // MỌI status — để phân biệt thiếu cầu vs thiếu cung
+      "completedTrips": 143,       // lọc theo completedAt trong kỳ
+      "totalBookings": 190,        // MỌI status, lọc theo createdAt trong kỳ — KHÁC mốc thời gian
       "lastCompletedAt": "2026-08-09T15:12:00Z",
       "contactedCount": 3,         // DISTINCT tài CÓ chuyến COMPLETED trên tuyến này trong kỳ VÀ có stage ≠ null
       "joinedCount": 1             // như trên, lọc stage = JOINED
@@ -183,7 +183,19 @@ Query: `from`, `to` (VN-local `YYYY-MM-DD`), `q?` (lọc tên tuyến), `sort?` 
 Nếu group từ booking thì tuyến không có chuyến nào **biến mất khỏi kết quả** — đúng cái CEO cần thấy
 lại thành thứ không bao giờ hiện. Đây là lỗi dễ mắc nhất của cả tính năng này.
 
-`totalBookings` lấy bằng `COUNT(*) FILTER (WHERE ...)` trong cùng một câu — gần như không tốn thêm.
+**`completedTrips` và `totalBookings` đếm theo HAI mốc thời gian khác nhau** — `completedAt` và
+`createdAt` — nên là hai tập hợp khác nhau, không phải tử số / mẫu số của cùng một tập. Chuyến
+đặt ngày 30/7 chạy xong ngày 1/8 sẽ nằm trong `totalBookings` của tháng 7 nhưng `completedTrips`
+của tháng 8. Cố ý làm vậy: mỗi con số dùng đúng mốc có nghĩa của nó, và mỗi truy vấn bám được
+một index riêng (`(routeId, createdAt)` đã có sẵn cho vế cầu; index mới ở §4.3 cho vế cung).
+
+**Hệ quả bắt buộc cho UI:** hiện thành **hai cột riêng** có nhãn rõ (*"Hoàn thành trong kỳ"* /
+*"Khách đặt trong kỳ"*), **KHÔNG** hiện dạng phân số `143/190` — phân số ngụ ý chung mẫu số và sẽ
+bị đọc sai thành tỉ lệ hoàn thành.
+
+Kỹ thuật: hai CTE riêng (`done` lọc `completedAt`, `demand` lọc `createdAt`), rồi `LEFT JOIN` cả
+hai lên `defined_routes`. Không gộp bằng `OR` trong một `WHERE` — `OR` giữa hai cột thời gian sẽ
+làm Postgres bỏ index.
 
 ### 5.2 `GET /admin/driver-team/routes/:routeId/drivers` — cấp 2 (tải lazy khi mở)
 
@@ -201,8 +213,6 @@ Query: `from`, `to`, `stage?`, `ownerAdminUserId?`, `minTrips?`, `q?`, `sort?` (
       "tripsOnRoute": 41,
       "shareOfRoute": 0.287,       // tripsOnRoute / completedTrips của tuyến
       "tripsAllRoutes": 63,
-      "otherRoutes": [{ "routeId": 7, "name": "…", "trips": 22 }],
-      "registeredRouteIds": [7],   // Driver.routes — để đối chiếu khai vs thực chạy
       "lastCompletedAt": "2026-08-09T15:12:00Z",
       "firstCompletedAt": "2026-05-02T08:00:00Z",
       "isApproved": "true", "isBanned": false, "suspendedUntil": null,
@@ -226,7 +236,16 @@ tài cần 3 truy vấn riêng → 20 dòng = 60 truy vấn. Drawer gọi `getDr
 
 ### 5.3 `GET /admin/driver-team/:driverId`
 
-Trả `team` (như trên, có thể null) + `events: DriverTeamEvent[]` (mới nhất trước).
+Query: `from`, `to`. Trả:
+
+- `team` (như §5.2, có thể `null`) + `events: DriverTeamEvent[]` (mới nhất trước).
+- `routesRun: [{ routeId, name, trips }]` — tuyến **thực chạy** trong kỳ.
+- `registeredRouteIds: number[]` — tuyến **đăng ký** (bảng M2M `driver_routes`, cột
+  `driver_id` / `route_id` — **snake_case**, khác quy ước camelCase của các bảng khác).
+
+**Cố ý để ở đây chứ không ở §5.2.** Bản trước tôi nhét `otherRoutes` + `registeredRouteIds` vào
+từng dòng của danh sách → thêm 2 join cho dữ liệu mà bảng không hiển thị. Việc đối chiếu
+"khai vs thực chạy" chỉ xảy ra trong drawer (§6.2), nên dữ liệu cũng chỉ nên tải ở đó.
 
 ### 5.4 `PATCH /admin/driver-team/:driverId`
 
@@ -246,11 +265,25 @@ Trả về `team` sau khi cập nhật.
 Body `{ "type": "CALL" | "NOTE", "note": "…" }` → ghi nhận cuộc gọi / ghi chú thủ công.
 `CALL` **không** tự đổi `stage` — đổi trạng thái là hành động có chủ đích, không suy diễn.
 
-### 5.6 Export CSV
+### 5.6 `GET /admin/driver-team/owners`
 
-FE tự dựng bằng `csv.ts`: lặp trang §5.2 (`limit = 200`) cho các tuyến đang chọn, xuất **phẳng** có
-cột tuyến (file mang đi gọi điện thì phẳng dễ dùng hơn). Cap **1000 dòng** tổng; vượt cap thì
-**hiện cảnh báo rõ số dòng bị cắt**, không cắt im lặng.
+Trả `[{ id, fullName, phone }]` — danh sách tài khoản admin, để nuôi dropdown "người phụ trách".
+
+**Bắt buộc phải có endpoint riêng.** `GET /admin/users` (`rbac-admin.controller.ts:101`) gắn
+`SuperOnlyGuard` — **chỉ super admin**. Tài khoản được cấp đúng function `driver-team` mà không
+phải super sẽ nhận 403, tức dropdown gán người phụ trách hỏng đúng với người được giao chăm team.
+Tái dùng `adminListAssignableUsers()` ở FE là bẫy: nó chạy được khi CEO test bằng tài khoản super,
+rồi hỏng lặng lẽ khi giao cho nhân sự khác.
+
+### 5.7 Export
+
+FE tự dựng bằng `downloadXlsx` của `src/lib/csv.ts`: lặp trang §5.2 (`limit = 200`) cho các tuyến
+đang chọn, xuất **phẳng** có cột tuyến (file mang đi gọi điện thì phẳng dễ dùng hơn). Cap **1000
+dòng** tổng; vượt cap thì **hiện cảnh báo rõ số dòng bị cắt**, không cắt im lặng.
+
+**Định dạng là `.xlsx`, KHÔNG phải CSV** — dù file tiện ích tên là `csv.ts`. Comment đầu file ghi
+rõ lý do đã bỏ CSV dấu phẩy: Excel tiếng Việt tách dòng theo `;` nên toàn bộ CSV dồn vào một cột.
+`.xlsx` còn giữ số ở dạng số (sort/sum được).
 
 ---
 
@@ -267,14 +300,19 @@ Thẻ cuối là *việc phải làm*, không phải số để ngắm — bấm
 **Cấp 1 — accordion, hiện MỌI tuyến kể cả 0 tài.** Mặc định sort số tài giảm dần, tuyến rỗng trôi
 xuống đáy. Cột:
 
-`Tên tuyến` · `Số tài chạy thành công` · `Chuyến hoàn thành / tổng đặt` · `Đã liên hệ / Trong team` · `Chuyến gần nhất`
+`Tên tuyến` · `Số tài chạy thành công` · `Hoàn thành trong kỳ` · `Khách đặt trong kỳ` · `Đã liên hệ / Trong team` · `Chuyến gần nhất`
+
+Hai cột giữa **để riêng, không viết thành phân số** — xem lý do ở §5.1 (khác mốc thời gian).
 
 Hàng đặc biệt cuối danh sách: **"Không gắn tuyến"**.
 
-**Badge "Có khách, thiếu tài":** tuyến có `totalBookings > 0` nhưng `driverCount = 0`, hoặc tỉ lệ
-`completedTrips / totalBookings` thấp. Đây là lý do phải có cột `tổng đặt`: tuyến 0 tài vì *không
-ai đặt* là vấn đề marketing; tuyến *có khách đặt mà không tài nào chạy xong* mới là tuyến cần
-tuyển gấp — và đó chính là danh sách việc CEO cần.
+**Badge "Có khách, thiếu tài":** tuyến có `totalBookings > 0` **và** `driverCount = 0`.
+Chỉ dùng đúng điều kiện này — **không** dựa vào tỉ lệ `completedTrips / totalBookings` vì hai số
+đó khác mốc thời gian (§5.1), tỉ lệ giữa chúng không có nghĩa.
+
+Đây là lý do phải có cột "Khách đặt trong kỳ": tuyến 0 tài vì *không ai đặt* là vấn đề marketing;
+tuyến *có khách đặt mà không tài nào chạy xong* mới là tuyến cần tuyển gấp — và đó chính là danh
+sách việc CEO cần.
 
 **Cấp 2 (mở ra, tải lazy)** — tài trên đúng tuyến đó, sort số chuyến giảm dần, hiện 10 người đầu +
 nút *"Xem tất cả (n)"*. Cột:
@@ -309,7 +347,7 @@ form: đổi stage / gán tuyến phụ trách / gán người phụ trách / h�
 Gõ tên/SĐT hoặc lọc trạng thái → các tuyến có kết quả **tự bung ra** kèm số khớp, tuyến không khớp
 thu lại. Không thêm tab bảng phẳng thứ hai (bớt một màn phải nuôi).
 
-Checkbox trong nhóm đang mở → đổi trạng thái hàng loạt, gán người phụ trách hàng loạt, export CSV
+Checkbox trong nhóm đang mở → đổi trạng thái hàng loạt, gán người phụ trách hàng loạt, export `.xlsx`
 dòng đã chọn.
 
 **Không có endpoint bulk.** FE gọi §5.4 tuần tự, **tối đa 50 dòng/lần**, hiện tiến độ và **liệt kê
@@ -414,14 +452,14 @@ Thứ tự rollout: **BE trước, FE sau**. Nếu FE lên trước thì endpoin
 - Hiển thị `shareOfRoute` (định dạng %, xử lý `null`/`0`).
 - Hàm patch trạng thái lan sang **mọi nhóm đang mở** có cùng `driverId` (§6.3.2) — đây là lỗi
   dễ tái phát nhất, phải có test riêng.
-- Bộ dựng CSV: phẳng có cột tuyến, lặp trang, cảnh báo khi cắt ở 1000 dòng.
+- Bộ dựng dữ liệu export: phẳng có cột tuyến, lặp trang, cảnh báo khi cắt ở 1000 dòng.
 - `rbac.test.ts` phải pass với 28 function.
 
 ---
 
 ## 12. Rollout
 
-1. `vigo-backend`: migration index (`CONCURRENTLY`, ngoài transaction) + 2 bảng + 6 endpoint (§5.0–§5.5) + RBAC key → deploy **prod trước**.
+1. `vigo-backend`: migration index (`CONCURRENTLY`, ngoài transaction) + 2 bảng + 7 endpoint (§5.0–§5.6) + RBAC key → deploy **prod trước**.
 2. `vigo-admin`: nhánh `feat/driver-team` cắt từ `main`.
 3. Merge `feat/driver-team` → `dev` → **test runtime trên DEV (cổng bắt buộc)**.
 4. PR `feat/driver-team` → `main` → merge = deploy prod.
