@@ -660,7 +660,11 @@ export function patchDriverAcrossGroups(
   return out;
 }
 
-/** Đếm TÀI XẾ duy nhất — không đếm dòng, vì một tài nằm ở nhiều nhóm. */
+/**
+ * Đếm TÀI XẾ duy nhất — không đếm dòng, vì một tài nằm ở nhiều nhóm.
+ * 4 thẻ số lấy từ `GET /summary` của backend (đã DISTINCT sẵn), nên hàm này CHỈ dùng
+ * cho các con số đếm tại chỗ trên dữ liệu đang mở, ví dụ nhãn "Đã chọn n".
+ */
 export function countUniqueByStage(groups: DriverGroups, stage: DriverTeamStage): number {
   const ids = new Set<string>();
   for (const rows of Object.values(groups)) {
@@ -881,7 +885,11 @@ Trong `src/lib/nav-items.tsx`: thêm `Handshake` vào khối import từ `lucide
       { href: '/driver-team', label: 'Đội tài chuyên nghiệp', icon: Handshake },
 ```
 
-- [ ] **Step 4: Khai báo function**
+- [ ] **Step 4: Khai báo function + sửa comment đếm**
+
+Comment đầu `src/lib/rbac.ts:4` đang ghi *"Test đồng bộ (rbac.test.ts) khoá số 27 + 10"* → sửa thành **28 + 10**, nếu không nó mâu thuẫn với test ngay sau khi đổi và lần đọc sau sẽ có người tin comment.
+
+- [ ] **Step 5: Khai báo function**
 
 Trong `src/lib/rbac.ts`, thêm vào `MENU_FUNCTION_BY_HREF` ngay sau dòng `/driver-reputation`:
 
@@ -891,14 +899,14 @@ Trong `src/lib/rbac.ts`, thêm vào `MENU_FUNCTION_BY_HREF` ngay sau dòng `/dri
   '/driver-team': 'driver-team',
 ```
 
-- [ ] **Step 5: Chạy test — PASS**
+- [ ] **Step 6: Chạy test — PASS**
 
 Run: `npx vitest run src/lib/rbac.test.ts && npm run typecheck`
 Expected: PASS toàn bộ, gồm cả test song ánh navItems ↔ MENU_FUNCTION_BY_HREF.
 
 `function-catalog.ts` **không phải sửa** — nó dựng danh mục tự động từ `navItems`.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add src/lib/nav-items.tsx src/lib/rbac.ts src/lib/rbac.test.ts
@@ -998,7 +1006,11 @@ export function DriverTeamScreen() {
   const [summary, setSummary] = React.useState<TeamSummary | null>(null);
   const [owners, setOwners] = React.useState<TeamOwner[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [detailDriverId, setDetailDriverId] = React.useState<string | null>(null);
+  const [detailDriver, setDetailDriver] = React.useState<TeamDriverRow | null>(null);
+  const [open, setOpen] = React.useState<string[]>([]);
+  // Danh mục tuyến cho ô "gán tuyến phụ trách" trong drawer. getRoutes() đã mặc định
+  // limit 1000 nên lấy đủ (~27 tuyến trên prod).
+  const [allRoutes, setAllRoutes] = React.useState<{ id: number; name: string }[]>([]);
   // `groups` (tài xế đã tải theo từng nhóm tuyến) SỐNG Ở ĐÂY, không ở trong
   // RouteAccordion — cả accordion, drawer (Task 8) và hành động hàng loạt (Task 9)
   // đều phải ghi vào cùng một chỗ, nếu không sẽ có hai bản trạng thái lệch nhau.
@@ -1026,6 +1038,9 @@ export function DriverTeamScreen() {
       .then(setOwners)
       // Dropdown người phụ trách hỏng KHÔNG được làm sập cả màn.
       .catch(() => setOwners([]));
+    getRoutes()
+      .then((rs) => setAllRoutes(rs.map((r) => ({ id: r.id, name: r.name }))))
+      .catch(() => setAllRoutes([]));
   }, []);
 
   return (
@@ -1036,7 +1051,25 @@ export function DriverTeamScreen() {
         <StatCard title="Tài chạy thành công" value={summary?.driversWithCompletedTrips ?? '—'} hint="Trong khoảng ngày đang chọn" />
         <StatCard title="Đã liên hệ" value={summary?.contactedDrivers ?? '—'} hint="Mọi tài đã được chạm tới" />
         <StatCard title="Trong team" value={summary?.joinedDrivers ?? '—'} />
-        <StatCard title="Cần gọi lại hôm nay" value={summary?.followUpDueToday ?? '—'} hint="Không phụ thuộc khoảng ngày đang xem" />
+        {/* Thẻ này là VIỆC PHẢI LÀM, không phải số để ngắm (spec §6.1) → bấm được.
+            Đợt 1 chưa có filter server-side "quá hạn", nên bấm sẽ mở toàn bộ tuyến và
+            để cột "Hẹn gọi lại" tô đỏ dòng quá hạn. Nếu danh sách quá dài thì bổ sung
+            param `followUpDue=true` cho §5.2 ở đợt sau. */}
+        <button
+          type="button"
+          className="text-left"
+          onClick={() =>
+            setOpen((unassigned ? [...routes, unassigned] : routes).map((r) =>
+              r.routeId === null ? 'none' : String(r.routeId),
+            ))
+          }
+        >
+          <StatCard
+            title="Cần gọi lại hôm nay"
+            value={summary?.followUpDueToday ?? '—'}
+            hint="Bấm để mở mọi tuyến · không phụ thuộc khoảng ngày đang xem"
+          />
+        </button>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -1089,7 +1122,9 @@ export function DriverTeamScreen() {
           allValue={ALL}
           groups={groups}
           setGroups={setGroups}
-          onSelectDriver={setDetailDriverId}
+          open={open}
+          setOpen={setOpen}
+          onSelectDriver={setDetailDriver}
         />
       )}
     </div>
@@ -1158,7 +1193,7 @@ const vnDay = (iso: string | null) =>
   iso ? new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10) : '—';
 
 export function RouteAccordion({
-  routes, unassigned, range, filters, owners, allValue, groups, setGroups, onSelectDriver,
+  routes, unassigned, range, filters, owners, allValue, groups, setGroups, open, setOpen, onSelectDriver,
 }: {
   routes: TeamRouteRow[];
   unassigned: TeamRouteRow | null;
@@ -1170,11 +1205,13 @@ export function RouteAccordion({
   // đúng state này, nên KHÔNG được giữ bản sao cục bộ ở đây.
   groups: DriverGroups;
   setGroups: React.Dispatch<React.SetStateAction<DriverGroups>>;
-  onSelectDriver?: (driverId: string) => void;
+  // `open` cũng sống ở screen: thẻ số "Cần gọi lại hôm nay" cần mở được mọi tuyến.
+  open: string[];
+  setOpen: React.Dispatch<React.SetStateAction<string[]>>;
+  onSelectDriver?: (driver: TeamDriverRow) => void;
 }) {
   const { toast } = useToast();
   const [loadingKeys, setLoadingKeys] = React.useState<Set<string>>(new Set());
-  const [open, setOpen] = React.useState<string[]>([]);
 
   const rows = React.useMemo(
     () => (unassigned ? [...routes, unassigned] : routes),
@@ -1212,9 +1249,14 @@ export function RouteAccordion({
 
   // Đổi bộ lọc/khoảng ngày → dữ liệu đã tải hết hạn. Xoá sạch rồi nạp lại các
   // nhóm ĐANG MỞ, nếu không nhóm mở sẽ hiện số liệu của bộ lọc cũ.
+  // DEBOUNCE 400ms: `filters.q` đổi theo TỪNG KÝ TỰ gõ — không debounce thì mỗi ký tự
+  // xoá sạch groups và bắn lại request cho mọi nhóm đang mở.
   React.useEffect(() => {
-    setGroups({});
-    open.forEach((k) => void load(k));
+    const t = setTimeout(() => {
+      setGroups({});
+      open.forEach((k) => void load(k));
+    }, 400);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [range.from, range.to, filters.stage, filters.ownerAdminUserId, filters.q, filters.minTrips]);
 
@@ -1319,7 +1361,7 @@ export function RouteAccordion({
                             </span>
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button variant="ghost" size="sm" onClick={() => onSelectDriver?.(d.driverId)}>
+                            <Button variant="ghost" size="sm" onClick={() => onSelectDriver?.(d)}>
                               Chi tiết
                             </Button>
                           </TableCell>
@@ -1397,30 +1439,42 @@ import { useToast } from '@/hooks/use-toast';
 import {
   addTeamEvent, getDriverCallHistory, getDriverReputation, getTeamDriverDetail, patchTeamMember,
 } from '@/lib/api';
+// DriverCallEvent được export từ api.ts (:505), KHÔNG có trong types.ts — import sai
+// chỗ là typecheck fail, mà `npx next build` sẽ KHÔNG phát hiện vì next.config bật
+// ignoreBuildErrors.
+import type { DriverCallEvent } from '@/lib/api';
 import type {
-  DriverCallEvent, DriverReputation, DriverTeamDetail, DriverTeamStage, TeamOwner,
+  DriverReputation, DriverTeamDetail, DriverTeamStage, TeamDriverRow, TeamOwner,
 } from '@/lib/types';
-import { stageLabel, STAGE_ORDER } from '@/lib/driver-team-labels';
+import { driverWarning, stageLabel, STAGE_ORDER } from '@/lib/driver-team-labels';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { MultiSelectCombobox } from '@/components/ui/multi-select-combobox';
 import type { DateRange } from '../../finance/components/finance-filter';
 
 const vnDay = (iso: string | null | undefined) =>
   iso ? new Date(new Date(iso).getTime() + 7 * 3600_000).toISOString().slice(0, 10) : '—';
 
+/** shadcn Select cấm value rỗng — cần sentinel để biểu diễn "không ai". */
+const NONE = '__none__';
+
 export function DriverTeamDrawer({
-  driverId, range, owners, onClose, onSaved,
+  driver, range, owners, allRoutes, onClose, onSaved,
 }: {
-  driverId: string | null;
+  // Nhận cả DÒNG chứ không chỉ id: tên/SĐT/HTX đã có sẵn trong bảng, truyền xuống là
+  // drawer hiện được ngay "đang xem ai" mà không cần endpoint trả thêm hồ sơ.
+  driver: TeamDriverRow | null;
   range: DateRange;
   owners: TeamOwner[];
+  allRoutes: { id: number; name: string }[];
   onClose: () => void;
   onSaved: (driverId: string, team: DriverTeamDetail['team']) => void;
 }) {
+  const driverId = driver?.driverId ?? null;
   const { toast } = useToast();
   const [detail, setDetail] = React.useState<DriverTeamDetail | null>(null);
   const [reputation, setReputation] = React.useState<DriverReputation | null>(null);
@@ -1472,7 +1526,16 @@ export function DriverTeamDrawer({
   return (
     <Sheet open={!!driverId} onOpenChange={(o) => !o && onClose()}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader><SheetTitle>Chi tiết tài xế</SheetTitle></SheetHeader>
+        <SheetHeader>
+          <SheetTitle>{driver?.fullName ?? 'Chi tiết tài xế'}</SheetTitle>
+          <p className="text-sm text-muted-foreground">
+            <a href={`tel:${driver?.phone ?? ''}`} className="hover:underline">{driver?.phone ?? '—'}</a>
+            {driver?.transportCompanyName ? ` · ${driver.transportCompanyName}` : ''}
+          </p>
+          {driverWarning(driver ?? ({} as TeamDriverRow)) ? (
+            <Badge className="w-fit bg-red-100 text-red-800">{driverWarning(driver as TeamDriverRow)}</Badge>
+          ) : null}
+        </SheetHeader>
 
         {loading || !detail ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -1491,19 +1554,45 @@ export function DriverTeamDrawer({
                 </SelectContent>
               </Select>
 
+              {/* shadcn Select KHÔNG cho SelectItem value="" → dùng sentinel NONE để gỡ
+                  người phụ trách, nếu không thì gán rồi không bao giờ bỏ ra được. */}
               <Select
-                value={detail.team?.ownerAdminUserId ?? ''}
-                onValueChange={(v) => void save({ ownerAdminUserId: v || null })}
+                value={detail.team?.ownerAdminUserId ?? NONE}
+                onValueChange={(v) => void save({ ownerAdminUserId: v === NONE ? null : v })}
               >
                 <SelectTrigger><SelectValue placeholder="Chưa gán người phụ trách" /></SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={NONE}>Không ai phụ trách</SelectItem>
                   {owners.map((o) => <SelectItem key={o.id} value={o.id}>{o.fullName ?? o.phone ?? o.id}</SelectItem>)}
                 </SelectContent>
               </Select>
 
               <div>
+                <label className="text-xs text-muted-foreground">Tuyến được phân công</label>
+                <MultiSelectCombobox
+                  options={allRoutes.map((r) => ({ value: String(r.id), label: r.name }))}
+                  selected={(detail.team?.assignedRouteIds ?? []).map(String)}
+                  onChange={(vals) => void save({ assignedRouteIds: vals.map(Number) })}
+                  placeholder="Chọn tuyến"
+                />
+                {(detail.team?.assignedRouteIds ?? [])
+                  .filter((id) => !allRoutes.some((r) => r.id === id))
+                  .map((id) => (
+                    // assignedRouteIds cố ý không có FK (spec §4.1) → tuyến xoá mềm còn
+                    // nằm lại. Hiện tường minh thay vì để nó biến mất im lặng.
+                    <Badge key={id} className="mt-1 mr-1 bg-muted text-muted-foreground">
+                      Tuyến đã xoá (#{id})
+                    </Badge>
+                  ))}
+              </div>
+
+              <div>
                 <label className="text-xs text-muted-foreground">Hẹn gọi lại (ngày VN)</label>
+                {/* `key` ép React dựng lại input khi giá trị từ server đổi — nếu để
+                    uncontrolled thuần thì sau khi logCall() nạp lại detail, ô vẫn giữ
+                    giá trị cũ và người dùng tưởng đã lưu hụt. */}
                 <Input
+                  key={detail.team?.nextFollowUpAt ?? 'empty'}
                   type="date"
                   defaultValue={detail.team?.nextFollowUpAt ? vnDay(detail.team.nextFollowUpAt) : ''}
                   onChange={(e) =>
@@ -1519,6 +1608,7 @@ export function DriverTeamDrawer({
               <div>
                 <label className="text-xs text-muted-foreground">Ghi chú riêng (ops/CSKH không đọc được)</label>
                 <Textarea
+                  key={detail.team?.note ?? 'empty'}
                   defaultValue={detail.team?.note ?? ''}
                   onBlur={(e) => void save({ note: e.target.value })}
                   rows={3}
@@ -1535,7 +1625,9 @@ export function DriverTeamDrawer({
                 <ul className="space-y-1 text-sm">
                   {detail.routesRun.map((r) => (
                     <li key={String(r.routeId)} className="flex items-center gap-2">
-                      <span className="flex-1">{r.name ?? 'Không gắn tuyến'}</span>
+                      <span className="flex-1">
+                        {(r as any).routeDeleted ? `Tuyến đã xoá (#${r.routeId})` : (r.name ?? 'Không gắn tuyến')}
+                      </span>
                       <span className="text-muted-foreground">{r.trips} chuyến</span>
                       {r.routeId != null && !registered.has(r.routeId) ? (
                         <Badge className="bg-amber-100 text-amber-800">Chạy nhưng chưa đăng ký</Badge>
@@ -1621,15 +1713,16 @@ const handleSaved = React.useCallback(
 
 ```tsx
 <DriverTeamDrawer
-  driverId={detailDriverId}
+  driver={detailDriver}
   range={range}
   owners={owners}
-  onClose={() => setDetailDriverId(null)}
+  allRoutes={allRoutes}
+  onClose={() => setDetailDriver(null)}
   onSaved={handleSaved}
 />
 ```
 
-Import thêm: `patchDriverAcrossGroups` từ `@/lib/driver-team-sync`, `DriverTeamDetail` và `TeamDriverRow` từ `@/lib/types`, `buildExportRows` + `EXPORT_HEADER` từ `@/lib/driver-team-export`, `downloadXlsx` từ `@/lib/csv`, `getTeamRouteDrivers` từ `@/lib/api`, và `DriverTeamDrawer` từ `./driver-team-drawer`.
+Import thêm: `patchDriverAcrossGroups` từ `@/lib/driver-team-sync`, `DriverTeamDetail` và `TeamDriverRow` từ `@/lib/types`, `buildExportRows` + `EXPORT_HEADER` từ `@/lib/driver-team-export`, `downloadXlsx` từ `@/lib/csv`, `getTeamRouteDrivers` + `getRoutes` từ `@/lib/api`, và `DriverTeamDrawer` từ `./driver-team-drawer`.
 
 - [ ] **Step 3: Thêm export**
 
@@ -1641,19 +1734,45 @@ const [exporting, setExporting] = React.useState(false);
 const handleExport = async () => {
   setExporting(true);
   try {
-    const targets = unassigned ? [...routes, unassigned] : routes;
     const items: { routeName: string; driver: TeamDriverRow }[] = [];
-    for (const r of targets) {
-      const key = r.routeId === null ? ('none' as const) : r.routeId;
-      let page = 1;
-      // Lặp trang tới khi hết hoặc chạm cap — cap áp ở buildExportRows.
-      for (;;) {
-        const res = await getTeamRouteDrivers(key, { from: range.from, to: range.to, page, limit: 200 });
-        items.push(...res.data.map((d) => ({ routeName: r.routeName, driver: d })));
-        if (page >= res.meta.totalPages || res.data.length === 0 || items.length >= 1000) break;
-        page += 1;
+
+    if (selected.size > 0) {
+      // Có tick → xuất ĐÚNG dòng đã tick, không gọi thêm API.
+      for (const [key, rows] of Object.entries(groups)) {
+        const routeName =
+          (unassigned ? [...routes, unassigned] : routes).find(
+            (r) => (r.routeId === null ? 'none' : String(r.routeId)) === key,
+          )?.routeName ?? key;
+        for (const d of rows) {
+          if (selected.has(d.driverId)) items.push({ routeName, driver: d });
+        }
       }
-      if (items.length >= 1000) break;
+    } else {
+      const targets = unassigned ? [...routes, unassigned] : routes;
+      for (const r of targets) {
+        const key = r.routeId === null ? ('none' as const) : r.routeId;
+        let page = 1;
+        for (;;) {
+          // PHẢI truyền nguyên bộ lọc đang áp. Xuất "toàn bộ mọi tuyến" trong khi
+          // người dùng đang lọc "Trong team, phụ trách = A" là sai nguy hiểm: họ nhận
+          // file của tất cả mọi người, bị cắt ngẫu nhiên ở tuyến thứ n, kèm cảnh báo
+          // cắt dòng càng làm họ tin file đúng.
+          const res = await getTeamRouteDrivers(key, {
+            from: range.from,
+            to: range.to,
+            stage: filters.stage === ALL ? undefined : filters.stage,
+            ownerAdminUserId: filters.ownerAdminUserId === ALL ? undefined : filters.ownerAdminUserId,
+            q: filters.q || undefined,
+            minTrips: filters.minTrips ? Number(filters.minTrips) : undefined,
+            page,
+            limit: 200,
+          });
+          items.push(...res.data.map((d) => ({ routeName: r.routeName, driver: d })));
+          if (page >= res.meta.totalPages || res.data.length === 0 || items.length >= 1000) break;
+          page += 1;
+        }
+        if (items.length >= 1000) break;
+      }
     }
     const { rows, truncated } = buildExportRows(items);
     const stamp = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
@@ -1716,7 +1835,7 @@ Hai phần của spec §6.4 chưa được phủ ở Task 1–8.
 - Produces:
   - `applyBulk(driverIds: string[], body: BulkBody, patch: PatchFn, max?: number): Promise<BulkResult>`
   - `BulkResult = { ok: string[]; failed: { driverId: string; message: string }[]; skipped: string[] }`
-  - `matchingRouteKeys(groups: DriverGroups, q: string): string[]`
+  - (KHÔNG có `matchingRouteKeys` — xem Step 7)
 
 - [ ] **Step 1: Viết test thất bại**
 
@@ -1727,12 +1846,22 @@ import { describe, it, expect, vi } from 'vitest';
 import { applyBulk } from './driver-team-bulk';
 
 describe('applyBulk', () => {
-  it('gọi tuần tự từng tài, trả danh sách thành công', async () => {
-    const patch = vi.fn().mockResolvedValue({ stage: 'JOINED' });
+  it('trả kèm team THẬT từ backend, không phải giá trị FE tự ghép', async () => {
+    const patch = vi.fn().mockResolvedValue({ stage: 'JOINED', ownerAdminName: 'Chị B' });
     const out = await applyBulk(['d1', 'd2'], { stage: 'JOINED' }, patch as any);
     expect(patch).toHaveBeenCalledTimes(2);
-    expect(out.ok).toEqual(['d1', 'd2']);
+    expect(out.ok).toEqual([
+      { driverId: 'd1', team: { stage: 'JOINED', ownerAdminName: 'Chị B' } },
+      { driverId: 'd2', team: { stage: 'JOINED', ownerAdminName: 'Chị B' } },
+    ]);
     expect(out.failed).toEqual([]);
+  });
+
+  it('tài "Tiềm năng" (chưa có team) VẪN nằm trong ok — đây là ca dùng nhiều nhất', async () => {
+    const patch = vi.fn().mockResolvedValue({ stage: 'CONTACTED' });
+    const out = await applyBulk(['d1'], { stage: 'CONTACTED' }, patch as any);
+    expect(out.ok).toHaveLength(1);
+    expect(out.ok[0].team.stage).toBe('CONTACTED');
   });
 
   it('một dòng lỗi KHÔNG chặn các dòng còn lại, và nêu ĐÍCH DANH dòng lỗi', async () => {
@@ -1744,7 +1873,7 @@ describe('applyBulk', () => {
 
     const out = await applyBulk(['d1', 'd2', 'd3'], { stage: 'JOINED' }, patch as any);
 
-    expect(out.ok).toEqual(['d1', 'd3']);
+    expect(out.ok.map((o) => o.driverId)).toEqual(['d1', 'd3']);
     expect(out.failed).toEqual([{ driverId: 'd2', message: '403 Forbidden' }]);
   });
 
@@ -1778,13 +1907,18 @@ Expected: FAIL — không tìm thấy module.
 
 ```ts
 import type { DriverTeamStage, TeamMemberState } from './types';
-import type { DriverGroups } from './driver-team-sync';
 
 export type BulkBody = { stage?: DriverTeamStage; ownerAdminUserId?: string | null };
 export type PatchFn = (driverId: string, body: BulkBody) => Promise<TeamMemberState>;
 
 export type BulkResult = {
-  ok: string[];
+  /**
+   * Trả kèm `team` THẬT do backend trả về, không phải giá trị FE tự đoán:
+   * backend bổ sung `ownerAdminName` và có thể tự đặt `stage` mặc định khi tạo row
+   * mới. Ghép `{...cũ, ...body}` ở FE sẽ mất tên người phụ trách và bỏ sót đúng
+   * nhóm tài "Tiềm năng" (chưa có `team`) — nhóm dùng thao tác hàng loạt nhiều nhất.
+   */
+  ok: { driverId: string; team: TeamMemberState }[];
   failed: { driverId: string; message: string }[];
   /** Bị bỏ vì vượt trần — PHẢI báo cho người dùng, không nuốt. */
   skipped: string[];
@@ -1804,13 +1938,13 @@ export async function applyBulk(
 ): Promise<BulkResult> {
   const targets = driverIds.slice(0, max);
   const skipped = driverIds.slice(max);
-  const ok: string[] = [];
+  const ok: { driverId: string; team: TeamMemberState }[] = [];
   const failed: { driverId: string; message: string }[] = [];
 
   for (const id of targets) {
     try {
-      await patch(id, body);
-      ok.push(id);
+      const team = await patch(id, body);
+      ok.push({ driverId: id, team });
     } catch (e: any) {
       failed.push({ driverId: id, message: String(e?.message ?? e) });
     }
@@ -1819,20 +1953,9 @@ export async function applyBulk(
   return { ok, failed, skipped };
 }
 
-/** Khoá của các nhóm có ít nhất một tài khớp từ khoá — để tự bung accordion. */
-export function matchingRouteKeys(groups: DriverGroups, q: string): string[] {
-  const needle = q.trim().toLowerCase();
-  if (!needle) return [];
-  return Object.entries(groups)
-    .filter(([, rows]) =>
-      rows.some(
-        (r) =>
-          (r.fullName ?? '').toLowerCase().includes(needle) ||
-          (r.phone ?? '').includes(needle),
-      ),
-    )
-    .map(([key]) => key);
-}
+// KHÔNG viết `matchingRouteKeys` để "tự bung nhóm khớp": `groups` chỉ chứa nhóm ĐANG
+// MỞ, nên hàm đó chỉ trả về key của nhóm đã mở sẵn — tức là không mở thêm được gì.
+// Muốn làm thật phải để backend đếm số tài khớp theo từng tuyến (§5.1). Xem spec §6.4.
 ```
 
 - [ ] **Step 4: Chạy test — PASS**
@@ -1866,9 +1989,11 @@ const runBulk = async (body: BulkBody) => {
   // Lan kết quả vào bảng: đọc lại state của từng tài đã đổi thành công.
   setGroups((g) => {
     let next = g;
-    for (const id of res.ok) {
-      const row = Object.values(next).flat().find((r) => r.driverId === id);
-      if (row?.team) next = patchDriverAcrossGroups(next, id, { ...row.team, ...body } as any);
+    // Dùng team backend trả về. KHÔNG lọc theo `row.team` — tài "Tiềm năng" chưa có
+    // team chính là nhóm hay dùng thao tác này nhất, lọc đi là chúng không bao giờ
+    // được cập nhật trên UI dù PATCH đã thành công.
+    for (const { driverId, team } of res.ok) {
+      next = patchDriverAcrossGroups(next, driverId, team);
     }
     return next;
   });
@@ -1897,21 +2022,26 @@ Thanh hiện: `Đã chọn {selected.size}` + `Select` đổi trạng thái + `S
 
 > **Lưu ý:** `runBulk` cập nhật lạc quan từ `body`. Nếu muốn chắc chắn khớp backend thì tải lại các nhóm đang mở sau khi xong — đánh đổi giữa một lần tải thêm và rủi ro lệch hiển thị. Với thao tác chỉ đổi `stage`/`owner` thì cập nhật lạc quan là đủ.
 
-- [ ] **Step 7: Tìm kiếm tự bung nhóm khớp**
+- [ ] **Step 7: Tìm kiếm hai tầng, nói rõ giới hạn**
 
-Trong `route-accordion.tsx`, thêm effect: khi `filters.q` khác rỗng và dữ liệu nhóm đã tải xong, gọi `matchingRouteKeys(groups, filters.q)` và `setOpen((o) => Array.from(new Set([...o, ...keys])))`.
+Ô tìm hiện đang gộp hai việc khác hẳn nhau. Tách rõ:
 
-**Giới hạn đã biết, phải ghi rõ trên UI:** chỉ bung được nhóm **đã tải**. Nhóm chưa mở lần nào thì client không có dữ liệu để so khớp. Vì vậy khi `filters.q` khác rỗng, hiện dòng chú thích dưới thanh lọc:
+1. **Tìm theo tên tuyến** → truyền `q` vào `getTeamRoutes` (§5.1 có param này nhưng Task 6 chưa gửi), lọc ngay danh sách cấp 1. Sửa `getTeamRoutes` trong `api.ts` để nhận `q`, và `driver-team-screen.tsx` để truyền `filters.routeQ`.
+2. **Tìm theo tên tài / SĐT** → đã gửi xuống §5.2, chỉ lọc **bên trong tuyến đang mở**.
+
+Thêm hai ô riêng vào thanh lọc (`routeQ` và `q`) thay vì một ô làm hai việc, và khi `filters.q` khác rỗng thì hiện chú thích:
 
 ```tsx
 {filters.q ? (
   <p className="text-xs text-muted-foreground">
-    Tìm kiếm chỉ soi trong các tuyến đã mở. Mở thêm tuyến để tìm rộng hơn.
+    Tìm theo tên/SĐT chỉ soi trong các tuyến đang mở. Tìm tuyến thì dùng ô "Tên tuyến".
   </p>
 ) : null}
 ```
 
-Nói thẳng giới hạn còn hơn để người dùng tin là đã tìm hết rồi kết luận "tài này không chạy tuyến nào".
+**KHÔNG làm "tuyến có kết quả tự bung ra"** (spec §6.4 đã chốt bỏ). Client chỉ giữ dữ liệu của nhóm đang mở nên không thể biết tuyến chưa mở có ai khớp — làm nửa vời sẽ khiến người dùng tin là đã tìm hết rồi kết luận sai "tài này không chạy tuyến nào". Muốn làm thật thì phải thêm đếm-khớp-theo-tuyến ở §5.1, để đợt sau.
+
+Nhớ cập nhật `TeamFilters` thêm `routeQ: string`.
 
 - [ ] **Step 8: Kiểm**
 

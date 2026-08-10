@@ -323,9 +323,23 @@ Expected: PASS, tsc không lỗi.
 
 - [ ] **Step 11: Chạy migration thật trên DB local**
 
-Run: `npm run migration:run`
+Run: `npm run migration:run -- -t each`
 Expected: log `Migration CreateDriverTeamTables1792800000000 has been executed successfully`.
-Kiểm ngược: `npm run migration:revert` rồi `npm run migration:run` lại — phải sạch cả hai chiều.
+
+> ⚠️ **`-t each` là BẮT BUỘC, đừng bỏ.** TypeORM CLI mặc định `transaction: 'all'`
+> (`node_modules/typeorm/migration/MigrationExecutor.js:28`) và **ném
+> `ForbiddenTransactionModeOverrideError`** nếu có migration nào khai `transaction`
+> (:179-190) — tức là migration index ở Task 2 sẽ làm cả lệnh này chết.
+> **KHÔNG được "sửa" bằng cách gỡ `transaction = false`** khỏi Task 2: gỡ xong thì
+> `CREATE INDEX CONCURRENTLY` chạy trong transaction và Postgres từ chối, hoặc tệ hơn
+> là có người đổi sang `CREATE INDEX` thường và **khoá ghi bảng `booking` prod**.
+> Prod không dính lỗi này vì `migration:run:prod` gọi
+> `runMigrations({ transaction: 'each' })` (`src/database/run-migration.ts:14`).
+
+Kiểm ngược: `npm run migration:revert -- -t none` rồi `npm run migration:run -- -t each` lại.
+`-t none` cũng bắt buộc ở chiều revert vì đường `undoLastMigration` **không** đọc
+`migration.transaction` của từng migration (`MigrationExecutor.js:317-321`) — để mặc định thì
+`DROP INDEX CONCURRENTLY` của Task 2 luôn chạy trong transaction và fail.
 
 - [ ] **Step 12: Commit**
 
@@ -358,6 +372,18 @@ Tách riêng vì đây là **phần rủi ro cao nhất** của cả tính năng
 - Produces: index `IDX_booking_completed_route_driver` — mọi truy vấn ở Task 4–6 dựa vào nó.
 
 **Bối cảnh index đã có** (đã kiểm `rg 'ON "booking"' src/database/migrations/*.ts`): có `("routeId","createdAt" DESC)`, `("status","createdAt" DESC)`, `("driverId","status")`, `("driverId","createdAt")`. **Không cái nào chứa `completedAt`** → index mới không trùng lặp. Vế "cầu" (`demand` CTE, lọc `createdAt`) đã có `("routeId","createdAt")` phục vụ.
+
+**Rủi ro khi chạy trên prod — đọc hết trước khi bấm deploy:**
+
+| Rủi ro | Thực tế |
+|---|---|
+| Thời gian build | `CREATE INDEX CONCURRENTLY` quét bảng **2 lần** và chờ mọi transaction đang mở kết thúc. Trên bảng nóng nhất hệ thống, tính bằng phút chứ không phải giây |
+| Treo deploy | CIC bị **chặn bởi transaction dài, kể cả read-only**. Nếu migration nằm trong bước deploy ECS thì deploy **treo**, không fail nhanh |
+| Lock | `SHARE UPDATE EXCLUSIVE` — không chặn đọc/ghi thường, nhưng chặn DDL và VACUUM khác suốt thời gian build |
+| `statement_timeout` của Neon | Là nguyên nhân phổ biến nhất khiến CIC bị huỷ giữa chừng → để lại index INVALID (đã xử lý ở `up()`) |
+| Dung lượng | Index 4 cột trên bảng lớn nhất; Neon tính tiền theo dung lượng |
+
+**Nên chạy vào giờ thấp điểm** và theo dõi tới khi xong, chứ đừng bắn kèm một đợt deploy bận.
 
 - [ ] **Step 1: Viết test thất bại**
 
@@ -418,8 +444,22 @@ export class AddBookingCompletedRouteDriverIndex1792800100000 implements Migrati
   transaction = false as const;
 
   public async up(q: QueryRunner): Promise<void> {
+    // Dọn index INVALID sót lại từ lần build concurrent bị huỷ giữa chừng.
+    // KHÔNG dùng `IF NOT EXISTS` ở câu tạo bên dưới: nếu một index INVALID cùng tên
+    // còn nằm đó thì `IF NOT EXISTS` sẽ NO-OP, migration được ghi nhận "thành công",
+    // và ta có một index vĩnh viễn vô dụng cho việc đọc nhưng vẫn phải bảo trì ở
+    // MỌI insert/update trên `booking`. Migration sẽ không bao giờ chạy lại để tự sửa.
+    const invalid = await q.query(
+      `SELECT 1 FROM pg_index i
+         JOIN pg_class c ON c.oid = i.indexrelid
+        WHERE c.relname = 'IDX_booking_completed_route_driver' AND NOT i.indisvalid`,
+    );
+    if (invalid.length > 0) {
+      await q.query(`DROP INDEX CONCURRENTLY "IDX_booking_completed_route_driver"`);
+    }
+
     await q.query(
-      `CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_booking_completed_route_driver"
+      `CREATE INDEX CONCURRENTLY "IDX_booking_completed_route_driver"
          ON "booking" ("status", "completedAt", "routeId", "driverId")`,
     );
   }
@@ -439,7 +479,8 @@ Expected: PASS toàn bộ.
 
 - [ ] **Step 5: Chạy thật + đo**
 
-Run: `npm run migration:run`
+Run: `npm run migration:run -- -t each` (xem cảnh báo ở Task 1 Step 11 — thiếu `-t each` là lệnh chết vì `ForbiddenTransactionModeOverrideError`, và **đừng** gỡ `transaction = false` để chữa).
+
 Sau đó trên psql, xác nhận index tồn tại và **hợp lệ**:
 
 ```sql
@@ -448,7 +489,11 @@ SELECT indexrelid::regclass AS idx, indisvalid
  WHERE indexrelid::regclass::text = 'IDX_booking_completed_route_driver';
 ```
 
-Expected: `indisvalid = true`. **Nếu `false`** → lần build concurrent bị lỗi giữa chừng, phải `DROP INDEX CONCURRENTLY` rồi chạy lại; **đừng để index invalid nằm lại**, Postgres vẫn phải bảo trì nó khi ghi mà không dùng được để đọc.
+Expected: `indisvalid = true`. **Nếu `false`** → lần build concurrent bị lỗi giữa chừng. `up()` đã tự dọn index invalid ở lần chạy sau, nhưng migration đã được ghi nhận thành công thì **sẽ không chạy lại** → phải xử lý tay: `DROP INDEX CONCURRENTLY "IDX_booking_completed_route_driver";` rồi tạo lại bằng psql (ngoài transaction).
+
+**Rollback trên prod là thao tác TAY, không dùng `migration:revert`.** Đường revert của TypeORM không đọc `transaction` của từng migration (`MigrationExecutor.js:317-321`), nên `DROP INDEX CONCURRENTLY` trong `down()` sẽ chạy trong transaction và fail. Cách đúng: `npm run migration:revert -- -t none`, hoặc drop bằng psql rồi xoá row tương ứng trong bảng `migrations`.
+
+**Thêm hậu-kiểm vào runbook deploy, đừng dựa vào "nhớ chạy psql":** sau bước migration, chạy câu `SELECT indisvalid ...` ở trên và **fail deploy nếu trả về `false`**. CI/CD tự chạy migration thì không có ai đứng đó kiểm.
 
 - [ ] **Step 6: Commit**
 
@@ -491,7 +536,7 @@ Tách SQL ra file thuần để test được **không cần DB**, và để cá
 ```ts
 import {
   buildRouteStatsSql, buildRouteDriversSql, clampLimit, clampPage, routeOrderBy,
-  SUMMARY_SQL, UNASSIGNED_STATS_SQL,
+  SUMMARY_SQL, UNASSIGNED_STATS_SQL, type RouteDriversFilter,
 } from './driver-team.sql';
 
 describe('clampLimit / clampPage', () => {
@@ -566,10 +611,10 @@ describe('UNASSIGNED_STATS_SQL', () => {
 });
 
 describe('buildRouteDriversSql', () => {
-  const base = {
+  const base: RouteDriversFilter = {
     startUtc: new Date('2026-08-01T00:00:00Z'),
     endUtc: new Date('2026-08-31T00:00:00Z'),
-    routeId: 12 as const | number,
+    routeId: 12,
     sort: 'trips', order: 'desc', limit: 10, offset: 0,
   };
 
@@ -705,12 +750,12 @@ SELECT
     WHERE b.status = 'COMPLETED' AND b."routeId" IS NULL AND b."driverId" IS NOT NULL
       AND b."completedAt" >= $1 AND b."completedAt" <= $2) AS "driverCount",
   (SELECT COUNT(*)::int FROM "booking" b
-    WHERE b.status = 'COMPLETED' AND b."routeId" IS NULL
+    WHERE b.status = 'COMPLETED' AND b."routeId" IS NULL AND b."driverId" IS NOT NULL
       AND b."completedAt" >= $1 AND b."completedAt" <= $2) AS "completedTrips",
   (SELECT COUNT(*)::int FROM "booking" b
     WHERE b."routeId" IS NULL AND b."createdAt" >= $1 AND b."createdAt" <= $2) AS "totalBookings",
   (SELECT MAX(b."completedAt") FROM "booking" b
-    WHERE b.status = 'COMPLETED' AND b."routeId" IS NULL
+    WHERE b.status = 'COMPLETED' AND b."routeId" IS NULL AND b."driverId" IS NOT NULL
       AND b."completedAt" >= $1 AND b."completedAt" <= $2) AS "lastCompletedAt"`;
 
 /**
@@ -1083,7 +1128,11 @@ describe('DriverTeamStatsService — listRouteDrivers', () => {
   };
 
   it('câu COUNT không được nhận limit/offset — dư param là Postgres báo lỗi bind', async () => {
+    // listRouteDrivers gọi query 3 lần: list, count, tổng chuyến tuyến. Thiếu mock
+    // lần 3 thì Promise.all trả undefined và test chết vì TypeError, không phải vì
+    // invariant bị vi phạm.
     rowsOnce([]);
+    query.mockResolvedValueOnce([{ completedTrips: 0 }]);
     await service.listRouteDrivers(12, { from: '2026-08-01', to: '2026-08-31' });
 
     const listParams = query.mock.calls[0][1] as unknown[];
@@ -1147,6 +1196,7 @@ export type TeamDriverRow = {
   /** Tính ở BE để FE không phải chia — và để chỗ chia-cho-0 chỉ tồn tại một nơi. */
   shareOfRoute: number;
   lastCompletedAt: Date | null;
+  /** Chuyến đầu tiên TRONG KỲ đang lọc, KHÔNG phải chuyến đầu tiên từng chạy. */
   firstCompletedAt: Date | null;
   isApproved: boolean;
   isBanned: boolean;
@@ -1195,12 +1245,18 @@ export type RouteDriversQuery = {
       this.dataSource.query(sql, params),
       this.dataSource.query(countSql, countParams),
       this.dataSource.query(
+        // `b."driverId" IS NOT NULL` PHẢI có: mẫu số này chia cho tử số sinh từ CTE
+        // `done` (đã lọc driverId IS NOT NULL) và phải khớp đúng con số "Hoàn thành
+        // trong kỳ" người dùng vừa đọc ở dòng cấp 1. Thiếu nó thì tổng tỉ trọng của
+        // một tuyến không ra 100% và cột "Tỉ trọng %" — lý do tồn tại của màn — sai.
         routeId === 'none'
           ? `SELECT COUNT(*)::int AS "completedTrips" FROM "booking" b
               WHERE b.status = 'COMPLETED' AND b."routeId" IS NULL
+                AND b."driverId" IS NOT NULL
                 AND b."completedAt" >= $1 AND b."completedAt" <= $2`
           : `SELECT COUNT(*)::int AS "completedTrips" FROM "booking" b
               WHERE b.status = 'COMPLETED' AND b."routeId" = $3
+                AND b."driverId" IS NOT NULL
                 AND b."completedAt" >= $1 AND b."completedAt" <= $2`,
         routeId === 'none' ? [startUtc, endUtc] : [startUtc, endUtc, routeId],
       ),
@@ -1287,6 +1343,7 @@ import { DefinedRoute } from '../common/entities/defined-route.entity';
 import { DriverTeamMember } from './entities/driver-team-member.entity';
 import { DriverTeamEvent } from './entities/driver-team-event.entity';
 import { DriverTeamStatsService } from './driver-team-stats.service';
+import { DriverTeamService } from './driver-team.service';
 
 /**
  * SQL thô của DriverTeamStatsService chạy trên Postgres THẬT.
@@ -1300,16 +1357,32 @@ describe('DriverTeamStatsService — SQL thật trên Postgres thật', () => {
   let ds: DataSource;
   let service: DriverTeamStatsService;
 
+  // Bám ĐÚNG tiền lệ driver-reputation.sql.integration.spec.ts:50-73. Bốn chi tiết
+  // dưới đây đều đã có lý do, đừng "đơn giản hoá":
+  //  - entities dùng __dirname: glob tương đối cwd sẽ rỗng khi jest chạy từ rootDir khác.
+  //  - synchronize hoãn lại sau CREATE EXTENSION postgis: DefinedRoute.routeGeometry và
+  //    Driver.currentLocation là cột `geometry`, sync trước khi bật extension là fail.
+  //  - options '-c timezone=UTC': giữ đúng bất biến "timestamp chứa byte UTC" của prod.
   beforeAll(async () => {
-    container = await new PostgreSqlContainer('postgis/postgis:15-3.3').start();
+    container = await new PostgreSqlContainer('postgis/postgis:15-3.4-alpine').start();
     ds = new DataSource({
       type: 'postgres',
       url: container.getConnectionUri(),
-      entities: ['src/**/*.entity.ts'],
-      synchronize: true,
+      entities: [__dirname + '/../**/*.entity{.ts,.js}'],
+      synchronize: false,
+      extra: { options: '-c timezone=UTC' },
     });
     await ds.initialize();
+    await ds.query('CREATE EXTENSION IF NOT EXISTS postgis');
+    await ds.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+    await ds.synchronize();
     service = new DriverTeamStatsService(ds);
+  });
+
+  // Không dọn thì các case phụ thuộc thứ tự chạy và sẽ vỡ khi thêm case mới.
+  beforeEach(async () => {
+    await ds.query('TRUNCATE "booking", "driver_team_member", "driver_team_event" CASCADE');
+    await ds.query('DELETE FROM "defined_routes"');
   });
 
   afterAll(async () => {
@@ -1387,6 +1460,38 @@ describe('DriverTeamStatsService — SQL thật trên Postgres thật', () => {
     expect(out.meta.total).toBe(1);
   });
 
+  it('totalBookings đếm theo createdAt, KHÁC tập với completedTrips', async () => {
+    const { route, driver } = await seedDriverOnRoute(ds, 'Tuyến F');
+    // Đặt ngày 31/7 giờ VN, chạy xong ngày 1/8 giờ VN.
+    const b = await ds.getRepository(Booking).save({
+      driverId: driver.id, routeId: route.id, status: 'COMPLETED',
+      completedAt: new Date('2026-08-01T03:00:00.000Z'),
+    } as any);
+    await ds.query(`UPDATE "booking" SET "createdAt" = $1 WHERE id = $2`, [
+      new Date('2026-07-31T03:00:00.000Z'), b.id,
+    ]);
+
+    const jul = await service.listRoutes({ from: '2026-07-31', to: '2026-07-31' });
+    const aug = await service.listRoutes({ from: '2026-08-01', to: '2026-08-01' });
+
+    expect(jul.data.find((r) => r.routeId === route.id)!.totalBookings).toBe(1);
+    expect(jul.data.find((r) => r.routeId === route.id)!.completedTrips).toBe(0);
+    expect(aug.data.find((r) => r.routeId === route.id)!.completedTrips).toBe(1);
+    expect(aug.data.find((r) => r.routeId === route.id)!.totalBookings).toBe(0);
+  });
+
+  it('listOwners chỉ trả admin còn hoạt động', async () => {
+    const repo = ds.getRepository(User);
+    await repo.save({ phone: '0911111111', fullName: 'Admin sống', role: 'ADMIN' } as any);
+    await repo.save({ phone: '0922222222', fullName: 'User thường', role: 'USER' } as any);
+    const gone = await repo.save({ phone: '0933333333', fullName: 'Admin nghỉ', role: 'ADMIN' } as any);
+    await repo.softDelete(gone.id);
+
+    const owners = await new DriverTeamService(null as any, null as any, ds).listOwners();
+
+    expect(owners.map((o) => o.fullName)).toEqual(['Admin sống']);
+  });
+
   it('getSummary đếm DISTINCT: tài chạy 2 tuyến chỉ tính 1 lần', async () => {
     const { route: r1, driver } = await seedDriverOnRoute(ds, 'Tuyến E1');
     const r2 = await ds.getRepository(DefinedRoute).save({ name: 'Tuyến E2' } as any);
@@ -1424,13 +1529,21 @@ async function seedCompleted(
   routeId: number | null,
   completedAtIso: string,
 ) {
-  return ds.getRepository(Booking).save({
+  const saved = await ds.getRepository(Booking).save({
     driverId,
     routeId,
     status: 'COMPLETED',
     completedAt: new Date(completedAtIso),
-    createdAt: new Date(completedAtIso),
   } as any);
+  // Booking.createdAt là @CreateDateColumn → TypeORM GHI ĐÈ mọi giá trị truyền vào
+  // lúc insert. Phải UPDATE thô sau đó, nếu không nhánh `demand` (totalBookings đếm
+  // theo createdAt) không thể test được — mà đó đúng là nửa số liệu spec §5.1 coi là
+  // dễ hiểu sai nhất.
+  await ds.query(`UPDATE "booking" SET "createdAt" = $1 WHERE id = $2`, [
+    new Date(completedAtIso),
+    saved.id,
+  ]);
+  return saved;
 }
 ```
 
@@ -1439,7 +1552,7 @@ async function seedCompleted(
 - [ ] **Step 3: Chạy integration**
 
 Run: `npm run test:integration -- src/driver-team/driver-team.sql.integration.spec.ts`
-Expected: PASS toàn bộ 7 case. Lần đầu mất vài phút vì phải kéo image Postgres.
+Expected: PASS toàn bộ 9 case. Lần đầu mất vài phút vì phải kéo image Postgres.
 
 **Nếu FAIL:** đây chính là mục đích của task này — sửa SQL ở `driver-team.sql.ts` (và unit test tương ứng ở Task 3), **không** sửa kỳ vọng của integration spec để nó xanh.
 
@@ -1641,20 +1754,15 @@ describe('DriverTeamService', () => {
     expect(out).toHaveProperty('ownerAdminName');
   });
 
-  it('listOwners lọc đúng role ADMIN — dropdown người phụ trách không được lộ user thường', async () => {
-    const ds = { query: jest.fn().mockResolvedValue([]) };
-    const m2 = await Test.createTestingModule({
-      providers: [
-        DriverTeamService,
-        { provide: getRepositoryToken(DriverTeamMember), useValue: memberRepo },
-        { provide: getRepositoryToken(DriverTeamEvent), useValue: eventRepo },
-        { provide: DataSource, useValue: ds },
-      ],
-    }).compile();
+  it('tạo row mới khi CHỈ gửi note — không được vi phạm NOT NULL của stage', async () => {
+    memberRepo.findOne.mockResolvedValue(null);
 
-    await m2.get(DriverTeamService).listOwners();
+    await service.patchMember(DRIVER, { note: 'gọi thử' }, ADMIN);
 
-    expect(ds.query.mock.calls[0][0]).toContain("u.role = 'ADMIN'");
+    // Đây là đường đi thật từ drawer: nhập ghi chú cho một tài "Tiềm năng".
+    expect(memberRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: DriverTeamStage.CONTACTED }),
+    );
   });
 
   it('ghi nhận cuộc gọi KHÔNG tự đổi stage', async () => {
@@ -1687,7 +1795,7 @@ import { InjectDataSource, InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository } from 'typeorm';
 import { vnRangeToUtc } from '../common/vn-time.util';
 import { CreateEventDto, UpdateMemberDto } from './dto/driver-team.dto';
-import { DriverTeamEventType } from './driver-team.enums';
+import { DriverTeamEventType, DriverTeamStage } from './driver-team.enums';
 import { DriverTeamEvent } from './entities/driver-team-event.entity';
 import { DriverTeamMember } from './entities/driver-team-member.entity';
 
@@ -1708,12 +1816,16 @@ export class DriverTeamService {
       this.members.findOne({ where: { driverId } }),
       this.events.find({ where: { driverId }, order: { createdAt: 'DESC' } }),
       this.dataSource.query(
-        `SELECT b."routeId" AS "routeId", r.name AS name, COUNT(*)::int AS trips
+        // Tuyến xoá mềm vẫn phải hiện (chuyến đã chạy là có thật) nhưng gắn cờ để FE
+        // hiện "Tuyến đã xoá (#id)" thay vì tên trông như tuyến còn sống.
+        `SELECT b."routeId" AS "routeId", r.name AS name,
+                (r."deletedAt" IS NOT NULL) AS "routeDeleted",
+                COUNT(*)::int AS trips
            FROM "booking" b
            LEFT JOIN "defined_routes" r ON r.id = b."routeId"
           WHERE b.status = 'COMPLETED' AND b."driverId" = $3
             AND b."completedAt" >= $1 AND b."completedAt" <= $2
-          GROUP BY b."routeId", r.name
+          GROUP BY b."routeId", r.name, r."deletedAt"
           ORDER BY trips DESC`,
         [startUtc, endUtc, driverId],
       ),
@@ -1740,11 +1852,15 @@ export class DriverTeamService {
     const existing = await this.members.findOne({ where: { driverId } });
     const now = new Date();
 
+    // stage là NOT NULL. PATCH chỉ gửi `note` hoặc `nextFollowUpAt` cho một tài
+    // "Tiềm năng" (chưa có row) là đường đi CÓ THẬT từ drawer — nếu để undefined thì
+    // INSERT vi phạm NOT NULL và người dùng nhận 500 lúc chỉ định ghi một dòng ghi chú.
+    // Chạm tới tài nào tức là đã liên hệ tài đó, nên CONTACTED là mặc định đúng nghĩa.
     const member =
       existing ??
       this.members.create({
         driverId,
-        stage: body.stage ?? undefined,
+        stage: body.stage ?? DriverTeamStage.CONTACTED,
         assignedRouteIds: [],
         createdByAdminUserId: adminUserId,
       });
@@ -1793,13 +1909,18 @@ export class DriverTeamService {
       member.note = note;
     }
 
-    const saved = await this.members.save(member);
-
-    for (const e of pending) {
-      await this.events.save(
-        this.events.create({ ...e, driverId, byAdminUserId: adminUserId }),
-      );
-    }
+    // Member + event phải vào cùng MỘT transaction. Ghi rời nhau thì khi events.save
+    // lỗi ta có trạng thái đã đổi mà nhật ký không ghi — đúng thứ spec §10 dựa vào để
+    // truy lại ca "hai admin sửa cùng lúc".
+    const saved = await this.dataSource.transaction(async (em) => {
+      const m = await em.save(DriverTeamMember, member);
+      for (const e of pending) {
+        await em.save(DriverTeamEvent, em.create(DriverTeamEvent, {
+          ...e, driverId, byAdminUserId: adminUserId,
+        }));
+      }
+      return m;
+    });
 
     return this.withOwnerName(saved);
   }
@@ -1826,10 +1947,13 @@ export class DriverTeamService {
    * hiển thị được cho người chỉ có function 'driver-team'.
    */
   async listOwners(): Promise<{ id: string; fullName: string | null; phone: string | null }[]> {
+    // deletedAt/isActive BẮT BUỘC lọc: user entity có cả hai (user.entity.ts:110,173)
+    // và truy vấn thô KHÔNG được TypeORM tự thêm điều kiện soft-delete. Thiếu thì
+    // dropdown liệt kê nhân viên đã nghỉ việc và cho phép gán họ làm người phụ trách.
     return this.dataSource.query(
       `SELECT u.id, u."fullName", u.phone
          FROM "user" u
-        WHERE u.role = 'ADMIN'
+        WHERE u.role = 'ADMIN' AND u."deletedAt" IS NULL AND u."isActive" = true
         ORDER BY u."fullName" ASC NULLS LAST`,
     );
   }
@@ -1953,21 +2077,55 @@ describe('DriverTeamAdminController', () => {
 Run: `npx jest src/driver-team/driver-team-admin.controller.spec.ts`
 Expected: FAIL — `Cannot find module './driver-team-admin.controller'`.
 
-- [ ] **Step 3: Viết controller**
+- [ ] **Step 3: Viết DTO cho query param**
+
+Thêm vào `src/driver-team/dto/driver-team.dto.ts`. **Bắt buộc là DTO class**, không phải kiểu TS trần: `ValidationPipe` chỉ chạy trên class. Với kiểu trần thì `?stage=xxx` đi thẳng vào SQL và Postgres ném `invalid input value for enum` → **500 thay vì 400**, log prod đầy lỗi DB che mất lỗi thật.
+
+```ts
+export class TeamRangeQueryDto {
+  @IsString() from: string;
+  @IsString() to: string;
+}
+
+export class TeamRoutesQueryDto extends TeamRangeQueryDto {
+  @IsOptional() @IsIn(['drivers', 'trips', 'name']) sort?: string;
+  @IsOptional() @IsIn(['asc', 'desc']) order?: string;
+  @IsOptional() @IsString() q?: string;
+}
+
+export class TeamRouteDriversQueryDto extends TeamRangeQueryDto {
+  @IsOptional() @IsEnum(DriverTeamStage) stage?: DriverTeamStage;
+  @IsOptional() @IsUUID() ownerAdminUserId?: string;
+  @IsOptional() @IsString() minTrips?: string;
+  @IsOptional() @IsString() q?: string;
+  @IsOptional() @IsIn(['trips', 'last', 'name']) sort?: string;
+  @IsOptional() @IsIn(['asc', 'desc']) order?: string;
+  @IsOptional() @IsString() page?: string;
+  @IsOptional() @IsString() limit?: string;
+}
+```
+
+Bổ sung `IsIn` vào khối import `class-validator` ở đầu file.
+
+- [ ] **Step 4: Viết controller**
 
 `src/driver-team/driver-team-admin.controller.ts`:
 
 ```ts
-import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards } from '@nestjs/common';
+import {
+  BadRequestException, Body, Controller, Get, Param, ParseUUIDPipe, Patch, Post, Query, Req, UseGuards,
+} from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { FunctionAccessGuard } from '../rbac/function-access.guard';
 import { RequireFunction } from '../rbac/require-function.decorator';
 import { UserRole } from '../users/user.entity';
-import { CreateEventDto, UpdateMemberDto } from './dto/driver-team.dto';
+import {
+  CreateEventDto, TeamRangeQueryDto, TeamRouteDriversQueryDto, TeamRoutesQueryDto, UpdateMemberDto,
+} from './dto/driver-team.dto';
 import { DriverTeamService } from './driver-team.service';
-import { DriverTeamStatsService, RouteDriversQuery } from './driver-team-stats.service';
+import { DriverTeamStatsService } from './driver-team-stats.service';
 
 @Controller('admin/driver-team')
 @UseGuards(JwtAuthGuard, RolesGuard, FunctionAccessGuard)
@@ -1980,12 +2138,12 @@ export class DriverTeamAdminController {
   ) {}
 
   @Get('summary')
-  summary(@Query() q: { from: string; to: string }) {
+  summary(@Query() q: TeamRangeQueryDto) {
     return this.stats.getSummary(q);
   }
 
   @Get('routes')
-  routes(@Query() q: { from: string; to: string; sort?: string; order?: string }) {
+  routes(@Query() q: TeamRoutesQueryDto) {
     return this.stats.listRoutes(q);
   }
 
@@ -2001,25 +2159,38 @@ export class DriverTeamAdminController {
   }
 
   @Get('routes/:routeId/drivers')
-  routeDrivers(@Param('routeId') routeId: string, @Query() q: RouteDriversQuery) {
-    // 'none' = nhóm booking không gắn tuyến. Giữ NGUYÊN chuỗi — Number('none') là NaN
-    // và sẽ âm thầm khớp 0 tuyến thay vì khớp nhóm không-tuyến.
-    const id = routeId === 'none' ? 'none' : Number(routeId);
+  routeDrivers(@Param('routeId') routeId: string, @Query() q: TeamRouteDriversQueryDto) {
+    // 'none' = nhóm booking không gắn tuyến. Giữ NGUYÊN chuỗi — Number('none') là NaN.
+    if (routeId === 'none') return this.stats.listRouteDrivers('none', q);
+    const id = Number(routeId);
+    // NaN lọt xuống SQL thành `invalid input syntax for type integer` → 500. Chặn ở đây.
+    if (!Number.isInteger(id)) throw new BadRequestException('routeId không hợp lệ');
     return this.stats.listRouteDrivers(id, q);
   }
 
   @Get(':driverId')
-  detail(@Param('driverId') driverId: string, @Query() q: { from: string; to: string }) {
+  detail(
+    @Param('driverId', ParseUUIDPipe) driverId: string,
+    @Query() q: TeamRangeQueryDto,
+  ) {
     return this.team.getDetail(driverId, q);
   }
 
   @Patch(':driverId')
-  patch(@Param('driverId') driverId: string, @Body() body: UpdateMemberDto, @Req() req: any) {
+  patch(
+    @Param('driverId', ParseUUIDPipe) driverId: string,
+    @Body() body: UpdateMemberDto,
+    @Req() req: any,
+  ) {
     return this.team.patchMember(driverId, body, req.user.id);
   }
 
   @Post(':driverId/events')
-  event(@Param('driverId') driverId: string, @Body() body: CreateEventDto, @Req() req: any) {
+  event(
+    @Param('driverId', ParseUUIDPipe) driverId: string,
+    @Body() body: CreateEventDto,
+    @Req() req: any,
+  ) {
     return this.team.addEvent(driverId, body, req.user.id);
   }
 }
@@ -2027,7 +2198,7 @@ export class DriverTeamAdminController {
 
 > **Thứ tự route quan trọng:** `@Get('summary')`, `@Get('routes')`, `@Get('owners')` phải khai **TRƯỚC** `@Get(':driverId')`, nếu không Nest sẽ khớp `/summary` vào `:driverId` và trả rác thay vì báo lỗi.
 
-- [ ] **Step 4: Viết module**
+- [ ] **Step 5: Viết module**
 
 `src/driver-team/driver-team.module.ts`:
 
@@ -2049,16 +2220,16 @@ import { DriverTeamMember } from './entities/driver-team-member.entity';
 export class DriverTeamModule {}
 ```
 
-- [ ] **Step 5: Đăng ký vào `app.module.ts`**
+- [ ] **Step 6: Đăng ký vào `app.module.ts`**
 
 Thêm import `import { DriverTeamModule } from './driver-team/driver-team.module';` và thêm `DriverTeamModule` vào mảng `imports` của `AppModule` (đặt cạnh `DriverReputationModule` cho dễ tìm).
 
-- [ ] **Step 6: Chạy test + lưới an toàn RBAC**
+- [ ] **Step 7: Chạy test + lưới an toàn RBAC**
 
 Run: `npx jest src/driver-team src/rbac && npx tsc --noEmit`
 Expected: PASS — đặc biệt `src/rbac/route-coverage.spec.ts` phải xanh. Spec này quét tĩnh mọi controller; nếu nó fail thì controller đang thiếu `@RequireFunction` hoặc thiếu `FunctionAccessGuard` trong guard chain.
 
-- [ ] **Step 7: Chạy toàn bộ test + smoke thật**
+- [ ] **Step 8: Chạy toàn bộ test + smoke thật**
 
 Run: `npx jest && npx tsc --noEmit`
 Expected: toàn bộ xanh.
@@ -2074,7 +2245,7 @@ Expected: JSON có `data` (mảng tuyến, **gồm cả tuyến 0 chuyến**) v�
 
 Kiểm quyền: dùng token admin **không** có function `driver-team` → phải trả lỗi `AUTH_003`.
 
-- [ ] **Step 8: Commit**
+- [ ] **Step 9: Commit**
 
 ```bash
 git add src/driver-team/driver-team-admin.controller.ts src/driver-team/driver-team-admin.controller.spec.ts src/driver-team/driver-team.module.ts src/app.module.ts

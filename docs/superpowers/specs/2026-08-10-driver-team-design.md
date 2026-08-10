@@ -80,11 +80,16 @@ Ghi chú đàm phán tuyển team (mức hỗ trợ, cam kết…) **không đư
 | `stage` | enum | `CONTACTED` \| `INVITED` \| `JOINED` \| `DECLINED` \| `DROPPED` |
 | `assignedRouteIds` | `integer[]` NOT NULL DEFAULT `'{}'` | Tuyến được phân công |
 | `ownerAdminUserId` | uuid NULL, FK user | Người phụ trách chăm |
-| `nextFollowUpAt` | timestamptz NULL | Hẹn gọi lại |
+| `nextFollowUpAt` | `timestamp` NULL | Hẹn gọi lại |
 | `note` | text NULL | Ghi chú hiện ở bảng (bản mới nhất) |
-| `stageChangedAt` | timestamptz NULL | |
+| `stageChangedAt` | `timestamp` NULL | |
 | `createdByAdminUserId` | uuid NULL | |
-| `createdAt` / `updatedAt` | timestamptz | |
+| `createdAt` / `updatedAt` | `timestamp` | |
+
+**Dùng `timestamp` (without time zone), KHÔNG `timestamptz`** — bám bất biến sẵn có của repo:
+mọi cột thời gian lưu **byte UTC** trong `timestamp`, container và session Postgres đều pin
+`TZ=UTC` (`src/common/vn-time.util.ts:7-11`, `typeorm-cli.config.ts`). Trộn `timestamptz` vào
+sẽ phá bất biến đó ở đúng một bảng và làm mọi so sánh chéo thành bẫy.
 
 **"Tiềm năng" KHÔNG lưu row.** Tài chưa có row = tiềm năng. Nhờ vậy không phải backfill vài
 nghìn dòng rỗng, và bảng chỉ chứa người đã thực sự được chạm tới. FE hiển thị `stage = null`
@@ -104,7 +109,7 @@ việc bớt một bảng và bớt một tầng join là đáng.
 | `fromStage` / `toStage` | enum NULL | Chỉ có với `STAGE_CHANGE` |
 | `note` | text NULL | |
 | `byAdminUserId` | uuid NULL | |
-| `createdAt` | timestamptz, INDEX `(driverId, createdAt DESC)` | |
+| `createdAt` | `timestamp`, INDEX `(driverId, createdAt DESC)` | |
 
 Log này **không dùng chung** với `customer-call` của CSKH và nằm sau `@RequireFunction('driver-team')`.
 Chiều ngược lại vẫn thông: drawer đọc được log CSKH (chỉ đọc) để hai bên không gọi chồng nhau.
@@ -215,7 +220,7 @@ Query: `from`, `to`, `stage?`, `ownerAdminUserId?`, `minTrips?`, `q?`, `sort?` (
       "tripsAllRoutes": 63,
       "lastCompletedAt": "2026-08-09T15:12:00Z",
       "firstCompletedAt": "2026-05-02T08:00:00Z",
-      "isApproved": "true", "isBanned": false, "suspendedUntil": null,
+      "isApproved": true, "isBanned": false, "suspendedUntil": null,
       "team": {                    // null = chưa chạm (Tiềm năng)
         "stage": "CONTACTED",
         "assignedRouteIds": [12],
@@ -277,9 +282,19 @@ rồi hỏng lặng lẽ khi giao cho nhân sự khác.
 
 ### 5.7 Export
 
-FE tự dựng bằng `downloadXlsx` của `src/lib/csv.ts`: lặp trang §5.2 (`limit = 200`) cho các tuyến
-đang chọn, xuất **phẳng** có cột tuyến (file mang đi gọi điện thì phẳng dễ dùng hơn). Cap **1000
-dòng** tổng; vượt cap thì **hiện cảnh báo rõ số dòng bị cắt**, không cắt im lặng.
+FE tự dựng bằng `downloadXlsx` của `src/lib/csv.ts`, xuất **phẳng** có cột tuyến (file mang đi gọi
+điện thì phẳng dễ dùng hơn). Cap **1000 dòng** tổng; vượt cap thì **hiện cảnh báo rõ số dòng bị
+cắt**, không cắt im lặng.
+
+**File xuất ra PHẢI đúng tập người dùng đang nhìn.** Hai chế độ:
+
+1. Có dòng được tick → xuất **đúng các dòng đã tick**, không gọi thêm API.
+2. Không tick gì → lặp trang §5.2 (`limit = 200`) và **truyền nguyên bộ lọc đang áp**
+   (`stage`, `ownerAdminUserId`, `q`, `minTrips`).
+
+Xuất "toàn bộ mọi tuyến" khi người dùng đang lọc *"Trong team, phụ trách = A"* là sai nguy hiểm:
+họ nhận về 1000 dòng của tất cả mọi người, bị cắt ngẫu nhiên ở tuyến thứ n, kèm một cảnh báo cắt
+dòng càng làm họ tin là file đúng.
 
 **Định dạng là `.xlsx`, KHÔNG phải CSV** — dù file tiện ích tên là `csv.ts`. Comment đầu file ghi
 rõ lý do đã bỏ CSV dấu phẩy: Excel tiếng Việt tách dòng theo `;` nên toàn bộ CSV dồn vào một cột.
@@ -344,8 +359,18 @@ form: đổi stage / gán tuyến phụ trách / gán người phụ trách / h�
 
 ### 6.4 Tìm kiếm & hành động hàng loạt
 
-Gõ tên/SĐT hoặc lọc trạng thái → các tuyến có kết quả **tự bung ra** kèm số khớp, tuyến không khớp
-thu lại. Không thêm tab bảng phẳng thứ hai (bớt một màn phải nuôi).
+Ô tìm hoạt động ở **hai tầng riêng biệt**, và UI phải nói rõ điều đó:
+
+- **Tên tuyến** → lọc ngay danh sách cấp 1 (param `q` của §5.1).
+- **Tên tài / SĐT** → gửi xuống §5.2, tức chỉ lọc **bên trong những tuyến đang mở**.
+
+**Cố ý KHÔNG làm "tuyến có kết quả tự bung ra".** Client chỉ có dữ liệu của nhóm đã mở nên không
+thể biết tuyến chưa mở có ai khớp; muốn làm thật thì phải thêm một truy vấn đếm-khớp theo tuyến ở
+§5.1. Không đáng cho đợt 1 — nhưng cũng KHÔNG được làm nửa vời rồi để người dùng tưởng đã tìm hết
+và kết luận sai rằng "tài này không chạy tuyến nào". Hiện chú thích thẳng:
+*"Tìm theo tên/SĐT chỉ soi trong các tuyến đang mở."*
+
+Không thêm tab bảng phẳng thứ hai (bớt một màn phải nuôi).
 
 Checkbox trong nhóm đang mở → đổi trạng thái hàng loạt, gán người phụ trách hàng loạt, export `.xlsx`
 dòng đã chọn.
