@@ -85,6 +85,17 @@ describe('HtxTripsPage', () => {
     expect(table().getByText('270.000 ₫')).toBeInTheDocument();
   });
 
+  it('hiện mã chuyến ĐẦY ĐỦ, liền một chuỗi, không cắt 8 ký tự', async () => {
+    render(<HtxTripsPage />);
+
+    // Cột "Mã chuyến" phải khớp mặt chữ với cột cùng tên ở bảng/Excel đối soát admin
+    // (htx-reconciliation/detail dùng nguyên bookingId). Cắt ngắn ⇒ HTX không tra được.
+    expect(await table().findByText('aaaaaaaa-1111-2222-3333-444444444444')).toBeInTheDocument();
+    expect(table().getByRole('columnheader', { name: 'Mã chuyến' })).toBeInTheDocument();
+    // Bản cũ hiện "#aaaaaaaa" dưới ô Thời gian — hai mã cùng nghĩa khác mặt chữ gây cãi lúc đối soát.
+    expect(screen.queryByText('#aaaaaaaa')).not.toBeInTheDocument();
+  });
+
   it('mặc định hỏi chuyến hoàn thành trong 30 ngày gần nhất', async () => {
     render(<HtxTripsPage />);
 
