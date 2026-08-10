@@ -759,3 +759,90 @@ export type RecentDriverRating = {
   driverName: string | null;
   driverPhone: string | null;
 };
+
+// ---- Đội tài chuyên nghiệp (/driver-team) ----
+
+/** Bậc pipeline tuyển đội tài. null (không có row) = "Tiềm năng" — xem spec §4.1. */
+export type DriverTeamStage = 'CONTACTED' | 'INVITED' | 'JOINED' | 'DECLINED' | 'DROPPED';
+
+export type DriverTeamEventType = 'STAGE_CHANGE' | 'CALL' | 'NOTE' | 'ASSIGN' | 'FOLLOW_UP';
+
+export type TeamMemberState = {
+  stage: DriverTeamStage;
+  assignedRouteIds: number[];
+  ownerAdminUserId: string | null;
+  ownerAdminName: string | null;
+  nextFollowUpAt: string | null;
+  note: string | null;
+  stageChangedAt: string | null;
+};
+
+/** Một dòng cấp 1. routeId null = hàng gộp "Không gắn tuyến". */
+export type TeamRouteRow = {
+  routeId: number | null;
+  routeName: string;
+  driverCount: number;
+  /** Đếm theo completedAt. KHÁC mốc với totalBookings — đừng chia cho nhau. */
+  completedTrips: number;
+  /** Đếm theo createdAt. */
+  totalBookings: number;
+  lastCompletedAt: string | null;
+  contactedCount: number;
+  joinedCount: number;
+};
+
+/** Một dòng cấp 2 — cặp (tài × tuyến). */
+export type TeamDriverRow = {
+  driverId: string;
+  fullName: string | null;
+  phone: string | null;
+  transportCompanyName: string | null;
+  tripsOnRoute: number;
+  tripsAllRoutes: number;
+  /** 0..1, backend tính sẵn. */
+  shareOfRoute: number;
+  lastCompletedAt: string | null;
+  /** Chuyến đầu tiên TRONG KỲ đang lọc, không phải chuyến đầu tiên từng chạy. */
+  firstCompletedAt: string | null;
+  isApproved: boolean;
+  isBanned: boolean;
+  suspendedUntil: string | null;
+  /** null = chưa chạm tới = Tiềm năng. */
+  team: TeamMemberState | null;
+};
+
+export type TeamSummary = {
+  driversWithCompletedTrips: number;
+  contactedDrivers: number;
+  joinedDrivers: number;
+  followUpDueToday: number;
+};
+
+export type DriverTeamEvent = {
+  id: string;
+  driverId: string;
+  type: DriverTeamEventType;
+  fromStage: DriverTeamStage | null;
+  toStage: DriverTeamStage | null;
+  note: string | null;
+  byAdminUserId: string | null;
+  createdAt: string;
+};
+
+export type TeamRouteRun = {
+  routeId: number | null;
+  name: string | null;
+  /** true = tuyến đã xoá mềm → hiện "Tuyến đã xoá (#id)" thay vì tên. */
+  routeDeleted?: boolean;
+  trips: number;
+};
+
+export type DriverTeamDetail = {
+  team: TeamMemberState | null;
+  events: DriverTeamEvent[];
+  routesRun: TeamRouteRun[];
+  /** Tuyến tài ĐĂNG KÝ — đối chiếu với routesRun để thấy chỗ lệch. */
+  registeredRouteIds: number[];
+};
+
+export type TeamOwner = { id: string; fullName: string | null; phone: string | null };
