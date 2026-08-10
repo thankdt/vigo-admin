@@ -1,5 +1,6 @@
 import type { Driver } from '@/lib/types';
 import { driverApprovalLabel } from '../../drivers/components/driver-approval';
+import { DRIVER_ONLINE_LABEL, driverOnlineState } from '@/lib/driver-presence';
 
 // Column order for the per-HTX driver xlsx export. Kept next to the row builder
 // so header and cells can't drift apart.
@@ -15,8 +16,10 @@ export const DRIVER_EXPORT_HEADER = [
   'Ngày tạo',
 ];
 
-const onlineLabel = (s: Driver['status']): string =>
-  s === 'ONLINE' ? 'Online' : s === 'BUSY' ? 'Bận' : 'Offline';
+// Dùng chung quy đổi với hai màn hình danh sách — xuất file mà nói "Online" cho
+// một tài đã bỏ app thì người đọc báo cáo không có cách nào biết.
+const onlineLabel = (d: Pick<Driver, 'status' | 'presence'>): string =>
+  DRIVER_ONLINE_LABEL[driverOnlineState(d.status, d.presence)];
 
 const vehicleLabel = (d: Driver): string => {
   const brand = d.vehicleRegistration?.brand ?? '';
@@ -51,7 +54,7 @@ export function driverExportRows(drivers: Driver[]): Array<Array<string | number
     vehicleLabel(d),
     routeLabel(d),
     driverApprovalLabel(d),
-    onlineLabel(d.status),
+    onlineLabel(d),
     fmtDateVn(d.createdAt || d.user?.createdAt),
   ]);
 }
