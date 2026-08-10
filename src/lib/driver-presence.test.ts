@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DRIVER_ONLINE_LABEL,
   driverOnlineState,
+  STALE_AFTER_MINUTES,
   type DriverPresence,
 } from './driver-presence';
 
@@ -10,23 +11,32 @@ const presence = (over: Partial<DriverPresence> = {}): DriverPresence => ({
   hasAlive: false,
   hasModernFlag: true,
   quality: 'low',
+  silentMinutes: null,
   ...over,
 });
 
 describe('driverOnlineState', () => {
-  it('khai ONLINE + có tín hiệu → online', () => {
-    expect(driverOnlineState('ONLINE', presence({ quality: 'high' }))).toBe('online');
-    expect(driverOnlineState('ONLINE', presence({ quality: 'medium' }))).toBe('online');
+  it('có socket hoặc heartbeat → online', () => {
+    expect(driverOnlineState('ONLINE', presence({ hasSocket: true }))).toBe('online');
+    expect(driverOnlineState('ONLINE', presence({ hasAlive: true }))).toBe('online');
   });
 
-  // Đây chính là bug người dùng báo: tài test bấm ONLINE từ tháng 5 rồi bỏ app,
-  // danh sách vẫn hiện "Online".
-  it('khai ONLINE nhưng app im lặng → mất kết nối', () => {
-    expect(driverOnlineState('ONLINE', presence({ quality: 'low' }))).toBe('stale');
+  // iOS thu app xuống nền là rụng socket + heartbeat trong ~3 phút, nhưng tài vẫn
+  // nhận chuyến qua push. Gắn "Mất kết nối" cho cửa sổ đó là vu oan hàng loạt.
+  it('im lặng ngắn → chờ tín hiệu, KHÔNG phải mất kết nối', () => {
+    expect(driverOnlineState('ONLINE', presence({ silentMinutes: 0 }))).toBe('idle');
+    expect(driverOnlineState('ONLINE', presence({ silentMinutes: STALE_AFTER_MINUTES - 1 }))).toBe('idle');
   });
 
-  it('app cũ → legacy, KHÔNG vu là mất kết nối', () => {
-    expect(driverOnlineState('ONLINE', presence({ quality: 'legacy' }))).toBe('legacy');
+  // Đây là bug người dùng báo: tài test bấm ONLINE từ tháng 5 rồi bỏ app, danh
+  // sách vẫn hiện "Online".
+  it('im lặng dài → mất kết nối', () => {
+    expect(driverOnlineState('ONLINE', presence({ silentMinutes: STALE_AFTER_MINUTES }))).toBe('stale');
+    expect(driverOnlineState('ONLINE', presence({ silentMinutes: 60 * 24 * 30 }))).toBe('stale');
+  });
+
+  it('chưa ghi nhận tín hiệu nào → không rõ (không kết luận bừa)', () => {
+    expect(driverOnlineState('ONLINE', presence({ silentMinutes: null }))).toBe('unknown');
   });
 
   // Redis chớp → BE bỏ field. Nếu quy thành "mất kết nối" thì cả danh sách báo sai.
@@ -36,12 +46,12 @@ describe('driverOnlineState', () => {
   });
 
   it('BUSY luôn là bận, không phụ thuộc presence', () => {
-    expect(driverOnlineState('BUSY', presence({ quality: 'low' }))).toBe('busy');
+    expect(driverOnlineState('BUSY', presence({ silentMinutes: 9999 }))).toBe('busy');
     expect(driverOnlineState('BUSY', undefined)).toBe('busy');
   });
 
   it('OFFLINE / thiếu / lạ → offline', () => {
-    expect(driverOnlineState('OFFLINE', presence({ quality: 'high' }))).toBe('offline');
+    expect(driverOnlineState('OFFLINE', presence({ hasSocket: true }))).toBe('offline');
     expect(driverOnlineState(undefined, undefined)).toBe('offline');
     expect(driverOnlineState('SOMETHING_ELSE', undefined)).toBe('offline');
   });

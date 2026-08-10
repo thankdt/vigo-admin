@@ -46,6 +46,15 @@ const statusBadge = (status: string, presence?: DriverPresence) => {
       return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Sẵn sàng</Badge>;
     case 'busy':
       return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400">Đang chở khách</Badge>;
+    case 'idle':
+      return (
+        <Badge
+          title={DRIVER_ONLINE_HINT.idle}
+          className="bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-400"
+        >
+          Chờ tín hiệu
+        </Badge>
+      );
     case 'stale':
       return (
         <Badge
@@ -55,10 +64,10 @@ const statusBadge = (status: string, presence?: DriverPresence) => {
           Mất kết nối
         </Badge>
       );
-    case 'legacy':
+    case 'unknown':
       return (
-        <Badge title={DRIVER_ONLINE_HINT.legacy} variant="outline">
-          Sẵn sàng (app cũ)
+        <Badge title={DRIVER_ONLINE_HINT.unknown} variant="outline">
+          Không rõ
         </Badge>
       );
     default:

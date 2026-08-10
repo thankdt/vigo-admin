@@ -595,16 +595,22 @@ export function DriversTable() {
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Online</Badge>;
       case 'busy':
         return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400">Bận</Badge>;
+      case 'idle':
+        return (
+          <Badge title={hint} className="bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-400">
+            {DRIVER_ONLINE_LABEL.idle}
+          </Badge>
+        );
       case 'stale':
         return (
           <Badge title={hint} className="bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-400">
             {DRIVER_ONLINE_LABEL.stale}
           </Badge>
         );
-      case 'legacy':
+      case 'unknown':
         return (
           <Badge title={hint} variant="outline" className="text-muted-foreground">
-            {DRIVER_ONLINE_LABEL.legacy}
+            {DRIVER_ONLINE_LABEL.unknown}
           </Badge>
         );
       default:
