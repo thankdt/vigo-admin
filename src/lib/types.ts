@@ -1,3 +1,4 @@
+import type { DriverPresence } from './driver-presence';
 
 export type LoyaltyTier = 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
 
@@ -133,6 +134,10 @@ export type Driver = {
   // Live operational state (from driver.status). Surfaced in the admin table's
   // "Đã duyệt" tab so ops can see who's online right now.
   status?: 'ONLINE' | 'OFFLINE' | 'BUSY' | string;
+  // Tín hiệu THẬT từ Redis (socket/heartbeat). `status` chỉ là trạng thái KHAI
+  // BÁO — tài bỏ app vẫn ONLINE mãi. Optional: BE cũ không có, và BE bỏ field
+  // này khi Redis lỗi. Xem `driverOnlineState`.
+  presence?: DriverPresence;
   rejectionReason?: string | null;
   // CSKH: loại mốc "lịch sử làm việc" gần nhất (trạng thái cuối) + thời điểm — hiện badge ở danh sách.
   csLastCallType?: string | null;

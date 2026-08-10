@@ -41,6 +41,11 @@ import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDriver
 import { VoidBookingDialog } from './void-booking-dialog';
 import { buildDiscountRows } from './price-breakdown-utils';
 import type { Route } from '@/lib/types';
+import {
+  DRIVER_ONLINE_HINT,
+  DRIVER_ONLINE_LABEL,
+  driverOnlineState,
+} from '@/lib/driver-presence';
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
@@ -1014,6 +1019,21 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                       {!route && !plate ? 'Chưa có thông tin xe' : ''}
                     </div>
                     <div className="flex items-center gap-2 justify-end">
+                      {/* `status` chỉ là trạng thái KHAI BÁO — tài bỏ app vẫn ONLINE mãi.
+                          Hiện tín hiệu thật để admin không đẩy chuyến vào một máy đã chết. */}
+                      {(() => {
+                        const state = driverOnlineState(driver.status, (driver as any).presence);
+                        if (state === 'online' || state === 'offline') return null;
+                        return (
+                          <Badge
+                            variant="outline"
+                            className="text-xs"
+                            title={DRIVER_ONLINE_HINT[state]}
+                          >
+                            {DRIVER_ONLINE_LABEL[state]}
+                          </Badge>
+                        );
+                      })()}
                       {(driver as any).availableSeats != null && (
                         <Badge variant="outline" className="text-xs">
                           {/* "ghế KHÁCH": số này là chỗ chở khách, KHÁC "xe N chỗ" (tổng
