@@ -784,6 +784,8 @@ export type TeamRouteRow = {
   lastCompletedAt: string | null;
   contactedCount: number;
   joinedCount: number;
+  /** Số tài KHỚP từ khoá tìm tài xế trên tuyến này; 0 khi không tìm kiếm. */
+  matchedDriverCount: number;
 };
 
 /** Một dòng cấp 2 — cặp (tài × tuyến). */
@@ -806,10 +808,19 @@ export type TeamDriverRow = {
   team: TeamMemberState | null;
 };
 
+/**
+ * Thẻ số theo TỪNG TẦNG pipeline. Cố ý không có một con số "đã liên hệ" gộp:
+ * gộp lại thì tài đã Từ chối/Loại bị đếm chung với tài đang chăm.
+ */
 export type TeamSummary = {
   driversWithCompletedTrips: number;
+  /** Có chuyến hoàn thành trong kỳ nhưng CHƯA có row pipeline. */
+  notContactedDrivers: number;
   contactedDrivers: number;
+  invitedDrivers: number;
   joinedDrivers: number;
+  declinedDrivers: number;
+  droppedDrivers: number;
   followUpDueToday: number;
 };
 

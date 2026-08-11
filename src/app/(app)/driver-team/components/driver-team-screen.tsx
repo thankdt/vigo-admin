@@ -43,6 +43,11 @@ import { DriverTeamDrawer } from './driver-team-drawer';
 // không âm thầm đổi khoảng ngày mặc định của trang.
 const DEFAULT_PRESET = PRESETS.find((p) => p.key === 'last30') ?? PRESETS[0];
 const ALL = '__all__';
+/**
+ * "Chưa liên hệ" KHÔNG phải một stage trong DB — tài chưa có row pipeline thì không
+ * có stage nào cả (spec §4.1). Sentinel riêng để phân biệt với "mọi trạng thái".
+ */
+const NOT_CONTACTED = '__not_contacted__';
 const EXPORT_CAP = 1000;
 
 export type TeamFilters = {
@@ -75,6 +80,34 @@ function StatCard({
   );
 }
 
+function StageCard({
+  title,
+  value,
+  active,
+  hint,
+  onClick,
+}: {
+  title: string;
+  value: number | undefined;
+  active: boolean;
+  hint?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" className="text-left" onClick={onClick}>
+      <Card className={active ? 'border-primary ring-1 ring-primary' : undefined}>
+        <CardHeader className="pb-2">
+          <CardDescription>{title}</CardDescription>
+          <CardTitle className="text-3xl">{value ?? '—'}</CardTitle>
+        </CardHeader>
+        {hint ? (
+          <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent>
+        ) : null}
+      </Card>
+    </button>
+  );
+}
+
 export function DriverTeamScreen() {
   const { toast } = useToast();
   const [range, setRange] = React.useState<DateRange>(DEFAULT_PRESET.range());
@@ -104,14 +137,29 @@ export function DriverTeamScreen() {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      getTeamRoutes({ ...range, q: filters.routeQ || undefined }),
+      getTeamRoutes({
+        ...range,
+        q: filters.routeQ || undefined,
+        driverQ: filters.q || undefined,
+      }),
       getTeamSummary(range),
     ])
       .then(([r, s]) => {
         if (cancelled) return;
-        setRoutes(r.routes ?? []);
+        const list = r.routes ?? [];
+        setRoutes(list);
         setUnassigned(r.unassigned ?? null);
         setSummary(s);
+        // Đang tìm tài xế → tự bung ĐÚNG những tuyến có người khớp. Đây là mảnh
+        // khiến việc tìm theo tên dùng được: gõ một cái tên là thấy ngay người đó
+        // chạy những tuyến nào, không phải mở thủ công từng tuyến một.
+        if (filters.q) {
+          setOpen(
+            list
+              .filter((x) => (x.matchedDriverCount ?? 0) > 0)
+              .map((x) => (x.routeId === null ? 'none' : String(x.routeId))),
+          );
+        }
       })
       .catch((e) =>
         toast({
@@ -124,7 +172,7 @@ export function DriverTeamScreen() {
     return () => {
       cancelled = true;
     };
-  }, [range, filters.routeQ, toast]);
+  }, [range, filters.routeQ, filters.q, toast]);
 
   React.useEffect(() => {
     // Hai nguồn phụ hỏng KHÔNG được làm sập cả màn.
@@ -218,7 +266,12 @@ export function DriverTeamScreen() {
             const res = await getTeamRouteDrivers(key, {
               from: range.from,
               to: range.to,
-              stage: filters.stage === ALL ? undefined : filters.stage,
+              stage:
+                filters.stage === ALL
+                  ? undefined
+                  : filters.stage === NOT_CONTACTED
+                    ? 'none'
+                    : filters.stage,
               ownerAdminUserId:
                 filters.ownerAdminUserId === ALL ? undefined : filters.ownerAdminUserId,
               q: filters.q || undefined,
@@ -274,20 +327,47 @@ export function DriverTeamScreen() {
     <div className="space-y-6">
       <FinanceFilter value={range} onChange={setRange} isLoading={loading} initialPreset="last30" />
 
-      <div className="grid gap-4 md:grid-cols-4">
+      {/* Thẻ số theo TỪNG TẦNG. Bấm một tầng là lọc luôn xuống tầng đó — thẻ ở đây
+          là lối vào việc cần làm, không phải số để ngắm. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
         <StatCard
-          title="Tài chạy thành công"
+          title="Chạy thành công"
           value={summary?.driversWithCompletedTrips ?? '—'}
-          hint="Trong khoảng ngày đang chọn"
+          hint="Trong kỳ"
         />
-        <StatCard
+        <StageCard
+          title="Chưa liên hệ"
+          value={summary?.notContactedDrivers}
+          active={filters.stage === NOT_CONTACTED}
+          onClick={() => setFilters((f) => ({ ...f, stage: NOT_CONTACTED }))}
+        />
+        <StageCard
           title="Đã liên hệ"
-          value={summary?.contactedDrivers ?? '—'}
-          hint="Mọi tài đã được chạm tới"
+          value={summary?.contactedDrivers}
+          active={filters.stage === 'CONTACTED'}
+          onClick={() => setFilters((f) => ({ ...f, stage: 'CONTACTED' }))}
         />
-        <StatCard title="Trong team" value={summary?.joinedDrivers ?? '—'} />
-        {/* Thẻ này là VIỆC PHẢI LÀM, không phải số để ngắm → bấm được: mở mọi tuyến
-            để quét cột "Hẹn gọi lại" đang tô đỏ. */}
+        <StageCard
+          title="Đã mời"
+          value={summary?.invitedDrivers}
+          active={filters.stage === 'INVITED'}
+          onClick={() => setFilters((f) => ({ ...f, stage: 'INVITED' }))}
+        />
+        <StageCard
+          title="Trong team"
+          value={summary?.joinedDrivers}
+          active={filters.stage === 'JOINED'}
+          onClick={() => setFilters((f) => ({ ...f, stage: 'JOINED' }))}
+        />
+        <StageCard
+          title="Từ chối / Loại"
+          value={
+            summary ? summary.declinedDrivers + summary.droppedDrivers : undefined
+          }
+          active={filters.stage === 'DECLINED'}
+          onClick={() => setFilters((f) => ({ ...f, stage: 'DECLINED' }))}
+          hint="Bấm để xem nhóm Từ chối"
+        />
         <button
           type="button"
           className="text-left"
@@ -298,7 +378,7 @@ export function DriverTeamScreen() {
           <StatCard
             title="Cần gọi lại hôm nay"
             value={summary?.followUpDueToday ?? '—'}
-            hint="Bấm để mở mọi tuyến · không phụ thuộc khoảng ngày đang xem"
+            hint="Bấm để mở mọi tuyến"
           />
         </button>
       </div>
@@ -331,6 +411,7 @@ export function DriverTeamScreen() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
+            <SelectItem value={NOT_CONTACTED}>Chưa liên hệ</SelectItem>
             {STAGE_ORDER.map((s) => (
               <SelectItem key={s} value={s}>
                 {stageLabel(s)}
@@ -370,8 +451,8 @@ export function DriverTeamScreen() {
 
       {filters.q ? (
         <p className="text-xs text-muted-foreground">
-          Tìm theo tên/SĐT chỉ soi trong các tuyến đang mở. Muốn tìm tuyến thì dùng ô
-          &quot;Tên tuyến&quot;.
+          Đã tự mở những tuyến có tài xế khớp — mỗi tuyến gắn nhãn số tài khớp. Muốn lọc
+          bớt tuyến thì dùng ô &quot;Tên tuyến&quot;.
         </p>
       ) : null}
 
@@ -419,6 +500,7 @@ export function DriverTeamScreen() {
           range={range}
           filters={filters}
           allValue={ALL}
+          notContactedValue={NOT_CONTACTED}
           groups={groups}
           setGroups={setGroups}
           open={open}

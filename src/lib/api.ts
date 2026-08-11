@@ -3123,12 +3123,19 @@ export async function getTeamRoutes(params: {
   to: string;
   sort?: string;
   order?: string;
+  /** Lọc theo TÊN TUYẾN — bớt dòng ở cấp 1. */
   q?: string;
+  /**
+   * Tìm theo TÊN/SĐT TÀI XẾ. KHÔNG lọc bớt tuyến — chỉ để backend đếm
+   * matchedDriverCount mỗi tuyến, FE tự bung đúng những tuyến có người khớp.
+   */
+  driverQ?: string;
 }): Promise<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }> {
   const q = new URLSearchParams({ from: params.from, to: params.to });
   if (params.sort) q.set('sort', params.sort);
   if (params.order) q.set('order', params.order);
   if (params.q) q.set('q', params.q);
+  if (params.driverQ) q.set('driverQ', params.driverQ);
   return unwrap<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }>(
     await fetchWithAuth(`/admin/driver-team/routes?${q}`),
   );
