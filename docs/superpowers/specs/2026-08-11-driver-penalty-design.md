@@ -98,21 +98,32 @@ Bước 1 — tìm các dòng trừ commission của chuyến:
    AND (description LIKE 'Booking Commission%' OR description LIKE 'Vi-now Commission%')
    ORDER BY id DESC
 
-Bước 2 — gom LẦN TRỪ GẦN NHẤT: lấy tối đa 2 dòng đầu, và chỉ giữ dòng thứ hai khi nó
-         KHÁC ví với dòng thứ nhất VÀ có cùng "mô tả gốc" (bỏ hậu tố " (Main)"/" (Deposit)").
-         Một lần trừ sinh tối đa 1 dòng Main + 1 dòng Deposit ⇒ cắt ở 2 dòng là không bao giờ
-         cộng nhầm sang vòng nhận–huỷ trước đó.
+Bước 2 — đọc N: mô tả luôn nhúng sẵn tổng commission ở **nhóm ngoặc SỐ CUỐI CÙNG**.
+         Mô tả thật có 2 dạng:
+             "Booking Commission (12345) (Main)"
+             "Booking Commission (admin reassign) (12345) (Deposit)"   ← booking.service.ts:4201
+         ⇒ regex phải bóc nhóm ngoặc-số cuối cùng SAU KHI bỏ hậu tố ví.
+         Regex kiểu /Commission \((\d+)\)/ sẽ KHÔNG khớp dạng reassign ⇒ chặn nhầm đúng
+         nhóm chuyến hay dính vi phạm nhất.
 
-Bước 3 — amount = tổng các dòng vừa gom.
+Bước 3 — dùng N làm BỘ CHỌN (không phải chỉ để kiểm):
+             thử lấy 1 dòng đầu → tổng == N ? lấy.
+             chưa khớp → thử 2 dòng đầu → tổng == N ? lấy.
+             vẫn chưa khớp → KHÔNG tự động phạt, báo "dữ liệu ledger bất thường".
 
-Bước 4 — ĐỐI CHIẾU: mô tả gốc luôn nhúng sẵn tổng commission, dạng "… Commission (<N>)".
-         Assert amount == N. Lệch ⇒ KHÔNG tự động phạt, báo "dữ liệu ledger bất thường".
-         (Dùng N để kiểm, không dùng N làm số tiền — format description đổi thì vỡ TO,
-          không vỡ âm thầm.)
+Bước 4 — amount = tổng các dòng vừa chọn (KHÔNG lấy thẳng N — format mô tả đổi thì
+         phải vỡ TO ở bước 3, không được vỡ âm thầm bằng cách tin vào chuỗi).
 
-Bước 5 — xác nhận đã được hoàn: mỗi dòng ở bước 2 phải có một dòng REFUND cùng referenceId,
+Bước 5 — xác nhận đã được hoàn: mỗi dòng đã chọn phải có một dòng REFUND cùng referenceId,
          source = SYSTEM_REVENUE, dest = ví tài xế, description chứa "(reverse #<id dòng đó>)".
 ```
+
+> **Vì sao phải dùng N làm bộ chọn chứ không phải "cắt cứng ở 2 dòng":** một lần trừ sinh tối đa
+> 1 dòng Main + 1 dòng Deposit, nhưng **không phải lần nào cũng đủ 2 dòng**. Case vỡ có thật: vòng
+> nhận–huỷ gần nhất trừ hết ở ví thưởng (1 dòng Main), vòng trước đó trừ hết ở ví ký quỹ (1 dòng
+> Deposit) — giá chuyến không đổi nên **mô tả gốc y hệt nhau**. Luật "2 dòng đầu, khác ví, cùng mô
+> tả gốc" sẽ gom cả hai ⇒ `amount = 2×`. Đối chiếu N chặn được, nhưng khi đó chuyến bị **chặn phạt
+> vô cớ**. Thử-1-rồi-thử-2 xử đúng cả hai dạng.
 
 Các chuỗi `'Booking Commission%'` / `'Vi-now Commission%'` là **đúng chuỗi** code sinh ra:
 accept `booking.service.ts:1044`, Vi-now `:1337`, và **admin gán lại tài xế** `:4201`
@@ -132,16 +143,23 @@ nhất — xem tiếp.
 **Không viết code trừ ví mới.** Gọi đúng hàm hệ thống đang dùng:
 
 ```ts
-walletService.deductDriverWallet(
+const r = await walletService.deductDriverWallet(
   driverUserId,
   amount,
   `penalty:${penaltyId}`,                    // referenceId — KHÔNG phải bookingId
   `Phạt vi phạm — thu lại hoa hồng chuyến ${bookingCode}`,
   true,                                      // allowNegative — ví ký quỹ được đi âm
   manager,                                   // cùng transaction với việc tạo driver_penalty
-  { strategy: 'MAIN_FIRST' },
+  { strategy: <xem §4.5>, deferNotify: true },
 )
+// SAU khi transaction commit mới bắn:
+if (r.__notify) driverGateway.notifyDriver(r.__notify.driverId, r.__notify.event, r.__notify.data)
 ```
+
+⚠️ **`deferNotify: true` là bắt buộc, không phải tuỳ chọn.** Hợp đồng ghi ở
+`wallet.service.ts:579-584`: caller sở hữu transaction mà không defer thì socket bắn **trước
+commit** — transaction rollback là tài xế nhận số dư sai. Người gọi phải tự bắn `__notify` sau
+commit, nếu quên thì tài xế không được cập nhật ví.
 
 Được 4 thứ miễn phí, không phải tự làm lại:
 
@@ -169,22 +187,32 @@ dùng `penalty:<id>` thì `b.id IS NULL` ⇒ dòng được giữ lại và hi�
 **KHÔNG thêm giá trị mới cho `LedgerType`** — app tài xế hard-map enum này
 (`vigo-driver/lib/data/dto/wallet/transaction_dto.dart`, `@JsonValue`) ⇒ enum mới làm app cũ vỡ parse.
 
-### 4.5 Ví đi âm — cưỡng chế thật sự
+### 4.5 Trừ ví nào — ⏳ CHỜ CEO CHỐT
 
-Với `MAIN_FIRST`, phần tài xế không trả nổi **luôn rơi vào ví ký quỹ**. Cổng nhận chuyến kiểm
-`DEPOSIT ≥ DRIVER_MIN_DEPOSIT` (`booking.service.ts:990`, Vi-now `:1274`, reassign `:4091`) ⇒ ví ký
-quỹ âm là **chắc chắn bị chặn** cho tới khi nạp bù. Đây là cơ chế đang áp dụng cho nợ thuế.
+Cổng nhận chuyến chỉ đọc **ví ký quỹ** (`DEPOSIT ≥ DRIVER_MIN_DEPOSIT` — `booking.service.ts:990`,
+Vi-now `:1274`, reassign `:4091`). **Ví thưởng (MAIN) âm không chặn gì cả.** Vì vậy việc chọn
+chiến lược trừ quyết định luôn "phạt có đau không":
 
-> ⚠️ Ghi nhận để không nói sai: **ví thưởng (MAIN) âm KHÔNG chặn gì cả** — cổng chỉ đọc ví ký quỹ.
-> Nhưng với `MAIN_FIRST`, MAIN chỉ bị trừ trong phạm vi số dư dương của nó, nên trường hợp
-> "tài xế không đủ tiền" luôn biểu hiện thành **ký quỹ âm** ⇒ cưỡng chế vẫn đúng.
+| | `MAIN_FIRST` | `DEPOSIT_ONLY` |
+|---|---|---|
+| Trừ ở đâu | Ví thưởng trước, thiếu mới sang ký quỹ | Trừ **thẳng ví ký quỹ** (tiền thật) |
+| Tài xế **có ví thưởng** | Trả bằng tiền thưởng, **không mất đồng tiền thật nào**, ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường** | Mất tiền thật ngay |
+| Tài xế **không có ví thưởng** | Ký quỹ âm ⇒ bị chặn nhận chuyến | Ký quỹ âm ⇒ bị chặn nhận chuyến |
+| Lập luận ủng hộ | **Đối xứng**: commission lúc nhận chuyến cũng trừ `MAIN_FIRST`, nên lấy lại đúng chỗ đã hoàn | **Răn đe thật**: giống hệt cách hệ thống thu thuế tiền mặt (`booking.service.ts:1620`) — nghĩa vụ tiền thật thì ví thưởng không gánh hộ |
+| Giữ invariant `MAIN>0 ⟹ DEPOSIT≥0` | Có | Có |
+
+Kỹ thuật thì cả hai đều chạy được ngay, chỉ khác một tham số. Đây là câu hỏi **chính sách**:
+tài xế có nhiều tiền thưởng khuyến mãi thì bị phạt có được coi là "đã trả" không.
 
 ### 4.6 Chống trùng & đồng thời
 
 - Toàn bộ trong **1 transaction**: khoá hàng `booking` bằng `pessimistic_write` và **kiểm lại
-  `status = CANCELLED` bên trong transaction** — `adminUpdateStatus` (`booking.service.ts:3909`)
-  đổi trạng thái booking **không khoá, không side-effect tiền**, nên nếu chỉ đọc trước transaction
-  sẽ có race: phạt xong thì chuyến đã bị lật về `ACCEPTED`.
+  `status = CANCELLED` bên trong transaction**.
+- **Chặn cả chiều ngược lại:** khoá hàng chỉ chặn được lúc phạt đang chạy. `adminUpdateStatus`
+  (`booking.service.ts:3923`) đặt thẳng mọi trạng thái thủ công, **không side-effect tiền**, nên
+  *sau khi* phạt đã commit, admin vẫn lật được `CANCELLED → ACCEPTED`: chuyến chạy tiếp, tài xế
+  vừa bị phạt vừa bị trừ commission mới. Thêm guard: **booking đang có `driver_penalty` ACTIVE thì
+  không cho rời trạng thái `CANCELLED`** (muốn lật thì huỷ phạt trước).
 - **Unique partial index** `UNIQUE (bookingId) WHERE status = 'ACTIVE'` → 1 chuyến tối đa 1 vụ phạt
   còn hiệu lực. Chốt chặn cuối ở tầng DB.
 - **Không** loại trừ theo lịch sử phạt cũ: sau khi huỷ phạt (tiền đã trả về) thì chuyến **được phép**
@@ -195,22 +223,47 @@ quỹ âm là **chắc chắn bị chặn** cho tới khi nạp bù. Đây là c
 | Case | Thông báo |
 |---|---|
 | Chuyến chưa ở trạng thái `CANCELLED` | "Chỉ phạt được chuyến đã huỷ." |
-| Chuyến **từng hoàn thành** (`completedAt IS NOT NULL`, tức chuyến bị `void`) | "Chuyến này đã hoàn thành rồi bị huỷ bằng công cụ huỷ chuyến — không phạt ở đây." |
+| Chuyến **từng hoàn thành** (chuyến bị `void`) — nhận diện ở §4.7b | "Chuyến này đã hoàn thành rồi bị huỷ bằng công cụ huỷ chuyến — không phạt ở đây." |
 | Huỷ trước khi tài xế nhận → không có dòng trừ commission | "Chuyến này chưa từng thu hoa hồng, không có gì để phạt." |
 | Có dòng trừ nhưng **chưa được hoàn** | "Hoa hồng chuyến này chưa được hoàn cho tài xế, không có gì để thu lại." |
 | Chuyến đang có vụ phạt `ACTIVE` | "Chuyến này đã bị phạt rồi." |
 
 Nút *Phạt* disable kèm đúng lý do, không để admin tưởng hệ thống hỏng.
 
+### 4.7b Nhận diện "chuyến từng hoàn thành" — KHÔNG được chỉ dựa vào `completedAt`
+
+`completedAt IS NOT NULL` **không đủ**: migration backfill `1790200000000-BackfillBookingCompletedAt`
+chỉ điền cho hàng `status = 'COMPLETED'` (`:79`, `:98`, `:113`). Chuyến hoàn thành rồi bị `void`
+**trước** khi migration chạy lúc đó đã mang `status = CANCELLED` ⇒ `completedAt` vẫn `NULL` ⇒ lọt
+thẳng vào hàng đợi.
+
+Điều kiện loại (bất kỳ dấu hiệu nào đúng ⇒ loại):
+
+```
+booking.completedAt IS NOT NULL
+OR EXISTS (ledger cùng referenceId = bookingId có description LIKE 'Booking Earnings%'
+                                              OR LIKE 'Giữ hộ thuế:%')
+```
+
+Dấu vết ledger là bằng chứng **trực tiếp việc chuyến đã hoàn thành** (`booking.service.ts:1603`
+cho chuyến chuyển khoản, `:1617` cho chuyến tiền mặt) và **không phụ thuộc backfill** nên đúng cả
+với dữ liệu lịch sử.
+
+*(Dấu hiệu phụ, chỉ để đối chiếu khi dò lỗi — không dùng làm điều kiện chính: `voidCompletedBooking`
+**không** set `cancelledByRole` (`:3858-3861`) trong khi `cancel()` **luôn** set (`:2308`), nên
+`cancelledByRole IS NULL` + có tài xế là một dấu hiệu khá sạch của chuyến bị void.)*
+
 ### 4.8 Huỷ phạt — cũng dùng lại hàm sẵn có
 
 ```ts
-walletService.refundDriverCommission(
+const r = await walletService.refundDriverCommission(
   driverUserId,
   `penalty:${penaltyId}`,
   `Huỷ phạt vi phạm — chuyến ${bookingCode}`,
   manager,
+  { deferNotify: true },                     // bắt buộc — lý do như §4.4
 )
+// sau commit: r.__notify.event === 'wallet.refunded'
 ```
 
 Hàm này đảo ngược **chính xác** các dòng `PAYMENT` mang `referenceId = penalty:<id>` về đúng ví đã
@@ -276,7 +329,14 @@ không đến đón · `FORCED_CANCEL` = Ép khách huỷ chuyến · `FAKE_TRIP
 | `ledger` | số commission có thể thu (§4.2) |
 | `driver_penalty` | trạng thái phạt của chuyến |
 
-**Không** tạo bảng/cron mới cho hàng đợi — nó là một truy vấn đọc.
+**Không** tạo bảng/cron mới cho hàng đợi — nó là một truy vấn đọc. Hai bẫy khi dựng truy vấn:
+
+- **Không JOIN thẳng `cancel_enforcement_alert`**: một booking có thể có nhiều alert (rule A/B/C,
+  bản `shadow` lẫn bản thật) ⇒ JOIN trực tiếp **nhân dòng** làm phân trang sai. Phải gom trước
+  (subquery aggregate / `DISTINCT ON`) rồi mới JOIN. `leakage_trace` thì an toàn (UNIQUE theo
+  `watchId`, thực tế 1 trace/booking) nhưng vẫn nên gom cho nhất quán.
+- **Không tra ledger từng dòng** để tính cột "Thu được" ⇒ N+1. Lấy tập `bookingId` của trang rồi
+  truy vấn ledger **một lần theo lô**.
 
 ---
 
@@ -296,9 +356,20 @@ Module mới `src/driver-penalty/`. Controller `@Roles(ADMIN)` + `FunctionAccess
 
 **Nhưng any-of một mình là chưa đủ** — người chỉ có `leakage-review` sẽ gọi được
 `POST /driver-penalties` với `bookingId` **bất kỳ**, tức trừ tiền mọi tài xế, mọi chuyến. Bắt buộc
-**scope ở service**: nếu người gọi **không** có `driver-penalties` thì `bookingId` phải tồn tại
-trong `leakage_trace` (người có `leakage-review`) hoặc `cancel_enforcement_alert` / chuyến huỷ của
-tài xế đang soát (người có `driver-cancel-review`).
+**scope ở service**, và **áp cho cả `GET /preview`**, không riêng `POST`: nếu chỉ chặn POST thì
+người đó vẫn dò được `bookingId` bất kỳ để đọc số tiền commission + tình trạng ví.
+
+Quy tắc scope khi người gọi **không** có `driver-penalties`:
+
+| Quyền họ có | Ràng buộc `bookingId` | Siết được bao nhiêu |
+|---|---|---|
+| `leakage-review` | phải tồn tại trong `leakage_trace` | **Siết thật** — chỉ phạt được chuyến bị hệ thống gắn cờ rò rỉ |
+| `driver-cancel-review` | phải là chuyến huỷ có tài xế | **Gần như không siết** — đúng bằng tập hàng đợi |
+
+Ghi rõ để không tự lừa mình: với `driver-cancel-review`, scope này **không phải biện pháp an toàn**
+— ai vào được màn soát huỷ thì phạt được gần như mọi chuyến trong tập đó. Đó là hệ quả trực tiếp
+của quyết định #8 (nút ăn theo quyền vào màn). Nếu sau này thấy rộng quá thì siết bằng cách bỏ nút
+ở màn soát, không phải bằng scope.
 
 `preview` **không trả số dư ví thô** — chỉ trả cờ `willOweDeposit` (số tiền ví ký quỹ sẽ âm) để
 người không có quyền `drivers`/`finance` không đọc được số dư tài xế.
@@ -359,7 +430,18 @@ thuộc `ALL_FUNCTION_KEYS`.
 
 ## 8. Thông báo cho tài xế — không cần release app
 
-**Kênh thật là `NotificationService.create(...)`** (in-app + push): ghi rõ số tiền, lý do, mã chuyến.
+**Kênh thật là `usersService.sendPushToUser(userId, title, body, data, type, DeviceApp.DRIVER)`**
+(`users.service.ts:139`) — hàm này gọi `notificationService.create(...)` rồi mới đẩy SNS.
+
+⚠️ **KHÔNG gọi thẳng `NotificationService.create(...)`**: nó chỉ `save()` một hàng DB
+(`notification.service.ts:52`), **không bắn push**. Tài xế sẽ chỉ thấy thông báo nếu tình cờ mở
+danh sách noti.
+
+⚠️ **Bắt buộc truyền `appId = DeviceApp.DRIVER`**: một tài khoản tài xế thường đăng ký cả app
+khách lẫn app tài. Bỏ trống thì rơi về hành vi cũ "bắn thiết bị mới nhất" — comment
+`users.service.ts:128-137` ghi rõ đây là bug đã xảy ra thật với noti "Có chuyến mới".
+
+Nội dung: số tiền, lý do vi phạm, mã chuyến.
 
 Socket `wallet.deducted` vẫn bắn để app cập nhật số dư, nhưng **đừng coi nó là kênh thông báo**:
 app **vứt payload đi**, chỉ dùng để trigger refresh (`vigo-driver/lib/presentation/home/bloc/home_bloc.dart:507`)
@@ -371,7 +453,8 @@ không phải UUID nên không hiện link chuyến (đã kiểm: **không crash
 ⇒ **Bằng chứng đối chất với tài xế nằm ở notification + trang Lịch sử phạt của admin**, không phải
 màn Thu nhập. Muốn hiện lý do ngay trong lịch sử ví thì phải release app tài xế — **đợt sau**.
 
-Huỷ phạt → bắn `wallet.credited` + notification tương ứng.
+Huỷ phạt → `refundDriverCommission` bắn **`wallet.refunded`** (`wallet.service.ts:848`), không
+phải `wallet.credited` — đừng chờ nhầm event khi kiểm thử. Kèm notification tương ứng.
 
 ---
 
@@ -391,14 +474,24 @@ Rollout: **backend trước** (migration + module + sửa `cashflowCategories`),
 
 ## 10. Test
 
-**Backend (`npx jest`)** — trọng tâm là tiền:
+**Backend (`npm test`, KHÔNG phải `npx jest`)** — `test/jest-setup-tz.js` ném lỗi nếu process không
+chạy ở UTC, nên `npx jest` trần đỏ 100% suite trên máy giờ VN (CLAUDE.md backend, dòng 114-119).
+Test chạm Postgres thật phải đặt tên `*.integration.spec.ts` và chạy bằng `npm run test:integration`
+(bị loại khỏi `npm test` qua `testPathIgnorePatterns`) — áp cho test #14. Trọng tâm là tiền:
 
 1. Phạt chuyến thường → thu đúng số commission lịch sử, `MAIN_FIRST` đúng thứ tự ví.
 2. **Chuyến tiền mặt đã `void`** (có dòng "Giữ hộ thuế" đã hoàn) → **bị chặn**, và kể cả nếu lọt
    qua cổng thì bộ lọc `description LIKE 'Booking Commission%'` cũng **không** lấy dòng thuế.
+2b. **Chuyến void từ trước migration backfill** (`completedAt IS NULL`) → vẫn bị chặn nhờ dấu vết
+   ledger `'Booking Earnings%'` / `'Giữ hộ thuế:%'` (§4.7b).
 3. Chuyến qua **nhiều vòng nhận→huỷ** → thu đúng **1×** (lần trừ gần nhất), không cộng dồn.
-3b. Commission bị **chia 2 ví** (Main + Deposit) → gom đủ cả 2 dòng, `amount` khớp `N` ở bước 4.
-3c. Chuyến **admin gán lại tài xế** → mô tả `"Booking Commission (admin reassign) (…)"` vẫn khớp bộ lọc.
+3b. Commission bị **chia 2 ví** (Main + Deposit) → gom đủ cả 2 dòng, tổng khớp `N`.
+3c. Chuyến **admin gán lại tài xế** → mô tả `"Booking Commission (admin reassign) (12345)"`:
+    assert cả bộ lọc tiền tố **và** `amount == 12345` (chỉ kiểm tiền tố là **test xanh giả** —
+    regex bóc N sai vẫn pass).
+3d. Vòng gần nhất trừ hết ở **Main**, vòng trước trừ hết ở **Deposit**, cùng giá (mô tả gốc y hệt)
+    → phải lấy đúng 1×, không gom nhầm 2 dòng.
+3e. `deferNotify` — rollback transaction thì **không** có socket nào được bắn.
 4. **Không nuốt nhầm dòng `clawbackDriverPromo`** (cùng `referenceId`, ngược chiều ví).
 5. Ví không đủ → **ví ký quỹ âm** đúng số, MAIN không âm (giữ invariant), không throw.
 6. Chuyến huỷ trước khi có tài nhận → `amount = 0`, chặn với message riêng.
@@ -408,8 +501,10 @@ Rollout: **backend trước** (migration + module + sửa `cashflowCategories`),
 10. Phạt → huỷ phạt → phạt lại → số tiền bằng lần đầu.
 11. Sau khi phạt, chuyến đi thêm một vòng nhận→huỷ → `refundDriverCommission` **không** hoàn nhầm
     tiền phạt (chốt chặn của `referenceId = penalty:<id>`).
-12. Race: phạt trong khi `adminUpdateStatus` lật trạng thái → khoá booking + kiểm lại trong txn.
-13. RBAC scope: người chỉ có `leakage-review` phạt `bookingId` không thuộc trace nào → **403**.
+12. Khoá booking + kiểm lại `status` trong txn; và **chiều ngược**: chuyến có `driver_penalty`
+    ACTIVE thì `adminUpdateStatus` không lật được khỏi `CANCELLED`.
+13. RBAC scope: người chỉ có `leakage-review` gọi **cả `POST` lẫn `GET /preview`** với `bookingId`
+    không thuộc trace nào → **403** (không chỉ chặn POST).
 14. `cashflowCategories()` xếp dòng phạt vào nhóm `penalty`, không phải `commission`/`refund`.
 
 **Admin (`npx vitest run`)**: nhãn lý do/trạng thái, nút Phạt disable đúng lý do khi `amount = 0`,
