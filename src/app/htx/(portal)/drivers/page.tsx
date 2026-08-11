@@ -23,6 +23,11 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { htxListDrivers, htxToggleDriverActive, type HtxDriverRow } from '@/lib/api';
 import { getImageUrl } from '@/lib/utils';
+import {
+  DRIVER_ONLINE_HINT,
+  driverOnlineState,
+  type DriverPresence,
+} from '@/lib/driver-presence';
 
 type ApprovalTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false';
 type StatusFilter = '' | 'ONLINE' | 'OFFLINE' | 'BUSY';
@@ -31,13 +36,40 @@ type ActiveFilter = '' | 'true' | 'false';
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
 
-const statusBadge = (status: string) => {
-  switch (status) {
-    case 'ONLINE':
+// `status` chỉ là trạng thái KHAI BÁO — tài bỏ app vẫn ONLINE mãi. Kết hợp tín
+// hiệu Redis (`presence`) qua `driverOnlineState` để chủ HTX không nhìn nhầm một
+// tài đã biến mất thành "sẵn sàng". Chữ ở portal khác danh sách admin có chủ đích.
+const statusBadge = (status: string, presence?: DriverPresence) => {
+  const state = driverOnlineState(status, presence);
+  switch (state) {
+    case 'online':
       return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Sẵn sàng</Badge>;
-    case 'BUSY':
+    case 'busy':
       return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400">Đang chở khách</Badge>;
-    case 'OFFLINE':
+    case 'idle':
+      return (
+        <Badge
+          title={DRIVER_ONLINE_HINT.idle}
+          className="bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-400"
+        >
+          Chờ tín hiệu
+        </Badge>
+      );
+    case 'stale':
+      return (
+        <Badge
+          title={DRIVER_ONLINE_HINT.stale}
+          className="bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-400"
+        >
+          Mất kết nối
+        </Badge>
+      );
+    case 'unknown':
+      return (
+        <Badge title={DRIVER_ONLINE_HINT.unknown} variant="outline">
+          Không rõ
+        </Badge>
+      );
     default:
       return <Badge variant="secondary">Ngoại tuyến</Badge>;
   }
@@ -219,7 +251,7 @@ export default function HtxDriversPage() {
                   <TableCell className="text-right tabular-nums">{d.tripCount}</TableCell>
                   <TableCell className="text-right tabular-nums font-medium">{formatCurrency(d.lifetimeIncome ?? 0)}</TableCell>
                   <TableCell className="text-right tabular-nums text-amber-700 dark:text-amber-400">{formatCurrency(d.lifetimeTax ?? 0)}</TableCell>
-                  <TableCell>{statusBadge(d.status)}</TableCell>
+                  <TableCell>{statusBadge(d.status, d.presence)}</TableCell>
                   <TableCell>
                     <span className="text-sm text-muted-foreground">
                       {new Date(d.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}

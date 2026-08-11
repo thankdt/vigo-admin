@@ -29,6 +29,11 @@ import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
 import type { Driver, TransportCompany, Route } from '@/lib/types';
+import {
+  DRIVER_ONLINE_HINT,
+  DRIVER_ONLINE_LABEL,
+  driverOnlineState,
+} from '@/lib/driver-presence';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -579,14 +584,35 @@ export function DriversTable() {
     }
   };
 
-  // Live operational state (driver.status). Shown in the "Đã duyệt" tab where
-  // approval status is uniform and ops care about who's online right now.
-  const getOnlineBadge = (driver: Pick<Driver, 'status'> | null | undefined) => {
-    switch (driver?.status) {
-      case 'ONLINE':
+  // Trạng thái vận hành. `driver.status` chỉ là KHAI BÁO — tài bỏ app vẫn ONLINE
+  // mãi — nên quy đổi qua `driverOnlineState` (kết hợp tín hiệu Redis) để tách
+  // "đang kết nối" khỏi "khai online rồi biến mất".
+  const getOnlineBadge = (driver: Pick<Driver, 'status' | 'presence'> | null | undefined) => {
+    const state = driverOnlineState(driver?.status, driver?.presence);
+    const hint = DRIVER_ONLINE_HINT[state];
+    switch (state) {
+      case 'online':
         return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Online</Badge>;
-      case 'BUSY':
+      case 'busy':
         return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-400">Bận</Badge>;
+      case 'idle':
+        return (
+          <Badge title={hint} className="bg-sky-100 text-sky-800 dark:bg-sky-900/50 dark:text-sky-400">
+            {DRIVER_ONLINE_LABEL.idle}
+          </Badge>
+        );
+      case 'stale':
+        return (
+          <Badge title={hint} className="bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-400">
+            {DRIVER_ONLINE_LABEL.stale}
+          </Badge>
+        );
+      case 'unknown':
+        return (
+          <Badge title={hint} variant="outline" className="text-muted-foreground">
+            {DRIVER_ONLINE_LABEL.unknown}
+          </Badge>
+        );
       default:
         return <Badge variant="outline" className="text-muted-foreground">Offline</Badge>;
     }
