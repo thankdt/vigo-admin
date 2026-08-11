@@ -34,6 +34,10 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/app-popups': 'app-popups',
   '/feedback': 'feedback',
   '/leakage-review': 'leakage-review',
+  // Backend: @RequireFunction('driver-penalties'). Quyền RIÊNG vì đây là thao tác TRỪ
+  // TIỀN THẬT của tài xế — nhóm xử lý vi phạm được cấp cụm driver-cancel-review +
+  // leakage-review + driver-penalties, tách khỏi team vận hành.
+  '/driver-penalties': 'driver-penalties',
   '/driver-cancel-review': 'driver-cancel-review',
   '/cskh-activity': 'cskh-activity',
 };
