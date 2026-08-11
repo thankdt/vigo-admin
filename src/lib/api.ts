@@ -3250,7 +3250,10 @@ export type PenaltyBlockedReason =
   | 'ALREADY_PENALIZED'
   | 'NO_COMMISSION'
   | 'NOT_REFUNDED'
-  | 'LEDGER_ANOMALY';
+  /** Chuyến quá cũ: sổ ví không nhúng mức hoa hồng nên không tự tính được. */
+  | 'LEGACY_LEDGER'
+  | 'LEDGER_ANOMALY'
+  | 'DRIVER_NOT_FOUND';
 
 export type PenaltyPreview = {
   amount: number;
