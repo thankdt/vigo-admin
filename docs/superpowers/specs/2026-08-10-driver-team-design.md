@@ -120,9 +120,28 @@ Chiều ngược lại vẫn thông: drawer đọc được log CSKH (chỉ đ�
 nhưng **không khai `@Index` nào cho tổ hợp này** → query tổng hợp sẽ quét bảng.
 
 ```sql
-CREATE INDEX CONCURRENTLY IF NOT EXISTS "IDX_booking_completed_route_driver"
-  ON "booking" ("status", "completedAt", "routeId", "driverId");
+CREATE INDEX CONCURRENTLY "IDX_booking_completed_team_partial"
+  ON "booking" ("completedAt", "routeId", "driverId")
+  WHERE "status" = 'COMPLETED' AND "driverId" IS NOT NULL;
 ```
+
+**PARTIAL index** (chốt 2026-08-11): mọi truy vấn của màn đều có
+`status = 'COMPLETED' AND "driverId" IS NOT NULL` dạng literal, nên đưa hai điều kiện đó
+vào *predicate* thay vì vào khoá. Đo trên Postgres thật, bảng 300k dòng: **808 kB** so với
+**2864 kB** của index đầy đủ, và planner dùng đúng nó (`Bitmap Index Scan`). Quan trọng
+hơn: booking mới tạo ở trạng thái `CREATED` **không phải đụng vào index này**, nên chi phí
+ghi trên đường nóng gần như bằng 0.
+
+**Chạy TAY trên prod, KHÔNG qua CI/CD.** Rủi ro lớn nhất không phải bản thân index mà là nó
+nằm trong bước deploy: CIC bị chặn bởi một transaction dài (kể cả read-only) thì **deploy
+treo**, không fail nhanh. Quy trình: giờ thấp điểm chạy `psql` tạo index → kiểm
+`indisvalid = t` → rồi mới deploy. Migration `up()` thấy index đã có và hợp lệ thì **bỏ
+qua**, deploy không đụng gì tới bảng `booking`. Runbook đầy đủ nằm trong comment đầu file
+`1792800200000-ReplaceBookingTeamIndexWithPartial.ts`.
+
+> **KHÔNG sửa migration `1792800100000` đã ship** — nó đã chạy trên DEV, mà TypeORM không
+> chạy lại migration đã ghi nhận. Sửa file cũ chỉ làm DEV và PROD lệch nhau trong im lặng.
+> Thay index phải bằng một migration MỚI.
 
 **`CONCURRENTLY`** để không khoá ghi trên bảng booking prod. TypeORM bọc `up()` trong transaction
 mặc định, mà `CREATE INDEX CONCURRENTLY` **không chạy được trong transaction** → migration phải
@@ -150,11 +169,27 @@ Query: `from`, `to`.
 ```jsonc
 {
   "driversWithCompletedTrips": 87,  // DISTINCT tài có ≥1 chuyến COMPLETED trong kỳ
-  "contactedDrivers": 24,           // DISTINCT tài có stage ≠ null (mọi stage)
-  "joinedDrivers": 9,               // DISTINCT tài stage = JOINED
+  "notContactedDrivers": 55,        // CÓ chuyến trong kỳ nhưng CHƯA có row pipeline
+  "contactedDrivers": 14,
+  "invitedDrivers": 6,
+  "joinedDrivers": 9,
+  "declinedDrivers": 2,
+  "droppedDrivers": 1,
   "followUpDueToday": 5             // nextFollowUpAt ≤ hết ngày hôm nay (giờ VN)
 }
 ```
+
+**Đếm RIÊNG từng tầng, KHÔNG gộp thành một con số "đã liên hệ"** (sửa 2026-08-11 theo
+phản hồi). Gộp lại thì tài đã `Từ chối`/`Loại` bị đếm chung với tài đang chăm — đúng thứ
+mà việc chia tầng sinh ra để tránh. Pipeline có 6 trạng thái người dùng thấy được:
+
+`Chưa liên hệ` → `Đã liên hệ` → `Đã mời` → rồi rẽ ba: `Trong team` / `Từ chối` / `Loại`.
+
+`notContactedDrivers` phải đếm bằng `LEFT JOIN driver_team_member ... WHERE m.id IS NULL`,
+**không** so cột `stage` — tài chưa chạm tới thì không có row nào cả (§4.1).
+
+Mỗi thẻ số trên UI **bấm được để lọc xuống tầng đó**. Endpoint §5.2 nhận thêm
+`stage=none` cho nhóm "Chưa liên hệ".
 
 **Phải là endpoint riêng, không cộng dồn từ §5.1.** Cộng `driverCount` của các tuyến sẽ **đếm trùng**
 tài chạy nhiều tuyến. Mọi số ở đây đếm `DISTINCT driverId`.
@@ -164,7 +199,13 @@ khoảng ngày đang xem số liệu.
 
 ### 5.1 `GET /admin/driver-team/routes` — cấp 1 (danh sách tuyến)
 
-Query: `from`, `to` (VN-local `YYYY-MM-DD`), `q?` (lọc tên tuyến), `sort?` (`drivers` \| `trips` \| `name`, mặc định `drivers`), `order?`.
+Query: `from`, `to` (VN-local `YYYY-MM-DD`), `q?` (lọc **tên tuyến**), `driverQ?` (tìm
+**tên/SĐT tài xế**), `sort?` (`drivers` \| `trips` \| `name`, mặc định `drivers`), `order?`.
+
+**`driverQ` KHÔNG lọc bớt tuyến** — nó chỉ thêm cột `matchedDriverCount` (số tài khớp trên
+từng tuyến, `LEFT JOIN` nên tuyến không ai khớp vẫn còn với giá trị 0). FE dùng nó để **tự
+bung đúng những tuyến có người khớp**. Đây là thứ trả lời câu "tài này chạy những tuyến
+nào" — thiếu nó thì phải mở thủ công từng tuyến mới biết.
 
 ```jsonc
 {
@@ -309,8 +350,12 @@ rõ lý do đã bỏ CSV dấu phẩy: Excel tiếng Việt tách dòng theo `;`
 **Thanh lọc:** khoảng ngày (`FinanceFilter` + `PRESETS`) · trạng thái pipeline · người phụ trách ·
 ô tìm tên tài / SĐT / tên tuyến · số chuyến tối thiểu.
 
-**4 thẻ số:** Tài chạy thành công trong kỳ · Đã liên hệ · Trong team · **Cần gọi lại hôm nay**.
-Thẻ cuối là *việc phải làm*, không phải số để ngắm — bấm vào lọc luôn danh sách quá hạn.
+**7 thẻ số, theo từng tầng pipeline** (sửa 2026-08-11):
+
+`Chạy thành công` · `Chưa liên hệ` · `Đã liên hệ` · `Đã mời` · `Trong team` · `Từ chối / Loại` · `Cần gọi lại hôm nay`
+
+Mỗi thẻ tầng **bấm được để lọc xuống đúng tầng đó** — thẻ ở đây là lối vào việc cần làm, không
+phải số để ngắm. Thẻ cuối mở mọi tuyến để quét cột "Hẹn gọi lại" đang tô đỏ.
 
 **Cấp 1 — accordion, hiện MỌI tuyến kể cả 0 tài.** Mặc định sort số tài giảm dần, tuyến rỗng trôi
 xuống đáy. Cột:
@@ -318,6 +363,8 @@ xuống đáy. Cột:
 `Tên tuyến` · `Số tài chạy thành công` · `Hoàn thành trong kỳ` · `Khách đặt trong kỳ` · `Đã liên hệ / Trong team` · `Chuyến gần nhất`
 
 Hai cột giữa **để riêng, không viết thành phân số** — xem lý do ở §5.1 (khác mốc thời gian).
+
+Khi đang tìm tài xế, mỗi tuyến có người khớp gắn thêm nhãn **"n tài khớp"** và tự bung ra.
 
 Hàng đặc biệt cuối danh sách: **"Không gắn tuyến"**.
 
@@ -364,11 +411,12 @@ form: đổi stage / gán tuyến phụ trách / gán người phụ trách / h�
 - **Tên tuyến** → lọc ngay danh sách cấp 1 (param `q` của §5.1).
 - **Tên tài / SĐT** → gửi xuống §5.2, tức chỉ lọc **bên trong những tuyến đang mở**.
 
-**Cố ý KHÔNG làm "tuyến có kết quả tự bung ra".** Client chỉ có dữ liệu của nhóm đã mở nên không
-thể biết tuyến chưa mở có ai khớp; muốn làm thật thì phải thêm một truy vấn đếm-khớp theo tuyến ở
-§5.1. Không đáng cho đợt 1 — nhưng cũng KHÔNG được làm nửa vời rồi để người dùng tưởng đã tìm hết
-và kết luận sai rằng "tài này không chạy tuyến nào". Hiện chú thích thẳng:
-*"Tìm theo tên/SĐT chỉ soi trong các tuyến đang mở."*
+**Tuyến có tài khớp TỰ BUNG RA** (bổ sung 2026-08-11). Backend trả `matchedDriverCount` theo
+từng tuyến (§5.1) nên client biết được cả tuyến chưa mở, mỗi tuyến gắn nhãn *"n tài khớp"*.
+
+Bản đầu tôi bỏ tính năng này vì đánh giá sai là phức tạp — thực tế chỉ là một CTE đếm ở
+§5.1. Điều KHÔNG được làm là bản nửa vời chỉ soi trong nhóm đã mở: nó khiến người dùng
+tưởng đã tìm hết rồi kết luận sai "tài này không chạy tuyến nào".
 
 Không thêm tab bảng phẳng thứ hai (bớt một màn phải nuôi).
 
