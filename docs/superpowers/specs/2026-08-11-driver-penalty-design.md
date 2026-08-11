@@ -57,7 +57,8 @@ Cần: sau khi admin **xác minh có vi phạm**, thu lại đúng khoản commi
 |---|---|---|
 | 1 | Case chính: chuyến **ĐÃ huỷ**, commission đã tự hoàn → **thu lại** | Không làm luồng "huỷ kèm phạt" |
 | 2 | Số tiền = **commission của chuyến đó, đúng 1 lần**, admin **không sửa được** | Không gõ tay ⇒ không sai số |
-| 3 | Ví không đủ tiền → **cho ví ký quỹ âm = ghi nợ** | Cổng nhận chuyến chặn tới khi nạp bù (§4.4) |
+| 3 | Trừ **ví thưởng trước, thiếu mới sang ký quỹ** (`MAIN_FIRST`); ký quỹ được đi âm = ghi nợ | Chỉ tài xế **không đủ tiền** mới bị chặn nhận chuyến — xem §4.5 |
+| 11 | Thẻ "Đã trừ ví tài xế" trên dashboard **giữ nguyên**, gồm cả tiền phạt | Tách chi tiết ở bảng cashflow là đủ (§4.9) |
 | 4 | **Không** mật khẩu cấp 2 — thay bằng quyền RBAC riêng | Ghi rõ người thực hiện ở mọi vụ |
 | 5 | **Bắt buộc chọn lý do** vi phạm | Phục vụ thống kê + đối chất |
 | 6 | **Cho huỷ phạt** (hoàn lại tiền) | Bản ghi giữ lại, đổi trạng thái, không xoá |
@@ -150,7 +151,7 @@ const r = await walletService.deductDriverWallet(
   `Phạt vi phạm — thu lại hoa hồng chuyến ${bookingCode}`,
   true,                                      // allowNegative — ví ký quỹ được đi âm
   manager,                                   // cùng transaction với việc tạo driver_penalty
-  { strategy: <xem §4.5>, deferNotify: true },
+  { strategy: 'MAIN_FIRST', deferNotify: true },   // §4.5 — CEO chốt
 )
 // SAU khi transaction commit mới bắn:
 if (r.__notify) driverGateway.notifyDriver(r.__notify.driverId, r.__notify.event, r.__notify.data)
@@ -187,7 +188,7 @@ dùng `penalty:<id>` thì `b.id IS NULL` ⇒ dòng được giữ lại và hi�
 **KHÔNG thêm giá trị mới cho `LedgerType`** — app tài xế hard-map enum này
 (`vigo-driver/lib/data/dto/wallet/transaction_dto.dart`, `@JsonValue`) ⇒ enum mới làm app cũ vỡ parse.
 
-### 4.5 Trừ ví nào — ⏳ CHỜ CEO CHỐT
+### 4.5 Trừ ví nào — CHỐT: `MAIN_FIRST`
 
 Cổng nhận chuyến chỉ đọc **ví ký quỹ** (`DEPOSIT ≥ DRIVER_MIN_DEPOSIT` — `booking.service.ts:990`,
 Vi-now `:1274`, reassign `:4091`). **Ví thưởng (MAIN) âm không chặn gì cả.** Vì vậy việc chọn
@@ -201,8 +202,12 @@ chiến lược trừ quyết định luôn "phạt có đau không":
 | Lập luận ủng hộ | **Đối xứng**: commission lúc nhận chuyến cũng trừ `MAIN_FIRST`, nên lấy lại đúng chỗ đã hoàn | **Răn đe thật**: giống hệt cách hệ thống thu thuế tiền mặt (`booking.service.ts:1620`) — nghĩa vụ tiền thật thì ví thưởng không gánh hộ |
 | Giữ invariant `MAIN>0 ⟹ DEPOSIT≥0` | Có | Có |
 
-Kỹ thuật thì cả hai đều chạy được ngay, chỉ khác một tham số. Đây là câu hỏi **chính sách**:
-tài xế có nhiều tiền thưởng khuyến mãi thì bị phạt có được coi là "đã trả" không.
+**CEO chốt `MAIN_FIRST`** — lấy lại đúng chỗ đã hoàn, đối xứng với lúc trừ commission.
+
+Hệ quả phải nói rõ với vận hành, **đừng hứa nhầm là "phạt xong tài xế bị treo"**: tài xế còn nhiều
+ví thưởng sẽ trả bằng thưởng, ví ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường**. Việc chặn nhận
+chuyến chỉ xảy ra khi họ **không đủ tiền** (phần thiếu dồn vào ký quỹ → âm → cổng chặn). Muốn phạt
+luôn cắn vào tiền thật thì phải đổi sang `DEPOSIT_ONLY` — một tham số, đổi lúc nào cũng được.
 
 ### 4.6 Chống trùng & đồng thời
 
