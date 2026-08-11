@@ -224,9 +224,18 @@ loại `cashflowCategories()` (`:613`) có nhánh
 `commission = PAYMENT AND referenceId NOT LIKE 'admin:%' AND description NOT LIKE '%VAT%'`
 ⇒ **dòng phạt sẽ bị dán nhãn "Trừ hoa hồng"**, dòng huỷ phạt bị tính vào "Hoàn tiền".
 
-Bắt buộc: thêm nhóm `{ key: 'penalty', cond: "l.\"referenceId\" LIKE 'penalty:%'" }` **đặt TRƯỚC**
-cả nhánh `refund` và `commission` (CASE lấy nhánh khớp đầu tiên), thêm nhãn "Phạt vi phạm" ở
-`vigo-admin/src/app/(app)/driver-cashflow/page.tsx:31`.
+Bắt buộc, **làm cùng đợt này**:
+
+- BE `finance.service.ts:613` — chèn `{ key: 'penalty', cond: "l.\"referenceId\" LIKE 'penalty:%'" }`
+  **ngay trước nhánh `refund`** (CASE lấy nhánh khớp đầu tiên ⇒ phải đứng trước cả `refund` và
+  `commission`).
+- FE `vigo-admin/src/app/(app)/driver-cashflow/page.tsx:23` — thêm
+  `{ key: 'penalty', label: 'Phạt vi phạm' }` vào `CATEGORIES` (dropdown lọc + nhãn cột dùng chung
+  một nguồn).
+
+**Giữ nguyên có chủ đích:** thẻ "Đã trừ ví tài xế" trên dashboard tài chính
+(`aggregateCashFlow.driverDeducted`, `finance.service.ts:436`) cộng mọi khoản trừ khỏi ví tài xế
+nên **sẽ gồm cả tiền phạt** — đúng nghĩa đen của chỉ số đó. Tách chi tiết ở bảng cashflow là đủ.
 
 ---
 
