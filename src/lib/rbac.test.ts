@@ -19,8 +19,26 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 27 menu functions (navItems minus /settings)', () => {
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(27); // 2026-08-06: +driver-reputation
+  it('has exactly 28 menu functions (navItems minus /settings)', () => {
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(28); // 2026-08-10: +driver-team
+  });
+
+  // Ranh giới riêng tư của màn "Đội tài chuyên nghiệp": ghi chú tuyển team KHÔNG
+  // được lộ cho người chỉ có quyền xem danh sách tài xế.
+  it('/driver-team là function RIÊNG, không dùng chung với drivers', () => {
+    expect(MENU_FUNCTION_BY_HREF['/driver-team']).toBe('driver-team');
+    expect(MENU_FUNCTION_BY_HREF['/driver-team']).not.toBe('drivers');
+  });
+
+  it('có function drivers KHÔNG mở được /driver-team', () => {
+    const opsUser = { isSuperAdmin: false, functions: ['drivers'] } as any;
+    expect(isRouteAllowed('/driver-team', opsUser)).toBe(false);
+    expect(isMenuVisible('/driver-team', opsUser)).toBe(false);
+  });
+
+  it('có function driver-team thì vào được', () => {
+    const ceo = { isSuperAdmin: false, functions: ['driver-team'] } as any;
+    expect(isRouteAllowed('/driver-team', ceo)).toBe(true);
   });
 
   it('each menu function key = its href without the leading slash', () => {

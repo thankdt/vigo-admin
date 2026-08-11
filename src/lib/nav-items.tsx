@@ -27,6 +27,7 @@ import {
   PieChart,
   Headset,
   Star,
+  Handshake,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -54,6 +55,8 @@ export const navGroups: NavGroup[] = [
       { href: '/drivers', label: 'Tài xế', icon: Car },
       // Cạnh mục tài xế, cùng cụm "chất lượng tài xế" với Tỉ lệ huỷ / Góp ý.
       { href: '/driver-reputation', label: 'Điểm & đánh giá tài xế', icon: Star },
+      // Cùng cụm "chất lượng tài xế". Quyền RIÊNG driver-team — ops/CSKH không thấy.
+      { href: '/driver-team', label: 'Đội tài chuyên nghiệp', icon: Handshake },
       { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
       { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
       { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },

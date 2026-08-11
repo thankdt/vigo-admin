@@ -1,7 +1,6 @@
 'use client';
-
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -3105,4 +3104,124 @@ export async function getCskhActivitySummary(f: CskhActivityFilters): Promise<Cs
 export async function getCskhActivityStaff(): Promise<Array<{ id: string; fullName: string | null }>> {
   const res = await fetchWithAuth('/admin/cskh-activity/staff');
   return unwrap<Array<{ id: string; fullName: string | null }>>(res);
+}
+
+// ---- Đội tài chuyên nghiệp (/driver-team) ----
+// Quyền RIÊNG 'driver-team' ở backend. KHÔNG dùng adminListAssignableUsers() cho
+// dropdown người phụ trách: GET /admin/users gắn SuperOnlyGuard nên tài khoản chỉ
+// có function driver-team sẽ nhận 403.
+
+export async function getTeamSummary(range: { from: string; to: string }): Promise<TeamSummary> {
+  const q = new URLSearchParams({ from: range.from, to: range.to });
+  return unwrap<TeamSummary>(await fetchWithAuth(`/admin/driver-team/summary?${q}`));
+}
+
+/**
+ * Cấp 1. Shape trả về là {routes, unassigned, range} — cố ý KHÔNG phải {data, meta}:
+ * TransformInterceptor của backend thấy cặp data+meta sẽ dựng lại response và VỨT
+ * mọi field khác, làm `unassigned` biến mất im lặng.
+ */
+export async function getTeamRoutes(params: {
+  from: string;
+  to: string;
+  sort?: string;
+  order?: string;
+  /** Lọc theo TÊN TUYẾN — bớt dòng ở cấp 1. */
+  q?: string;
+  /**
+   * Tìm theo TÊN/SĐT TÀI XẾ. KHÔNG lọc bớt tuyến — chỉ để backend đếm
+   * matchedDriverCount mỗi tuyến, FE tự bung đúng những tuyến có người khớp.
+   */
+  driverQ?: string;
+}): Promise<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }> {
+  const q = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.sort) q.set('sort', params.sort);
+  if (params.order) q.set('order', params.order);
+  if (params.q) q.set('q', params.q);
+  if (params.driverQ) q.set('driverQ', params.driverQ);
+  return unwrap<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }>(
+    await fetchWithAuth(`/admin/driver-team/routes?${q}`),
+  );
+}
+
+export async function getTeamRouteDrivers(
+  routeId: number | 'none',
+  params: {
+    from: string;
+    to: string;
+    stage?: string;
+    ownerAdminUserId?: string;
+    minTrips?: number;
+    q?: string;
+    sort?: string;
+    order?: string;
+    page?: number;
+    limit?: number;
+  },
+): Promise<{
+  data: TeamDriverRow[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}> {
+  const q = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.stage) q.set('stage', params.stage);
+  if (params.ownerAdminUserId) q.set('ownerAdminUserId', params.ownerAdminUserId);
+  if (params.minTrips) q.set('minTrips', String(params.minTrips));
+  if (params.q) q.set('q', params.q);
+  if (params.sort) q.set('sort', params.sort);
+  if (params.order) q.set('order', params.order);
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  // routeId giữ NGUYÊN 'none' — nhóm booking không gắn tuyến.
+  const res = await fetchWithAuth(`/admin/driver-team/routes/${routeId}/drivers?${q}`);
+  const body = await res.json();
+  return {
+    data: body.data ?? [],
+    meta: body.meta ?? { page: 1, limit: 10, total: 0, totalPages: 0 },
+  };
+}
+
+export async function getTeamOwners(): Promise<TeamOwner[]> {
+  return unwrap<TeamOwner[]>(await fetchWithAuth('/admin/driver-team/owners'));
+}
+
+export async function getTeamDriverDetail(
+  driverId: string,
+  range: { from: string; to: string },
+): Promise<DriverTeamDetail> {
+  const q = new URLSearchParams({ from: range.from, to: range.to });
+  return unwrap<DriverTeamDetail>(await fetchWithAuth(`/admin/driver-team/${driverId}?${q}`));
+}
+
+/**
+ * Chỉ gửi field muốn đổi — field vắng mặt KHÔNG bị backend ghi đè null.
+ * note: '' = XOÁ ghi chú; ownerAdminUserId: null = gỡ người phụ trách.
+ */
+export async function patchTeamMember(
+  driverId: string,
+  body: {
+    stage?: DriverTeamStage;
+    assignedRouteIds?: number[];
+    ownerAdminUserId?: string | null;
+    nextFollowUpAt?: string | null;
+    note?: string;
+  },
+): Promise<TeamMemberState> {
+  return unwrap<TeamMemberState>(
+    await fetchWithAuth(`/admin/driver-team/${driverId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export async function addTeamEvent(
+  driverId: string,
+  body: { type: 'CALL' | 'NOTE'; note?: string },
+): Promise<DriverTeamEvent> {
+  return unwrap<DriverTeamEvent>(
+    await fetchWithAuth(`/admin/driver-team/${driverId}/events`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  );
 }

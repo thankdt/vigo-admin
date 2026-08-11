@@ -1,7 +1,7 @@
 // RBAC catalog mirror (frontend). MUST stay in sync with backend rbac.constants.ts.
 // Function key của mỗi mục menu = href bỏ dấu '/' đầu (spec §2.1). `/settings` KHÔNG
 // nằm ở đây: nó nở thành 10 function con `settings.*` và được gate riêng (any-of).
-// Test đồng bộ (rbac.test.ts) khoá số 27 + 10 để thêm menu/nhóm mà quên khai báo -> fail.
+// Test đồng bộ (rbac.test.ts) khoá số 28 + 10 để thêm menu/nhóm mà quên khai báo -> fail.
 
 export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/dashboard': 'dashboard',
@@ -10,6 +10,9 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   // Backend: @RequireFunction('driver-reputation') trên DriverReputationAdminController.
   // KHÁC function 'drivers' — admin xem được tài xế vẫn có thể không được xem điểm.
   '/driver-reputation': 'driver-reputation',
+  // Backend: @RequireFunction('driver-team'). KHÁC function 'drivers' — ghi chú
+  // tuyển team là dữ liệu nhạy cảm, người xem được danh sách tài xế KHÔNG được đọc.
+  '/driver-team': 'driver-team',
   '/transport-companies': 'transport-companies',
   '/bookings': 'bookings',
   '/referrals': 'referrals',
