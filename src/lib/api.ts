@@ -3282,6 +3282,11 @@ export type PenaltyQueueRow = {
   collectibleAmount: number;
 };
 
+/**
+ * Hàng trong LỊCH SỬ phạt — có các field JOIN thêm (tên tài xế, tên người phạt).
+ * `createPenalty`/`reversePenalty` KHÔNG trả những field này (backend trả entity thô),
+ * nên hai hàm đó dùng `DriverPenaltyEntity` bên dưới.
+ */
 export type DriverPenaltyRow = {
   id: string;
   bookingId: string;
@@ -3302,24 +3307,13 @@ export type DriverPenaltyRow = {
   reverseNote: string | null;
 };
 
-type PenaltyMeta = { page: number; limit: number; total: number; totalPages: number };
+/** Entity thô backend trả về khi tạo/huỷ phạt — thiếu mọi field JOIN của danh sách. */
+export type DriverPenaltyEntity = Omit<
+  DriverPenaltyRow,
+  'driverName' | 'driverPhone' | 'createdByName' | 'reversedByName'
+>;
 
-/**
- * Ném kèm ĐÚNG câu tiếng Việt backend trả về (vd "Chuyến này đã bị phạt rồi.") —
- * dialog hiện thẳng, không dịch lại ở FE để hai đường không trôi lệch.
- */
-async function unwrapPenalty<T>(response: Response): Promise<T> {
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err?.message || `Thao tác thất bại (${response.status})`);
-  }
-  const body = await response.json();
-  if (body && typeof body === 'object') {
-    if ('data' in body && 'meta' in body) return body as T;
-    if ('data' in body) return body.data as T;
-  }
-  return body as T;
-}
+type PenaltyMeta = { page: number; limit: number; total: number; totalPages: number };
 
 export async function getPenaltyQueue(params: {
   from: string;
@@ -3333,11 +3327,11 @@ export async function getPenaltyQueue(params: {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
   });
-  return unwrapPenalty(await fetchWithAuth(`/admin/driver-penalties/queue?${qs.toString()}`));
+  return unwrap(await fetchWithAuth(`/admin/driver-penalties/queue?${qs.toString()}`));
 }
 
 export async function previewPenalty(bookingId: string): Promise<PenaltyPreview> {
-  return unwrapPenalty(
+  return unwrap(
     await fetchWithAuth(
       `/admin/driver-penalties/preview?bookingId=${encodeURIComponent(bookingId)}`,
     ),
@@ -3349,8 +3343,8 @@ export async function createPenalty(body: {
   reasonCode: PenaltyReasonCode;
   note?: string;
   source: PenaltySource;
-}): Promise<DriverPenaltyRow> {
-  return unwrapPenalty(
+}): Promise<DriverPenaltyEntity> {
+  return unwrap(
     await fetchWithAuth('/admin/driver-penalties', {
       method: 'POST',
       body: JSON.stringify(body),
@@ -3376,11 +3370,11 @@ export async function listPenalties(params: {
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
   });
-  return unwrapPenalty(await fetchWithAuth(`/admin/driver-penalties?${qs.toString()}`));
+  return unwrap(await fetchWithAuth(`/admin/driver-penalties?${qs.toString()}`));
 }
 
-export async function reversePenalty(id: string, note?: string): Promise<DriverPenaltyRow> {
-  return unwrapPenalty(
+export async function reversePenalty(id: string, note?: string): Promise<DriverPenaltyEntity> {
+  return unwrap(
     await fetchWithAuth(`/admin/driver-penalties/${id}/reverse`, {
       method: 'POST',
       body: JSON.stringify({ ...(note && { note }) }),

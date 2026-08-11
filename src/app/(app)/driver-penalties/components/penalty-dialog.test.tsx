@@ -5,10 +5,17 @@ import { PenaltyDialog } from './penalty-dialog';
 const previewPenalty = vi.fn();
 const createPenalty = vi.fn();
 
-vi.mock('@/lib/api', () => ({
-  previewPenalty: (...a: any[]) => previewPenalty(...a),
-  createPenalty: (...a: any[]) => createPenalty(...a),
-}));
+// Giữ NGUYÊN `parseApiError` thật: nó chính là thứ biến envelope JSON của
+// `fetchWithAuth` thành câu người đọc được, nên mock nó đi là mất luôn ý nghĩa của
+// hai ca test bên dưới.
+vi.mock('@/lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api')>();
+  return {
+    ...actual,
+    previewPenalty: (...a: any[]) => previewPenalty(...a),
+    createPenalty: (...a: any[]) => createPenalty(...a),
+  };
+});
 
 const toast = vi.fn();
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
@@ -83,13 +90,39 @@ describe('PenaltyDialog', () => {
     expect(screen.queryByText(/nạp bù mới nhận được chuyến/i)).not.toBeInTheDocument();
   });
 
-  it('preview lỗi (mạng/403) vẫn hiện lý do ra chỗ người dùng đang nhìn', async () => {
-    previewPenalty.mockRejectedValue(new Error('Chuyến này không thuộc phạm vi bạn được soát.'));
+  /**
+   * `fetchWithAuth` ném `Error(JSON.stringify(envelope))` chứ KHÔNG phải câu tiếng
+   * Việt trần (api.ts:137). Test cũ mock một Error với câu sạch → xanh, trong khi
+   * production hiện nguyên khối JSON cho admin. Mock ĐÚNG hình dạng thật ở đây.
+   */
+  it('preview lỗi 403: hiện CÂU của backend, không phải JSON thô', async () => {
+    previewPenalty.mockRejectedValue(
+      new Error(
+        JSON.stringify({
+          success: false,
+          error: { code: 'Forbidden', message: 'Chuyến này không thuộc phạm vi bạn được soát.' },
+          path: '/admin/driver-penalties/preview',
+        }),
+      ),
+    );
     renderDialog();
     await waitFor(() =>
-      expect(screen.getByText(/không thuộc phạm vi bạn được soát/i)).toBeInTheDocument(),
+      expect(
+        screen.getByText('Chuyến này không thuộc phạm vi bạn được soát.'),
+      ).toBeInTheDocument(),
     );
+    expect(screen.queryByText(/"success"/)).not.toBeInTheDocument();
     expect(confirmButton()).toBeDisabled();
+  });
+
+  it('envelope kiểu cũ ({ message }) cũng bóc được', async () => {
+    previewPenalty.mockRejectedValue(
+      new Error(JSON.stringify({ message: 'Chuyến này đã bị phạt rồi.', statusCode: 400 })),
+    );
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText('Chuyến này đã bị phạt rồi.')).toBeInTheDocument(),
+    );
   });
 
   it('không gọi preview khi dialog đóng', () => {

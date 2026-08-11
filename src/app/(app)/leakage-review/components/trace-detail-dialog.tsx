@@ -38,6 +38,13 @@ export function TraceDetailDialog({
   // vẫn giữ nguyên ngữ cảnh trace đang xem.
   const [penaltyOpen, setPenaltyOpen] = React.useState(false);
 
+  // Component này KHÔNG unmount khi đóng (cha giữ mount, truyền trace=null), nên state
+  // sống sót qua các lần mở/đóng — không clear là lần mở trace KHÁC có thể tự bung
+  // dialog phạt cho chuyến CŨ.
+  React.useEffect(() => {
+    setPenaltyOpen(false);
+  }, [trace?.id]);
+
   if (!trace) return null;
 
   const lines = describeEvidence(trace.evidence);

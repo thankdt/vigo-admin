@@ -138,6 +138,10 @@ export function DriverDetailDialog({
     setSaving(null);
     setCheckNote('');
     setCheckSaving(null);
+    // Kể cả dialog phạt: component này KHÔNG unmount khi đóng (cha giữ mount, truyền
+    // stat=null), nên state sống sót qua các lần mở/đóng — không clear là lần mở tài
+    // xế KHÁC có thể tự bung dialog phạt cho bookingId của tài xế CŨ.
+    setPenaltyBookingId(null);
     if (stat) {
       loadDetail(stat.driverEntityId);
     } else {

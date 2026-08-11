@@ -23,6 +23,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import {
   createPenalty,
+  parseApiError,
   previewPenalty,
   type PenaltyPreview,
   type PenaltyReasonCode,
@@ -55,6 +56,8 @@ export function PenaltyDialog({
 }) {
   const { toast } = useToast();
   const [preview, setPreview] = React.useState<PenaltyPreview | null>(null);
+  /** Lỗi khi GỌI preview (mạng/403) — khác hẳn "backend nói không phạt được chuyến này". */
+  const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [reasonCode, setReasonCode] = React.useState<PenaltyReasonCode | ''>('');
@@ -63,12 +66,14 @@ export function PenaltyDialog({
   React.useEffect(() => {
     if (!open || !bookingId) {
       setPreview(null);
+      setError(null);
       setReasonCode('');
       setNote('');
       return;
     }
     let alive = true;
     setLoading(true);
+    setError(null);
     previewPenalty(bookingId)
       .then((p) => {
         if (alive) setPreview(p);
@@ -76,12 +81,9 @@ export function PenaltyDialog({
       .catch((e: any) => {
         if (!alive) return;
         // Lỗi mạng/403 cũng phải hiện ra chỗ người dùng đang nhìn, không nuốt.
-        setPreview({
-          amount: 0,
-          willOweDeposit: 0,
-          blockedReason: 'LEDGER_ANOMALY',
-          blockedMessage: e?.message || 'Không đọc được thông tin chuyến.',
-        });
+        // KHÔNG mượn mã `blockedReason` nào của backend: 403 phân quyền không phải
+        // "ledger bất thường", gán bừa mã là sau này ai dịch theo mã sẽ hiện sai hẳn.
+        setError(e?.message ? parseApiError(e.message) : 'Không đọc được thông tin chuyến.');
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -91,7 +93,7 @@ export function PenaltyDialog({
     };
   }, [open, bookingId]);
 
-  const blocked = !!preview?.blockedReason;
+  const blocked = !!preview?.blockedReason || !!error;
   const noteRequired = isNoteRequired(reasonCode);
   const canSubmit = canSubmitPenalty({
     bookingId,
@@ -114,7 +116,12 @@ export function PenaltyDialog({
       onOpenChange(false);
       onDone?.();
     } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Phạt thất bại', description: e?.message });
+      // fetchWithAuth ném Error(JSON envelope) — parseApiError rút ra câu người đọc được.
+      toast({
+        variant: 'destructive',
+        title: 'Phạt thất bại',
+        description: e?.message ? parseApiError(e.message) : 'Vui lòng thử lại.',
+      });
     } finally {
       setSubmitting(false);
     }
@@ -140,9 +147,9 @@ export function PenaltyDialog({
             </p>
           )}
 
-          {!loading && preview && blocked && (
+          {!loading && (error || preview?.blockedMessage) && (
             <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-              {preview.blockedMessage}
+              {error ?? preview?.blockedMessage}
             </p>
           )}
 

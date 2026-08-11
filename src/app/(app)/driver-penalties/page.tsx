@@ -20,6 +20,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   getPenaltyQueue,
   listPenalties,
+  parseApiError,
   reversePenalty,
   type DriverPenaltyRow,
   type PenaltyQueueFlag,
@@ -107,7 +108,12 @@ export default function DriverPenaltiesPage() {
       }
     } catch (err: any) {
       if (reqId !== reqIdRef.current) return;
-      toast({ variant: 'destructive', title: 'Không tải được dữ liệu', description: err?.message });
+      // fetchWithAuth ném Error(JSON envelope) — parseApiError rút ra câu người đọc được.
+      toast({
+        variant: 'destructive',
+        title: 'Không tải được dữ liệu',
+        description: err?.message ? parseApiError(err.message) : 'Vui lòng thử lại.',
+      });
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
     }
@@ -131,11 +137,16 @@ export default function DriverPenaltiesPage() {
     if (note === null) return;
     setReversing(row.id);
     try {
-      await reversePenalty(row.id, note.trim() || undefined);
+      // Backend @MaxLength(500) — cắt tại chỗ thay vì đi một vòng để nhận 400.
+      await reversePenalty(row.id, note.trim().slice(0, 500) || undefined);
       toast({ title: 'Đã huỷ phạt', description: `Đã hoàn ${formatVnd(row.amount)} về ví tài xế.` });
       load();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Huỷ phạt thất bại', description: err?.message });
+      toast({
+        variant: 'destructive',
+        title: 'Huỷ phạt thất bại',
+        description: err?.message ? parseApiError(err.message) : 'Vui lòng thử lại.',
+      });
     } finally {
       setReversing(null);
     }
@@ -226,9 +237,11 @@ export default function DriverPenaltiesPage() {
                 </TableRow>
               )}
               {!loading && queueRows.length === 0 && (
-                <TableCell colSpan={QUEUE_COLS} className="py-8 text-center text-muted-foreground">
-                  Không có chuyến huỷ nào cần soát trong khoảng ngày này.
-                </TableCell>
+                <TableRow>
+                  <TableCell colSpan={QUEUE_COLS} className="py-8 text-center text-muted-foreground">
+                    Không có chuyến huỷ nào cần soát trong khoảng ngày này.
+                  </TableCell>
+                </TableRow>
               )}
               {!loading &&
                 queueRows.map((r) => {
@@ -243,7 +256,7 @@ export default function DriverPenaltiesPage() {
                         <p className="font-mono text-xs text-muted-foreground">
                           {r.bookingId.slice(0, 8)}
                         </p>
-                        <p className="truncate" title={`${r.pickupAddress} → ${r.dropoffAddress}`}>
+                        <p className="truncate" title={`${r.pickupAddress || '—'} → ${r.dropoffAddress || '—'}`}>
                           {r.pickupAddress || '—'} → {r.dropoffAddress || '—'}
                         </p>
                       </TableCell>
@@ -279,8 +292,13 @@ export default function DriverPenaltiesPage() {
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>
+                      {/* Hàng đã phạt hiện số ĐÃ THU; hàng chưa phạt hiện số CÒN thu được.
+                          Hiện collectibleAmount cho hàng đã phạt sẽ bị đọc nhầm thành
+                          "còn thu thêm được chừng này". */}
                       <TableCell className="whitespace-nowrap text-right tabular-nums">
-                        {formatVnd(r.collectibleAmount)}
+                        {r.penaltyStatus === 'ACTIVE'
+                          ? formatVnd(r.penaltyAmount ?? r.collectibleAmount)
+                          : formatVnd(r.collectibleAmount)}
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge className={status.className}>{status.label}</Badge>
