@@ -99,7 +99,10 @@ Bước 1 — tìm các dòng trừ commission của chuyến:
    AND (description LIKE 'Booking Commission%' OR description LIKE 'Vi-now Commission%')
    ORDER BY id DESC
 
-Bước 2 — đọc N: mô tả luôn nhúng sẵn tổng commission ở **nhóm ngoặc SỐ CUỐI CÙNG**.
+Bước 2 — đọc N **TỪ DÒNG ĐẦU TIÊN của danh sách (id lớn nhất)**, không phải dòng nào khác:
+         tỉ lệ commission đổi được giữa hai vòng nhận–huỷ, đọc N từ dòng của vòng cũ thì
+         bước 3 không bao giờ khớp ⇒ chặn phạt mà không ai hiểu vì sao.
+         Mô tả luôn nhúng sẵn tổng commission ở **nhóm ngoặc SỐ CUỐI CÙNG**.
          Mô tả thật có 2 dạng:
              "Booking Commission (12345) (Main)"
              "Booking Commission (admin reassign) (12345) (Deposit)"   ← booking.service.ts:4201
@@ -199,25 +202,32 @@ chiến lược trừ quyết định luôn "phạt có đau không":
 | Trừ ở đâu | Ví thưởng trước, thiếu mới sang ký quỹ | Trừ **thẳng ví ký quỹ** (tiền thật) |
 | Tài xế **có ví thưởng** | Trả bằng tiền thưởng, **không mất đồng tiền thật nào**, ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường** | Mất tiền thật ngay |
 | Tài xế **không có ví thưởng** | Ký quỹ âm ⇒ bị chặn nhận chuyến | Ký quỹ âm ⇒ bị chặn nhận chuyến |
-| Lập luận ủng hộ | **Đối xứng**: commission lúc nhận chuyến cũng trừ `MAIN_FIRST`, nên lấy lại đúng chỗ đã hoàn | **Răn đe thật**: giống hệt cách hệ thống thu thuế tiền mặt (`booking.service.ts:1620`) — nghĩa vụ tiền thật thì ví thưởng không gánh hộ |
-| Giữ invariant `MAIN>0 ⟹ DEPOSIT≥0` | Có | Có |
+| Lập luận ủng hộ | **Đối xứng**: commission lúc nhận chuyến cũng trừ `MAIN_FIRST`, nên lấy lại đúng chỗ đã hoàn | **Răn đe thật**: giống hệt cách hệ thống thu thuế tiền mặt (`booking.service.ts:1623`) — nghĩa vụ tiền thật thì ví thưởng không gánh hộ |
+| Invariant `MAIN>0 ⟹ DEPOSIT≥0` | **Giữ** — ví thưởng bị kẹp ở 0 trước khi ký quỹ đi âm, nên `MAIN>0` không bao giờ đi kèm `DEPOSIT<0` | **KHÔNG giữ** — tạo đúng trạng thái `MAIN=200k, DEPOSIT=−20k`. Chấp nhận được (nợ thuế tiền mặt đang chạy y hệt, `creditMainDebtAware` trả nợ dần khi tài xế có thu nhập) nhưng **không phải "vô hại"** |
 
 **CEO chốt `MAIN_FIRST`** — lấy lại đúng chỗ đã hoàn, đối xứng với lúc trừ commission.
 
 Hệ quả phải nói rõ với vận hành, **đừng hứa nhầm là "phạt xong tài xế bị treo"**: tài xế còn nhiều
 ví thưởng sẽ trả bằng thưởng, ví ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường**. Việc chặn nhận
 chuyến chỉ xảy ra khi họ **không đủ tiền** (phần thiếu dồn vào ký quỹ → âm → cổng chặn). Muốn phạt
-luôn cắn vào tiền thật thì phải đổi sang `DEPOSIT_ONLY` — một tham số, đổi lúc nào cũng được.
+luôn cắn vào tiền thật thì phải đổi sang `DEPOSIT_ONLY` — một tham số, nhưng **đọc kỹ ô invariant
+ở bảng trên trước khi đổi**, đó không phải thay đổi vô hại.
 
 ### 4.6 Chống trùng & đồng thời
 
 - Toàn bộ trong **1 transaction**: khoá hàng `booking` bằng `pessimistic_write` và **kiểm lại
   `status = CANCELLED` bên trong transaction**.
 - **Chặn cả chiều ngược lại:** khoá hàng chỉ chặn được lúc phạt đang chạy. `adminUpdateStatus`
-  (`booking.service.ts:3923`) đặt thẳng mọi trạng thái thủ công, **không side-effect tiền**, nên
+  (`booking.service.ts:3881`) đặt thẳng mọi trạng thái thủ công, **không side-effect tiền**, nên
   *sau khi* phạt đã commit, admin vẫn lật được `CANCELLED → ACCEPTED`: chuyến chạy tiếp, tài xế
   vừa bị phạt vừa bị trừ commission mới. Thêm guard: **booking đang có `driver_penalty` ACTIVE thì
   không cho rời trạng thái `CANCELLED`** (muốn lật thì huỷ phạt trước).
+  Đã soát mọi đường ghi `booking.status`: `reassignDriver` (`:4145`), `rescheduleBooking` (`:2571`)
+  và `handoffToSupport` (`:2513`) đều tự chặn `CANCELLED` sẵn ⇒ `adminUpdateStatus` là đường duy
+  nhất cần vá.
+  **Cách đấu dây để tránh vòng phụ thuộc:** đăng ký `TypeOrmModule.forFeature([DriverPenalty])`
+  trong `BookingModule` và inject thẳng `Repository<DriverPenalty>`. **Đừng** inject
+  `DriverPenaltyService` — module mới sẽ import `WalletModule`/`BookingModule` ⇒ circular dependency.
 - **Unique partial index** `UNIQUE (bookingId) WHERE status = 'ACTIVE'` → 1 chuyến tối đa 1 vụ phạt
   còn hiệu lực. Chốt chặn cuối ở tầng DB.
 - **Không** loại trừ theo lịch sử phạt cũ: sau khi huỷ phạt (tiền đã trả về) thì chuyến **được phép**
@@ -250,13 +260,20 @@ OR EXISTS (ledger cùng referenceId = bookingId có description LIKE 'Booking Ea
                                               OR LIKE 'Giữ hộ thuế:%')
 ```
 
-Dấu vết ledger là bằng chứng **trực tiếp việc chuyến đã hoàn thành** (`booking.service.ts:1603`
-cho chuyến chuyển khoản, `:1617` cho chuyến tiền mặt) và **không phụ thuộc backfill** nên đúng cả
+Dấu vết ledger là bằng chứng **trực tiếp việc chuyến đã hoàn thành** (`booking.service.ts:1605`
+cho chuyến chuyển khoản, `:1623` cho chuyến tiền mặt) và **không phụ thuộc backfill** nên đúng cả
 với dữ liệu lịch sử.
 
 *(Dấu hiệu phụ, chỉ để đối chiếu khi dò lỗi — không dùng làm điều kiện chính: `voidCompletedBooking`
-**không** set `cancelledByRole` (`:3858-3861`) trong khi `cancel()` **luôn** set (`:2308`), nên
-`cancelledByRole IS NULL` + có tài xế là một dấu hiệu khá sạch của chuyến bị void.)*
+**không** set `cancelledByRole` (`:3872`) trong khi `cancel()` **luôn** set (`:2308`). Nhưng cột này
+**không được backfill**, nên chuyến huỷ cũ cũng `NULL` ⇒ dùng làm điều kiện chính sẽ chặn nhầm
+chuyến huỷ thật.)*
+
+**Ranh giới thật là `referenceId`, không phải chuỗi mô tả.** Đơn "đặt hộ" nhiều điểm cũng ghi dòng
+thuế tương tự nhưng với `referenceId = order.id` (`multi-stop-lifecycle.service.ts:304`), tức một
+uuid khác hẳn ⇒ điều kiện `referenceId = bookingId` đã loại nó từ đầu. Chuỗi `'Giữ hộ thuế:%'` (có
+dấu hai chấm, khác `'Giữ hộ thuế đặt hộ: …'`) chỉ là lớp trùng lặp — giữ thì tốt, nhưng đừng coi
+chuỗi mô tả là hàng rào an toàn.
 
 ### 4.8 Huỷ phạt — cũng dùng lại hàm sẵn có
 
@@ -446,7 +463,10 @@ danh sách noti.
 khách lẫn app tài. Bỏ trống thì rơi về hành vi cũ "bắn thiết bị mới nhất" — comment
 `users.service.ts:128-137` ghi rõ đây là bug đã xảy ra thật với noti "Có chuyến mới".
 
-Nội dung: số tiền, lý do vi phạm, mã chuyến.
+Nội dung: số tiền, lý do vi phạm, mã chuyến. Bám tiền lệ cùng miền — `cancel-rate.service.ts:236`
+gọi `sendPushToUser(userId, 'Tài khoản bị khoá', msg, { type: 'DRIVER_BANNED' }, 'system',
+DeviceApp.DRIVER)` ⇒ dùng `{ type: 'DRIVER_PENALTY' }` + `'system'`. (`data.type` chỉ là metadata,
+app tài xế không route theo nó — nhưng theo tiền lệ thì khỏi phải cân nhắc lại.)
 
 Socket `wallet.deducted` vẫn bắn để app cập nhật số dư, nhưng **đừng coi nó là kênh thông báo**:
 app **vứt payload đi**, chỉ dùng để trigger refresh (`vigo-driver/lib/presentation/home/bloc/home_bloc.dart:507`)
@@ -519,8 +539,15 @@ Test chạm Postgres thật phải đặt tên `*.integration.spec.ts` và chạ
 
 ## 11. Rủi ro đã biết & ghi nhận
 
-- **Ví ký quỹ âm ⇒ tài xế không nhận được chuyến.** Đây là **chủ đích**, nhưng CSKH phải biết để
-  trả lời khi tài xế gọi lên → trang Lịch sử phạt là nơi tra.
+- **Phạt KHÔNG đồng nghĩa với treo tài xế.** Với `MAIN_FIRST` (§4.5), tài xế còn ví thưởng sẽ trả
+  tiền phạt bằng thưởng, ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường**. Vận hành/CSKH đừng hứa
+  ngược với khách hay với tài xế.
+- **Chỉ khi tài xế không đủ tiền** thì phần thiếu mới dồn vào ví ký quỹ → âm → cổng nhận chuyến
+  chặn tới khi nạp bù. Đây là **chủ đích**; CSKH tra ở trang Lịch sử phạt để trả lời tài xế.
+- **Khe hở nhỏ của §4.7b (ghi nhận, không xử):** chuyến hoàn thành với thuế = 0 *và* earnings = 0
+  (thực tế chỉ xảy ra với chuyến 0đ) rồi bị `void` **trước** migration backfill thì không có cả
+  `completedAt` lẫn dấu vết ledger ⇒ vẫn lọt hàng đợi. Số tiền phạt khi đó vẫn đúng bằng commission,
+  chỉ là sai phạm vi.
 - **Latent bug có sẵn (không thuộc phạm vi, chỉ ghi nhận):** `refundDriverCommission` quét *mọi* dòng
   `REFUND` cùng `referenceId` rồi rút marker `reverse #<id>`; marker của `clawbackDriverPromo` (trỏ
   tới id dòng `DEPOSIT`) về lý thuyết có thể trùng id một dòng `PAYMENT` commission và làm bỏ sót một
