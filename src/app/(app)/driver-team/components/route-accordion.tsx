@@ -51,6 +51,7 @@ export function RouteAccordion({
   range,
   filters,
   allValue,
+  notContactedValue,
   groups,
   setGroups,
   open,
@@ -64,6 +65,7 @@ export function RouteAccordion({
   range: DateRange;
   filters: TeamFilters;
   allValue: string;
+  notContactedValue: string;
   // groups và open sống ở DriverTeamScreen — drawer, hành động hàng loạt và thẻ số
   // "Cần gọi lại hôm nay" cùng ghi vào đúng state này, nên KHÔNG giữ bản sao cục bộ.
   groups: DriverGroups;
@@ -91,7 +93,14 @@ export function RouteAccordion({
         const res = await getTeamRouteDrivers(key === 'none' ? 'none' : Number(key), {
           from: range.from,
           to: range.to,
-          stage: filters.stage === allValue ? undefined : filters.stage,
+          // NOT_CONTACTED là sentinel của FE; backend nhận 'none' để lọc
+          // "chưa có row pipeline" (m.id IS NULL), không phải một stage trong DB.
+          stage:
+            filters.stage === allValue
+              ? undefined
+              : filters.stage === notContactedValue
+                ? 'none'
+                : filters.stage,
           ownerAdminUserId:
             filters.ownerAdminUserId === allValue ? undefined : filters.ownerAdminUserId,
           q: filters.q || undefined,
@@ -113,7 +122,7 @@ export function RouteAccordion({
         });
       }
     },
-    [range, filters, allValue, setGroups, toast],
+    [range, filters, allValue, notContactedValue, setGroups, toast],
   );
 
   // Đổi bộ lọc/khoảng ngày → dữ liệu đã tải hết hạn. Xoá sạch rồi nạp lại các nhóm
@@ -181,6 +190,11 @@ export function RouteAccordion({
                 {routeNeedsDrivers(r) ? (
                   <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
                     Có khách, thiếu tài
+                  </Badge>
+                ) : null}
+                {(r.matchedDriverCount ?? 0) > 0 ? (
+                  <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-100">
+                    {r.matchedDriverCount} tài khớp
                   </Badge>
                 ) : null}
                 <span className="w-24 text-right">{r.driverCount} tài</span>
