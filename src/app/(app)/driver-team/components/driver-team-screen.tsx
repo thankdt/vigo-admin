@@ -41,7 +41,7 @@ import { DriverTeamDrawer } from './driver-team-drawer';
 
 // Preset mặc định gắn theo KEY chứ không theo index — chèn preset vào giữa mảng sẽ
 // không âm thầm đổi khoảng ngày mặc định của trang.
-const DEFAULT_PRESET = PRESETS.find((p) => p.key === 'last30') ?? PRESETS[0];
+const DEFAULT_PRESET = PRESETS.find((p) => p.key === 'thisYear') ?? PRESETS[0];
 const ALL = '__all__';
 /**
  * "Chưa liên hệ" KHÔNG phải một stage trong DB — tài chưa có row pipeline thì không
@@ -54,56 +54,46 @@ export type TeamFilters = {
   stage: string;
   ownerAdminUserId: string;
   q: string;
-  routeQ: string;
+  /** ALL | 'none' | id tuyến dạng chuỗi. Lọc client-side trên danh sách đã tải. */
+  routeId: string;
   minTrips: string;
 };
 
-function StatCard({
-  title,
-  value,
-  hint,
-}: {
-  title: string;
-  value: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-3xl">{value}</CardTitle>
-      </CardHeader>
-      {hint ? (
-        <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent>
-      ) : null}
-    </Card>
-  );
-}
-
-function StageCard({
+/**
+ * MỘT component cho cả 7 thẻ số — trước đây có hai loại (một loại kèm dòng chú thích,
+ * một loại không) nên thẻ cao thẻ thấp so le nhau.
+ *
+ * `h-full` ở CẢ nút bọc lẫn Card: ô lưới vốn đã stretch, nhưng nút bọc không giãn thì
+ * Card bên trong co lại theo nội dung và lại lệch chiều cao.
+ */
+function TeamStatCard({
   title,
   value,
   active,
-  hint,
   onClick,
 }: {
   title: string;
-  value: number | undefined;
-  active: boolean;
-  hint?: string;
-  onClick: () => void;
+  value: React.ReactNode;
+  active?: boolean;
+  onClick?: () => void;
 }) {
+  const card = (
+    <Card
+      className={`flex h-full flex-col justify-between ${
+        active ? 'border-primary ring-1 ring-primary' : ''
+      } ${onClick ? 'transition-colors hover:border-primary/60' : ''}`}
+    >
+      <CardHeader className="gap-1 pb-3">
+        <CardDescription className="text-xs leading-tight">{title}</CardDescription>
+        <CardTitle className="text-3xl tabular-nums">{value ?? '—'}</CardTitle>
+      </CardHeader>
+    </Card>
+  );
+
+  if (!onClick) return <div className="h-full">{card}</div>;
   return (
-    <button type="button" className="text-left" onClick={onClick}>
-      <Card className={active ? 'border-primary ring-1 ring-primary' : undefined}>
-        <CardHeader className="pb-2">
-          <CardDescription>{title}</CardDescription>
-          <CardTitle className="text-3xl">{value ?? '—'}</CardTitle>
-        </CardHeader>
-        {hint ? (
-          <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent>
-        ) : null}
-      </Card>
+    <button type="button" className="h-full text-left" onClick={onClick}>
+      {card}
     </button>
   );
 }
@@ -115,7 +105,7 @@ export function DriverTeamScreen() {
     stage: ALL,
     ownerAdminUserId: ALL,
     q: '',
-    routeQ: '',
+    routeId: ALL,
     minTrips: '',
   });
   const [routes, setRoutes] = React.useState<TeamRouteRow[]>([]);
@@ -139,7 +129,6 @@ export function DriverTeamScreen() {
     Promise.all([
       getTeamRoutes({
         ...range,
-        q: filters.routeQ || undefined,
         driverQ: filters.q || undefined,
       }),
       getTeamSummary(range),
@@ -172,7 +161,7 @@ export function DriverTeamScreen() {
     return () => {
       cancelled = true;
     };
-  }, [range, filters.routeQ, filters.q, toast]);
+  }, [range, filters.q, toast]);
 
   React.useEffect(() => {
     // Hai nguồn phụ hỏng KHÔNG được làm sập cả màn.
@@ -234,9 +223,23 @@ export function DriverTeamScreen() {
     setSelected(new Set());
   };
 
+  /**
+   * Lọc tuyến làm CLIENT-SIDE: cấp 1 trả về TẤT CẢ tuyến trong một lần (~27 dòng,
+   * không phân trang), nên lọc tại chỗ vừa khớp chính xác theo routeId vừa không
+   * phải gọi lại API mỗi lần đổi lựa chọn.
+   */
+  const visibleRoutes = React.useMemo(() => {
+    if (filters.routeId === ALL) return routes;
+    if (filters.routeId === 'none') return [];
+    return routes.filter((r) => String(r.routeId) === filters.routeId);
+  }, [routes, filters.routeId]);
+
+  const visibleUnassigned =
+    filters.routeId === ALL || filters.routeId === 'none' ? unassigned : null;
+
   const allRouteRows = React.useMemo(
-    () => (unassigned ? [...routes, unassigned] : routes),
-    [routes, unassigned],
+    () => (visibleUnassigned ? [...visibleRoutes, visibleUnassigned] : visibleRoutes),
+    [visibleRoutes, visibleUnassigned],
   );
 
   const handleExport = async () => {
@@ -325,73 +328,80 @@ export function DriverTeamScreen() {
 
   return (
     <div className="space-y-6">
-      <FinanceFilter value={range} onChange={setRange} isLoading={loading} initialPreset="last30" />
+      <FinanceFilter value={range} onChange={setRange} isLoading={loading} initialPreset="thisYear" />
 
-      {/* Thẻ số theo TỪNG TẦNG. Bấm một tầng là lọc luôn xuống tầng đó — thẻ ở đây
-          là lối vào việc cần làm, không phải số để ngắm. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-7">
-        <StatCard
+      {/* Bấm một tầng là lọc luôn xuống tầng đó — thẻ ở đây là lối vào việc cần làm,
+          không phải số để ngắm. Chú thích gom xuống MỘT dòng dưới hàng thay vì rải trên
+          từng thẻ, để 7 thẻ cùng chiều cao. */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+        <TeamStatCard
           title="Chạy thành công"
           value={summary?.driversWithCompletedTrips ?? '—'}
-          hint="Trong kỳ"
         />
-        <StageCard
+        <TeamStatCard
           title="Chưa liên hệ"
           value={summary?.notContactedDrivers}
           active={filters.stage === NOT_CONTACTED}
           onClick={() => setFilters((f) => ({ ...f, stage: NOT_CONTACTED }))}
         />
-        <StageCard
+        <TeamStatCard
           title="Đã liên hệ"
           value={summary?.contactedDrivers}
           active={filters.stage === 'CONTACTED'}
           onClick={() => setFilters((f) => ({ ...f, stage: 'CONTACTED' }))}
         />
-        <StageCard
+        <TeamStatCard
           title="Đã mời"
           value={summary?.invitedDrivers}
           active={filters.stage === 'INVITED'}
           onClick={() => setFilters((f) => ({ ...f, stage: 'INVITED' }))}
         />
-        <StageCard
+        <TeamStatCard
           title="Trong team"
           value={summary?.joinedDrivers}
           active={filters.stage === 'JOINED'}
           onClick={() => setFilters((f) => ({ ...f, stage: 'JOINED' }))}
         />
-        <StageCard
+        <TeamStatCard
           title="Từ chối / Loại"
-          value={
-            summary ? summary.declinedDrivers + summary.droppedDrivers : undefined
-          }
+          value={summary ? summary.declinedDrivers + summary.droppedDrivers : undefined}
           active={filters.stage === 'DECLINED'}
           onClick={() => setFilters((f) => ({ ...f, stage: 'DECLINED' }))}
-          hint="Bấm để xem nhóm Từ chối"
         />
-        <button
-          type="button"
-          className="text-left"
+        <TeamStatCard
+          title="Cần gọi lại hôm nay"
+          value={summary?.followUpDueToday ?? '—'}
           onClick={() =>
             setOpen(allRouteRows.map((r) => (r.routeId === null ? 'none' : String(r.routeId))))
           }
-        >
-          <StatCard
-            title="Cần gọi lại hôm nay"
-            value={summary?.followUpDueToday ?? '—'}
-            hint="Bấm để mở mọi tuyến"
-          />
-        </button>
+        />
       </div>
+
+      <p className="-mt-3 text-xs text-muted-foreground">
+        Bấm một thẻ để lọc xuống tầng đó. Thẻ &quot;Từ chối / Loại&quot; mở nhóm Từ chối.
+        &quot;Cần gọi lại hôm nay&quot; mở mọi tuyến và không phụ thuộc khoảng ngày đang chọn.
+      </p>
 
       <div className="flex flex-wrap items-end gap-3">
         <div>
-          <Label className="text-xs text-muted-foreground">Tên tuyến</Label>
-          <Input
-            className="w-52"
-            placeholder="Lọc tuyến"
-            value={filters.routeQ}
-            onChange={(e) => setFilters((f) => ({ ...f, routeQ: e.target.value }))}
-          />
+          <Label className="text-xs text-muted-foreground">Tuyến</Label>
+          <Select
+            value={filters.routeId}
+            onValueChange={(v) => setFilters((f) => ({ ...f, routeId: v }))}
+          >
+            <SelectTrigger className="w-60">
+              <SelectValue placeholder="Mọi tuyến" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Mọi tuyến</SelectItem>
+              {routes.map((r) => (
+                <SelectItem key={String(r.routeId)} value={String(r.routeId)}>
+                  {r.routeName}
+                </SelectItem>
+              ))}
+              {unassigned ? <SelectItem value="none">Không gắn tuyến</SelectItem> : null}
+            </SelectContent>
+          </Select>
         </div>
         <div>
           <Label className="text-xs text-muted-foreground">Tài xế</Label>
@@ -402,47 +412,56 @@ export function DriverTeamScreen() {
             onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
           />
         </div>
-        <Select
-          value={filters.stage}
-          onValueChange={(v) => setFilters((f) => ({ ...f, stage: v }))}
-        >
-          <SelectTrigger className="w-44">
-            <SelectValue placeholder="Trạng thái" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
-            <SelectItem value={NOT_CONTACTED}>Chưa liên hệ</SelectItem>
-            {STAGE_ORDER.map((s) => (
-              <SelectItem key={s} value={s}>
-                {stageLabel(s)}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select
-          value={filters.ownerAdminUserId}
-          onValueChange={(v) => setFilters((f) => ({ ...f, ownerAdminUserId: v }))}
-        >
-          <SelectTrigger className="w-52">
-            <SelectValue placeholder="Người phụ trách" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Mọi người phụ trách</SelectItem>
-            {owners.map((o) => (
-              <SelectItem key={o.id} value={o.id}>
-                {o.fullName ?? o.phone ?? o.id}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Input
-          className="w-36"
-          type="number"
-          min={0}
-          placeholder="Chuyến tối thiểu"
-          value={filters.minTrips}
-          onChange={(e) => setFilters((f) => ({ ...f, minTrips: e.target.value }))}
-        />
+        <div>
+          <Label className="text-xs text-muted-foreground">Trạng thái</Label>
+          <Select
+            value={filters.stage}
+            onValueChange={(v) => setFilters((f) => ({ ...f, stage: v }))}
+          >
+            <SelectTrigger className="w-44">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Mọi trạng thái</SelectItem>
+              <SelectItem value={NOT_CONTACTED}>Chưa liên hệ</SelectItem>
+              {STAGE_ORDER.map((s) => (
+                <SelectItem key={s} value={s}>
+                  {stageLabel(s)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Người phụ trách</Label>
+          <Select
+            value={filters.ownerAdminUserId}
+            onValueChange={(v) => setFilters((f) => ({ ...f, ownerAdminUserId: v }))}
+          >
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="Người phụ trách" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={ALL}>Mọi người phụ trách</SelectItem>
+              {owners.map((o) => (
+                <SelectItem key={o.id} value={o.id}>
+                  {o.fullName ?? o.phone ?? o.id}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Chuyến tối thiểu</Label>
+          <Input
+            className="w-36"
+            type="number"
+            min={0}
+            placeholder="vd 5"
+            value={filters.minTrips}
+            onChange={(e) => setFilters((f) => ({ ...f, minTrips: e.target.value }))}
+          />
+        </div>
         <Button variant="outline" onClick={() => void handleExport()} disabled={exporting}>
           {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           {selected.size > 0 ? `Xuất ${selected.size} dòng đã chọn` : 'Xuất Excel'}
@@ -495,8 +514,8 @@ export function DriverTeamScreen() {
         </div>
       ) : (
         <RouteAccordion
-          routes={routes}
-          unassigned={unassigned}
+          routes={visibleRoutes}
+          unassigned={visibleUnassigned}
           range={range}
           filters={filters}
           allValue={ALL}
