@@ -167,11 +167,16 @@ commit, nếu quên thì tài xế không được cập nhật ví.
 
 Được 4 thứ miễn phí, không phải tự làm lại:
 
-- **Đúng thứ tự ví**: tiêu ví thưởng trước rồi tới ví ký quỹ — **đối xứng với lúc trừ commission ở
-  accept**, nên tài xế mất đúng thứ họ được hoàn.
-- **Giữ invariant `MAIN > 0 ⟹ DEPOSIT ≥ 0`** (`wallet.service.ts:1235-1248`): phần thiếu luôn rơi
-  vào ví ký quỹ, ví thưởng bị kẹp ở 0 (`:626`). Nếu trừ thẳng "đúng ví đã nhận hoàn" thì sẽ tạo ra
-  trạng thái `MAIN = 200k, DEPOSIT = −20k` — đúng thứ invariant sinh ra để cấm.
+- **Khoá ví đúng cách** (`ensureWallet` giữ `pessimistic_write` trên hàng ví) ⇒ không lost-update.
+- **Ví thưởng không bị đẩy âm**: `fromMain` luôn kẹp ở số dư (`:626`), phần thiếu rơi vào ví ký quỹ.
+
+⚠️ **Cách này CÓ phá invariant `MAIN > 0 ⟹ DEPOSIT ≥ 0`** (`wallet.service.ts:1235-1248`) — nó tạo
+được trạng thái `MAIN = 100k, DEPOSIT = −20k`. Chấp nhận có ý thức: invariant đó vốn đã là
+**best-effort**, đã có hai đường phá nó từ trước (giữ hộ thuế chuyến tiền mặt và thuế đơn đặt hộ,
+đều `DEPOSIT_ONLY` + `allowNegative`), và `creditMainDebtAware` tự trả nợ ký quỹ ở mọi khoản credit
+vào ví thưởng nên trạng thái này tự lành. Đã rà toàn repo: không có chỗ nào *dựa vào* invariant để
+quyết định gì, ngoài guard đủ‑số‑dư của `MAIN_FIRST` — và đó chính là lý do §4.5 phải truyền
+`allowNegative = true` cho phần ví thưởng.
 - **Cập nhật số dư ví hệ thống** (`bumpBalance`) — chỗ rất dễ quên nếu tự ghi ledger.
 - **Khoá ví bằng `ensureWallet`** (`pessimistic_write`) ⇒ serialize với mọi đường tiền khác của
   cùng tài xế.
@@ -207,6 +212,14 @@ fromDeposit = (mainTarget + depositTarget) − fromMain    ← phần thiếu d�
 Thi hành bằng **hai lời gọi `deductDriverWallet` tách bạch** (`MAIN_FIRST` cho phần ví thưởng đã
 kẹp theo số dư, `DEPOSIT_ONLY` cho phần còn lại) — chỉ cách này mới ép được đúng số vào đúng ví,
 mà vẫn giữ nguyên khoá ví / cập nhật ví hệ thống / ghi ledger của đường tiền chuẩn.
+
+⚠️ **Cả hai lời gọi đều truyền `allowNegative = true`**, kể cả lời gọi ví thưởng — nghe phản trực
+giác nên phải giải thích: guard đủ‑số‑dư của `MAIN_FIRST` soi **TỔNG hai ví**
+(`wallet.service.ts:608`), không soi riêng ví thưởng. Tài xế đang **nợ ký quỹ** mà khoản phạt vốn
+nằm ở ví thưởng sẽ bị ném `WAL_001` oan — và nợ ký quỹ chính là trạng thái mà lời gọi thứ hai (cùng
+khoản giữ hộ thuế) tạo ra, tức đúng nhóm tài xế hay bị phạt nhất. Đặt `true` **không** làm ví thưởng
+âm được: `fromMain ≤ max(0, số dư ví thưởng)` nên bên trong hàm `fromMain_inner = amount` và
+`fromDeposit_inner = 0`. Guard ở vị trí này không bảo vệ gì, chỉ chặn nhầm.
 
 **Vì sao KHÔNG dùng `MAIN_FIRST` cho toàn bộ khoản phạt** (phương án đã cân nhắc rồi loại):
 nó đối xứng với lúc **TRỪ** commission, còn thứ đang đảo ngược là lúc **HOÀN**. Case vỡ: commission
@@ -334,8 +347,8 @@ nên **sẽ gồm cả tiền phạt** — đúng nghĩa đen của chỉ số �
 | `driverEntityId` | uuid, index | khớp `driver.id` — 2 màn soát dùng id này |
 | `driverUserId` | uuid, index | để trừ ví + gửi thông báo |
 | `amount` | bigint | `Ledger.amount` là `decimal(15,2)`; ép về số nguyên VND bằng `Math.round` + assert, không để rơi phần lẻ âm thầm |
-| `fromMain` / `fromDeposit` | bigint | kết quả trả về của `deductDriverWallet` |
-| `sourceCommissionLedgerId` | bigint | id dòng `PAYMENT` commission đã dùng làm căn cứ — audit |
+| `fromMain` / `fromDeposit` | int | Kết quả chia ví (`splitPenaltyByWallet`). `fromMain` làm tròn rồi `fromDeposit = amount − fromMain` để hai cột luôn cộng đúng `amount` |
+| `sourceCommissionLedgerIds` | int[] | Các dòng `PAYMENT` commission làm căn cứ (1 hoặc 2). KHÔNG chỉ để audit: chính chúng quyết định chia ví ở §4.5 |
 | `reasonCode` | enum | `OFF_PLATFORM` / `NO_SHOW` / `FORCED_CANCEL` / `FAKE_TRIP` / `OTHER` |
 | `note` | text null | bắt buộc khi `reasonCode = OTHER` |
 | `source` | enum | `PENALTY_PAGE` / `CANCEL_REVIEW` / `LEAKAGE_REVIEW` |
@@ -513,7 +526,7 @@ chạy ở UTC, nên `npx jest` trần đỏ 100% suite trên máy giờ VN (CLA
 Test chạm Postgres thật phải đặt tên `*.integration.spec.ts` và chạy bằng `npm run test:integration`
 (bị loại khỏi `npm test` qua `testPathIgnorePatterns`) — áp cho test #14. Trọng tâm là tiền:
 
-1. Phạt chuyến thường → thu đúng số commission lịch sử, `MAIN_FIRST` đúng thứ tự ví.
+1. Phạt chuyến thường → thu đúng số commission lịch sử, trừ đúng ví đã nhận hoàn.
 2. **Chuyến tiền mặt đã `void`** (có dòng "Giữ hộ thuế" đã hoàn) → **bị chặn**, và kể cả nếu lọt
    qua cổng thì bộ lọc `description LIKE 'Booking Commission%'` cũng **không** lấy dòng thuế.
 2b. **Chuyến void từ trước migration backfill** (`completedAt IS NULL`) → vẫn bị chặn nhờ dấu vết
@@ -527,7 +540,7 @@ Test chạm Postgres thật phải đặt tên `*.integration.spec.ts` và chạ
     → phải lấy đúng 1×, không gom nhầm 2 dòng.
 3e. `deferNotify` — rollback transaction thì **không** có socket nào được bắn.
 4. **Không nuốt nhầm dòng `clawbackDriverPromo`** (cùng `referenceId`, ngược chiều ví).
-5. Ví không đủ → **ví ký quỹ âm** đúng số, MAIN không âm (giữ invariant), không throw.
+5. Ví thưởng không đủ phần của nó → phần thiếu dồn sang **ví ký quỹ** (được âm), ví thưởng KHÔNG âm, không throw. Kể cả khi ký quỹ đang âm sẵn (guard `MAIN_FIRST` soi tổng hai ví) cũng không được chặn oan.
 6. Chuyến huỷ trước khi có tài nhận → `amount = 0`, chặn với message riêng.
 7. Có dòng trừ nhưng chưa hoàn → chặn với message riêng.
 8. Phạt 2 lần → lần 2 bị unique index chặn.
@@ -548,9 +561,9 @@ Test chạm Postgres thật phải đặt tên `*.integration.spec.ts` và chạ
 
 ## 11. Rủi ro đã biết & ghi nhận
 
-- **Phạt KHÔNG đồng nghĩa với treo tài xế.** Với `MAIN_FIRST` (§4.5), tài xế còn ví thưởng sẽ trả
-  tiền phạt bằng thưởng, ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường**. Vận hành/CSKH đừng hứa
-  ngược với khách hay với tài xế.
+- **Phạt KHÔNG đồng nghĩa với treo tài xế.** Nếu khoản hoa hồng đó vốn được hoàn vào **ví thưởng**
+  và tài xế còn đủ số dư ở đó thì phạt xong ký quỹ không đổi ⇒ **vẫn nhận chuyến bình thường**.
+  Vận hành/CSKH đừng hứa ngược với khách hay với tài xế.
 - **Chỉ khi tài xế không đủ tiền** thì phần thiếu mới dồn vào ví ký quỹ → âm → cổng nhận chuyến
   chặn tới khi nạp bù. Đây là **chủ đích**; CSKH tra ở trang Lịch sử phạt để trả lời tài xế.
 - **Khe hở nhỏ của §4.7b (ghi nhận, không xử):** chuyến hoàn thành với thuế = 0 *và* earnings = 0
