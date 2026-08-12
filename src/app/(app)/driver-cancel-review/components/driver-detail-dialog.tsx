@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
-import { Loader2, Wallet } from 'lucide-react';
+import { Gavel, Loader2, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatDurationVi } from '@/lib/format-duration';
 import {
@@ -28,6 +28,7 @@ import type { DateRange } from '../../finance/components/finance-filter';
 import { addressText, formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { driverStatus } from '../cancel-labels';
 import { suspendMinutes } from './driver-action-dialog';
+import { PenaltyDialog } from '../../driver-penalties/components/penalty-dialog';
 
 // Reuses the ban/unban/suspend translations from the P2 dialog's action set —
 // keep DriverApprovalAction's approval-flow actions too since the same history
@@ -88,6 +89,9 @@ export function DriverDetailDialog({
   const [reason, setReason] = React.useState('');
   const [days, setDays] = React.useState(1);
   const [saving, setSaving] = React.useState<ActionKey | null>(null);
+  // Chuyến đang mở dialog phạt. Dialog phạt là dialog RIÊNG chồng lên dialog này —
+  // giữ nguyên dialog chi tiết bên dưới để đóng dialog phạt xong không mất ngữ cảnh.
+  const [penaltyBookingId, setPenaltyBookingId] = React.useState<string | null>(null);
 
   const [checkNote, setCheckNote] = React.useState('');
   const [checkSaving, setCheckSaving] = React.useState<DriverCancelCheckStatus | null>(null);
@@ -134,6 +138,10 @@ export function DriverDetailDialog({
     setSaving(null);
     setCheckNote('');
     setCheckSaving(null);
+    // Kể cả dialog phạt: component này KHÔNG unmount khi đóng (cha giữ mount, truyền
+    // stat=null), nên state sống sót qua các lần mở/đóng — không clear là lần mở tài
+    // xế KHÁC có thể tự bung dialog phạt cho bookingId của tài xế CŨ.
+    setPenaltyBookingId(null);
     if (stat) {
       loadDetail(stat.driverEntityId);
     } else {
@@ -332,7 +340,19 @@ export function DriverDetailDialog({
                     <div className="text-muted-foreground">
                       {addressText(t.pickupAddress)} → {addressText(t.dropoffAddress)}
                     </div>
-                    <div className="text-xs text-muted-foreground">Lý do: {t.cancelReason || '—'}</div>
+                    <div className="flex items-end justify-between gap-2">
+                      <div className="text-xs text-muted-foreground">Lý do: {t.cancelReason || '—'}</div>
+                      {/* Xác minh xong thì phạt ngay tại chỗ, khỏi nhảy sang màn khác.
+                          Backend tự giới hạn phạm vi chuyến được phạt theo quyền. */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 shrink-0 px-2 text-xs"
+                        onClick={() => setPenaltyBookingId(t.bookingId)}
+                      >
+                        <Gavel className="mr-1 h-3 w-3" /> Phạt
+                      </Button>
+                    </div>
                   </li>
                 ))}
               </ul>
@@ -406,6 +426,14 @@ export function DriverDetailDialog({
           </div>
         </DialogFooter>
       </DialogContent>
+
+      <PenaltyDialog
+        bookingId={penaltyBookingId}
+        open={!!penaltyBookingId}
+        source="CANCEL_REVIEW"
+        onOpenChange={(o) => { if (!o) setPenaltyBookingId(null); }}
+        onDone={() => loadDetail(stat.driverEntityId)}
+      />
     </Dialog>
   );
 }
