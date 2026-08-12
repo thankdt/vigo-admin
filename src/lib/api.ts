@@ -3245,7 +3245,10 @@ export type PenaltyReasonCode =
   | 'OTHER';
 export type PenaltyStatus = 'ACTIVE' | 'REVERSED';
 export type PenaltySource = 'PENALTY_PAGE' | 'CANCEL_REVIEW' | 'LEAKAGE_REVIEW';
-export type PenaltyQueueFlag = 'all' | 'leakage' | 'cancelAlert' | 'unpenalized' | 'penalized';
+/** Việc đã xử lý xong chưa. `pending` = còn phải phạt (mặc định của hàng đợi). */
+export type PenaltyQueueState = 'pending' | 'all' | 'penalized';
+/** Hệ thống thấy dấu hiệu gì. Tách khỏi `state` để lọc được "nghi rò rỉ mà CHƯA phạt". */
+export type PenaltyQueueSignal = 'all' | 'leakage' | 'cancelAlert';
 
 /** Mã chặn — câu hiển thị lấy từ `blockedMessage` (backend là nguồn duy nhất). */
 export type PenaltyBlockedReason =
@@ -3327,7 +3330,8 @@ type PenaltyMeta = { page: number; limit: number; total: number; totalPages: num
 export async function getPenaltyQueue(params: {
   from: string;
   to: string;
-  flag?: PenaltyQueueFlag;
+  state?: PenaltyQueueState;
+  signal?: PenaltyQueueSignal;
   q?: string;
   page?: number;
   limit?: number;

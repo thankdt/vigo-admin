@@ -23,8 +23,9 @@ import {
   parseApiError,
   reversePenalty,
   type DriverPenaltyRow,
-  type PenaltyQueueFlag,
   type PenaltyQueueRow,
+  type PenaltyQueueSignal,
+  type PenaltyQueueState,
 } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 import { formatVnDateTime } from '../leakage-review/leakage-labels';
@@ -48,22 +49,34 @@ const DEFAULT_PRESET = 'last30';
 const defaultRange = () =>
   (PRESETS.find((p) => p.key === DEFAULT_PRESET) ?? PRESETS[0]).range();
 
-type MainTab = 'queue' | 'history';
+/**
+ * Ba tab, tách theo CÔNG VIỆC chứ không theo bộ lọc:
+ *  - `pending`: còn phải xử lý. Phạt xong là rời khỏi đây — hàng đợi phải cạn dần,
+ *    nếu không người soát mất hẳn cảm giác "còn bao nhiêu việc".
+ *  - `all`: mọi chuyến huỷ có tài xế, để tra cứu lại chuyến bất kỳ.
+ *  - `history`: các vụ phạt đã ra quyết định (kèm huỷ phạt).
+ */
+type MainTab = 'pending' | 'all' | 'history';
 
-const FLAG_LABEL: Record<PenaltyQueueFlag, string> = {
-  all: 'Tất cả',
+const TAB_LABEL: Record<MainTab, string> = {
+  pending: 'Cần xử lý',
+  all: 'Tất cả chuyến huỷ',
+  history: 'Lịch sử phạt',
+};
+
+/** Lọc theo DẤU HIỆU — chiều độc lập với tab, áp cho cả 2 tab hàng đợi. */
+const SIGNAL_LABEL: Record<PenaltyQueueSignal, string> = {
+  all: 'Mọi dấu hiệu',
   leakage: 'Nghi rò rỉ',
   cancelAlert: 'Có cảnh báo huỷ',
-  unpenalized: 'Chưa phạt',
-  penalized: 'Đã phạt',
 };
 
 export default function DriverPenaltiesPage() {
   const { toast } = useToast();
-  const [tab, setTab] = React.useState<MainTab>('queue');
+  const [tab, setTab] = React.useState<MainTab>('pending');
   const [range, setRange] = React.useState<DateRange>(defaultRange());
   const [search, setSearch] = React.useState('');
-  const [flag, setFlag] = React.useState<PenaltyQueueFlag>('all');
+  const [signal, setSignal] = React.useState<PenaltyQueueSignal>('all');
   const [page, setPage] = React.useState(1);
 
   const [queueRows, setQueueRows] = React.useState<PenaltyQueueRow[]>([]);
@@ -82,11 +95,15 @@ export default function DriverPenaltiesPage() {
     const reqId = ++reqIdRef.current;
     setLoading(true);
     try {
-      if (tab === 'queue') {
+      if (tab !== 'history') {
         const res = await getPenaltyQueue({
           from: range.from,
           to: range.to,
-          flag,
+          // TS thu hẹp `tab` về 'pending' | 'all' nhờ nhánh `tab !== 'history'`, và
+          // hai giá trị đó chính là `PenaltyQueueState` — đổi tên khoá tab là compile
+          // đỏ ngay, không trôi lệch âm thầm.
+          state: tab,
+          signal,
           q: search.trim() || undefined,
           page,
           limit: PAGE_SIZE,
@@ -118,7 +135,7 @@ export default function DriverPenaltiesPage() {
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
     }
-  }, [tab, range.from, range.to, flag, search, page, toast]);
+  }, [tab, range.from, range.to, signal, search, page, toast]);
 
   React.useEffect(() => {
     const t = setTimeout(load, 300);
@@ -128,7 +145,7 @@ export default function DriverPenaltiesPage() {
   // Đổi bộ lọc → về trang đầu, tránh đứng ở trang vượt quá tập mới.
   React.useEffect(() => {
     setPage(1);
-  }, [tab, flag, search, range.from, range.to]);
+  }, [tab, signal, search, range.from, range.to]);
 
   const doReverse = async (row: DriverPenaltyRow) => {
     const note = window.prompt(
@@ -179,8 +196,11 @@ export default function DriverPenaltiesPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Tabs value={tab} onValueChange={(v) => setTab(v as MainTab)}>
             <TabsList>
-              <TabsTrigger value="queue">Cần xử lý</TabsTrigger>
-              <TabsTrigger value="history">Lịch sử phạt</TabsTrigger>
+              {(Object.keys(TAB_LABEL) as MainTab[]).map((k) => (
+                <TabsTrigger key={k} value={k}>
+                  {TAB_LABEL[k]}
+                </TabsTrigger>
+              ))}
             </TabsList>
           </Tabs>
           <div className="relative w-full sm:w-64">
@@ -194,12 +214,12 @@ export default function DriverPenaltiesPage() {
           </div>
         </div>
 
-        {tab === 'queue' && (
-          <Tabs value={flag} onValueChange={(v) => setFlag(v as PenaltyQueueFlag)}>
+        {tab !== 'history' && (
+          <Tabs value={signal} onValueChange={(v) => setSignal(v as PenaltyQueueSignal)}>
             <TabsList className="h-auto flex-wrap">
-              {(Object.keys(FLAG_LABEL) as PenaltyQueueFlag[]).map((k) => (
+              {(Object.keys(SIGNAL_LABEL) as PenaltyQueueSignal[]).map((k) => (
                 <TabsTrigger key={k} value={k}>
-                  {FLAG_LABEL[k]}
+                  {SIGNAL_LABEL[k]}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -215,7 +235,7 @@ export default function DriverPenaltiesPage() {
       </Card>
 
       <Card>
-        {tab === 'queue' ? (
+        {tab !== 'history' ? (
           <Table>
             <TableHeader>
               <TableRow>
@@ -240,7 +260,9 @@ export default function DriverPenaltiesPage() {
               {!loading && queueRows.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={QUEUE_COLS} className="py-8 text-center text-muted-foreground">
-                    Không có chuyến huỷ nào cần soát trong khoảng ngày này.
+                    {tab === 'pending'
+                      ? 'Không còn chuyến nào cần xử lý trong khoảng ngày này.'
+                      : 'Không có chuyến huỷ nào trong khoảng ngày này.'}
                   </TableCell>
                 </TableRow>
               )}
