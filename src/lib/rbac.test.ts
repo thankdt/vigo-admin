@@ -7,7 +7,7 @@ import {
   isRouteAllowed,
   firstAllowedRoute,
 } from './rbac';
-import { navItems } from './nav-items';
+import { navGroups, navItems } from './nav-items';
 import { CONFIG_GROUPS } from '@/app/(app)/settings/components/system-config-groups';
 import type { AdminMe } from './types';
 
@@ -39,6 +39,52 @@ describe('rbac catalog mirror', () => {
   it('có function driver-team thì vào được', () => {
     const ceo = { isSuperAdmin: false, functions: ['driver-team'] } as any;
     expect(isRouteAllowed('/driver-team', ceo)).toBe(true);
+  });
+
+  /**
+   * 2026-08-12: chuyển "Tỉ lệ huỷ tài xế" + "Nghi vấn gian lận" từ nhóm "Vận hành"
+   * sang nhóm mới "Xử lý vi phạm". Nhóm menu chỉ là TRÌNH BÀY — quyền vẫn khoá theo
+   * href — nhưng đây là loại thay đổi rất dễ vô tình cắt quyền của người đang dùng,
+   * nên khoá lại bằng test thay vì tin vào comment.
+   */
+  describe('đổi nhóm menu KHÔNG được đụng tới quyền', () => {
+    const VIOLATION_HREFS = ['/driver-cancel-review', '/leakage-review', '/driver-penalties'];
+
+    it('người đang có quyền soát vẫn thấy đúng mục của họ sau khi đổi nhóm', () => {
+      const opsCu = mkMe({ functions: ['driver-cancel-review', 'leakage-review'] });
+      expect(isMenuVisible('/driver-cancel-review', opsCu)).toBe(true);
+      expect(isMenuVisible('/leakage-review', opsCu)).toBe(true);
+      expect(isRouteAllowed('/driver-cancel-review', opsCu)).toBe(true);
+      expect(isRouteAllowed('/leakage-review', opsCu)).toBe(true);
+    });
+
+    it('quyền phạt vẫn TÁCH RIÊNG — có 2 quyền soát không kéo theo quyền phạt', () => {
+      const opsCu = mkMe({ functions: ['driver-cancel-review', 'leakage-review'] });
+      expect(isMenuVisible('/driver-penalties', opsCu)).toBe(false);
+      expect(isRouteAllowed('/driver-penalties', opsCu)).toBe(false);
+    });
+
+    it('3 mục vẫn nằm trong catalog và giữ nguyên function key', () => {
+      for (const href of VIOLATION_HREFS) {
+        expect(navItems.some((i) => i.href === href)).toBe(true);
+        expect(MENU_FUNCTION_BY_HREF[href]).toBe(href.replace(/^\//, ''));
+      }
+    });
+
+    // Sidebar bỏ nhóm rỗng (`layout.tsx`: filter items.length > 0) — người không có
+    // quyền nào trong nhóm mới không được thấy tiêu đề "Xử lý vi phạm" trơ trọi.
+    it('người không có quyền nào trong nhóm mới thì nhóm biến mất, không hiện tiêu đề rỗng', () => {
+      const khongCoQuyen = mkMe({ functions: ['bookings'] });
+      const nhomMoi = navGroups.find((g) => g.label === 'Xử lý vi phạm')!;
+      expect(nhomMoi).toBeDefined();
+      const visible = nhomMoi.items.filter((i) => isMenuVisible(i.href, khongCoQuyen));
+      expect(visible).toHaveLength(0);
+    });
+
+    it('nhóm "Xử lý vi phạm" gồm đúng 3 mục đã chốt', () => {
+      const nhomMoi = navGroups.find((g) => g.label === 'Xử lý vi phạm')!;
+      expect(nhomMoi.items.map((i) => i.href).sort()).toEqual([...VIOLATION_HREFS].sort());
+    });
   });
 
   it('each menu function key = its href without the leading slash', () => {
