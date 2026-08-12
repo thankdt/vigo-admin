@@ -292,7 +292,7 @@ export function CreateBookingDialog({
     setVoucherDropped(false);
   };
 
-  // Cờ "đã áp draft" chỉ được xoá khi dialog ĐÓNG, không xoá trong resetForm:
+  // Cờ "đã áp bản nháp" chỉ được xoá khi dialog ĐÓNG, không xoá trong resetForm:
   // tạo chuyến xong resetForm chạy trong lúc dialog còn đang mở, xoá cờ ở đó sẽ
   // khiến effect điền lại draft (và gọi lookup SĐT thừa) trước khi dialog kịp đóng.
   React.useEffect(() => {

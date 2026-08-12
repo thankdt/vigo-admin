@@ -22,6 +22,7 @@ import {
   type AdminAgentRow, type AgentStatus,
 } from '@/lib/api';
 import type { User } from '@/lib/types';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 
 const STATUS_LABEL: Record<AgentStatus, string> = { PENDING: 'Chờ duyệt', ACTIVE: 'Hoạt động', REVOKED: 'Đã thu hồi' };
 
@@ -72,7 +73,7 @@ export default function AgentAdminPage() {
       setTotalPages(tp);
       setTotal(result.meta.total);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không tải được danh sách đại lý', description: parseErr(err.message) });
+      toastApiError(err, 'Không tải được danh sách đại lý');
     } finally {
       setIsLoading(false);
     }
@@ -146,7 +147,7 @@ export default function AgentAdminPage() {
       setForm(null);
       await refreshAll();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Thao tác thất bại', description: parseErr(err.message) });
+      toastApiError(err, 'Thao tác thất bại');
     } finally {
       setSubmitting(false);
     }
@@ -161,7 +162,7 @@ export default function AgentAdminPage() {
       setRevokeTarget(null);
       await refreshAll();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Thu hồi thất bại', description: parseErr(err.message) });
+      toastApiError(err, 'Thu hồi thất bại');
     } finally {
       setSubmitting(false);
     }
@@ -176,7 +177,7 @@ export default function AgentAdminPage() {
       const res = await getUsers({ search: phone, limit: 10, includeDrivers: true });
       setAddResults(res.data);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Tìm không được', description: parseErr(err.message) });
+      toastApiError(err, 'Tìm không được');
     } finally {
       setAddSearching(false);
     }
@@ -443,12 +444,3 @@ function StatusBadge({ status }: { status: AgentStatus }) {
   return <Badge variant="destructive">{STATUS_LABEL.REVOKED}</Badge>;
 }
 
-// The API client throws Error(JSON.stringify(errorData)); surface the human sentence.
-function parseErr(msg: string): string {
-  try {
-    const o = JSON.parse(msg);
-    return o?.error?.message || o?.message || msg;
-  } catch {
-    return msg;
-  }
-}

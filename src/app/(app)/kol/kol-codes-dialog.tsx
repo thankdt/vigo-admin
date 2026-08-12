@@ -25,6 +25,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, BarChart3, Plus, Pencil, Trash2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 import {
   adminListKolCodes,
   adminCreateKolCode,
@@ -37,16 +38,6 @@ import {
 
 const fmt = (n: number) => n.toLocaleString('vi-VN');
 
-// API client ném Error(JSON.stringify({ error: { code, message } })) — rút câu message người đọc.
-function parseErr(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  try {
-    const o = JSON.parse(msg);
-    return o?.error?.message || o?.message || msg;
-  } catch {
-    return msg;
-  }
-}
 
 type Props = {
   open: boolean;
@@ -89,7 +80,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
     try {
       setRows(await adminListKolCodes(userId));
     } catch (e) {
-      toast({ variant: 'destructive', description: parseErr(e) || 'Không tải được danh sách mã' });
+      toastApiError(e, 'Không tải được danh sách mã');
     } finally {
       setLoading(false);
     }
@@ -158,7 +149,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
       setEditingId(null);
       await load();
     } catch (e) {
-      toast({ variant: 'destructive', description: parseErr(e) || 'Lưu mã thất bại' });
+      toastApiError(e, 'Lưu mã thất bại');
     } finally {
       setSaving(false);
     }
@@ -175,7 +166,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
     } catch (e) {
       // revert optimistic
       setRows((rs) => rs.map((r) => (r.id === row.id ? { ...r, isActive: row.isActive } : r)));
-      toast({ variant: 'destructive', description: parseErr(e) || 'Đổi trạng thái thất bại' });
+      toastApiError(e, 'Đổi trạng thái thất bại');
     } finally {
       setTogglingId(null);
     }
@@ -192,7 +183,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
       await load();
     } catch (e) {
       // Backend chặn xoá mã đã dùng → hiện đúng lý do, không đóng dialog.
-      toast({ variant: 'destructive', description: parseErr(e) || 'Xoá mã thất bại' });
+      toastApiError(e, 'Xoá mã thất bại');
     } finally {
       setDeletingBusy(false);
     }
@@ -212,7 +203,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
       const rep = await adminKolCodeReport(row.id);
       setReports((r) => ({ ...r, [row.id]: rep }));
     } catch (e) {
-      toast({ variant: 'destructive', description: parseErr(e) || 'Không tải được báo cáo' });
+      toastApiError(e, 'Không tải được báo cáo');
     } finally {
       setBusyId(null);
     }
