@@ -16,7 +16,10 @@
 - **Không xoá bất kỳ cột denormalize nào** trên `booking` (`customerCallStatus`, `customerCallCheckedAt`, `customerCallCheckedById`, `customerCallReason`, `callBeforeStatus`, `callBeforeAt`, `callAfterStatus`, `callAfterAt`). Bóc UI không phải bóc dữ liệu.
 - **Giờ Việt Nam (UTC+7)** cho mọi mốc ngày người dùng thấy. Ngưỡng "quá hạn" tính bằng **khoảng thời gian tuyệt đối** (`now() - interval`), không phải ranh giới ngày — nên không có bẫy múi giờ ở chỗ này.
 - Ngưỡng quá hạn nằm trong `system_config`, key `CSKH_CALL_AFTER_OVERDUE_HOURS`, **mặc định `24`**. Ops đổi được không cần deploy.
-- Lệnh kiểm: backend `npx tsc --noEmit && npx jest` · admin `npx tsc --noEmit && npx vitest run`.
+- Lệnh kiểm: backend `npx tsc --noEmit && npm test` · admin `npx tsc --noEmit && npx vitest run && npm run lint`.
+- **Backend luôn dùng `npm test`, KHÔNG `npx jest`** — script thật là `TZ=UTC jest …`; máy dev ở `Asia/Ho_Chi_Minh` nên chạy trần sẽ lệch 7 tiếng và đỏ vì lý do không liên quan.
+- **Đường dẫn test admin PHẢI trong nháy kép**: `npx vitest run "src/app/(app)/…"`. Dạng escape `\(app\)` bị vitest chuẩn hoá thành `(app/)` → `No test files found, exiting with code 1` — trông y hệt test đỏ.
+- `tsc --noEmit` **không** báo import/biến thừa (`noUnusedLocals` tắt) — dọn import phải dựa vào `npm run lint`.
 - Nhánh: backend `git checkout -b feat/crm-queue-api main` · admin `git checkout -b feat/crm-queue main`.
 - Message commit kết thúc bằng: `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`
 - **Yêu cầu trước:** GĐ0 (`docs/superpowers/plans/2026-08-12-crm-gd0-menu-restructure.md`) đã merge vào `main`. Task 8 dựa vào nhóm menu `'Khách hàng (CRM)'` do GĐ0 tạo.
@@ -84,7 +87,7 @@
 - Test: `/Volumes/exSSD/dev/projects/vigo-backend/src/rbac/rbac.constants.spec.ts`
 
 **Interfaces:**
-- Consumes: `MENU_FUNCTIONS`, `ALL_FUNCTION_KEYS` (rbac.constants.ts), `@RequireFunction(...keys)` — guard đã hỗ trợ any-of (`function-access.guard.ts:25-27`: `required.some(f => eff.has(f))`).
+- Consumes: `MENU_FUNCTIONS`, `ALL_FUNCTION_KEYS` (rbac.constants.ts), `@RequireFunction(...keys)` — guard đã hỗ trợ any-of (`function-access.guard.ts:24`: `required.some((f) => eff.has(f))`).
 - Produces: khoá function `'crm-queue'` dùng được ở cả FE lẫn BE.
 
 - [ ] **Step 1: Viết test thất bại**
@@ -100,7 +103,7 @@ Thêm vào `src/rbac/rbac.constants.spec.ts`:
 
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
-Run: `npx jest src/rbac/rbac.constants.spec.ts`
+Run: `npm test -- src/rbac/rbac.constants.spec.ts`
 Expected: FAIL — `'crm-queue'` chưa có trong mảng.
 
 - [ ] **Step 3: Thêm function key**
@@ -119,19 +122,25 @@ Expected: FAIL — `'crm-queue'` chưa có trong mảng.
 
 Trong `src/booking/booking.controller.ts`, đổi `@RequireFunction('bookings')` thành `@RequireFunction('bookings', 'crm-queue')` tại **đúng 5 chỗ** sau (kiểm bằng dòng `@Get`/`@Post` ngay bên dưới):
 
-| Dòng ~ | Route ngay dưới |
+| Dòng ~ | Route ngay dưới — **kiểm bằng dòng `@Get`/`@Post`, KHÔNG tin số dòng** |
 |---|---|
 | 270 | `@Get('admin/list')` |
-| 360 | `@Get('admin/:id')` — chi tiết chuyến |
 | 372 | `@Get('admin/customer-call-reasons')` |
+| **380** | `@Get('admin/:id')` — chi tiết chuyến |
 | 403 | `@Post('admin/:id/customer-call')` |
 | 418 | `@Get('admin/:id/customer-call-history')` |
 
-**KHÔNG đổi** các route `bookings` khác (đổi trạng thái, điều tài, huỷ, tạo chuyến, hoá đơn) — CSKH không được phép làm những việc đó.
+> 🚨 **Dòng 360 là `@Get('admin/available-drivers')` — TUYỆT ĐỐI KHÔNG đổi dòng đó.** Đấy là công cụ **điều tài** (tìm tài xế rảnh quanh toạ độ); mở cho `crm-queue` là cấp cho CSKH đúng thứ GĐ1 sinh ra để không cấp. Chi tiết chuyến nằm ở **380**. Xác minh bằng lệnh trước khi sửa:
+> ```bash
+> grep -n "RequireFunction('bookings')" -A 1 src/booking/booking.controller.ts
+> ```
+> Bỏ sót dòng 380 thì `BookingDetail` mở từ `/crm-queue` sẽ **403** cho vai trò chỉ có `crm-queue` — toàn bộ luồng ghi cuộc gọi chết, checklist DEV mục 3 không qua nổi.
+
+**KHÔNG đổi** mọi route `bookings` còn lại (đổi trạng thái, điều tài, huỷ, tạo chuyến, hoá đơn) — CSKH không được phép làm những việc đó.
 
 - [ ] **Step 5: Chạy test + kiểm tĩnh**
 
-Run: `npx jest src/rbac && npx tsc --noEmit`
+Run: `npm test -- src/rbac && npx tsc --noEmit`
 Expected: PASS, không lỗi type. `route-coverage.spec.ts` phải vẫn xanh (key mới đã nằm trong `ALL_FUNCTION_KEYS`).
 
 - [ ] **Step 6: Commit**
@@ -179,7 +188,31 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
   @Column({ type: 'uuid', nullable: true })
   callAfterById: string | null;
+
+  /**
+   * Quan hệ để API trả TÊN người giữ việc, không phải uuid trần. Cột "Người giữ việc"
+   * của hàng đợi mà chỉ hiện uuid thì vô dụng. Mẫu y hệt `customerCallCheckedBy` đã có
+   * ngay trên. Thuần thêm mới — client cũ không đọc field này nên không vỡ.
+   */
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'callBeforeById' })
+  callBeforeBy: User | null;
+
+  @ManyToOne(() => User, { nullable: true })
+  @JoinColumn({ name: 'callAfterById' })
+  callAfterBy: User | null;
 ```
+
+Migration **không** cần thêm gì cho hai quan hệ này — chúng ánh xạ vào đúng 2 cột uuid đã tạo, không sinh FK mới (giống `customerCallCheckedBy`).
+
+Trong `findAllBookings`, thêm cạnh `leftJoinAndSelect('booking.customerCallCheckedBy', ...)` sẵn có:
+
+```ts
+      .leftJoinAndSelect('booking.callBeforeBy', 'callBeforeBy')
+      .leftJoinAndSelect('booking.callAfterBy', 'callAfterBy')
+```
+
+và bổ sung vào `src/lib/types.ts` (admin) hai field `callBeforeBy` / `callAfterBy` cùng kiểu với `customerCallCheckedBy`.
 
 - [ ] **Step 2: Viết migration**
 
@@ -258,10 +291,14 @@ export class AddBookingCallPhaseOwner1793200000000 implements MigrationInterface
 
 > Vòng lặp `for` sinh SQL bằng template string với `${col}` / `${phase}` — cả hai đều là **hằng viết trong code**, không phải input người dùng, nên không có đường SQL injection ở đây. Đừng đổi thành tham số bound: tên cột không truyền qua tham số được.
 
-- [ ] **Step 3: Chạy migration trên DB dev cục bộ**
+- [ ] **Step 3: Kiểm tĩnh, rồi chạy migration trên môi trường DEV**
 
-Run: `npx tsc --noEmit && npm run migration:run -- -t each`
-Expected: chạy sạch. Kiểm bằng `\d booking` thấy 2 cột mới + 2 index partial.
+Run: `npx tsc --noEmit && npm test -- src/booking`
+Expected: sạch.
+
+Migration chạy **trên DEV sau khi merge vào `dev`**, không phải cục bộ: repo **không có** `.env.development` (chỉ có `.env.example`), mà `typeorm-cli.config.ts` đọc đúng file đó để lấy `DATABASE_URL`. Muốn chạy cục bộ thì phải tự dựng `.env.development` trỏ vào DB dev trước — đừng coi đó là bước mặc định.
+
+Trên DEV, sau khi migration chạy, kiểm bằng `\d booking`: thấy `callBeforeById`, `callAfterById` và 2 index partial.
 
 - [ ] **Step 4: Commit**
 
@@ -281,8 +318,10 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 3: `recordCustomerCall` ghi người giữ việc theo pha
 
 **Files:**
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.ts:3775-3785`
-- Test: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.spec.ts`
+- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.ts:3773-3784` (khối `phasePatch` + `manager.update`)
+- Test: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.customer-call.spec.ts`
+
+> ⚠️ Test của `recordCustomerCall` **KHÔNG** nằm trong `booking.service.spec.ts` (`grep -c recordCustomerCall` = 0) mà ở file riêng `booking.service.customer-call.spec.ts`. File đó **không dùng `jest.fn()`** cho `manager.update` — nó gom patch vào mảng và trả qua `getUpdates()`. Viết assertion kiểu `expect(updateSpy).toHaveBeenCalledWith(...)` sẽ là `ReferenceError`.
 
 **Interfaces:**
 - Consumes: `booking.callBeforeById` / `callAfterById` (Task 2).
@@ -290,36 +329,38 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 - [ ] **Step 1: Viết test thất bại**
 
-Thêm vào `src/booking/booking.service.spec.ts` (cùng khối describe với các test `recordCustomerCall` sẵn có):
+Thêm vào `src/booking/booking.service.customer-call.spec.ts`, dùng đúng helper `build()` / `getUpdates()` mà file đó đã có (đọc 30 dòng đầu file để lấy đúng chữ ký):
 
 ```ts
   it('ghi callBeforeById khi chuyến CHƯA hoàn thành, không đụng callAfterById', async () => {
-    // ... dựng mock manager như các test recordCustomerCall sẵn có, với target.completedAt = null
+    const { service, getUpdates } = build({ completedAt: null });
     await service.recordCustomerCall('bk-1', 'CLAIMED' as any, undefined, 'admin-A', undefined);
-    expect(updateSpy).toHaveBeenCalledWith(
-      expect.anything(),
-      { id: 'bk-1' },
-      expect.objectContaining({ callBeforeStatus: 'CLAIMED', callBeforeById: 'admin-A' }),
-    );
-    expect(updateSpy.mock.calls[0][2]).not.toHaveProperty('callAfterById');
+    const patch = getUpdates()[0].patch;
+    expect(patch.callBeforeStatus).toBe('CLAIMED');
+    expect(patch.callBeforeById).toBe('admin-A');
+    expect(patch).not.toHaveProperty('callAfterById');
   });
 
   it('ghi callAfterById khi chuyến ĐÃ hoàn thành, không đụng callBeforeById', async () => {
-    // ... như trên nhưng target.completedAt = new Date()
+    const { service, getUpdates } = build({ completedAt: new Date() });
     await service.recordCustomerCall('bk-2', 'CALLED' as any, undefined, 'admin-B', undefined);
-    expect(updateSpy).toHaveBeenCalledWith(
-      expect.anything(),
-      { id: 'bk-2' },
-      expect.objectContaining({ callAfterStatus: 'CALLED', callAfterById: 'admin-B' }),
-    );
-    expect(updateSpy.mock.calls[0][2]).not.toHaveProperty('callBeforeById');
+    const patch = getUpdates()[0].patch;
+    expect(patch.callAfterStatus).toBe('CALLED');
+    expect(patch.callAfterById).toBe('admin-B');
+    expect(patch).not.toHaveProperty('callBeforeById');
   });
 ```
 
+> 5 test sẵn có ở file này khẳng định bằng `.not.toHaveProperty('callAfterStatus')` chứ không so patch nguyên khối, nên thêm trường mới **không** làm đỏ chúng.
+
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
-Run: `npx jest src/booking/booking.service.spec.ts -t "callBeforeById"`
-Expected: FAIL — patch hiện chưa có trường `callBeforeById`.
+Run: `npm test -- src/booking/booking.service.customer-call.spec.ts`
+Expected: FAIL — patch hiện chưa có `callBeforeById`.
+
+> Dùng `npm test` (`TZ=UTC jest …`) chứ **không** `npx jest`: máy dev ở `Asia/Ho_Chi_Minh`, chạy trần thì test nào phụ thuộc mốc giờ sẽ lệch 7 tiếng và đỏ vì lý do không liên quan.
+>
+> Và **đừng dùng `-t "callBeforeById"`** để lọc: nếu tên test gõ sai, jest khớp 0 test rồi thoát **code 0** — bạn sẽ đọc nhầm thành "xanh" trong khi chưa chạy gì cả.
 
 - [ ] **Step 3: Sửa `phasePatch`**
 
@@ -344,8 +385,8 @@ thành:
 
 - [ ] **Step 4: Chạy test để xác nhận XANH**
 
-Run: `npx jest src/booking/booking.service.spec.ts && npx tsc --noEmit`
-Expected: PASS, toàn bộ test `recordCustomerCall` cũ vẫn xanh.
+Run: `npm test -- src/booking/booking.service.customer-call.spec.ts && npx tsc --noEmit`
+Expected: PASS, 5 test `recordCustomerCall` cũ vẫn xanh.
 
 - [ ] **Step 5: Commit**
 
@@ -387,7 +428,7 @@ Thêm vào `src/booking/booking.service.spec.ts`:
     await service.findAllBookings(1, 20, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, { claimedBy: 'admin-A' });
-    const sql = andWhereSpy.mock.calls.map((c) => String(c[0])).join(' | ');
+    const sql = qb.andWhere.mock.calls.map((c: any[]) => String(c[0])).join(' | ');
     expect(sql).toContain('callBeforeById');
     expect(sql).toContain('callAfterById');
     expect(sql).toContain("'CLAIMED'");
@@ -397,37 +438,45 @@ Thêm vào `src/booking/booking.service.spec.ts`:
     await service.findAllBookings(1, 20, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, { excludeStatus: 'COMPLETED,CANCELLED' });
-    const call = andWhereSpy.mock.calls.find((c) => String(c[0]).includes('NOT IN'));
+    const call = qb.andWhere.mock.calls.find((c: any[]) => String(c[0]).includes('NOT IN'));
     expect(call).toBeDefined();
     expect(call![1]).toMatchObject({ exStatuses: ['COMPLETED', 'CANCELLED'] });
   });
 
   it('overdue=true dùng ngưỡng giờ từ system_config', async () => {
-    masterData.getSystemConfig.mockResolvedValueOnce('6');
+    masterDataMock.getSystemConfig.mockResolvedValueOnce('6');
     await service.findAllBookings(1, 20, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, { overdue: 'true' });
-    const call = andWhereSpy.mock.calls.find((c) => String(c[0]).includes('completedAt'));
+    const call = qb.andWhere.mock.calls.find((c: any[]) => String(c[0]).includes('completedAt'));
     expect(call).toBeDefined();
     expect(call![1]).toMatchObject({ overdueHours: 6 });
   });
 
   it('overdue=true không có config thì mặc định 24 giờ', async () => {
-    masterData.getSystemConfig.mockResolvedValueOnce(null);
+    masterDataMock.getSystemConfig.mockResolvedValueOnce(null);
     await service.findAllBookings(1, 20, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, undefined, undefined, undefined, undefined,
       undefined, undefined, undefined, undefined, { overdue: 'true' });
-    const call = andWhereSpy.mock.calls.find((c) => String(c[0]).includes('completedAt'));
+    const call = qb.andWhere.mock.calls.find((c: any[]) => String(c[0]).includes('completedAt'));
     expect(call![1]).toMatchObject({ overdueHours: 24 });
   });
 ```
 
-> `andWhereSpy` và `masterData` lấy theo đúng cách các test `findAllBookings` sẵn có trong file đang dựng mock query-builder (xem test dòng 1720 trở đi).
+> **Hai điều kiện bắt buộc để bốn test trên chạy được** — khối `findAllBookings` hiện tại (`booking.service.spec.ts:1689-1712`) chưa đáp ứng:
+> 1. Đọc spy qua **`qb.andWhere.mock.calls`** (mock query-builder sẵn có đã khai `andWhere: jest.fn(() => qb)`), đúng cách test `agentPredicate` (~dòng 1757) đang làm. **Không có biến `andWhereSpy` nào trong repo** — dùng tên đó là `ReferenceError`.
+> 2. `masterDataService` là **tham số thứ 16** của `new BookingService(...)` và hiện là `{} as any` trong dãy mock. Phải thay bằng
+>    ```ts
+>    const masterDataMock = { getSystemConfig: jest.fn(async () => null as string | null) };
+>    ```
+>    đặt **đúng vị trí 16** (đếm kỹ — dãy `{} as any` không đánh số). Để nguyên `{}` thì `getSystemConfig` là `undefined`; gọi vào ném **TypeError đồng bộ**, `.catch()` gắn sau **không đỡ được**, test đỏ vì lý do sai và người thực thi sẽ đi sửa nhầm chỗ.
 
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
-Run: `npx jest src/booking/booking.service.spec.ts -t "claimedBy"`
+Run: `npm test -- src/booking/booking.service.spec.ts`
 Expected: FAIL — chưa có tham số `queue`.
+
+> Dùng `npm test` (`TZ=UTC jest …`) chứ không `npx jest`; và **đừng lọc bằng `-t`** — gõ sai tên test thì jest khớp 0 test rồi thoát code 0, bạn đọc nhầm thành "xanh".
 
 - [ ] **Step 3: Thêm tham số vào service**
 
@@ -447,9 +496,16 @@ Expected: FAIL — chưa có tham số `queue`.
 ```ts
     // Hàng đợi CSKH: ai đang giữ việc ở BẤT KỲ pha nào. Hai pha độc lập nên phải OR —
     // lọc bằng `customerCallCheckedById` sẽ sai vì cột đó bị đè giữa hai pha.
+    //
+    // `completedAt IS NULL` ở nhánh callBefore là BẮT BUỘC, không phải tối ưu. Nhận gọi
+    // trước chuyến rồi chuyến chạy xong -> recordCustomerCall LUÔN suy pha AFTER_COMPLETE,
+    // nên callBeforeStatus không còn đường nào rời khỏi 'CLAIMED'. Thiếu điều kiện này,
+    // dòng đó nằm trong "Việc của tôi" của người ấy VĨNH VIỄN. Đúng cái bẫy mà
+    // `excludeStatus` chặn cho tab "Cần gọi trước".
     if (queue?.claimedBy && queue.claimedBy.trim()) {
       query.andWhere(
-        `((booking."callBeforeById" = :claimedBy AND booking."callBeforeStatus" = 'CLAIMED')
+        `((booking."callBeforeById" = :claimedBy AND booking."callBeforeStatus" = 'CLAIMED'
+           AND booking."completedAt" IS NULL)
           OR (booking."callAfterById" = :claimedBy AND booking."callAfterStatus" = 'CLAIMED'))`,
         { claimedBy: queue.claimedBy.trim() },
       );
@@ -469,11 +525,18 @@ Expected: FAIL — chưa có tham số `queue`.
     // KHOẢNG thời gian tuyệt đối (now() - interval), không phải ranh giới ngày, nên
     // không có bẫy múi giờ. completedAt NULL bị loại tự nhiên bởi phép so sánh.
     if (queue?.overdue === 'true') {
-      const raw = await this.masterDataService
-        .getSystemConfig('CSKH_CALL_AFTER_OVERDUE_HOURS')
+      // Promise.resolve().then(...) chứ không phải `.catch()` gắn thẳng: nếu
+      // masterDataService hỏng/thiếu thì `getSystemConfig` là undefined và lời gọi ném
+      // TypeError ĐỒNG BỘ — `.catch()` gắn sau không bao giờ chạy tới, endpoint 500 thay
+      // vì rơi về mặc định như thiết kế.
+      const raw = await Promise.resolve()
+        .then(() => this.masterDataService.getSystemConfig('CSKH_CALL_AFTER_OVERDUE_HOURS'))
         .catch(() => null);
+      // isInteger chứ không phải isFinite: make_interval(hours => …) nhận INTEGER. Ops gõ
+      // '1.5' vào config sẽ làm Postgres ném "invalid input syntax for type integer" ->
+      // tab "Quá hạn" trắng và không ai hiểu vì sao. Giá trị không nguyên -> rơi về 24.
       const parsed = Number(raw);
-      const overdueHours = Number.isFinite(parsed) && parsed > 0 ? parsed : 24;
+      const overdueHours = Number.isInteger(parsed) && parsed > 0 ? parsed : 24;
       query.andWhere(
         `booking."completedAt" < (now() - make_interval(hours => :overdueHours))`,
         { overdueHours },
@@ -500,14 +563,16 @@ và ở lời gọi service, sau `callAfter,`:
 
 - [ ] **Step 5: Chạy test để xác nhận XANH**
 
-Run: `npx jest src/booking && npx tsc --noEmit`
+Run: `npm test -- src/booking && npx tsc --noEmit`
 Expected: PASS toàn bộ, kể cả 13 lời gọi `findAllBookings` cũ trong spec (không sửa dòng nào).
 
 - [ ] **Step 6: Seed config mặc định**
 
 Tạo `src/database/migrations/1793200100000-SeedCskhOverdueHours.ts` theo đúng mẫu `1791300000000-AddCustomerCallReason.ts`, chèn `CSKH_CALL_AFTER_OVERDUE_HOURS = '24'` vào `system_config` (`ON CONFLICT DO NOTHING`), `down()` xoá đúng key đó.
 
-Run: `npm run migration:run -- -t each`
+Phần mô tả của key phải ghi rõ: **chỉ nhận SỐ NGUYÊN giờ** — giá trị không nguyên sẽ bị bỏ qua và rơi về 24 (xem Step 3). Ops đọc mô tả này trong `/settings`.
+
+Migration chạy trên DEV cùng đợt với Task 2 (không chạy cục bộ được — xem Task 2 Step 3).
 
 - [ ] **Step 7: Commit**
 
@@ -526,7 +591,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ### Hoàn tất đợt 1
 
-- [ ] `npx tsc --noEmit && npx jest` — sạch cả hai.
+- [ ] `npx tsc --noEmit && npm test` — sạch cả hai.
 - [ ] Push `feat/crm-queue-api`, merge vào `dev`, chạy migration trên DEV, kiểm bằng `curl` với token admin: 4 tổ hợp param của bảng "Hợp đồng API" trả đúng tập chuyến.
 - [ ] PR `feat/crm-queue-api` → `main`, merge, **deploy backend production**.
 - [ ] Resync `main → dev`.
@@ -540,40 +605,49 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 5: Tách `BookingDetail` ra file riêng
 
 **Files:**
+- Create: `src/app/(app)/bookings/components/booking-shared.tsx` — ký hiệu **cả hai** màn dùng
 - Create: `src/app/(app)/bookings/components/booking-detail.tsx`
 - Modify: `src/app/(app)/bookings/components/bookings-table.tsx`
 - Modify: `src/app/(app)/bookings/components/bookings-table.test.tsx:3`
 
 **Interfaces:**
-- Produces: `export function BookingDetail({ bookingId, onClose, onDuplicate?, onCallRecorded? })` và `export function PriceBreakdownCard({ booking })` từ `./booking-detail`.
+- Produces từ `./booking-shared`: `export const CANCELLED_BY_ROLE_LABEL`, `export function getStatusBadge(booking: Pick<Booking,'status'|'adminClaimedAt'>)`.
+- Produces từ `./booking-detail`: `export function BookingDetail({ bookingId, onClose, onDuplicate?, onCallRecorded? })`, `export function PriceBreakdownCard({ booking })`, `export function CustomerCallBadge({ status })`.
 
-**Vì sao tách TRƯỚC khi dựng `/crm-queue`:** import `BookingDetail` thẳng từ `bookings-table.tsx` sẽ kéo nguyên module 1926 dòng — kèm `getAvailableDrivers`, `reassignBooking`, `CreateBookingDialog` — vào bundle của `/crm-queue`. Dùng lại component thì đúng, nhưng dùng lại qua một file khổng lồ thì đổi một bệnh lấy bệnh khác.
+**Vì sao tách TRƯỚC khi dựng `/crm-queue`:** import `BookingDetail` thẳng từ `bookings-table.tsx` sẽ kéo nguyên module 1926 dòng — kèm `getAvailableDrivers`, `reassignBooking`, `CreateBookingDialog` — vào bundle của `/crm-queue`.
 
-- [ ] **Step 1: Chuyển code**
+**Vì sao cần file THỨ BA:** hai ký hiệu dưới đây được **cả** `BookingDetail` **lẫn** `BookingsTable` dùng:
 
-Cắt từ `bookings-table.tsx` sang `booking-detail.tsx` (giữ nguyên nội dung, chỉ chuyển chỗ + mang theo import cần thiết):
-- `PriceBreakdownCard` và các helper chỉ nó dùng
-- `CUSTOMER_CALL_LABEL`, `CUSTOMER_CALL_TOAST`, `CustomerCallBadge` (dòng 403-421)
+| Ký hiệu | Dùng ở `BookingDetail` | Dùng ở `BookingsTable` |
+|---|---|---|
+| `getStatusBadge` (định nghĩa dòng 1064) | dòng 548 | dòng 1642 |
+| `CANCELLED_BY_ROLE_LABEL` (dòng 134) | dòng 838 | dòng 1696 |
+
+Để chúng ở `bookings-table.tsx` rồi cho `booking-detail.tsx` import ngược sẽ tạo **vòng import** (`bookings-table` → `booking-detail` → `bookings-table`): `/crm-queue` vẫn kéo cả module lớn vào bundle — đúng thứ task này sinh ra để tránh — cộng rủi ro TDZ với `const` trong chu trình ESM. Đưa sang file thứ ba là cách duy nhất cắt được vòng.
+
+- [ ] **Step 1: Tạo `booking-shared.tsx`**
+
+Cắt `CANCELLED_BY_ROLE_LABEL` (dòng 134) và `getStatusBadge` (dòng 1064) từ `bookings-table.tsx` sang, thêm `export` cho cả hai, mang theo import cần thiết (`Badge`, type `Booking`). **Không chép hai bản.**
+
+- [ ] **Step 2: Tạo `booking-detail.tsx`**
+
+Cắt từ `bookings-table.tsx` sang (giữ nguyên nội dung, chỉ đổi chỗ):
+- `PriceBreakdownCard` + các helper chỉ nó dùng
+- `CUSTOMER_CALL_LABEL`, `CUSTOMER_CALL_TOAST`, `CustomerCallBadge` (dòng 403-421) — **thêm `export` cho `CustomerCallBadge`**, hiện nó là `function` trần không export
 - `BookingDetail` (dòng 427 → hết component)
-- `CANCELLED_BY_ROLE_LABEL` nếu `BookingDetail` dùng — nếu `BookingsTable` cũng dùng thì để lại `bookings-table.tsx` và import ngược sang, **không chép hai bản**
 
-- [ ] **Step 2: Re-export để không vỡ chỗ đang dùng**
+`booking-detail.tsx` import `getStatusBadge` / `CANCELLED_BY_ROLE_LABEL` từ `./booking-shared`. **Cấm import bất cứ thứ gì từ `./bookings-table`.**
 
-Trong `bookings-table.tsx`, thêm ở đầu file:
+- [ ] **Step 3: Sửa `bookings-table.tsx`**
 
 ```tsx
-// Tách ra file riêng (2026-08-12) để /crm-queue dùng lại mà không phải nạp cả module
-// này. Re-export giữ nguyên đường import cũ cho các chỗ đang dùng.
-export { BookingDetail, PriceBreakdownCard } from './booking-detail';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
+import { CANCELLED_BY_ROLE_LABEL, getStatusBadge } from './booking-shared';
 ```
 
-- [ ] **Step 3: Chạy test — phải XANH mà không sửa assertion nào**
+**Không** thêm re-export `export { BookingDetail } from './booking-detail'`: consumer duy nhất là `bookings-table.test.tsx:3` và nó được đổi ngay ở Step 4 (`agent-orders/page.tsx:4` chỉ import `BookingsTable`). Để lại re-export chỉ mời người sau import qua module lớn.
 
-Run: `npx vitest run src/app/\(app\)/bookings && npx tsc --noEmit`
-Expected: PASS. Đây là refactor thuần — test cũ xanh **là** bằng chứng không đổi hành vi.
-
-- [ ] **Step 4: Đổi import trong test cho đúng nhà mới**
+- [ ] **Step 4: Đổi import trong test**
 
 `bookings-table.test.tsx:3`:
 
@@ -581,8 +655,12 @@ Expected: PASS. Đây là refactor thuần — test cũ xanh **là** bằng ch�
 import { PriceBreakdownCard, BookingDetail } from './booking-detail';
 ```
 
-Run lại: `npx vitest run src/app/\(app\)/bookings`
-Expected: PASS.
+- [ ] **Step 5: Chạy test — phải XANH mà không sửa assertion nào**
+
+Run: `npx vitest run "src/app/(app)/bookings" && npx tsc --noEmit && npm run lint`
+Expected: PASS. Đây là refactor thuần — test cũ xanh **là** bằng chứng không đổi hành vi. `npm run lint` để bắt import thừa còn sót (`tsc` không bắt).
+
+Kiểm thêm bằng mắt: `grep -n "from './bookings-table'" src/app/\(app\)/bookings/components/booking-detail.tsx` phải **rỗng** — có kết quả nghĩa là vòng import đã hình thành.
 
 - [ ] **Step 5: Commit**
 
@@ -633,12 +711,34 @@ Sau `...(params.callAfter && { callAfter: params.callAfter }),` (dòng 801):
     ...(params.overdue && { overdue: 'true' }),
 ```
 
-- [ ] **Step 3: Kiểm tĩnh + commit**
+- [ ] **Step 3: Dọn comment đã cũ ngay trên đó**
+
+`api.ts:761-763` đang ghi whitelist sort là `createdAt|updatedAt|price|status|scheduledTime` — **thiếu `completedAt`**, trong khi backend thật sự có (kèm `NULLS LAST`). Comment sai này sẽ làm người thực thi tưởng phải sửa backend cho tab "Cần gọi sau". Sửa thành:
+
+```ts
+  // Sắp xếp server-side (sắp cả bảng, không chỉ trang hiện tại). BE whitelist cột:
+  // createdAt|updatedAt|completedAt|price|status|scheduledTime. Mặc định createdAt DESC.
+```
+
+- [ ] **Step 4: Bổ sung 2 trường vào `Booking`**
+
+`src/lib/types.ts`, cạnh `callBeforeStatus`/`callAfterStatus` (~dòng 384-389):
+
+```ts
+  // Ai đang giữ việc gọi ở từng pha (BE: booking.callBeforeById/callAfterById).
+  // Chỉ là uuid — tên người hiển thị lấy từ `callBeforeBy`/`callAfterBy` (Task 8b).
+  callBeforeById?: string | null;
+  callAfterById?: string | null;
+```
+
+Thiếu bước này thì `page.tsx` đọc `booking.callBeforeById` sẽ lỗi type (`strict: true`).
+
+- [ ] **Step 5: Kiểm tĩnh + commit**
 
 Run: `npx tsc --noEmit`
 
 ```bash
-git add src/lib/api.ts
+git add src/lib/api.ts src/lib/types.ts
 git commit -m "feat(crm): getBookings nhận claimedBy/excludeStatus/overdue
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
@@ -658,7 +758,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 export type QueueTab = 'before' | 'after' | 'mine' | 'overdue';
 export const QUEUE_TAB_LABEL: Record<QueueTab, string>;
 export const QUEUE_TAB_ORDER: QueueTab[];
-export function paramsForTab(tab: QueueTab, adminId: string): Record<string, unknown>;
+export type QueueParams = Partial<Parameters<typeof getBookings>[0]>;
+export function paramsForTab(tab: QueueTab, adminId: string): QueueParams;
 ```
 Task 8 (`page.tsx`) đổ thẳng kết quả `paramsForTab` vào `getBookings`.
 
@@ -714,7 +815,7 @@ describe('paramsForTab', () => {
 
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
-Run: `npx vitest run src/app/\(app\)/crm-queue/queue-tabs.test.ts`
+Run: `npx vitest run "src/app/(app)/crm-queue/queue-tabs.test.ts"`
 Expected: FAIL — không tìm thấy module.
 
 - [ ] **Step 3: Viết `queue-tabs.ts`**
@@ -730,6 +831,8 @@ Expected: FAIL — không tìm thấy module.
  * callAfter* còn callBeforeStatus vẫn NULL -> dòng đó KHÔNG BAO GIỜ rời hàng đợi.
  * Số chuyến bị sót gọi trước là một CHỈ SỐ (xem /cskh-activity), không phải việc tồn.
  */
+import type { getBookings } from '@/lib/api';
+
 export type QueueTab = 'before' | 'after' | 'mine' | 'overdue';
 
 export const QUEUE_TAB_ORDER: QueueTab[] = ['before', 'after', 'mine', 'overdue'];
@@ -741,7 +844,14 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
   overdue: 'Quá hạn',
 };
 
-export function paramsForTab(tab: QueueTab, adminId: string): Record<string, unknown> {
+/**
+ * Kiểu buộc theo đúng tham số của getBookings. KHÔNG dùng Record<string, unknown>:
+ * spread một index-signature vào getBookings sẽ tắt hết kiểm kiểu ở call-site, gõ sai
+ * `sortby` hay `callbefore` sẽ im lặng trôi qua và tab trả sai dữ liệu.
+ */
+export type QueueParams = Partial<Parameters<typeof getBookings>[0]>;
+
+export function paramsForTab(tab: QueueTab, adminId: string): QueueParams {
   switch (tab) {
     case 'before':
       return {
@@ -773,7 +883,7 @@ export function paramsForTab(tab: QueueTab, adminId: string): Record<string, unk
 
 - [ ] **Step 4: Chạy test để xác nhận XANH**
 
-Run: `npx vitest run src/app/\(app\)/crm-queue/queue-tabs.test.ts`
+Run: `npx vitest run "src/app/(app)/crm-queue/queue-tabs.test.ts"`
 Expected: PASS (5 test).
 
 - [ ] **Step 5: Commit**
@@ -797,6 +907,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 - Modify: `src/lib/rbac.ts:42` (thêm `/crm-queue`)
 - Modify: `src/lib/nav-items.tsx` (thêm mục vào nhóm CRM, **vị trí đầu**)
 - Modify: `src/lib/rbac.test.ts:23` (29 → 30) và khối test nhóm CRM của GĐ0
+- Modify: `src/lib/function-catalog.test.ts:25-28` (**39 → 40**)
 
 **Interfaces:**
 - Consumes: `paramsForTab`, `QUEUE_TAB_ORDER`, `QUEUE_TAB_LABEL` (Task 7) · `getBookings` (Task 6) · `BookingDetail` từ `../bookings/components/booking-detail` (Task 5) · `useAuth().me.id`.
@@ -834,10 +945,22 @@ Trong `src/lib/rbac.test.ts`:
     });
 ```
 
+(d) **`src/lib/function-catalog.test.ts:25-28`** — đây là số cứng THỨ HAI, rất dễ quên vì nó nằm ở file khác. `allFunctionKeys()` dựng từ `navItems` nên thêm một mục menu là chạm vào nó:
+
+```ts
+  it('allFunctionKeys = 30 menu + 10 settings = 40 unique keys', () => {
+    const keys = allFunctionKeys();
+    expect(keys).toHaveLength(40); // 2026-08-12: +crm-queue
+    expect(new Set(keys).size).toBe(40);
+  });
+```
+
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
-Run: `npx vitest run src/lib/rbac.test.ts`
-Expected: FAIL — 29 ≠ 30 và `/crm-queue` chưa có trong catalog.
+Run: `npx vitest run`
+Expected: FAIL ở **cả hai** file — `rbac.test.ts` (29 ≠ 30) và `function-catalog.test.ts` (39 ≠ 40).
+
+> Chạy **toàn bộ** chứ không riêng `rbac.test.ts`: chạy lẻ sẽ cho xanh giả, đến bước kiểm cuối mới đỏ, lúc bạn đã tin là xong.
 
 - [ ] **Step 3: Khai vào catalog + menu**
 
@@ -861,8 +984,8 @@ Expected: FAIL — 29 ≠ 30 và `/crm-queue` chưa có trong catalog.
 
 - [ ] **Step 4: Chạy test để xác nhận XANH**
 
-Run: `npx vitest run src/lib/rbac.test.ts`
-Expected: PASS.
+Run: `npx vitest run`
+Expected: PASS toàn bộ, gồm cả `function-catalog.test.ts`.
 
 - [ ] **Step 5: Dựng trang**
 
@@ -871,20 +994,25 @@ Tạo `src/app/(app)/crm-queue/page.tsx`. Yêu cầu bắt buộc:
 - `'use client'` ở dòng đầu.
 - `Tabs` với `QUEUE_TAB_ORDER` / `QUEUE_TAB_LABEL`; đổi tab → `setPage(1)`.
 - Nạp dữ liệu: `getBookings({ page, limit: 20, ...paramsForTab(tab, me!.id) })`. Tab `mine` chỉ gọi khi `me?.id` đã có (`useAuth()` có giai đoạn `loading`) — chưa có thì hiện spinner, **không** gọi với `claimedBy: undefined` (sẽ ra toàn bộ chuyến).
-- Cột: Khách (tên + SĐT) · Tuyến · Giờ đón/hoàn thành · **Đã chờ** (tính từ `createdAt` hoặc `completedAt` theo tab) · Người giữ việc · Thao tác.
-- Mỗi dòng bấm được để mở `<BookingDetail bookingId=… onClose=… onCallRecorded={reload} />`.
+- Cột: Khách (tên + SĐT) · Tuyến · Giờ đón/hoàn thành · **Đã chờ** (tính từ `createdAt` hoặc `completedAt` theo tab) · Người giữ việc (`callBeforeBy`/`callAfterBy` theo tab, hiện `fullName`) · Thao tác.
+- **Thao tác INLINE ngay trên dòng — đây là toàn bộ giá trị của GĐ1, không được bỏ:**
+  - Chưa ai nhận → nút **Nhận gọi** → `recordBookingCustomerCall(id, { status: 'CLAIMED' })`.
+  - Đã nhận → hai nút **Đã gọi được** / **Không liên lạc được** → `status: 'CALLED' | 'UNREACHED'`, mở popover nhỏ cho `reason` (từ `getCustomerCallReasons()`) + `note`, cả hai không bắt buộc.
+  - Ghi xong → `reload()` để dòng rời khỏi tab.
+  - Nếu chỉ làm "bấm dòng mở dialog" thì hàng đợi **không nhanh hơn cách cũ ở `/bookings`** và mục 3.6 của checklist DEV sẽ trượt.
+- Ngoài ra vẫn cho mở `<BookingDetail bookingId=… onClose=… onCallRecorded={reload} />` khi CSKH cần ngữ cảnh đầy đủ (giá, địa chỉ, lịch sử) — nút "Xem chi tiết", không phải cách thao tác chính.
 - Mọi hiển thị ngày–giờ dùng `formatVnDateTime` từ `../leakage-review/leakage-labels` — **không tự viết formatter, không dùng `toLocaleDateString()`**.
 - Không có nút tạo chuyến, không có nút đổi trạng thái, không có điều tài.
 
 - [ ] **Step 6: Kiểm tĩnh + build**
 
-Run: `npx tsc --noEmit && npx vitest run && npx next build`
-Expected: sạch cả ba. (`npx next build`, **không** `npm run build` — lệnh đó deploy thẳng lên S3 production.)
+Run: `npx tsc --noEmit && npx vitest run && npm run lint && npx next build`
+Expected: sạch cả bốn. (`npx next build`, **không** `npm run build` — script thật là `next build && npm run deploy:prod`, tức deploy thẳng lên S3 production.)
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add src/app/\(app\)/crm-queue/page.tsx src/lib/rbac.ts src/lib/rbac.test.ts src/lib/nav-items.tsx
+git add src/app/\(app\)/crm-queue/page.tsx src/lib/rbac.ts src/lib/rbac.test.ts src/lib/function-catalog.test.ts src/lib/nav-items.tsx
 git commit -m "feat(crm): trang Hàng đợi CSKH /crm-queue
 
 URL phẳng vì isRouteAllowed gate theo segment cấp 1 — /crm/* sẽ gộp mọi trang
@@ -971,7 +1099,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ## Hoàn tất GĐ1
 
-- [ ] **Step 1:** `npx tsc --noEmit && npx vitest run && npx next build` — sạch.
+- [ ] **Step 1:** `npx tsc --noEmit && npx vitest run && npm run lint && npx next build` — sạch cả bốn.
 - [ ] **Step 2:** Push `feat/crm-queue`, merge vào `dev`.
 - [ ] **Step 3: Test runtime trên DEV — cổng bắt buộc, người thật test:**
   1. Tạo một vai trò **chỉ có `crm-queue`**, gán cho một tài khoản thử. Tài khoản đó: vào được `/crm-queue`, **không** thấy và **không** vào được `/bookings`.
@@ -989,4 +1117,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 1. **Tab "Cần gọi trước" sắp theo `createdAt ASC`, không phải `scheduledTime ASC NULLS LAST`** như spec §6.1. Lý do: chuyến thường (đi ngay — gấp nhất) có `scheduledTime` NULL, mà Postgres mặc định NULLS LAST cho ASC nên chúng sẽ bị đẩy xuống cuối hàng đợi. `createdAt ASC` = "chờ lâu nhất trước", luôn đúng và không cần đụng whitelist sort của backend. Nếu ops muốn ưu tiên theo giờ đón thì làm sau, cần thêm xử lý NULLS ở backend.
 2. **Backfill của migration chỉ chạm hàng `CLAIMED`**, không phải toàn bộ lịch sử. `booking` là bảng nóng nhất; việc đã xong thì không tab nào hỏi "ai từng giữ".
-3. **Ngưỡng "quá hạn" mặc định 24 giờ** (`CSKH_CALL_AFTER_OVERDUE_HOURS` trong `system_config`) — giả định của plan, ops đổi được ngay không cần deploy.
+3. **Ngưỡng "quá hạn" mặc định 24 giờ** (`CSKH_CALL_AFTER_OVERDUE_HOURS` trong `system_config`, **chỉ nhận số nguyên giờ**) — giả định của plan, ops đổi được ngay không cần deploy.
+4. **Tab "Quá hạn" dùng cờ `overdue=true` thay vì filter khoảng `completedAt`** như spec §6.1 mục #3 đề xuất. Backend tự đọc ngưỡng từ `system_config` rồi so `completedAt < now() - interval`. Vẫn là lọc server-side nên con số đúng trên toàn tập, mà FE không phải biết ngưỡng và ops đổi một chỗ là xong.
+5. **Tab "Việc của tôi" chỉ tính việc gọi-trước khi chuyến CHƯA hoàn thành** (`completedAt IS NULL`). Spec không nói rõ chỗ này. Không có điều kiện đó thì việc nhận-gọi-trước của một chuyến sau đó chạy xong sẽ kẹt trong danh sách của người ấy vĩnh viễn — backend luôn suy pha `AFTER_COMPLETE` sau khi có `completedAt`, nên `callBeforeStatus` không còn đường rời `CLAIMED`.
+6. **Thêm quan hệ `callBeforeBy` / `callAfterBy`** (`@ManyToOne` tới `User`) ngoài 2 cột uuid, để cột "Người giữ việc" hiện được tên chứ không phải uuid. Thuần thêm mới, không sinh FK mới.

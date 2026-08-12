@@ -143,10 +143,14 @@ Lưu ý: nhãn `/users` đổi từ `'Người dùng'` thành `'Khách hàng'` c
 Run: `npx vitest run src/lib/rbac.test.ts`
 Expected: PASS toàn bộ, kể cả test cũ `'has exactly 29 menu functions'` (không thêm function nào).
 
-- [ ] **Step 5: Kiểm tĩnh**
+- [ ] **Step 5: Kiểm tĩnh + toàn bộ test**
 
-Run: `npx tsc --noEmit`
-Expected: không lỗi. (Nếu báo `Users`/`Headset`/`PieChart` unused thì bạn đã gỡ nhầm — 3 icon này vẫn dùng.)
+Run: `npx tsc --noEmit && npx vitest run && npm run lint`
+Expected: sạch cả ba.
+
+> `tsconfig.json` **không** bật `noUnusedLocals`, nên `tsc` sẽ **không** báo import thừa — đừng trông vào nó. `npm run lint` (next lint, `no-unused-vars`) mới bắt được. Ba icon `Users` / `Headset` / `PieChart` vẫn phải còn dùng sau khi chuyển nhóm; nếu lint báo thừa thì bạn đã gỡ nhầm mục.
+>
+> Chạy **toàn bộ** `vitest run` chứ không riêng `rbac.test.ts`: `function-catalog.test.ts` cũng đọc `navItems` nên đổi menu là chạm vào nó.
 
 - [ ] **Step 6: Commit**
 
@@ -185,6 +189,13 @@ import { render, waitFor } from '@testing-library/react';
 import { UsersTable } from './user-table';
 import { getUsers } from '@/lib/api';
 
+// UsersTable gọi useRouter() (user-table.tsx:195). Không mock thì render ném
+// "invariant expected app router to be mounted" — KHÔNG phải lỗi thiếu mock api.
+// Repo chưa có test nào mock next/navigation nên không có tiền lệ để copy.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
+}));
+
 // Mock phải khai MỌI export mà component import — vitest ném lỗi ngay lúc nạp
 // module nếu thiếu, trước cả khi render.
 vi.mock('@/lib/api', () => ({
@@ -212,10 +223,12 @@ describe('UsersTable — danh bạ khách (CRM GĐ0)', () => {
 
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
-Run: `npx vitest run src/app/\(app\)/users/components/user-table.test.tsx`
-Expected: FAIL — call đầu tiên không có `role: 'USER'` (mặc định đang là `'ALL'`, và `getUsers` bỏ qua `role` khi rỗng/`ALL`).
+Run: `npx vitest run "src/app/(app)/users/components/user-table.test.tsx"`
+Expected: FAIL — call đầu tiên là `{ limit: 20, page: 1, search: '' }`, thiếu `role: 'USER'`.
 
-> Nếu test đỏ vì lỗi mock thiếu export, thêm đúng export còn thiếu vào khối `vi.mock` rồi chạy lại — đừng đổi assertion.
+> ⚠️ **Đường dẫn PHẢI trong nháy kép.** Dạng escape `src/app/\(app\)/...` bị vitest chuẩn hoá thành `src/app/(app/)/...` → `No test files found, exiting with code 1`. Exit code 1 trông y hệt "test đỏ" nên rất dễ tưởng đã RED đúng, rồi bước Step 4 không bao giờ xanh.
+>
+> Nếu đỏ vì thông báo khác `role`, đọc kỹ thông báo: thiếu mock `next/navigation` cho ra `invariant expected app router to be mounted`; thiếu export api cho ra `No X export is defined on the mock`. Đừng đổi assertion.
 
 - [ ] **Step 3: Sửa mặc định**
 
@@ -237,7 +250,7 @@ thành:
 
 - [ ] **Step 4: Chạy test để xác nhận XANH**
 
-Run: `npx vitest run src/app/\(app\)/users/components/user-table.test.tsx`
+Run: `npx vitest run "src/app/(app)/users/components/user-table.test.tsx"`
 Expected: PASS.
 
 - [ ] **Step 5: Kiểm tĩnh + toàn bộ test**
@@ -361,5 +374,5 @@ git checkout dev && git merge feat/crm-gd0-menu && git push
 
 ## Sai khác so với spec — cần biết
 
-1. Nhãn menu của `/users` đổi từ **"Người dùng"** thành **"Khách hàng"**. Spec §3.1 ghi "Khách hàng"; đây là ghi chú để người review không tưởng là nhầm.
+1. Nhãn menu của `/users` đổi từ **"Người dùng"** thành **"Khách hàng"**. Spec §3.1 ghi "Khách hàng"; đây là ghi chú để người review không tưởng là nhầm. **Kèm hệ quả:** `function-catalog.ts:12-13` lấy `label` từ `navItems`, nên ô tick quyền `users` ở trang `/roles` cũng đổi tên thành "Khách hàng". Không sai, nhưng báo trước để người quản trị không tưởng có function mới.
 2. Spec §3.5 viết "mặc định `role = USER`". Plan giữ nguyên cả 3 lựa chọn trong dropdown, chỉ đổi giá trị khởi tạo — đúng tinh thần spec và giữ đường tra cứu chủ HTX chưa gán công ty.
