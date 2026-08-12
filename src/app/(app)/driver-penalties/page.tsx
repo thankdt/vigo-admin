@@ -32,9 +32,10 @@ import { PenaltyDialog } from './components/penalty-dialog';
 import {
   REASON_LABEL,
   SOURCE_LABEL,
-  cancelAlertLabel,
+  cancelAlertSignal,
   cancelledByLabel,
   formatVnd,
+  leakageSignal,
   penaltyStatusBadge,
 } from './penalty-labels';
 
@@ -246,7 +247,14 @@ export default function DriverPenaltiesPage() {
               {!loading &&
                 queueRows.map((r) => {
                   const status = penaltyStatusBadge(r.penaltyStatus);
-                  const alert = cancelAlertLabel(r.cancelAlertRule, r.cancelAlertShadow);
+                  const leakage = leakageSignal(r.leakageVerdict);
+                  const alert = cancelAlertSignal({
+                    rule: r.cancelAlertRule,
+                    action: r.cancelAlertAction,
+                    ratePct: r.cancelAlertRatePct,
+                    shadow: r.cancelAlertShadow,
+                    reason: r.cancelAlertReason,
+                  });
                   return (
                     <TableRow key={r.bookingId}>
                       <TableCell className="whitespace-nowrap text-sm">
@@ -275,20 +283,26 @@ export default function DriverPenaltiesPage() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="space-x-1 space-y-1">
-                        {r.leakageVerdict && (
-                          <Badge
-                            className={
-                              r.leakageConfidence === 'HIGH'
-                                ? 'bg-red-100 text-red-800 hover:bg-red-100 dark:bg-red-900/50 dark:text-red-400 dark:hover:bg-red-900/50'
-                                : 'bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/50 dark:text-amber-400 dark:hover:bg-amber-900/50'
-                            }
-                          >
-                            Nghi rò rỉ {r.leakageConfidence}
+                      {/* Nhãn nói THẲNG hệ thống thấy gì; rê chuột ra tooltip giải
+                          thích cơ sở. Người soát dựa vào ô này để quyết định trừ tiền
+                          nên không được để mã kỹ thuật (LOW / rule A) lọt ra. */}
+                      <TableCell className="max-w-[240px] space-y-1">
+                        {leakage && (
+                          <Badge className={leakage.className} title={leakage.hint}>
+                            {leakage.label}
                           </Badge>
                         )}
-                        {alert && <Badge variant="secondary">{alert}</Badge>}
-                        {!r.leakageVerdict && !alert && (
+                        {alert && (
+                          <div>
+                            <Badge className={alert.className} title={alert.hint}>
+                              {alert.label}
+                            </Badge>
+                            {alert.note && (
+                              <p className="mt-0.5 text-xs text-muted-foreground">{alert.note}</p>
+                            )}
+                          </div>
+                        )}
+                        {!leakage && !alert && (
                           <span className="text-xs text-muted-foreground">—</span>
                         )}
                       </TableCell>

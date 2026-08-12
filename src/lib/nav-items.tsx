@@ -59,13 +59,20 @@ export const navGroups: NavGroup[] = [
       // Cùng cụm "chất lượng tài xế". Quyền RIÊNG driver-team — ops/CSKH không thấy.
       { href: '/driver-team', label: 'Đội tài chuyên nghiệp', icon: Handshake },
       { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
-      { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
-      { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
-      // Cùng cụm chống gian lận, ngay sau 2 màn soát. Quyền RIÊNG driver-penalties —
-      // đây là thao tác trừ tiền thật của tài xế, không mở cho cả team vận hành.
-      { href: '/driver-penalties', label: 'Phạt vi phạm', icon: Gavel },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
+    ],
+  },
+  {
+    // Cụm RIÊNG để phân quyền: người xử lý vi phạm được cấp đúng 3 quyền này
+    // (driver-cancel-review + leakage-review + driver-penalties), tách hẳn khỏi team
+    // vận hành. Gom vào một nhóm để lúc gán quyền không phải mò trong danh sách dài,
+    // và để người được cấp thấy đúng một cụm việc của mình.
+    label: 'Xử lý vi phạm',
+    items: [
+      { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
+      { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
+      { href: '/driver-penalties', label: 'Phạt vi phạm', icon: Gavel },
     ],
   },
   {
