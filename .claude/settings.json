@@ -20,13 +20,14 @@
       "Bash(aws logs tail:*)",
       "Bash(aws cloudwatch get-metric-statistics:*)",
       "Bash(aws cloudwatch get-metric-data:*)",
-      "Edit(.claude/skills/**)",
-      "mcp__postgres-readonly__query",
       "Bash(echo \"exit=$?\")",
       "Bash(pkill -f \"next dev\")",
       "Bash(rm -rf .next)",
       "Bash(npm run *)",
-      "Bash(docker buildx *)"
+      "Bash(docker buildx *)",
+      "Bash(docker info *)",
+      "Edit(.claude/skills/**)",
+      "mcp__postgres-readonly__query"
     ],
     "ask": [
       "Bash(psql:*)",
