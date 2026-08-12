@@ -2735,6 +2735,9 @@ export async function getAcquisition(from: string, to: string): Promise<Acquisit
 export type CashflowCategory =
   | 'payos' | 'km' | 'earnings' | 'admin_credit' | 'refund'
   | 'admin_debit' | 'tax' | 'commission' | 'other';
+/** Ví tài xế bị trừ / được cộng ở giao dịch này. */
+export type DriverWalletType = 'DRIVER_MAIN' | 'DRIVER_DEPOSIT';
+
 export type DriverCashflowRow = {
   id: string;
   amount: number;
@@ -2743,6 +2746,7 @@ export type DriverCashflowRow = {
   createdAt: string;
   description: string;
   refCode: string;
+  walletType: DriverWalletType;
   driverUserId: string;
   driverName: string;
   driverPhone: string;
@@ -3279,6 +3283,8 @@ export type PenaltyQueueRow = {
   cancelAlertAction: string | null;
   cancelAlertRatePct: number | null;
   cancelAlertShadow: boolean | null;
+  /** Câu giải thích kèm số liệu do rule engine sinh ra — dùng làm tooltip. */
+  cancelAlertReason: string | null;
   penaltyId: string | null;
   penaltyStatus: PenaltyStatus | null;
   penaltyAmount: number | null;

@@ -37,8 +37,17 @@ const CATEGORIES: Array<{ key: string; label: string }> = [
 ];
 const CAT_LABEL: Record<string, string> = Object.fromEntries(CATEGORIES.filter((c) => c.key).map((c) => [c.key, c.label]));
 
+/** Ví thưởng = tiền khuyến mãi/thưởng, chỉ tiêu được trong app. Ví ký quỹ = TIỀN THẬT
+ *  tài xế nạp vào và rút ra được. Cùng một số tiền nhưng trừ vào hai ví này là hai
+ *  chuyện hoàn toàn khác khi đối soát với tài xế, nên phải hiện rõ. */
+const WALLET_LABEL: Record<string, string> = {
+  DRIVER_MAIN: 'Ví thưởng',
+  DRIVER_DEPOSIT: 'Ví ký quỹ',
+};
+const walletLabel = (t: string | null | undefined) => (t ? (WALLET_LABEL[t] ?? t) : '—');
+
 const PAGE_SIZES = [10, 20, 50, 100];
-const COL_COUNT = 7;
+const COL_COUNT = 8;
 
 export default function DriverCashflowPage() {
   const { toast } = useToast();
@@ -69,11 +78,12 @@ export default function DriverCashflowPage() {
       if (all.length === 0) { toast({ title: 'Không có dữ liệu để xuất' }); return; }
       await downloadXlsx(
         `dong-tien-tai-xe_${range.from}_${range.to}.xlsx`,
-        ['Thời gian (VN)', 'Tài xế', 'SĐT', 'HTX', 'Biển số', 'Loại', 'Chiều', 'Số tiền (đ)', 'Mã GD', 'Diễn giải'],
+        ['Thời gian (VN)', 'Tài xế', 'SĐT', 'HTX', 'Biển số', 'Loại', 'Ví', 'Chiều', 'Số tiền (đ)', 'Mã GD', 'Diễn giải'],
         all.map((r) => [
           fmtVnTime(r.createdAt),
           r.driverName, r.driverPhone, r.htxName, r.plate,
           CAT_LABEL[r.category] ?? 'Khác',
+          walletLabel(r.walletType),
           r.direction === 'in' ? 'Vào' : 'Ra',
           r.amount,
           r.category === 'payos' ? r.refCode : '',
@@ -151,6 +161,7 @@ export default function DriverCashflowPage() {
               <TableHead>HTX</TableHead>
               <TableHead>Biển số</TableHead>
               <TableHead>Loại</TableHead>
+              <TableHead className="whitespace-nowrap">Ví</TableHead>
               <TableHead>Mã GD</TableHead>
               <TableHead className="text-right">Số tiền</TableHead>
             </TableRow>
@@ -178,6 +189,7 @@ export default function DriverCashflowPage() {
                       </Badge>
                       {r.description && <div className="mt-0.5 max-w-[220px] truncate text-xs text-muted-foreground" title={r.description}>{r.description}</div>}
                     </TableCell>
+                    <TableCell className="whitespace-nowrap text-sm">{walletLabel(r.walletType)}</TableCell>
                     <TableCell className="font-mono text-xs">{r.category === 'payos' ? (r.refCode || '—') : '—'}</TableCell>
                     <TableCell className={`text-right tabular-nums font-semibold ${isIn ? 'text-green-600 dark:text-green-400' : 'text-red-600'}`}>
                       {isIn ? '+' : '−'}{fmtVnd(r.amount)}
