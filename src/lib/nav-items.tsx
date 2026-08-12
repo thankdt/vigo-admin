@@ -29,6 +29,7 @@ import {
   Star,
   Handshake,
   type LucideIcon,
+  Gavel,
 } from 'lucide-react';
 
 export type NavItem = { href: string; label: string; icon: LucideIcon };
@@ -60,6 +61,9 @@ export const navGroups: NavGroup[] = [
       { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
       { href: '/driver-cancel-review', label: 'Tỉ lệ huỷ tài xế', icon: TrendingDown },
       { href: '/leakage-review', label: 'Nghi vấn gian lận', icon: ShieldAlert },
+      // Cùng cụm chống gian lận, ngay sau 2 màn soát. Quyền RIÊNG driver-penalties —
+      // đây là thao tác trừ tiền thật của tài xế, không mở cho cả team vận hành.
+      { href: '/driver-penalties', label: 'Phạt vi phạm', icon: Gavel },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
     ],

@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { Loader2 } from 'lucide-react';
+import { Gavel, Loader2 } from 'lucide-react';
 import type { LeakageTraceRow, LeakageTraceStatus } from '@/lib/types';
 import { VERDICT_LABEL, addressText, describeEvidence, formatVnDateTime, verdictBadgeClass } from '../leakage-labels';
+import { PenaltyDialog } from '../../driver-penalties/components/penalty-dialog';
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -33,6 +34,16 @@ export function TraceDetailDialog({
   onUpdateStatus: (id: string, status: LeakageTraceStatus) => Promise<void> | void;
 }) {
   const [saving, setSaving] = React.useState<LeakageTraceStatus | null>(null);
+  // Xác minh xong thì phạt ngay tại chỗ. Dialog phạt chồng lên dialog này, đóng lại
+  // vẫn giữ nguyên ngữ cảnh trace đang xem.
+  const [penaltyOpen, setPenaltyOpen] = React.useState(false);
+
+  // Component này KHÔNG unmount khi đóng (cha giữ mount, truyền trace=null), nên state
+  // sống sót qua các lần mở/đóng — không clear là lần mở trace KHÁC có thể tự bung
+  // dialog phạt cho chuyến CŨ.
+  React.useEffect(() => {
+    setPenaltyOpen(false);
+  }, [trace?.id]);
 
   if (!trace) return null;
 
@@ -123,8 +134,19 @@ export function TraceDetailDialog({
             {saving === 'CONFIRMED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
             Xác nhận gian lận
           </Button>
+          <Button variant="destructive" disabled={!!saving} onClick={() => setPenaltyOpen(true)}>
+            <Gavel className="mr-1.5 h-4 w-4" />
+            Phạt tài xế
+          </Button>
         </DialogFooter>
       </DialogContent>
+
+      <PenaltyDialog
+        bookingId={trace?.bookingId ?? null}
+        open={penaltyOpen}
+        source="LEAKAGE_REVIEW"
+        onOpenChange={setPenaltyOpen}
+      />
     </Dialog>
   );
 }

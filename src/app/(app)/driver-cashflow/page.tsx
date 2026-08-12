@@ -28,6 +28,9 @@ const CATEGORIES: Array<{ key: string; label: string }> = [
   { key: 'earnings', label: 'Earnings chuyến' },
   { key: 'refund', label: 'Hoàn tiền' },
   { key: 'admin_debit', label: 'Admin trừ tay' },
+  // Backend xếp nhóm này TRƯỚC 'refund'/'commission' (finance.service.ts) — nếu thiếu
+  // nhãn ở đây thì cột hiện key thô 'penalty'.
+  { key: 'penalty', label: 'Phạt vi phạm' },
   { key: 'commission', label: 'Trừ hoa hồng' },
   { key: 'tax', label: 'Trừ VAT/PIT' },
   { key: 'other', label: 'Khác' },

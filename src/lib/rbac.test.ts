@@ -19,8 +19,8 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 28 menu functions (navItems minus /settings)', () => {
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(28); // 2026-08-10: +driver-team
+  it('has exactly 29 menu functions (navItems minus /settings)', () => {
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(29); // 2026-08-11: +driver-penalties
   });
 
   // Ranh giới riêng tư của màn "Đội tài chuyên nghiệp": ghi chú tuyển team KHÔNG

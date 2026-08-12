@@ -3225,3 +3225,162 @@ export async function addTeamEvent(
     }),
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Phạt vi phạm tài xế (/driver-penalties)
+//
+// Phạt = thu lại đúng khoản commission của chuyến ĐÃ HUỶ, thay vì để hệ thống hoàn
+// về ví tài xế. Số tiền do backend tính từ ledger lịch sử — admin KHÔNG nhập tay.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export type PenaltyReasonCode =
+  | 'OFF_PLATFORM'
+  | 'NO_SHOW'
+  | 'FORCED_CANCEL'
+  | 'FAKE_TRIP'
+  | 'OTHER';
+export type PenaltyStatus = 'ACTIVE' | 'REVERSED';
+export type PenaltySource = 'PENALTY_PAGE' | 'CANCEL_REVIEW' | 'LEAKAGE_REVIEW';
+export type PenaltyQueueFlag = 'all' | 'leakage' | 'cancelAlert' | 'unpenalized' | 'penalized';
+
+/** Mã chặn — câu hiển thị lấy từ `blockedMessage` (backend là nguồn duy nhất). */
+export type PenaltyBlockedReason =
+  | 'NOT_CANCELLED'
+  | 'WAS_COMPLETED'
+  | 'ALREADY_PENALIZED'
+  | 'NO_COMMISSION'
+  | 'NOT_REFUNDED'
+  /** Chuyến quá cũ: sổ ví không nhúng mức hoa hồng nên không tự tính được. */
+  | 'LEGACY_LEDGER'
+  | 'LEDGER_ANOMALY'
+  | 'DRIVER_NOT_FOUND';
+
+export type PenaltyPreview = {
+  amount: number;
+  /** Số tiền ví ký quỹ sẽ ÂM sau khi phạt (0 = không âm). Không lộ số dư thô. */
+  willOweDeposit: number;
+  blockedReason: PenaltyBlockedReason | null;
+  blockedMessage: string | null;
+};
+
+export type PenaltyQueueRow = {
+  bookingId: string;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  cancelledByRole: string | null;
+  pickupAddress: string | null;
+  dropoffAddress: string | null;
+  driverEntityId: string;
+  driverName: string | null;
+  driverPhone: string | null;
+  leakageVerdict: string | null;
+  leakageConfidence: 'HIGH' | 'LOW' | null;
+  cancelAlertRule: string | null;
+  cancelAlertAction: string | null;
+  cancelAlertRatePct: number | null;
+  cancelAlertShadow: boolean | null;
+  penaltyId: string | null;
+  penaltyStatus: PenaltyStatus | null;
+  penaltyAmount: number | null;
+  collectibleAmount: number;
+};
+
+/**
+ * Hàng trong LỊCH SỬ phạt — có các field JOIN thêm (tên tài xế, tên người phạt).
+ * `createPenalty`/`reversePenalty` KHÔNG trả những field này (backend trả entity thô),
+ * nên hai hàm đó dùng `DriverPenaltyEntity` bên dưới.
+ */
+export type DriverPenaltyRow = {
+  id: string;
+  bookingId: string;
+  driverEntityId: string;
+  driverName: string | null;
+  driverPhone: string | null;
+  amount: number;
+  fromMain: number;
+  fromDeposit: number;
+  reasonCode: PenaltyReasonCode;
+  note: string | null;
+  source: PenaltySource;
+  status: PenaltyStatus;
+  createdByName: string | null;
+  createdAt: string;
+  reversedByName: string | null;
+  reversedAt: string | null;
+  reverseNote: string | null;
+};
+
+/** Entity thô backend trả về khi tạo/huỷ phạt — thiếu mọi field JOIN của danh sách. */
+export type DriverPenaltyEntity = Omit<
+  DriverPenaltyRow,
+  'driverName' | 'driverPhone' | 'createdByName' | 'reversedByName'
+>;
+
+type PenaltyMeta = { page: number; limit: number; total: number; totalPages: number };
+
+export async function getPenaltyQueue(params: {
+  from: string;
+  to: string;
+  flag?: PenaltyQueueFlag;
+  q?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{ data: PenaltyQueueRow[]; meta: PenaltyMeta }> {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+  });
+  return unwrap(await fetchWithAuth(`/admin/driver-penalties/queue?${qs.toString()}`));
+}
+
+export async function previewPenalty(bookingId: string): Promise<PenaltyPreview> {
+  return unwrap(
+    await fetchWithAuth(
+      `/admin/driver-penalties/preview?bookingId=${encodeURIComponent(bookingId)}`,
+    ),
+  );
+}
+
+export async function createPenalty(body: {
+  bookingId: string;
+  reasonCode: PenaltyReasonCode;
+  note?: string;
+  source: PenaltySource;
+}): Promise<DriverPenaltyEntity> {
+  return unwrap(
+    await fetchWithAuth('/admin/driver-penalties', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  );
+}
+
+export async function listPenalties(params: {
+  from: string;
+  to: string;
+  status?: PenaltyStatus;
+  reasonCode?: PenaltyReasonCode;
+  q?: string;
+  page?: number;
+  limit?: number;
+}): Promise<{
+  data: DriverPenaltyRow[];
+  // `totals` nằm TRONG meta: backend buộc phải để đó vì TransformInterceptor vứt mọi
+  // key ngoài `data`/`meta` khi dựng lại response phân trang.
+  meta: PenaltyMeta & { totals: { count: number; amount: number } };
+}> {
+  const qs = new URLSearchParams();
+  Object.entries(params).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
+  });
+  return unwrap(await fetchWithAuth(`/admin/driver-penalties?${qs.toString()}`));
+}
+
+export async function reversePenalty(id: string, note?: string): Promise<DriverPenaltyEntity> {
+  return unwrap(
+    await fetchWithAuth(`/admin/driver-penalties/${id}/reverse`, {
+      method: 'POST',
+      body: JSON.stringify({ ...(note && { note }) }),
+    }),
+  );
+}
