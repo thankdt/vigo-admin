@@ -35,6 +35,7 @@ import {
   Download,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { REFERRAL_EVENT_LABEL } from '@/lib/enum-labels';
 import {
   adminListReferrers,
   adminListReferrals,
@@ -233,7 +234,7 @@ export default function ReferralsPage() {
     setIsClawingBack(true);
     try {
       await adminClawbackReferralEvent(clawbackTarget.eventId, clawbackReason.trim());
-      toast({ title: 'Đã clawback', description: `Đã hoàn ${formatVND(clawbackTarget.amount)} từ chủ link.` });
+      toast({ title: 'Đã thu hồi', description: `Đã hoàn ${formatVND(clawbackTarget.amount)} từ chủ link.` });
       setClawbackTarget(null);
       setClawbackReason('');
       if (detail) {
@@ -370,7 +371,7 @@ export default function ReferralsPage() {
                           size="icon"
                           className="h-6 w-6 shrink-0"
                           onClick={(e) => { e.stopPropagation(); copyShortUrl(r); }}
-                          title="Copy link"
+                          title="Sao chép link"
                         >
                           {copiedId === r.id ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
                         </Button>
@@ -571,7 +572,7 @@ export default function ReferralsPage() {
                     <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Chưa có giao dịch.</TableCell></TableRow>
                   ) : detail.events.slice((eventPage - 1) * EVENT_PAGE_SIZE, eventPage * EVENT_PAGE_SIZE).map((e) => (
                     <TableRow key={e.id}>
-                      <TableCell><Badge variant={e.type === 'CLAWBACK' ? 'destructive' : 'secondary'}>{e.type}</Badge></TableCell>
+                      <TableCell><Badge variant={e.type === 'CLAWBACK' ? 'destructive' : 'secondary'}>{REFERRAL_EVENT_LABEL(e.type)}</Badge></TableCell>
                       <TableCell className={`text-right tabular-nums font-medium ${e.amount < 0 ? 'text-red-600' : ''}`}>{formatVND(e.amount)}</TableCell>
                       <TableCell className="text-xs text-muted-foreground font-mono">{e.bookingId ? e.bookingId.slice(0, 8) + '...' : '—'}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">{new Date(e.createdAt).toLocaleString('vi-VN')}</TableCell>
@@ -608,7 +609,7 @@ export default function ReferralsPage() {
           <DialogHeader>
             <DialogTitle>Clawback giao dịch</DialogTitle>
             <DialogDescription>
-              Hoàn lại <span className="font-medium">{clawbackTarget && formatVND(clawbackTarget.amount)}</span> ({clawbackTarget?.type}) từ chủ link về system. Hành động được ghi audit và không thể tự undo.
+              Hoàn lại <span className="font-medium">{clawbackTarget && formatVND(clawbackTarget.amount)}</span> ({clawbackTarget?.type}) từ chủ link về quỹ hệ thống. Hành động được ghi nhật ký và không thể hoàn tác.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">

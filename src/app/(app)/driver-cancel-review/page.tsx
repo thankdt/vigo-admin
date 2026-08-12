@@ -201,7 +201,7 @@ export default function DriverCancelReviewPage() {
               <TableHead className="whitespace-nowrap">Tỉ lệ</TableHead>
               <TableHead className="whitespace-nowrap">Số lần vi phạm</TableHead>
               <TableHead className="whitespace-nowrap">Trạng thái</TableHead>
-              <TableHead className="whitespace-nowrap">Check</TableHead>
+              <TableHead className="whitespace-nowrap">Kiểm tra</TableHead>
               <TableHead className="whitespace-nowrap">Cảnh báo gần nhất</TableHead>
             </TableRow>
           </TableHeader>

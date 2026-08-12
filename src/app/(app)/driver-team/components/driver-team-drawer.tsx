@@ -34,6 +34,8 @@ import {
 } from '@/components/ui/select';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import type { DateRange } from '../../finance/components/finance-filter';
+import { DRIVER_TEAM_EVENT_LABEL, unknownEnumLabel } from '@/lib/enum-labels';
+import { DRIVER_CALL_TYPE_LABEL } from '@/lib/cskh-call-labels';
 
 /** shadcn Select cấm value rỗng — cần sentinel để biểu diễn "không ai phụ trách". */
 const NONE = '__none__';
@@ -312,7 +314,7 @@ export function DriverTeamDrawer({
                 <ul className="space-y-1 text-sm">
                   {detail.events.map((e) => (
                     <li key={e.id} className="text-muted-foreground">
-                      {vnDay(e.createdAt)} · {e.type}
+                      {vnDay(e.createdAt)} · {DRIVER_TEAM_EVENT_LABEL(e.type)}
                       {e.toStage ? ` → ${stageLabel(e.toStage)}` : ''}
                       {e.note ? ` · ${e.note}` : ''}
                     </li>
@@ -330,7 +332,7 @@ export function DriverTeamDrawer({
                 <ul className="space-y-1 text-sm text-muted-foreground">
                   {csCalls.map((c) => (
                     <li key={c.id}>
-                      {vnDay(c.createdAt)} · {c.type}
+                      {vnDay(c.createdAt)} · {DRIVER_CALL_TYPE_LABEL[c.type] ?? unknownEnumLabel(c.type)}
                       {c.note ? ` · ${c.note}` : ''}
                     </li>
                   ))}

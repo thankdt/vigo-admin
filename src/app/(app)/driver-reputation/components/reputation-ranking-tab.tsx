@@ -8,8 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { useToast } from '@/hooks/use-toast';
-import { getDriverReputationRanking, parseApiError } from '@/lib/api';
+import { getDriverReputationRanking } from '@/lib/api';
 import type { DriverReputationRankRow } from '@/lib/types';
 import {
   NO_RATING_LABEL,
@@ -22,6 +21,7 @@ import {
   ratingCountText,
 } from '../reputation-labels';
 import type { SelectDriver } from './select-driver';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 
 const PAGE_SIZE = 20;
 const COL_COUNT = 6;
@@ -73,7 +73,6 @@ function StarsCell({ row }: { row: DriverReputationRankRow }) {
  * Phân trang chạy ở backend (limit/offset) vì bảng quét toàn bộ ~11.7k tài xế.
  */
 export function ReputationRankingTab({ onSelectDriver }: { onSelectDriver: SelectDriver }) {
-  const { toast } = useToast();
 
   const [search, setSearch] = React.useState('');
   // Mặc định CHỈ hiện tài đã có đánh giá. Dữ liệu thật: ~11.7k tài mà chỉ một
@@ -122,16 +121,11 @@ export function ReputationRankingTab({ onSelectDriver }: { onSelectDriver: Selec
       if (reqId !== reqIdRef.current) return;
       setRows([]);
       setTotal(0);
-      toast({
-        variant: 'destructive',
-        title: 'Không tải được bảng xếp hạng',
-        // fetchWithAuth ném Error(JSON envelope) — parseApiError rút ra câu người đọc được.
-        description: err?.message ? parseApiError(err.message) : 'Vui lòng thử lại.',
-      });
+      toastApiError(err, 'Không tải được bảng xếp hạng');
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
     }
-  }, [search, includeUnrated, page, toast]);
+  }, [search, includeUnrated, page]);
 
   React.useEffect(() => {
     const t = setTimeout(load, 300);

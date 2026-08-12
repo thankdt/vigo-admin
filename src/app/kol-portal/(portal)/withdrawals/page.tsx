@@ -9,12 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Loader2, Wallet } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 import {
   getKolMe,
   getMyWithdrawals,
   updateMyBankInfo,
   submitMyWithdrawal,
-  parseApiError,
   type KolMe,
   type KolWithdrawal,
 } from '@/lib/api';
@@ -55,7 +55,7 @@ export default function KolWithdrawalsPage() {
         setAccountHolder(m.bankInfo.accountHolder || '');
       }
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không tải được dữ liệu', description: parseApiError(err.message) });
+      toastApiError(err, 'Không tải được dữ liệu');
     } finally {
       setLoading(false);
     }
@@ -74,7 +74,7 @@ export default function KolWithdrawalsPage() {
       toast({ title: 'Đã lưu tài khoản nhận tiền' });
       await load();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Lưu thất bại', description: parseApiError(err.message) });
+      toastApiError(err, 'Lưu thất bại');
     } finally {
       setSavingBank(false);
     }
@@ -93,7 +93,7 @@ export default function KolWithdrawalsPage() {
       setAmount('');
       await load();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Tạo lệnh rút thất bại', description: parseApiError(err.message) });
+      toastApiError(err, 'Tạo lệnh rút thất bại');
     } finally {
       setSubmitting(false);
     }

@@ -558,7 +558,7 @@ export function UsersTable() {
                         <TableHead>Người được mời</TableHead>
                         <TableHead className="text-right">Chuyến</TableHead>
                         <TableHead className="text-right">Tiền nhận</TableHead>
-                        <TableHead>Bonus signup</TableHead>
+                        <TableHead>Thưởng đăng ký</TableHead>
                         <TableHead>Ngày mời</TableHead>
                       </TableRow>
                     </TableHeader>

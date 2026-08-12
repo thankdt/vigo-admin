@@ -25,7 +25,7 @@ export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
                 <TableRow>
                   <TableHead>HTX</TableHead>
                   <TableHead className="text-right">Chuyến</TableHead>
-                  <TableHead className="text-right">Net income</TableHead>
+                  <TableHead className="text-right">Thực thu</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -57,7 +57,7 @@ export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
                 <TableRow>
                   <TableHead>Tài xế</TableHead>
                   <TableHead className="text-right">Chuyến</TableHead>
-                  <TableHead className="text-right">Net earnings</TableHead>
+                  <TableHead className="text-right">Thực nhận</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>

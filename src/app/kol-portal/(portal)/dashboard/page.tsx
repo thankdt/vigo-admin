@@ -8,12 +8,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Loader2, Copy, Crown, Wallet, TrendingUp, Users, Percent, Layers } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts';
 import { useToast } from '@/hooks/use-toast';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 import {
   getKolMe,
   getKolEarnings,
   getKolLeaderDashboard,
   getKolReferees,
-  parseApiError,
   type KolMe,
   type KolLeaderDashboard,
   type KolEarningsSeries,
@@ -53,7 +53,7 @@ export default function KolDashboardPage() {
         }
         await Promise.all(tasks);
       } catch (err: any) {
-        toast({ variant: 'destructive', title: 'Không tải được dữ liệu', description: parseApiError(err.message) });
+        toastApiError(err, 'Không tải được dữ liệu');
       } finally {
         setLoading(false);
       }

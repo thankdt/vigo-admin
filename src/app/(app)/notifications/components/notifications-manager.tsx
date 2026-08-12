@@ -32,6 +32,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { parseVnDateTimeInput, vnDateTimeInputValue } from '@/lib/date-input-utils';
 import { Loader2, PlusCircle, Trash2, Clock, Repeat, Bell, ExternalLink, Send, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { NOTIFICATION_STATUS_LABEL } from '@/lib/enum-labels';
 
 /**
  * Hiển thị mốc UTC từ backend theo giờ VN. Toàn bộ ngày/giờ nghiệp vụ của Vigo
@@ -598,13 +599,20 @@ export function NotificationsManager() {
         }
     };
 
+    // CHỮ lấy từ NOTIFICATION_STATUS_LABEL (một nguồn chân lý, có test), switch
+    // chỉ còn chọn MÀU. Trước đây switch tự viết chữ nên hai nơi đã lệch nhau
+    // ("Hoàn thành" vs "Đã hoàn thành", "Đã hủy" vs "Đã huỷ") và 4 nhãn trong
+    // bảng không bao giờ được render — test cho chúng xanh mà chẳng chứng minh gì.
+    // Nhánh mặc định trả "Không rõ (MÃ)": backend thêm status mới thì admin vẫn
+    // đọc được, dev vẫn thấy mã để lần ra.
     const getStatusBadge = (status: string) => {
+        const label = NOTIFICATION_STATUS_LABEL(status);
         switch (status) {
-            case 'ACTIVE': return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Hoạt động</Badge>;
-            case 'COMPLETED': return <Badge variant="secondary">Hoàn thành</Badge>;
-            case 'CANCELLED': return <Badge variant="destructive">Đã hủy</Badge>;
-            case 'FAILED': return <Badge variant="destructive">Lỗi lịch</Badge>;
-            default: return <Badge variant="outline">{status}</Badge>;
+            case 'ACTIVE': return <Badge className="bg-green-100 text-green-800 hover:bg-green-100">{label}</Badge>;
+            case 'COMPLETED': return <Badge variant="secondary">{label}</Badge>;
+            case 'CANCELLED':
+            case 'FAILED': return <Badge variant="destructive">{label}</Badge>;
+            default: return <Badge variant="outline">{label}</Badge>;
         }
     };
 
