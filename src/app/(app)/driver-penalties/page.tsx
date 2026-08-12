@@ -160,9 +160,9 @@ export default function DriverPenaltiesPage() {
       />
 
       <Card className="p-4 text-sm text-muted-foreground">
-        Tiền phạt trừ ví thưởng trước, thiếu mới sang ví ký quỹ. Tài xế còn ví thưởng vẫn nhận
-        chuyến bình thường; chỉ khi ví ký quỹ âm mới bị chặn tới lúc nạp bù. Phạt nhầm thì vào tab
-        “Lịch sử phạt” bấm huỷ, tiền hoàn về đúng ví đã trừ.
+        Tiền phạt được thu lại đúng ví đã nhận hoàn hoa hồng: hoàn vào ví nào thì trừ ví đó.
+        Ví thưởng không bị đẩy xuống âm — phần thiếu thành nợ ví ký quỹ, và tài xế phải nạp bù
+        mới nhận được chuyến. Phạt nhầm thì vào tab “Lịch sử phạt” bấm huỷ, tiền hoàn về đúng ví đã trừ.
       </Card>
 
       <Card className="space-y-3 p-4">

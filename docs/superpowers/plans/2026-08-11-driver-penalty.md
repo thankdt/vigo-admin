@@ -86,13 +86,13 @@ export enum PenaltySource { PENALTY_PAGE, CANCEL_REVIEW, LEAKAGE_REVIEW }
 @Entity('driver_penalty') export class DriverPenalty { … }
 ```
 
-- [ ] **Step 1: Viết entity**
+- [x] **Step 1: Viết entity**
 
 Cột theo spec §5. `amount`/`fromMain`/`fromDeposit` dùng `bigint` + transformer về `number`
 (mirror cách repo xử lý số tiền), `sourceCommissionLedgerIds` là `int[]` (jsonb không cần —
 chỉ là danh sách id).
 
-- [ ] **Step 2: Viết migration**
+- [x] **Step 2: Viết migration**
 
 ```sql
 CREATE TABLE IF NOT EXISTS "driver_penalty" ( … );
@@ -104,9 +104,9 @@ CREATE INDEX IF NOT EXISTS "idx_driver_penalty_created" ON "driver_penalty" ("cr
 ```
 `down()` drop bảng + type enum.
 
-- [ ] **Step 3: `npx tsc --noEmit`** → sạch.
+- [x] **Step 3: `npx tsc --noEmit`** → sạch.
 
-- [ ] **Step 4: Commit** `feat(driver-penalty): bảng driver_penalty + migration`
+- [x] **Step 4: Commit** `feat(driver-penalty): bảng driver_penalty + migration`
 
 ---
 
@@ -133,7 +133,7 @@ export function resolvePenaltyAmount(args: {
 }): ResolveResult;
 ```
 
-- [ ] **Step 1: Viết test TRƯỚC** (`penalty-amount.util.spec.ts`)
+- [x] **Step 1: Viết test TRƯỚC** (`penalty-amount.util.spec.ts`)
 
 ```ts
 const row = (id: number, amount: number, description: string, sourceWalletId: number)
@@ -220,9 +220,9 @@ describe('resolvePenaltyAmount', () => {
 });
 ```
 
-- [ ] **Step 2: Chạy test → FAIL** (`npm test -- penalty-amount`)
+- [x] **Step 2: Chạy test → FAIL** (`npm test -- penalty-amount`)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```ts
 const WALLET_SUFFIX = / \((?:Main|Deposit)\)$/;
@@ -261,8 +261,8 @@ export function resolvePenaltyAmount({ commissionRows, refundRows }): ResolveRes
 }
 ```
 
-- [ ] **Step 4: Chạy test → PASS**
-- [ ] **Step 5: Commit** `feat(driver-penalty): util giải số tiền phạt từ ledger + test`
+- [x] **Step 4: Chạy test → PASS**
+- [x] **Step 5: Commit** `feat(driver-penalty): util giải số tiền phạt từ ledger + test`
 
 ---
 
@@ -311,7 +311,7 @@ reverse(id: string, note: string | undefined, actor: Actor): Promise<DriverPenal
    `refundDriverCommission(driverUserId, 'penalty:'+id, desc, manager, { deferNotify: true })`,
    set `REVERSED` + `reversedBy/At/Note`. Sau commit bắn `wallet.refunded` + push.
 
-- [ ] **Step 1: Viết test TRƯỚC** — mock `WalletService`, `Repository`, `DataSource.transaction`
+- [x] **Step 1: Viết test TRƯỚC** — mock `WalletService`, `Repository`, `DataSource.transaction`
       chạy callback với manager giả. Ca bắt buộc:
       `NOT_CANCELLED` · `WAS_COMPLETED` (cả 2 dấu hiệu, kể cả `completedAt = null` + dấu vết ledger)
       · `ALREADY_PENALIZED` · `NO_COMMISSION` · `NOT_REFUNDED` · phạt thành công gọi
@@ -319,10 +319,10 @@ reverse(id: string, note: string | undefined, actor: Actor): Promise<DriverPenal
       `strategy: 'MAIN_FIRST'`, `deferNotify: true`) · rollback thì **không** bắn socket ·
       `reverse` gọi `refundDriverCommission` với `'penalty:<id>'` và chặn reverse lần 2 ·
       `assertScope` ném 403 cho actor chỉ có `leakage-review` với booking không có trace.
-- [ ] **Step 2: Chạy test → FAIL**
-- [ ] **Step 3: Implement service**
-- [ ] **Step 4: Chạy test → PASS** (`npm test -- driver-penalty`)
-- [ ] **Step 5: Commit** `feat(driver-penalty): service phạt/huỷ phạt + test`
+- [x] **Step 2: Chạy test → FAIL**
+- [x] **Step 3: Implement service**
+- [x] **Step 4: Chạy test → PASS** (`npm test -- driver-penalty`)
+- [x] **Step 5: Commit** `feat(driver-penalty): service phạt/huỷ phạt + test`
 
 ---
 
@@ -347,9 +347,9 @@ list(q: { from; to; status?; reasonCode?; q?; page?; limit? }):
   subquery `DISTINCT ON (bookingId)` hoặc aggregate, giữ cờ `shadow`.
 - Cột "Thu được": **một truy vấn ledger theo lô** cho tập `bookingId` của trang, không N+1.
 
-- [ ] **Step 1: Test** — 1 booking có 3 alert → `queue` trả **đúng 1 dòng**; `meta.total` không bị thổi.
-- [ ] **Step 2: FAIL** → **Step 3: Implement** → **Step 4: PASS**
-- [ ] **Step 5: Commit** `feat(driver-penalty): hàng đợi soát + lịch sử phạt`
+- [x] **Step 1: Test** — 1 booking có 3 alert → `queue` trả **đúng 1 dòng**; `meta.total` không bị thổi.
+- [x] **Step 2: FAIL** → **Step 3: Implement** → **Step 4: PASS**
+- [x] **Step 5: Commit** `feat(driver-penalty): hàng đợi soát + lịch sử phạt`
 
 ---
 
@@ -373,14 +373,14 @@ POST /admin/driver-penalties/:id/reverse @RequireFunction('driver-penalties')
 ```
 ⚠️ Khai `queue` và `preview` **TRƯỚC** `:id` (Nest khớp theo thứ tự).
 
-- [ ] **Step 1:** Thêm `'driver-penalties'` vào `MENU_FUNCTIONS`.
-- [ ] **Step 2:** Viết DTO (`class-validator`: `bookingId` UUID, `reasonCode` enum, `note` optional
+- [x] **Step 1:** Thêm `'driver-penalties'` vào `MENU_FUNCTIONS`.
+- [x] **Step 2:** Viết DTO (`class-validator`: `bookingId` UUID, `reasonCode` enum, `note` optional
       string ≤ 500, **bắt buộc note khi `reasonCode = OTHER`**).
-- [ ] **Step 3:** Viết controller + module, đăng ký ở `app.module.ts`.
-- [ ] **Step 4:** Thêm assert vào `src/rbac/route-coverage.spec.ts`: mọi key trong
+- [x] **Step 3:** Viết controller + module, đăng ký ở `app.module.ts`.
+- [x] **Step 4:** Thêm assert vào `src/rbac/route-coverage.spec.ts`: mọi key trong
       `@RequireFunction` phải thuộc `ALL_FUNCTION_KEYS` (spec §7.4 — gõ sai key hiện đang pass hết test).
-- [ ] **Step 5:** `npm test` + `npx tsc --noEmit` → sạch.
-- [ ] **Step 6: Commit** `feat(driver-penalty): controller + RBAC driver-penalties`
+- [x] **Step 5:** `npm test` + `npx tsc --noEmit` → sạch.
+- [x] **Step 6: Commit** `feat(driver-penalty): controller + RBAC driver-penalties`
 
 ---
 
@@ -394,12 +394,12 @@ POST /admin/driver-penalties/:id/reverse @RequireFunction('driver-penalties')
 **Cách đấu dây (spec §4.6):** `TypeOrmModule.forFeature([DriverPenalty])` trong `BookingModule` +
 inject `Repository<DriverPenalty>`. **KHÔNG** inject `DriverPenaltyService` (circular dep).
 
-- [ ] **Step 1: Test** — booking `CANCELLED` có `driver_penalty` ACTIVE, gọi
+- [x] **Step 1: Test** — booking `CANCELLED` có `driver_penalty` ACTIVE, gọi
       `adminUpdateStatus(id, ACCEPTED)` → ném `BadRequestException` với thông điệp
       *"Chuyến đang có vụ phạt còn hiệu lực — huỷ phạt trước khi đổi trạng thái."*;
       không có phạt ACTIVE → đổi bình thường.
-- [ ] **Step 2: FAIL** → **Step 3: Implement** → **Step 4: PASS**
-- [ ] **Step 5: Commit** `feat(driver-penalty): chặn lật trạng thái chuyến đang bị phạt`
+- [x] **Step 2: FAIL** → **Step 3: Implement** → **Step 4: PASS**
+- [x] **Step 5: Commit** `feat(driver-penalty): chặn lật trạng thái chuyến đang bị phạt`
 
 ---
 
@@ -409,20 +409,20 @@ inject `Repository<DriverPenalty>`. **KHÔNG** inject `DriverPenaltyService` (ci
 - Modify: `src/finance/finance.service.ts` (`cashflowCategories()`, `:613`)
 - Test: `src/finance/finance.service.cashflow-penalty.spec.ts`
 
-- [ ] **Step 1: Test** — `cashflowCategories()` có key `penalty`, và nó đứng **trước** `refund`
+- [x] **Step 1: Test** — `cashflowCategories()` có key `penalty`, và nó đứng **trước** `refund`
       lẫn `commission` trong mảng (thứ tự quyết định nhánh CASE nào thắng).
-- [ ] **Step 2: FAIL**
-- [ ] **Step 3: Implement** — chèn ngay trước `refund`:
+- [x] **Step 2: FAIL**
+- [x] **Step 3: Implement** — chèn ngay trước `refund`:
       `{ key: 'penalty', cond: `l."referenceId" LIKE 'penalty:%'` }`
-- [ ] **Step 4: PASS** → **Step 5: Commit** `feat(driver-penalty): tách nhóm penalty ở driver-cashflow`
+- [x] **Step 4: PASS** → **Step 5: Commit** `feat(driver-penalty): tách nhóm penalty ở driver-cashflow`
 
 ---
 
 ## Task 8 — Kiểm tĩnh + test toàn backend
 
-- [ ] `npx tsc --noEmit` → 0 lỗi
-- [ ] `npm test` → xanh
-- [ ] Commit nếu có sửa vặt.
+- [x] `npx tsc --noEmit` → 0 lỗi
+- [x] `npm test` → xanh
+- [x] Commit nếu có sửa vặt.
 
 ---
 
@@ -456,14 +456,14 @@ listPenalties(p): Promise<{ data: PenaltyRow[]; meta; totals: { count: number; a
 reversePenalty(id: string, note?: string): Promise<void>
 ```
 
-- [ ] **Step 1:** Viết types + 5 hàm trong `api.ts` (dùng `fetchWithAuth`, ném `Error` với
+- [x] **Step 1:** Viết types + 5 hàm trong `api.ts` (dùng `fetchWithAuth`, ném `Error` với
       `err.message` như `voidCompletedBooking:850` để dialog hiện được lý do chặn từ BE).
-- [ ] **Step 2:** `src/lib/rbac.ts` — thêm `'/driver-penalties': 'driver-penalties'`; **bump số
+- [x] **Step 2:** `src/lib/rbac.ts` — thêm `'/driver-penalties': 'driver-penalties'`; **bump số
       chốt** trong `src/lib/rbac.test.ts` và `src/lib/function-catalog.test.ts`.
-- [ ] **Step 3:** `nav-items.tsx` — thêm `{ href: '/driver-penalties', label: 'Phạt vi phạm', icon: Gavel }`
+- [x] **Step 3:** `nav-items.tsx` — thêm `{ href: '/driver-penalties', label: 'Phạt vi phạm', icon: Gavel }`
       ngay **sau** `/leakage-review` (cùng cụm chống gian lận).
-- [ ] **Step 4:** `npx vitest run` + `npx tsc --noEmit` → sạch.
-- [ ] **Step 5: Commit** `feat(driver-penalty): api client + quyền + menu admin`
+- [x] **Step 4:** `npx vitest run` + `npx tsc --noEmit` → sạch.
+- [x] **Step 5: Commit** `feat(driver-penalty): api client + quyền + menu admin`
 
 ---
 
@@ -490,12 +490,12 @@ Hành vi dialog (spec §7.2): mở → gọi `previewPenalty`; `blockedReason` �
 tiếng Việt + **disable nút**; `willOweDeposit > 0` ⇒ cảnh báo đỏ; lý do **bắt buộc**;
 `reasonCode = OTHER` ⇒ ghi chú bắt buộc; số tiền là **chữ, không phải input**.
 
-- [ ] **Step 1: Test trước** (`penalty-dialog.test.tsx`, mock `@/lib/api`):
+- [x] **Step 1: Test trước** (`penalty-dialog.test.tsx`, mock `@/lib/api`):
       preview trả `blockedReason: 'NO_COMMISSION'` → nút disable + hiện "Chuyến này chưa từng thu
       hoa hồng…"; `willOweDeposit = 50000` → hiện cảnh báo âm ví; chưa chọn lý do → nút disable;
       chọn `OTHER` mà bỏ trống ghi chú → nút disable; bấm xác nhận → gọi `createPenalty` đúng body.
-- [ ] **Step 2: FAIL** → **Step 3: Implement** → **Step 4: PASS**
-- [ ] **Step 5: Commit** `feat(driver-penalty): dialog phạt dùng chung + nhãn`
+- [x] **Step 2: FAIL** → **Step 3: Implement** → **Step 4: PASS**
+- [x] **Step 5: Commit** `feat(driver-penalty): dialog phạt dùng chung + nhãn`
 
 ---
 
@@ -511,8 +511,8 @@ Bám khuôn `/driver-cancel-review/page.tsx`: `PageHeader` + `FinanceFilter` (`P
 - Tab **Lịch sử phạt**: cột theo spec §7.1; nút *Huỷ phạt* (confirm) gọi `reversePenalty`;
   dòng tổng số vụ + tổng tiền.
 
-- [ ] **Step 1:** Viết trang. **Step 2:** `npx tsc --noEmit` + `npx vitest run`.
-- [ ] **Step 3: Commit** `feat(driver-penalty): trang /driver-penalties`
+- [x] **Step 1:** Viết trang. **Step 2:** `npx tsc --noEmit` + `npx vitest run`.
+- [x] **Step 3: Commit** `feat(driver-penalty): trang /driver-penalties`
 
 ---
 
@@ -524,31 +524,31 @@ Bám khuôn `/driver-cancel-review/page.tsx`: `PageHeader` + `FinanceFilter` (`P
 - Modify: `src/app/(app)/leakage-review/components/trace-detail-dialog.tsx`
 - Modify: `src/app/(app)/driver-cashflow/page.tsx` (`CATEGORIES`, `:23`)
 
-- [ ] **Step 1:** Thêm nút *Phạt* mỗi dòng chuyến huỷ → `PenaltyDialog` `source='CANCEL_REVIEW'`;
+- [x] **Step 1:** Thêm nút *Phạt* mỗi dòng chuyến huỷ → `PenaltyDialog` `source='CANCEL_REVIEW'`;
       xong thì refetch danh sách.
-- [ ] **Step 2:** Thêm nút *Phạt tài xế* ở trace detail → `source='LEAKAGE_REVIEW'`.
+- [x] **Step 2:** Thêm nút *Phạt tài xế* ở trace detail → `source='LEAKAGE_REVIEW'`.
       ⚠️ Dialog lồng dialog: mở `PenaltyDialog` **thay vì** chồng lên (theo ghi chú
       `driver-detail-dialog.tsx:67` về 2 modal chồng nhau).
-- [ ] **Step 3:** `CATEGORIES` thêm `{ key: 'penalty', label: 'Phạt vi phạm' }`.
-- [ ] **Step 4:** `npx tsc --noEmit` + `npx vitest run` → sạch.
-- [ ] **Step 5: Commit** `feat(driver-penalty): nút phạt ở 2 màn soát + nhãn cashflow`
+- [x] **Step 3:** `CATEGORIES` thêm `{ key: 'penalty', label: 'Phạt vi phạm' }`.
+- [x] **Step 4:** `npx tsc --noEmit` + `npx vitest run` → sạch.
+- [x] **Step 5: Commit** `feat(driver-penalty): nút phạt ở 2 màn soát + nhãn cashflow`
 
 ---
 
 ## Task 13 — Self-review + review độc lập
 
-- [ ] Đọc lại **toàn bộ diff** 2 repo: từng site đã đổi, altitude, edge case.
-- [ ] `npx tsc --noEmit` + `npm test` (BE); `npx tsc --noEmit` + `npx vitest run` (FE).
-- [ ] Dispatch sub-agent review độc lập (fresh-context, model mạnh, ghi report ra scratchpad).
-- [ ] Sửa theo review; ghi lại các điểm cần CEO quyết (nếu có) để hỏi sáng hôm sau.
+- [x] Đọc lại **toàn bộ diff** 2 repo: từng site đã đổi, altitude, edge case.
+- [x] `npx tsc --noEmit` + `npm test` (BE); `npx tsc --noEmit` + `npx vitest run` (FE).
+- [x] Dispatch sub-agent review độc lập (fresh-context, model mạnh, ghi report ra scratchpad).
+- [ ] Sửa theo review; ghi lại các điểm cần chủ dự án quyết (nếu có) để hỏi sáng hôm sau.
 - [ ] Push 2 nhánh. **KHÔNG** merge vào `dev`/`main` khi chưa test DEV + chưa có người duyệt.
 
 ---
 
 ## Kiểm tương thích ngược (CLAUDE.md §4) — chạy trước khi push
 
-- [ ] Không xoá/đổi tên field response nào đang có.
-- [ ] Không thêm giá trị `LedgerType`.
-- [ ] Không đổi shape/required của request cũ.
-- [ ] App tài xế không cần release: `referenceId = 'penalty:<uuid>'` không crash
+- [x] Không xoá/đổi tên field response nào đang có.
+- [x] Không thêm giá trị `LedgerType`.
+- [x] Không đổi shape/required của request cũ.
+- [x] App tài xế không cần release: `referenceId = 'penalty:<uuid>'` không crash
       (`earnings_history.dart` whitelist type + regex UUID → `canOpen = false`).

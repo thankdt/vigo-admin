@@ -135,8 +135,8 @@ export function PenaltyDialog({
             <AlertTriangle className="h-5 w-5" /> Phạt tài xế vi phạm
           </DialogTitle>
           <DialogDescription>
-            Thu lại hoa hồng của chuyến đã huỷ. Số tiền do hệ thống tính theo hoa hồng thực tế
-            đã trừ của chuyến, không sửa được.
+            Thu lại hoa hồng của chuyến đã huỷ, trừ đúng ví đã nhận hoàn. Số tiền do hệ thống
+            tính theo hoa hồng thực tế của chuyến, không sửa được.
           </DialogDescription>
         </DialogHeader>
 

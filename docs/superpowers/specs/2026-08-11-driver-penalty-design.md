@@ -1,7 +1,7 @@
 # Phạt tài xế vi phạm — thu lại commission chuyến (`/driver-penalties`) — Design
 
 **Ngày:** 2026-08-11 · **Repos:** `vigo-backend` (rollout TRƯỚC) + `vigo-admin` · **App tài xế: KHÔNG đổi**
-**Nguồn yêu cầu:** CEO Vigo · **Trạng thái:** đã qua 1 lượt review đối kháng (fresh-context), đã sửa
+**Nguồn yêu cầu:** chủ dự án (admin Vigo) · **Trạng thái:** đã qua 1 lượt review đối kháng (fresh-context), đã sửa
 
 > "Trên admin tôi cần 1 chức năng phạt tài xế vi phạm, sau khi xác minh tài xế đó vi phạm cần
 > phạt bằng cách thu tiền commission của chuyến đó mà không phải huỷ là trả lại nữa."
@@ -51,13 +51,13 @@ Cần: sau khi admin **xác minh có vi phạm**, thu lại đúng khoản commi
 
 ---
 
-## 3. Quyết định đã chốt với CEO
+## 3. Quyết định đã chốt
 
 | # | Quyết định | Ghi chú |
 |---|---|---|
 | 1 | Case chính: chuyến **ĐÃ huỷ**, commission đã tự hoàn → **thu lại** | Không làm luồng "huỷ kèm phạt" |
 | 2 | Số tiền = **commission của chuyến đó, đúng 1 lần**, admin **không sửa được** | Không gõ tay ⇒ không sai số |
-| 3 | Trừ **ví thưởng trước, thiếu mới sang ký quỹ** (`MAIN_FIRST`); ký quỹ được đi âm = ghi nợ | Chỉ tài xế **không đủ tiền** mới bị chặn nhận chuyến — xem §4.5 |
+| 3 | Trừ lại **đúng tỉ lệ ví đã nhận hoàn**; ví thưởng không bị đẩy âm, phần thiếu dồn sang ký quỹ = ghi nợ | Tái lập trạng thái "như chưa từng hoàn" — xem §4.5 |
 | 11 | Thẻ "Đã trừ ví tài xế" trên dashboard **giữ nguyên**, gồm cả tiền phạt | Tách chi tiết ở bảng cashflow là đủ (§4.9) |
 | 4 | **Không** mật khẩu cấp 2 — thay bằng quyền RBAC riêng | Ghi rõ người thực hiện ở mọi vụ |
 | 5 | **Bắt buộc chọn lý do** vi phạm | Phục vụ thống kê + đối chất |
@@ -154,7 +154,7 @@ const r = await walletService.deductDriverWallet(
   `Phạt vi phạm — thu lại hoa hồng chuyến ${bookingCode}`,
   true,                                      // allowNegative — ví ký quỹ được đi âm
   manager,                                   // cùng transaction với việc tạo driver_penalty
-  { strategy: 'MAIN_FIRST', deferNotify: true },   // §4.5 — CEO chốt
+  { strategy: <theo ví đã hoàn — xem §4.5>, deferNotify: true },
 )
 // SAU khi transaction commit mới bắn:
 if (r.__notify) driverGateway.notifyDriver(r.__notify.driverId, r.__notify.event, r.__notify.data)
@@ -191,27 +191,36 @@ dùng `penalty:<id>` thì `b.id IS NULL` ⇒ dòng được giữ lại và hi�
 **KHÔNG thêm giá trị mới cho `LedgerType`** — app tài xế hard-map enum này
 (`vigo-driver/lib/data/dto/wallet/transaction_dto.dart`, `@JsonValue`) ⇒ enum mới làm app cũ vỡ parse.
 
-### 4.5 Trừ ví nào — CHỐT: `MAIN_FIRST`
+### 4.5 Trừ ví nào — CHỐT: **theo đúng tỉ lệ ví đã nhận hoàn**
 
-Cổng nhận chuyến chỉ đọc **ví ký quỹ** (`DEPOSIT ≥ DRIVER_MIN_DEPOSIT` — `booking.service.ts:990`,
-Vi-now `:1274`, reassign `:4091`). **Ví thưởng (MAIN) âm không chặn gì cả.** Vì vậy việc chọn
-chiến lược trừ quyết định luôn "phạt có đau không":
+`refundDriverCommission` hoàn về **đúng ví đã bị trừ**. Muốn tái lập trạng thái "như thể chưa bao
+giờ hoàn" thì phải thu lại theo đúng tỉ lệ đó — đây là lý do entity lưu `sourceCommissionLedgerIds`.
 
-| | `MAIN_FIRST` | `DEPOSIT_ONLY` |
-|---|---|---|
-| Trừ ở đâu | Ví thưởng trước, thiếu mới sang ký quỹ | Trừ **thẳng ví ký quỹ** (tiền thật) |
-| Tài xế **có ví thưởng** | Trả bằng tiền thưởng, **không mất đồng tiền thật nào**, ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường** | Mất tiền thật ngay |
-| Tài xế **không có ví thưởng** | Ký quỹ âm ⇒ bị chặn nhận chuyến | Ký quỹ âm ⇒ bị chặn nhận chuyến |
-| Lập luận ủng hộ | **Đối xứng**: commission lúc nhận chuyến cũng trừ `MAIN_FIRST`, nên lấy lại đúng chỗ đã hoàn | **Răn đe thật**: giống hệt cách hệ thống thu thuế tiền mặt (`booking.service.ts:1623`) — nghĩa vụ tiền thật thì ví thưởng không gánh hộ |
-| Invariant `MAIN>0 ⟹ DEPOSIT≥0` | **Giữ** — ví thưởng bị kẹp ở 0 trước khi ký quỹ đi âm, nên `MAIN>0` không bao giờ đi kèm `DEPOSIT<0` | **KHÔNG giữ** — tạo đúng trạng thái `MAIN=200k, DEPOSIT=−20k`. Chấp nhận được (nợ thuế tiền mặt đang chạy y hệt, `creditMainDebtAware` trả nợ dần khi tài xế có thu nhập) nhưng **không phải "vô hại"** |
+```
+mainTarget     = tổng các dòng commission có ví nguồn = ví thưởng
+depositTarget  = tổng các dòng còn lại (ví ký quỹ)
 
-**CEO chốt `MAIN_FIRST`** — lấy lại đúng chỗ đã hoàn, đối xứng với lúc trừ commission.
+fromMain    = min(mainTarget, max(0, số dư ví thưởng))   ← KHÔNG đẩy ví thưởng xuống âm
+fromDeposit = (mainTarget + depositTarget) − fromMain    ← phần thiếu dồn về đây, được đi âm
+```
 
-Hệ quả phải nói rõ với vận hành, **đừng hứa nhầm là "phạt xong tài xế bị treo"**: tài xế còn nhiều
-ví thưởng sẽ trả bằng thưởng, ví ký quỹ không âm ⇒ **vẫn nhận chuyến bình thường**. Việc chặn nhận
-chuyến chỉ xảy ra khi họ **không đủ tiền** (phần thiếu dồn vào ký quỹ → âm → cổng chặn). Muốn phạt
-luôn cắn vào tiền thật thì phải đổi sang `DEPOSIT_ONLY` — một tham số, nhưng **đọc kỹ ô invariant
-ở bảng trên trước khi đổi**, đó không phải thay đổi vô hại.
+Thi hành bằng **hai lời gọi `deductDriverWallet` tách bạch** (`MAIN_FIRST` cho phần ví thưởng đã
+kẹp theo số dư, `DEPOSIT_ONLY` cho phần còn lại) — chỉ cách này mới ép được đúng số vào đúng ví,
+mà vẫn giữ nguyên khoá ví / cập nhật ví hệ thống / ghi ledger của đường tiền chuẩn.
+
+**Vì sao KHÔNG dùng `MAIN_FIRST` cho toàn bộ khoản phạt** (phương án đã cân nhắc rồi loại):
+nó đối xứng với lúc **TRỪ** commission, còn thứ đang đảo ngược là lúc **HOÀN**. Case vỡ: commission
+trừ hết ở ví ký quỹ (ví thưởng lúc đó rỗng) → huỷ chuyến → hoàn về ký quỹ → tài xế được tặng khuyến
+mãi vào ví thưởng → phạt ăn hết vào tiền khuyến mãi. Tiền thật của tài xế không suy suyển và khoản
+"thu lại hoa hồng" thực chất do ngân sách marketing gánh.
+
+**Vì sao ví thưởng không bị đẩy âm:** cùng nguyên tắc `clawbackDriverPromo` đang áp — thưởng đã
+tiêu là khoản marketing mất, không đòi lại được. Phần thiếu thành **nợ ký quỹ**, và nợ ký quỹ mới
+là thứ cổng nhận chuyến thực sự chặn (`DEPOSIT ≥ DRIVER_MIN_DEPOSIT` — `booking.service.ts:990`,
+Vi-now `:1274`, reassign `:4091`). Ví thưởng âm **không** chặn gì cả.
+
+Hệ quả cần nói với vận hành: tài xế **có thể vẫn nhận chuyến bình thường sau khi bị phạt**, nếu
+khoản phạt vốn nằm ở ví thưởng và họ còn đủ số dư ở đó. Chỉ khi ký quỹ âm mới bị treo tới lúc nạp bù.
 
 ### 4.6 Chống trùng & đồng thời
 
