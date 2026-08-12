@@ -29,17 +29,6 @@ function loginPathForCurrentArea(): string {
   return '/';
 }
 
-// The backend wraps errors as { error: { code, message } }; some legacy endpoints use { message }.
-// fetchWithAuth throws Error(JSON.stringify(envelope)) — this pulls out the human sentence for toasts.
-export function parseApiError(msg: string): string {
-  try {
-    const o = JSON.parse(msg);
-    return o?.error?.message || o?.message || msg;
-  } catch {
-    return msg;
-  }
-}
-
 let isRefreshing = false;
 let failedQueue: Array<{
   resolve: (value: unknown) => void;
@@ -149,7 +138,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
       // BẤT BIẾN: fetchWithAuth KHÔNG BAO GIỜ trả về response có `ok === false`
       // — hoặc ném ở đây, hoặc trả promise không resolve khi đang redirect 401.
       // Vì vậy `if (!response.ok)` đặt sau một lời gọi fetchWithAuth là CODE CHẾT.
-      // Từng có 9 khối như vậy trong file này, mang theo 4 câu tiếng Anh
+      // Từng có 10 khối như vậy trong file này, mang theo 4 câu tiếng Anh
       // ('Clawback failed', 'Approve failed'…) mà không ai từng thấy trên màn hình.
       //
       // Body có thể không phải JSON (HTML 502/504 từ ALB) — khi đó `body` là
@@ -1488,7 +1477,8 @@ export async function assignTransportCompanyOwner(
 // Persist a rotated image: backend rotates + recompresses the S3 object in place
 // (key must be under uploads/). degrees = CSS clockwise (0/90/180/270).
 export async function rotateUploadImage(key: string, degrees: number): Promise<void> {
-  const response = await fetchWithAuth('/uploads/rotate', {
+  // Không cần giữ response: fetchWithAuth đã ném ApiError khi lỗi.
+  await fetchWithAuth('/uploads/rotate', {
     method: 'POST',
     body: JSON.stringify({ key, degrees }),
   });

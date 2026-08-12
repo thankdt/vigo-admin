@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/hooks/use-toast';
 import { getRecentDriverRatings } from '@/lib/api';
 import type { RecentDriverRating } from '@/lib/types';
 import {
@@ -108,7 +107,6 @@ function RatingCard({
  * Bộ lọc "chỉ xem ≤ 3 sao" là thứ admin cần nhất hằng ngày (ai bị chê, chê gì).
  */
 export function RecentRatingsTab({ onSelectDriver }: { onSelectDriver: SelectDriver }) {
-  const { toast } = useToast();
 
   const [lowOnly, setLowOnly] = React.useState(false);
   const [page, setPage] = React.useState(0);
@@ -153,7 +151,7 @@ export function RecentRatingsTab({ onSelectDriver }: { onSelectDriver: SelectDri
     return () => {
       cancelled = true;
     };
-  }, [lowOnly, page, toast]);
+  }, [lowOnly, page]);
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 

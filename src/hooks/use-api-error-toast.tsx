@@ -48,6 +48,24 @@ export function toastApiError(err: unknown, title: string): void {
 }
 
 /**
+ * `ToastAction` của Radix RENDER RA `ToastClose` — bấm nút là toast lỗi đóng
+ * ngay, và `TOAST_LIMIT = 1` khiến toast tiếp theo đẩy nốt cái cũ ra. Nên khi
+ * sao chép THẤT BẠI, không được bảo admin "chụp màn hình phần mã lỗi": khối đó
+ * đã biến mất cùng toast gốc. Phải in lại nguyên nội dung vào toast mới.
+ */
+function copyFailedToast(clipboard: string): void {
+  toast({
+    variant: 'destructive',
+    title: 'Không sao chép được — hãy chụp màn hình khung dưới',
+    description: (
+      <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap rounded bg-black/20 p-2 text-[11px] leading-tight select-all">
+        {clipboard}
+      </pre>
+    ),
+  });
+}
+
+/**
  * `navigator.clipboard` chỉ có trong secure context (https hoặc localhost).
  * Admin chạy trên S3 qua https nên đường chính luôn dùng được; nhánh dự phòng
  * giữ cho môi trường test/HTTP nội bộ không vỡ.
@@ -68,11 +86,7 @@ async function copyToClipboard(text: string): Promise<void> {
     }
     toast({ title: 'Đã sao chép chi tiết lỗi' });
   } catch {
-    // Không nuốt im lặng: admin đang cần gửi thông tin này cho dev.
-    toast({
-      variant: 'destructive',
-      title: 'Không sao chép được',
-      description: 'Bạn có thể chụp màn hình phần mã lỗi để gửi cho đội kỹ thuật.',
-    });
+    // Không nuốt im lặng: admin đang cần gửi đúng thông tin này cho dev.
+    copyFailedToast(text);
   }
 }

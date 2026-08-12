@@ -206,3 +206,33 @@ describe('describeApiError — dữ liệu dựng toast', () => {
     expect(view.message.length).toBeGreaterThan(0);
   });
 });
+
+describe('buildApiError — chống message không phải chuỗi', () => {
+  // Bất biến "message luôn là câu người đọc được" đang được bảo vệ bởi HÀNH VI
+  // CỦA BACKEND (filter ép mảng class-validator về một chuỗi), chứ không phải bởi
+  // code tại chỗ. Backend đổi filter là admin vỡ âm thầm — nên chốt chặn ở đây.
+
+  it('message là mảng → không in "a,b" ra toast', () => {
+    const err = buildApiError({
+      body: { error: { code: 'VAL_001', message: ['a must be a number', 'b should not be empty'] } },
+      httpStatus: 400,
+      path: 'POST /promotions',
+    });
+    expect(err.message).not.toContain(',');
+    expect(err.message.length).toBeGreaterThan(0);
+    // Không được mất thông tin: mảng phải đi theo nút Sao chép.
+    expect(err.toClipboard()).toContain('b should not be empty');
+  });
+
+  it('message là object → không in "[object Object]", kể cả với VAL_001', () => {
+    // Nhánh miễn trừ VAL_001 bỏ qua kiểm tiếng Việt nên nó là đường duy nhất
+    // đưa thẳng giá trị lạ vào message.
+    const err = buildApiError({
+      body: { error: { code: 'VAL_001', message: { field: 'amount' } } },
+      httpStatus: 400,
+      path: 'POST /promotions',
+    });
+    expect(err.message).not.toContain('[object Object]');
+    expect(err.message).not.toMatch(/[{}]/);
+  });
+});

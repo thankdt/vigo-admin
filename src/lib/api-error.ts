@@ -137,8 +137,8 @@ export function describeApiError(err: unknown, title: string): ApiErrorView {
 
 /** Envelope chuẩn của backend; một số endpoint cũ chỉ có `message` ở tầng gốc. */
 type ErrorBody = {
-  error?: { code?: string; message?: string; details?: unknown };
-  message?: string;
+  error?: { code?: string; message?: unknown; details?: unknown };
+  message?: unknown;
 };
 
 export function buildApiError(input: {
@@ -170,8 +170,16 @@ export function buildApiError(input: {
   const httpStatus = input.httpStatus ?? 0;
   const body = (input.body ?? {}) as ErrorBody;
   const code = body.error?.code || `HTTP_${httpStatus}`;
-  const beMessage = body.error?.message || body.message;
-  const details = body.error?.details;
+
+  // `ErrorBody` là ép kiểu, KHÔNG phải kiểm tra — nên phải chốt runtime ở đây.
+  // Backend hiện ép mảng lỗi class-validator về một chuỗi trước khi trả, nhưng
+  // bất biến "message là câu người đọc được" không được phép phụ thuộc vào hành
+  // vi của repo khác: backend đổi filter là admin in ra "a,b" hoặc
+  // "[object Object]" mà không ai biết. Giá trị lạ vẫn được giữ trong `details`
+  // để nút Sao chép không mất thông tin.
+  const rawMsg = body.error?.message ?? body.message;
+  const beMessage = typeof rawMsg === 'string' ? rawMsg : undefined;
+  const details = body.error?.details ?? (beMessage ? undefined : rawMsg);
 
   const base = { code, httpStatus, path: input.path, details, at };
 

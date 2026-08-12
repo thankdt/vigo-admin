@@ -646,4 +646,3 @@ function StatusBadge({ status }: { status: KolStatus }) {
   return <Badge variant="destructive">{STATUS_LABEL.REVOKED}</Badge>;
 }
 
-// The API client throws Error(JSON.stringify(errorData)). Backend errors are ErrorResponseDto
