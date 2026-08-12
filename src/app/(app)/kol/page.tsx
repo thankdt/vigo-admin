@@ -43,6 +43,7 @@ import {
   type KolStatus,
 } from '@/lib/api';
 import type { User } from '@/lib/types';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 
 const KIND_LABEL: Record<KolKind, string> = { STANDARD: 'KOL thường', LEADER: 'Thủ lĩnh' };
 const STATUS_LABEL: Record<KolStatus, string> = { PENDING: 'Chờ duyệt', ACTIVE: 'Hoạt động', REVOKED: 'Đã thu hồi' };
@@ -111,7 +112,7 @@ export default function KolPage() {
       setTotalPages(tp);
       setTotal(result.meta.total);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không tải được danh sách KOL', description: parseErr(err.message) });
+      toastApiError(err, 'Không tải được danh sách KOL');
     } finally {
       setIsLoading(false);
     }
@@ -229,7 +230,7 @@ export default function KolPage() {
       setForm(null);
       await refreshAll();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Thao tác thất bại', description: parseErr(err.message) });
+      toastApiError(err, 'Thao tác thất bại');
     } finally {
       setSubmitting(false);
     }
@@ -244,7 +245,7 @@ export default function KolPage() {
       setRevokeTarget(null);
       await refreshAll();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Thu hồi thất bại', description: parseErr(err.message) });
+      toastApiError(err, 'Thu hồi thất bại');
     } finally {
       setSubmitting(false);
     }
@@ -258,7 +259,7 @@ export default function KolPage() {
       const res = await getUsers({ search: phone, role: 'USER', limit: 10 });
       setAddResults(res.data);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Tìm không được', description: parseErr(err.message) });
+      toastApiError(err, 'Tìm không được');
     } finally {
       setAddSearching(false);
     }
@@ -646,12 +647,3 @@ function StatusBadge({ status }: { status: KolStatus }) {
 }
 
 // The API client throws Error(JSON.stringify(errorData)). Backend errors are ErrorResponseDto
-// ({ error: { code, message } }); some legacy endpoints use { message }. Surface the human sentence.
-function parseErr(msg: string): string {
-  try {
-    const o = JSON.parse(msg);
-    return o?.error?.message || o?.message || msg;
-  } catch {
-    return msg;
-  }
-}

@@ -17,12 +17,12 @@ import {
   listAgentBookings,
   agentCanSelfWithdraw,
   agentCanRequestWithdrawal,
-  parseApiError,
   type AgentMe,
   type KolWithdrawal,
   type AgentBooking,
 } from '@/lib/api';
 import { agentCommissionDisplay } from '@/lib/agent-commission-display';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 
 const formatVND = (n: number | null | undefined) =>
   n == null
@@ -71,7 +71,7 @@ export default function AgentWalletPage() {
       // rút — người dùng mất dấu số tiền đang chờ chuyển khoản.
       setList(await getMyWithdrawals().catch(() => []));
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không tải được dữ liệu', description: parseApiError(err.message) });
+      toastApiError(err, 'Không tải được dữ liệu');
     } finally {
       setLoading(false);
     }
@@ -93,7 +93,7 @@ export default function AgentWalletPage() {
       toast({ title: 'Đã lưu tài khoản nhận tiền' });
       await load();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Lưu thất bại', description: parseApiError(err.message) });
+      toastApiError(err, 'Lưu thất bại');
     } finally {
       setSavingBank(false);
     }
@@ -115,7 +115,7 @@ export default function AgentWalletPage() {
       setAmount('');
       await load();
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Tạo lệnh rút thất bại', description: parseApiError(err.message) });
+      toastApiError(err, 'Tạo lệnh rút thất bại');
     } finally {
       setSubmitting(false);
     }

@@ -32,6 +32,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { parseVnDateTimeInput, vnDateTimeInputValue } from '@/lib/date-input-utils';
 import { Loader2, PlusCircle, Trash2, Clock, Repeat, Bell, ExternalLink, Send, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { NOTIFICATION_STATUS_LABEL } from '@/lib/enum-labels';
 
 /**
  * Hiển thị mốc UTC từ backend theo giờ VN. Toàn bộ ngày/giờ nghiệp vụ của Vigo
@@ -604,7 +605,9 @@ export function NotificationsManager() {
             case 'COMPLETED': return <Badge variant="secondary">Hoàn thành</Badge>;
             case 'CANCELLED': return <Badge variant="destructive">Đã hủy</Badge>;
             case 'FAILED': return <Badge variant="destructive">Lỗi lịch</Badge>;
-            default: return <Badge variant="outline">{status}</Badge>;
+            // Không in enum thô: backend thêm status mới thì admin vẫn đọc được,
+            // còn mã vẫn nằm trong ngoặc để dev lần ra.
+            default: return <Badge variant="outline">{NOTIFICATION_STATUS_LABEL(status)}</Badge>;
         }
     };
 

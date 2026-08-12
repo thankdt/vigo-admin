@@ -7,6 +7,9 @@ import {
   type RankingQueryInput,
   type RecentRatingsQueryInput,
 } from '@/lib/driver-reputation-query';
+import { ApiError, buildApiError } from '@/lib/api-error';
+
+export { ApiError } from '@/lib/api-error';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -68,6 +71,9 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
   }
 
   const fullUrl = url.startsWith('http') ? url : `${API_BASE_URL}${url}`;
+  // `options.method` vắng mặt với mọi lời gọi GET — thiếu fallback thì payload
+  // nút Sao chép in "undefined /drivers/..." cho toàn bộ lỗi GET.
+  const requestPath = `${(options.method ?? 'GET').toUpperCase()} ${url}`;
 
   try {
     const response = await fetch(fullUrl, {
@@ -115,7 +121,14 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
 
             throw new Error('Refresh failed');
           } catch (refreshError) {
-            processQueue(refreshError, null);
+            // Các request đang xếp hàng bị reject bằng chính lỗi này. Trước đây
+            // nó là `Error('Refresh failed')` — tiếng Anh, không có mã — nên
+            // request thứ hai toast "Refresh failed" ngay lúc trang đang chuyển
+            // về màn đăng nhập. Reject bằng ApiError 401 để câu hiện ra là tiếng Việt.
+            processQueue(
+              buildApiError({ httpStatus: 401, path: requestPath }),
+              null,
+            );
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
             window.location.href = loginPathForCurrentArea();
@@ -133,13 +146,28 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
         }
       }
 
-      const errorData = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(JSON.stringify(errorData) || 'An API error occurred');
+      // BẤT BIẾN: fetchWithAuth KHÔNG BAO GIỜ trả về response có `ok === false`
+      // — hoặc ném ở đây, hoặc trả promise không resolve khi đang redirect 401.
+      // Vì vậy `if (!response.ok)` đặt sau một lời gọi fetchWithAuth là CODE CHẾT.
+      // Từng có 9 khối như vậy trong file này, mang theo 4 câu tiếng Anh
+      // ('Clawback failed', 'Approve failed'…) mà không ai từng thấy trên màn hình.
+      //
+      // Body có thể không phải JSON (HTML 502/504 từ ALB) — khi đó `body` là
+      // undefined và buildApiError tự chọn câu chuẩn theo status.
+      const errorData = await response.json().catch(() => undefined);
+      throw buildApiError({
+        body: errorData,
+        httpStatus: response.status,
+        path: requestPath,
+      });
     }
 
     return response;
   } catch (error) {
-    throw error;
+    if (error instanceof ApiError) throw error;
+    // `fetch` chỉ ném khi chưa nhận được response nào: mất mạng, DNS hỏng, CORS,
+    // abort. Trước đây lỗi này lọt nguyên "TypeError: Failed to fetch" lên toast.
+    throw buildApiError({ networkError: error, path: requestPath });
   }
 }
 
@@ -173,7 +201,15 @@ export async function uploadToS3(url: string, file: File): Promise<Response> {
   if (!response.ok) {
     const errorText = await response.text();
     console.error("[S3] Upload Failed. Status:", response.status, "Error:", errorText);
-    throw new Error(`Failed to upload file to S3. Status: ${response.status}`);
+    // Trước đây ném Error tiếng Anh không có mã, nên 5 call-site upload ảnh
+    // (tài xế, banner, tin tức, popup, tuyến) toast nguyên câu tiếng Anh.
+    throw new ApiError({
+      message: 'Tải ảnh lên không thành công. Vui lòng thử lại.',
+      code: `S3_${response.status}`,
+      httpStatus: response.status,
+      path: 'PUT <S3 presigned URL>',
+      rawMessage: errorText || undefined,
+    });
   }
 
   console.log('[S3] Upload Successful');
@@ -191,8 +227,17 @@ export async function login(phone: string, pass: string): Promise<any> {
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({ message: response.statusText }));
-    throw new Error(errorData.message || 'Login failed');
+    // BUG cũ: đọc `errorData.message`, nhưng envelope backend là
+    // `{ success, error: { code, message }, timestamp, path }` nên giá trị đó
+    // LUÔN undefined → admin sai mật khẩu thì thấy 'Login failed' bằng tiếng Anh
+    // trong khi backend đã gửi 'Thông tin đăng nhập không đúng.' (AUTH_002).
+    // Đây là màn hình đầu tiên và được nhìn nhiều nhất của toàn bộ admin.
+    const errorData = await response.json().catch(() => undefined);
+    throw buildApiError({
+      body: errorData,
+      httpStatus: response.status,
+      path: 'POST /auth/login',
+    });
   }
 
   const responseData = await response.json();
@@ -675,10 +720,6 @@ export type AdminInvoiceListResponse = {
 // Returns a Blob of the contract PDF. Caller wires the download (object URL + click).
 export async function downloadAdminContractPdf(bookingId: string): Promise<Blob> {
   const response = await fetchWithAuth(`/bookings/admin/${bookingId}/contract.pdf`);
-  if (!response.ok) {
-    const text = await response.text().catch(() => '');
-    throw new Error(text || `Không tải được hợp đồng (${response.status})`);
-  }
   return response.blob();
 }
 
@@ -709,9 +750,6 @@ export async function getAdminInvoices(params: {
 // triggers the browser download.
 export async function getAdminContractPdfBlob(bookingId: string): Promise<Blob> {
   const response = await fetchWithAuth(`/bookings/admin/${bookingId}/contract.pdf`);
-  if (!response.ok) {
-    throw new Error('Không tải được hợp đồng. Vui lòng thử lại.');
-  }
   return response.blob();
 }
 
@@ -848,10 +886,6 @@ export async function voidCompletedBooking(
     method: 'POST',
     body: JSON.stringify({ secondaryPassword, ...(reason && { reason }) }),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || `Huỷ chuyến thất bại (${response.status})`);
-  }
   const result = await response.json();
   return result.data ?? result;
 }
@@ -1448,10 +1482,6 @@ export async function assignTransportCompanyOwner(
     method: 'POST',
     body: JSON.stringify(data),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Không gán được chủ HTX');
-  }
   return response.json();
 }
 
@@ -1462,10 +1492,6 @@ export async function rotateUploadImage(key: string, degrees: number): Promise<v
     method: 'POST',
     body: JSON.stringify({ key, degrees }),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || `Lưu ảnh thất bại (${response.status})`);
-  }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -1783,10 +1809,6 @@ export async function adminClawbackReferralEvent(eventId: string, reason: string
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Clawback failed');
-  }
   return unwrap(response);
 }
 
@@ -1854,10 +1876,6 @@ export async function adminApproveWithdrawal(id: string, note?: string): Promise
     method: 'POST',
     body: JSON.stringify({ note }),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Approve failed');
-  }
   return unwrap(response);
 }
 
@@ -1866,10 +1884,6 @@ export async function adminRejectWithdrawal(id: string, note: string): Promise<A
     method: 'POST',
     body: JSON.stringify({ note }),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Reject failed');
-  }
   return unwrap(response);
 }
 
@@ -1877,10 +1891,6 @@ export async function adminMarkWithdrawalTransferred(id: string): Promise<AdminW
   const response = await fetchWithAuth(`/withdrawals/${id}/mark-transferred`, {
     method: 'POST',
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.message || 'Mark transferred failed');
-  }
   return unwrap(response);
 }
 
@@ -2211,7 +2221,12 @@ export async function sendKolLoginOtp(phone: string): Promise<{ message: string 
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Gửi OTP thất bại');
+    throw buildApiError({
+      body: e,
+      httpStatus: response.status,
+      path: 'POST /auth/send-login-otp',
+      fallbackMessage: 'Gửi OTP thất bại. Vui lòng thử lại.',
+    });
   }
   return response.json().then((b) => b.data ?? b);
 }
@@ -2225,7 +2240,12 @@ export async function kolLoginOtp(phone: string, otp: string): Promise<any> {
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Đăng nhập thất bại');
+    throw buildApiError({
+      body: e,
+      httpStatus: response.status,
+      path: 'POST /auth/login-otp',
+      fallbackMessage: 'Đăng nhập thất bại. Vui lòng thử lại.',
+    });
   }
   const data = await response.json();
   if (data?.data?.access_token && typeof window !== 'undefined') {
@@ -2306,7 +2326,12 @@ export async function sendAgentLoginOtp(phone: string): Promise<{ message: strin
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Không gửi được OTP');
+    throw buildApiError({
+      body: e,
+      httpStatus: response.status,
+      path: 'POST /auth/send-otp',
+      fallbackMessage: 'Không gửi được mã OTP. Vui lòng thử lại.',
+    });
   }
   return response.json();
 }
@@ -2316,7 +2341,12 @@ export async function agentLoginOtp(phone: string, otp: string): Promise<any> {
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Đăng nhập thất bại');
+    throw buildApiError({
+      body: e,
+      httpStatus: response.status,
+      path: 'POST /auth/login-otp',
+      fallbackMessage: 'Đăng nhập thất bại. Vui lòng thử lại.',
+    });
   }
   const data = await response.json();
   if (data?.data?.access_token && typeof window !== 'undefined') {
@@ -2342,7 +2372,12 @@ export async function sendRegistrationOtp(phone: string): Promise<{ message: str
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Không gửi được OTP');
+    throw buildApiError({
+      body: e,
+      httpStatus: response.status,
+      path: 'POST /auth/send-otp',
+      fallbackMessage: 'Không gửi được mã OTP. Vui lòng thử lại.',
+    });
   }
   return response.json().then((b) => b.data ?? b);
 }
@@ -2363,7 +2398,12 @@ export async function registerAccount(body: {
   });
   if (!response.ok) {
     const e = await response.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Đăng ký thất bại');
+    throw buildApiError({
+      body: e,
+      httpStatus: response.status,
+      path: 'POST /auth/register',
+      fallbackMessage: 'Đăng ký thất bại. Vui lòng thử lại.',
+    });
   }
   const data = await response.json();
   const tokens = data?.data ?? data;
@@ -2431,14 +2471,11 @@ export async function listAgentBookings(page = 1, limit = 50): Promise<{ data: A
   return unwrap(await fetchWithAuth(`/agent/bookings?page=${page}&limit=${limit}`));
 }
 export async function cancelAgentBooking(id: string, reason?: string): Promise<void> {
-  const res = await fetchWithAuth(`/agent/bookings/${id}/cancel`, {
+  // Không cần kiểm `res.ok`: fetchWithAuth đã ném ApiError kèm câu tiếng Việt.
+  await fetchWithAuth(`/agent/bookings/${id}/cancel`, {
     method: 'POST',
     body: JSON.stringify({ reason }),
   });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e?.error?.message || e?.message || 'Không huỷ được đơn');
-  }
 }
 export async function getAgentOrder(id: string): Promise<AgentOrder> {
   return unwrap<AgentOrder>(await fetchWithAuth(`/agent/orders/${id}`));

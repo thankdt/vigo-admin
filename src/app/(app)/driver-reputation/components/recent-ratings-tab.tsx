@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { getRecentDriverRatings, parseApiError } from '@/lib/api';
+import { getRecentDriverRatings } from '@/lib/api';
 import type { RecentDriverRating } from '@/lib/types';
 import {
   driverNameText,
@@ -21,6 +21,7 @@ import {
   serviceTypeText,
 } from '../reputation-labels';
 import type { SelectDriver } from './select-driver';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 
 const PAGE_SIZE = 20;
 
@@ -144,11 +145,7 @@ export function RecentRatingsTab({ onSelectDriver }: { onSelectDriver: SelectDri
         if (cancelled || reqId !== reqIdRef.current) return;
         setItems([]);
         setTotal(0);
-        toast({
-          variant: 'destructive',
-          title: 'Không tải được danh sách đánh giá',
-          description: err?.message ? parseApiError(err.message) : 'Vui lòng thử lại.',
-        });
+        toastApiError(err, 'Không tải được danh sách đánh giá');
       })
       .finally(() => {
         if (!cancelled && reqId === reqIdRef.current) setLoading(false);

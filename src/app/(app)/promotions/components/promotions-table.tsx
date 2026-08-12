@@ -25,6 +25,7 @@ import { dateInputValue, parseDateInput } from '@/lib/date-input-utils';
 import { Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 
 // Optional numeric fields used to break the save button: an empty <Input
 // type="number"> sends "" to RHF; z.coerce.number()('') === 0, then
@@ -132,22 +133,15 @@ function PromotionForm({
       onSaveSuccess();
       if (mode === 'create') reset();
     } catch (err: any) {
-      const errorMessage = err.message || 'Đã xảy ra lỗi không xác định';
-      let finalDescription = errorMessage;
-
-      // Attempt to parse if the message is a JSON string
-      try {
-        const errorObj = JSON.parse(errorMessage);
-        if (errorObj.details && Array.isArray(errorObj.details)) {
-          finalDescription = errorObj.details.join(', ');
-        } else if (errorObj.message) {
-          finalDescription = errorObj.message;
-        }
-      } catch (e) {
-        // Not a JSON string, use the original message
-      }
-
-      toast({ variant: 'destructive', title: mode === 'edit' ? 'Không thể cập nhật voucher' : 'Không thể tạo voucher', description: finalDescription });
+      // Khối JSON.parse cũ ở đây là CODE CHẾT: nó đọc `errorObj.details` và
+      // `errorObj.message` ở tầng gốc, trong khi envelope backend lồng chúng dưới
+      // `error`. Cả hai luôn undefined nên form voucher vẫn hiện nguyên cục JSON.
+      // Giờ ApiError lo phần bóc; riêng lỗi nhập liệu (VAL_001) giữ nguyên câu
+      // của backend vì nó chỉ đích danh field sai — đúng thứ admin cần ở form này.
+      toastApiError(
+        err,
+        mode === 'edit' ? 'Không thể cập nhật voucher' : 'Không thể tạo voucher',
+      );
     }
   };
 

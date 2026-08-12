@@ -30,14 +30,14 @@ export function FinanceStatCards({
   const cards: CardConfig[] = [
     { metric: 'driverPayosTopUp', label: 'Nạp ví qua PayOS', value: data.cashFlow.driverPayosTopUp, icon: <ArrowDownCircle className="h-5 w-5" />, hint: 'Top-up thật qua cổng thanh toán (khớp PayOS)' },
     { metric: 'driverAdminPromoCredit', label: 'Admin / Promo nạp', value: data.cashFlow.driverAdminPromoCredit, icon: <Gift className="h-5 w-5" />, hint: 'Admin nạp tay + credit khuyến mãi (không qua PayOS)' },
-    { metric: 'driverDeducted', label: 'Trừ từ ví tài xế', value: data.cashFlow.driverDeducted, icon: <MinusCircle className="h-5 w-5" />, hint: 'Net: commission + PIT + VAT − hoàn (đã trừ refund chuyến huỷ)' },
+    { metric: 'driverDeducted', label: 'Trừ từ ví tài xế', value: data.cashFlow.driverDeducted, icon: <MinusCircle className="h-5 w-5" />, hint: 'Thực trừ: hoa hồng + thuế TNCN + VAT − hoàn (đã trừ tiền trả lại chuyến huỷ)' },
     { metric: 'totalTripIncludingTax', label: 'Tổng tiền chuyến đi (kèm thuế)', value: data.cashFlow.totalTripIncludingTax, icon: <Banknote className="h-5 w-5" />, hint: 'SUM(finalPrice) chuyến hoàn thành — gồm VAT + phụ phí' },
     { metric: 'vigoRevenue', label: 'Doanh thu VIGO', value: b.vigoRevenue, icon: <DollarSign className="h-5 w-5" />, hint: 'Hoa hồng VIGO giữ (KHÔNG gồm VAT VIGO phải nộp)', green: true },
     { metric: 'totalVat', label: 'Tổng VAT', value: b.totalVat, icon: <Percent className="h-5 w-5" />, hint: 'VAT của tất cả chuyến trong kỳ' },
     { metric: 'vigoVatRemit', label: 'VAT VIGO phải nộp', value: b.vigoVatRemit, icon: <Landmark className="h-5 w-5" />, hint: 'Phần VAT VIGO nộp NN (theo tỉ lệ phí nền tảng)' },
     { metric: 'htxTotalReceived', label: 'Tổng phải đưa HTX', value: b.htxTotalReceived, icon: <Building2 className="h-5 w-5" />, hint: 'Hoa hồng HTX + VAT HTX + PIT' },
     { metric: 'driverTotalReceived', label: 'Tổng thu nhập tài xế', value: b.driverTotalReceived, icon: <Car className="h-5 w-5" />, hint: 'Tiền thực nhận của tài xế (gồm hoàn discount)' },
-    { metric: 'affiliateCredited', label: 'Affiliate đã credit', value: b.affiliateCredited, icon: <Share2 className="h-5 w-5" />, hint: 'Hoa hồng giới thiệu (net clawback)' },
+    { metric: 'affiliateCredited', label: 'Affiliate đã cộng', value: b.affiliateCredited, icon: <Share2 className="h-5 w-5" />, hint: 'Hoa hồng giới thiệu (đã trừ phần thu hồi)' },
     { metric: 'affiliateWithdrawn', label: 'Affiliate đã rút', value: b.affiliateWithdrawn, icon: <Wallet className="h-5 w-5" />, hint: 'Yêu cầu rút đã chuyển khoản trong kỳ' },
   ];
 
