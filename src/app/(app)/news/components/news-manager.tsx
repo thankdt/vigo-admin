@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { getNews, createNews, updateNews, deleteNews, getPresignedUrl, uploadToS3, API_BASE_URL } from '@/lib/api';
 import type { News } from '@/lib/types';
-import { Loader2, PlusCircle, Edit, Trash2, Search, ExternalLink } from 'lucide-react';
+import { Loader2, PlusCircle, Edit, Trash2, ExternalLink } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogHeader, AlertDialogTitle, AlertDialogFooter } from "@/components/ui/alert-dialog"

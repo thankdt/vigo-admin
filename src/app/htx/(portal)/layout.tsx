@@ -14,7 +14,6 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar';
 import { LayoutDashboard, LogOut, Car, Route } from 'lucide-react';
-import { Logo } from '@/components/logo';
 import React from 'react';
 
 const navItems = [

@@ -25,7 +25,6 @@ import {
   type DriverPenaltyRow,
   type PenaltyQueueRow,
   type PenaltyQueueSignal,
-  type PenaltyQueueState,
 } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 import { formatVnDateTime } from '../leakage-review/leakage-labels';

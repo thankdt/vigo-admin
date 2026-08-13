@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { sendAgentLoginOtp, agentLoginOtp, getAgentMe } from '@/lib/api';
 import React from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Store, ArrowLeft } from 'lucide-react';
+import { Loader2, ArrowLeft } from 'lucide-react';
 
 /**
  * Booking-agent (đại lý đặt hộ) portal login — passwordless (phone + OTP). After login we call

@@ -14,7 +14,6 @@ import {
   Loader2,
   Car,
   User,
-  Phone,
   ChevronLeft,
   ChevronRight,
   ChevronsLeft,

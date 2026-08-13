@@ -1142,7 +1142,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // we cast back to number | 'none' when calling the API.
   const [selectedRouteId, setSelectedRouteId] = React.useState<string>('ALL');
   // Lọc "gọi check khách": 'ALL' = không lọc; called/unreached/uncalled = trạng thái.
-  const [customerCallFilter, setCustomerCallFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
+  const [customerCallFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
   // Lọc riêng từng pha. Dùng đồng thời được: "đã gọi trước" + "chưa gọi sau" = danh
   // sách chuyến CSKH còn nợ cuộc gọi hậu mãi.
   const [callBeforeFilter, setCallBeforeFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
@@ -1159,7 +1159,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [pageSize, setPageSize] = React.useState(20);
 
   const [selectedBookingId, setSelectedBookingId] = React.useState<string | null>(null);
-  const [isDetailOpen, setIsDetailOpen] = React.useState(false);
   const [reassigningBooking, setReassigningBooking] = React.useState<Booking | null>(null);
   const [voidBookingId, setVoidBookingId] = React.useState<string | null>(null);
   // Nhân bản chuyến: bản nháp điền sẵn cho form Tạo chuyến (null = không nhân bản).
@@ -1309,7 +1308,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
 
   const openDetails = (bookingId: string) => {
     setSelectedBookingId(bookingId);
-    setIsDetailOpen(true);
   }
 
   // Nhân bản: đóng chi tiết (nếu đang mở) rồi mở form Tạo chuyến đã điền sẵn.

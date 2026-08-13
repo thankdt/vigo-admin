@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle} from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { getRoutes, getPricingByRoute, createPricing, updatePricing, deletePricing, getAdminUnits } from '@/lib/api';
@@ -176,18 +176,6 @@ export function RoutePricingManager() {
             setDeletingPricing(null);
         }
     };
-
-    // Find provinces related to the selected route (from its districts' parentIds)
-    const routeProvinceNames = React.useMemo(() => {
-        if (!selectedRoute?.districts) return [];
-        const provinceIds = new Set<number>();
-        selectedRoute.districts.forEach(d => {
-            if (d.parentId) provinceIds.add(d.parentId);
-        });
-        return allAdminUnits
-            .filter(u => u.level === 'PROVINCE' && provinceIds.has(u.id))
-            .map(u => u.name);
-    }, [selectedRoute, allAdminUnits]);
 
     // Districts that don't have a specific pricing override
     const unconfiguredDistricts = React.useMemo(() => {
