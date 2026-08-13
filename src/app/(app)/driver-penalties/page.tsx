@@ -17,10 +17,10 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 import {
   getPenaltyQueue,
   listPenalties,
-  parseApiError,
   reversePenalty,
   type DriverPenaltyRow,
   type PenaltyQueueRow,
@@ -124,18 +124,15 @@ export default function DriverPenaltiesPage() {
         setTotalPages(res.meta.totalPages);
         setTotals(res.meta.totals);
       }
-    } catch (err: any) {
+    } catch (err) {
       if (reqId !== reqIdRef.current) return;
-      // fetchWithAuth ném Error(JSON envelope) — parseApiError rút ra câu người đọc được.
-      toast({
-        variant: 'destructive',
-        title: 'Không tải được dữ liệu',
-        description: err?.message ? parseApiError(err.message) : 'Vui lòng thử lại.',
-      });
+      // fetchWithAuth ném ApiError có message đã là câu tiếng Việt sạch; toastApiError
+      // hiện thêm mã lỗi + nút Sao chép để admin gửi thẳng cho dev.
+      toastApiError(err, 'Không tải được dữ liệu');
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
     }
-  }, [tab, range.from, range.to, signal, search, page, toast]);
+  }, [tab, range.from, range.to, signal, search, page]);
 
   React.useEffect(() => {
     const t = setTimeout(load, 300);
@@ -159,12 +156,8 @@ export default function DriverPenaltiesPage() {
       await reversePenalty(row.id, note.trim().slice(0, 500) || undefined);
       toast({ title: 'Đã huỷ phạt', description: `Đã hoàn ${formatVnd(row.amount)} về ví tài xế.` });
       load();
-    } catch (err: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Huỷ phạt thất bại',
-        description: err?.message ? parseApiError(err.message) : 'Vui lòng thử lại.',
-      });
+    } catch (err) {
+      toastApiError(err, 'Huỷ phạt thất bại');
     } finally {
       setReversing(null);
     }

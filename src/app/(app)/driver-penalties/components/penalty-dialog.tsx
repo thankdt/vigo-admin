@@ -21,9 +21,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
+import { toastApiError } from '@/hooks/use-api-error-toast';
 import {
   createPenalty,
-  parseApiError,
   previewPenalty,
   type PenaltyPreview,
   type PenaltyReasonCode,
@@ -78,12 +78,17 @@ export function PenaltyDialog({
       .then((p) => {
         if (alive) setPreview(p);
       })
-      .catch((e: any) => {
+      .catch((e: unknown) => {
         if (!alive) return;
         // Lỗi mạng/403 cũng phải hiện ra chỗ người dùng đang nhìn, không nuốt.
         // KHÔNG mượn mã `blockedReason` nào của backend: 403 phân quyền không phải
         // "ledger bất thường", gán bừa mã là sau này ai dịch theo mã sẽ hiện sai hẳn.
-        setError(e?.message ? parseApiError(e.message) : 'Không đọc được thông tin chuyến.');
+        //
+        // Ô lỗi INLINE nên KHÔNG dùng toastApiError — ở đây không có chỗ cho khối mã
+        // lỗi + nút Sao chép. Lấy thẳng `e.message` là ĐỦ và đúng khuôn 10 site inline
+        // khác: từ 2026-08-12 `fetchWithAuth` ném ApiError với message đã là câu tiếng
+        // Việt sạch (api.ts -> buildApiError), không còn cục JSON như trước.
+        setError(e instanceof Error && e.message ? e.message : 'Không đọc được thông tin chuyến.');
       })
       .finally(() => {
         if (alive) setLoading(false);
@@ -115,13 +120,10 @@ export function PenaltyDialog({
       });
       onOpenChange(false);
       onDone?.();
-    } catch (e: any) {
-      // fetchWithAuth ném Error(JSON envelope) — parseApiError rút ra câu người đọc được.
-      toast({
-        variant: 'destructive',
-        title: 'Phạt thất bại',
-        description: e?.message ? parseApiError(e.message) : 'Vui lòng thử lại.',
-      });
+    } catch (e) {
+      // Thất bại lúc GHI (khác ô lỗi inline ở trên, vốn là lỗi lúc ĐỌC preview): dùng
+      // khuôn toast chung — câu tiếng Việt + mã lỗi + nút Sao chép cho admin gửi dev.
+      toastApiError(e, 'Phạt thất bại');
     } finally {
       setSubmitting(false);
     }
