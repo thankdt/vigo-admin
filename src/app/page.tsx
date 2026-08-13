@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Logo } from '@/components/logo';
 import { login, getAdminMe } from '@/lib/api';
 import { firstAllowedRoute } from '@/lib/rbac';
 import { navItems } from '@/lib/nav-items';
