@@ -39,7 +39,7 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons } from '@/lib/api';
 import { VoidBookingDialog } from './void-booking-dialog';
-import { buildDiscountRows } from './price-breakdown-utils';
+import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import type { Route } from '@/lib/types';
 import {
   DRIVER_ONLINE_HINT,
@@ -159,8 +159,15 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
   const discounts = buildDiscountRows(breakdown);
 
   const vatAmount = Number(breakdown?.vatAmount ?? 0);
-  const totalDiscount = discounts.reduce((sum, d) => sum + d.value, 0);
-  const priceAfterDiscountUi = Number(booking.price ?? 0) - totalDiscount;
+  // CHỈ trừ loyalty + promotion. `seatDiscountAmount` backend đã trừ sẵn vào
+  // `transportPrice` (và `booking.price` = transportPrice + phụ phí), nên cộng nó
+  // vào đây là trừ hai lần — xem ghi chú ở price-breakdown-utils.ts.
+  const totalDiscount = subtractableDiscountTotal(breakdown);
+  // Chặn sàn 0 cho khớp backend: `pricing.service.ts` chốt
+  // `priceAfterDiscount = Math.max(0, currentPrice - discount)` rồi mới cộng VAT.
+  // Không clamp thì ca loyalty + mã KM > giá chuyến sẽ hiện "Giá thực tế" ÂM trong
+  // khi "Khách trả" là 0 — cột tự mâu thuẫn.
+  const priceAfterDiscountUi = Math.max(0, Number(booking.price ?? 0) - totalDiscount);
   const finalPrice = Number(booking.finalPrice ?? booking.price ?? 0);
 
   // Driver / HTX / Vigo allocation rebuild. Restored after f93e369 cut the
@@ -345,8 +352,19 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
         <div className="space-y-1.5 text-sm">
           <div className="text-xs font-medium text-muted-foreground">Giá cước</div>
           <div className="flex justify-between">
-            <span>Giá vận chuyển</span>
-            <span>{fmtVnd(breakdown.transportPrice)}</span>
+            {/* Nhãn nói rõ đây là số GỘP khi có giảm ghế: chuyến 2 ghế tuyến
+                300k hiện 600.000 chứ không phải 300.000, không có chú thích thì
+                kế toán/CSKH dễ tưởng sai giá tuyến. */}
+            <span>
+              Giá vận chuyển
+              {Number(breakdown.seatDiscountAmount ?? 0) > 0 && (
+                <span className="text-muted-foreground"> (trước giảm ghế)</span>
+              )}
+            </span>
+            {/* GỘP (trước giảm ghế) để dòng "giảm theo số ghế" bên dưới có cái mà
+                trừ. Chuyến không phải CARPOOL thì seatDiscountAmount = 0 nên số này
+                bằng đúng transportPrice như cũ. */}
+            <span>{fmtVnd(grossTransportPrice(breakdown))}</span>
           </div>
           {surcharges.map(s => (
             <div key={s.label} className="flex justify-between">
