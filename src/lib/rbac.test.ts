@@ -19,8 +19,8 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 29 menu functions (navItems minus /settings)', () => {
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(29); // 2026-08-11: +driver-penalties
+  it('has exactly 30 menu functions (navItems minus /settings)', () => {
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(30); // 2026-08-12: +crm-queue
   });
 
   // Ranh giới riêng tư của màn "Đội tài chuyên nghiệp": ghi chú tuyển team KHÔNG
@@ -94,15 +94,15 @@ describe('rbac catalog mirror', () => {
    * (app/page.tsx -> firstAllowedRoute(navItems)). Khoá lại bằng test.
    */
   describe('nhóm Khách hàng (CRM)', () => {
-    const CRM_HREFS = ['/users', '/cskh-activity', '/acquisition'];
+    const CRM_HREFS = ['/crm-queue', '/users', '/cskh-activity', '/acquisition'];
 
-    it('nhóm tồn tại và gồm đúng 3 mục, ĐÚNG THỨ TỰ', () => {
+    it('nhóm tồn tại và gồm đúng 4 mục, ĐÚNG THỨ TỰ', () => {
       const crm = navGroups.find((g) => g.label === 'Khách hàng (CRM)');
       expect(crm).toBeDefined();
       expect(crm!.items.map((i) => i.href)).toEqual(CRM_HREFS);
     });
 
-    it('3 mục KHÔNG còn nằm ở nhóm cũ (không bị nhân đôi trong menu)', () => {
+    it('các mục KHÔNG còn nằm ở nhóm cũ (không bị nhân đôi trong menu)', () => {
       for (const href of CRM_HREFS) {
         expect(navItems.filter((i) => i.href === href)).toHaveLength(1);
       }
@@ -115,6 +115,26 @@ describe('rbac catalog mirror', () => {
       const cskh = mkMe({ functions: ['cskh-activity'] });
       expect(isMenuVisible('/cskh-activity', cskh)).toBe(true);
       expect(isRouteAllowed('/cskh-activity', cskh)).toBe(true);
+    });
+
+    // Cả lý do tồn tại của GĐ1: CSKH tuyến đầu KHÔNG được cấp 'bookings' (đổi trạng
+    // thái chuyến, điều tài, tạo chuyến) chỉ để làm được việc gọi khách.
+    it('crm-queue là quyền RIÊNG, có bookings không mở được /crm-queue', () => {
+      expect(MENU_FUNCTION_BY_HREF['/crm-queue']).toBe('crm-queue');
+      const ops = mkMe({ functions: ['bookings'] });
+      expect(isMenuVisible('/crm-queue', ops)).toBe(false);
+      expect(isRouteAllowed('/crm-queue', ops)).toBe(false);
+      const cskh = mkMe({ functions: ['crm-queue'] });
+      expect(isRouteAllowed('/crm-queue', cskh)).toBe(true);
+      expect(isRouteAllowed('/bookings', cskh)).toBe(false);
+    });
+
+    // URL PHẲNG, không lồng /crm/*: isRouteAllowed gate theo SEGMENT CẤP 1 nên
+    // /crm/queue + /crm/tickets sẽ gộp chung một function, mất khả năng phân quyền
+    // từng mảnh. Khoá lại để sau này không ai "dọn cho đẹp" thành /crm/*.
+    it('trang đích của người CHỈ có quyền CSKH là /crm-queue', () => {
+      const cskh = mkMe({ functions: ['crm-queue'] });
+      expect(firstAllowedRoute(cskh, navItems.map((i) => i.href))).toBe('/crm-queue');
     });
 
     it('nhóm CRM đứng sau "Xử lý vi phạm" và trước "Người dùng & Đối tác"', () => {

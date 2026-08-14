@@ -1,7 +1,7 @@
 // RBAC catalog mirror (frontend). MUST stay in sync with backend rbac.constants.ts.
 // Function key của mỗi mục menu = href bỏ dấu '/' đầu (spec §2.1). `/settings` KHÔNG
 // nằm ở đây: nó nở thành 10 function con `settings.*` và được gate riêng (any-of).
-// Test đồng bộ (rbac.test.ts) khoá số 28 + 10 để thêm menu/nhóm mà quên khai báo -> fail.
+// Test đồng bộ (rbac.test.ts) khoá số 30 + 10 để thêm menu/nhóm mà quên khai báo -> fail.
 
 export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/dashboard': 'dashboard',
@@ -40,6 +40,11 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/driver-penalties': 'driver-penalties',
   '/driver-cancel-review': 'driver-cancel-review',
   '/cskh-activity': 'cskh-activity',
+  // Backend: @RequireFunction('bookings','crm-queue') trên 5 route gọi khách. Quyền
+  // RIÊNG khỏi 'bookings' — CSKH tuyến đầu chỉ được đọc chuyến + ghi cuộc gọi, KHÔNG
+  // được đổi trạng thái/điều tài/tạo chuyến. URL PHẲNG (không phải /crm/queue) vì
+  // isRouteAllowed gate theo segment cấp 1: /crm/* sẽ gộp mọi trang CRM một function.
+  '/crm-queue': 'crm-queue',
 };
 
 // 10 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).

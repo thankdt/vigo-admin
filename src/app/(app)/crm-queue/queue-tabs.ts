@@ -32,6 +32,40 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
  */
 export type QueueParams = Partial<NonNullable<Parameters<typeof getBookings>[0]>>;
 
+/**
+ * Mốc bắt đầu ĐẾM CHỜ của từng tab. Tab gọi-trước tính từ lúc khách đặt; tab gọi-sau
+ * (kể cả "Quá hạn") tính từ lúc chuyến hoàn thành — dùng chung `createdAt` cho cả hai
+ * thì cột "Đã chờ" ở tab gọi-sau sẽ hiện tuổi của CHUYẾN, không phải tuổi của VIỆC.
+ */
+export function waitedSince(
+  tab: QueueTab,
+  booking: { createdAt?: string | null; completedAt?: string | null },
+): string | null {
+  if (tab === 'after' || tab === 'overdue') return booking.completedAt ?? null;
+  return booking.createdAt ?? null;
+}
+
+/**
+ * "Đã chờ bao lâu" cho người đọc. KHÔNG dùng ngày-tháng ở đây nên không có bẫy múi
+ * giờ: đây là HIỆU hai mốc thời gian tuyệt đối, không phải ranh giới ngày VN.
+ */
+export function formatWaited(sinceIso: string | null | undefined, nowMs: number): string {
+  if (!sinceIso) return '—';
+  const t = new Date(sinceIso).getTime();
+  if (Number.isNaN(t)) return '—';
+  const mins = Math.floor((nowMs - t) / 60_000);
+  if (mins < 0) return '—'; // mốc ở tương lai (lệch đồng hồ) — thà không hiện còn hơn hiện số âm
+  if (mins < 60) return `${mins} phút`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) {
+    const rem = mins % 60;
+    return rem ? `${hours} giờ ${rem} phút` : `${hours} giờ`;
+  }
+  const days = Math.floor(hours / 24);
+  const remH = hours % 24;
+  return remH ? `${days} ngày ${remH} giờ` : `${days} ngày`;
+}
+
 export function paramsForTab(tab: QueueTab, adminId: string): QueueParams {
   switch (tab) {
     case 'before':
