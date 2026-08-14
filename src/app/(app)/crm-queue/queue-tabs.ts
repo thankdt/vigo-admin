@@ -1,5 +1,5 @@
 /**
- * Định nghĩa 4 tab của hàng đợi CSKH bằng ĐÚNG tham số API — logic thuần, tách khỏi
+ * Định nghĩa các tab của hàng đợi CSKH bằng ĐÚNG tham số API — logic thuần, tách khỏi
  * page.tsx để test được mà không phải mount cả trang.
  *
  * Quy tắc quan trọng nhất ở đây là `excludeStatus` của tab "before". Backend suy pha
@@ -41,9 +41,9 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
  */
 export const QUEUE_TAB_HINT: Record<QueueTab, string> = {
   before:
-    'Chuyến CHƯA hoàn thành, chưa ai gọi xác nhận. Gọi để chắc khách còn đi và đón đúng chỗ — tránh khách huỷ ngang hoặc không ra.',
+    'Chuyến CHƯA hoàn thành và chưa ai NHẬN việc gọi xác nhận. Gọi để chắc khách còn đi và đón đúng chỗ — tránh khách huỷ ngang hoặc không ra. Chuyến chạy xong mà chưa kịp gọi thì tự rời tab này (xem chỉ số "sót gọi trước" ở Hoạt động CSKH).',
   after:
-    'Chuyến ĐÃ hoàn thành, chưa ai gọi lại. Gọi hỏi chuyến có ổn không, tài xế thế nào.',
+    'Chuyến ĐÃ hoàn thành và chưa ai NHẬN việc gọi lại. Gọi hỏi chuyến có ổn không, tài xế thế nào.',
   mine:
     'Việc bạn đã bấm "Nhận gọi" nhưng chưa ghi kết quả. Gọi xong nhớ ghi kết quả để việc rời hàng đợi.',
   holding:
@@ -149,8 +149,10 @@ export function paramsForTab(tab: QueueTab, adminId: string): QueueParams {
     case 'mine':
       return { claimedBy: adminId, sortBy: 'createdAt', order: 'ASC' };
     case 'holding':
-      // KHÔNG lọc theo người: đây là tầm nhìn quản lý. Chờ lâu nhất lên đầu vì việc giữ
-      // càng lâu càng đáng ngờ là đã bị bỏ quên.
+      // KHÔNG lọc theo người: đây là tầm nhìn quản lý.
+      // Sắp theo `createdAt` = tuổi CHUYẾN, không phải tuổi lúc-nhận-việc — backend chưa
+      // mở `callBeforeAt/callAfterAt` trong whitelist sort. Đủ dùng vì hai thứ tương quan,
+      // nhưng đừng đọc thành "ôm lâu nhất lên đầu".
       return { claimed: true, sortBy: 'createdAt', order: 'ASC' };
     case 'overdue':
       // Ngưỡng giờ CỐ Ý không nằm ở FE — backend đọc từ system_config

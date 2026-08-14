@@ -39,8 +39,14 @@ const { toast } = vi.hoisted(() => ({ toast: vi.fn() }));
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }), toast }));
 
 // BookingDetail kéo cả module chi tiết chuyến — không thuộc phạm vi test này.
+// Mock lộ ra một nút bắn `onCallRecorded` để test được ĐƯỜNG GHI TỪ DIALOG — đường này
+// trước đây không có ca nào chạm, và nó chính là chỗ quên nạp lại số trên nhãn tab.
 vi.mock('../bookings/components/booking-detail', () => ({
-  BookingDetail: () => <div data-testid="booking-detail" />,
+  BookingDetail: ({ onCallRecorded }: { onCallRecorded?: () => void }) => (
+    <div data-testid="booking-detail">
+      <button onClick={() => onCallRecorded?.()}>giả lập ghi từ dialog</button>
+    </div>
+  ),
 }));
 
 const mkBooking = (over: Partial<Booking> = {}): Booking =>
@@ -225,5 +231,28 @@ describe('CrmQueuePage — số việc trên tab', () => {
     render(<CrmQueuePage />);
 
     await waitFor(() => expect(screen.getAllByText('4').length).toBeGreaterThanOrEqual(4));
+  });
+});
+
+describe('CrmQueuePage — ghi kết quả từ dialog chi tiết', () => {
+  /**
+   * Ghi từ dialog cũng làm việc rời tab, nên số trên nhãn tab phải nạp lại. Chỉ gọi
+   * `load` thì badge đứng số cũ tới khi F5 — mà màn đã bỏ dòng "N việc" khi chỉ một
+   * trang, nên không còn chỗ nào để người dùng đối chiếu và phát hiện.
+   */
+  it('nạp lại CẢ danh sách LẪN số trên nhãn tab', async () => {
+    getBookings.mockResolvedValue(page([mkBooking()], { total: 1 }));
+    render(<CrmQueuePage />);
+
+    await userEvent.click(await screen.findByRole('button', { name: /xem chi tiết chuyến/i }));
+    const countsBefore = getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 1).length;
+    const listBefore = getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 20).length;
+
+    await userEvent.click(await screen.findByRole('button', { name: /giả lập ghi từ dialog/i }));
+
+    await waitFor(() =>
+      expect(getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 1).length).toBeGreaterThan(countsBefore),
+    );
+    expect(getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 20).length).toBeGreaterThan(listBefore);
   });
 });

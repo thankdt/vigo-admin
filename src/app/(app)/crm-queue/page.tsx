@@ -40,7 +40,7 @@ import {
 } from './queue-tabs';
 
 const PAGE_SIZE = 20;
-// 5 cột cố định + cột "Người giữ việc" chỉ có ở tab "Việc của tôi".
+// 5 cột cố định + cột "Người giữ việc" (chỉ 2 tab có người giữ).
 const BASE_COLS = 5;
 
 /**
@@ -73,9 +73,12 @@ export default function CrmQueuePage() {
    * Số việc của TỪNG tab, hiện ngay trên nhãn tab.
    *
    * Đây là thứ đắt giá nhất của màn này: không có nó, CSKH mở trang ra phải bấm lần lượt
-   * 5 tab mới biết hôm nay việc nằm ở đâu. Mỗi tab một request `limit: 1` chỉ để lấy
-   * `total` — rẻ, và chỉ nạp lại khi có việc được xử lý xong (không nạp theo từng lần
-   * đổi tab hay lật trang).
+   * 5 tab mới biết hôm nay việc nằm ở đâu.
+   *
+   * ⚠️ `limit: 1` KHÔNG làm truy vấn rẻ đi: `getManyAndCount` vẫn chạy một COUNT trên toàn
+   * tập khớp điều kiện (TypeORM tước limit khỏi câu COUNT). Nó chỉ cắt phần trả về. Vì vậy
+   * chỉ nạp lúc mở màn và sau khi một việc được xử lý xong — KHÔNG nạp theo từng lần đổi
+   * tab hay lật trang. Nếu sau này thấy nặng thì gộp 5 request thành một endpoint đếm.
    */
   const [counts, setCounts] = React.useState<Partial<Record<QueueTab, number>>>({});
 
@@ -85,6 +88,7 @@ export default function CrmQueuePage() {
 
   // Chống request cũ về sau ghi đè danh sách của bộ lọc hiện tại.
   const reqIdRef = React.useRef(0);
+  const countsReqRef = React.useRef(0);
 
   const load = React.useCallback(async () => {
     // Tab "Việc của tôi" lọc theo id admin đang đăng nhập. Gọi khi chưa có `me` sẽ
@@ -126,6 +130,9 @@ export default function CrmQueuePage() {
 
   const loadCounts = React.useCallback(async () => {
     if (!me?.id) return;
+    // Cùng chốt chống-đua với `load` ở trên: hai lần đếm chồng nhau (ghi kết quả liên
+    // tiếp) thì vòng CŨ về sau sẽ đè số MỚI, badge đứng sai cho tới lần ghi kế tiếp.
+    const reqId = ++countsReqRef.current;
     const entries = await Promise.all(
       QUEUE_TAB_ORDER.map(async (t) => {
         try {
@@ -137,6 +144,7 @@ export default function CrmQueuePage() {
         }
       }),
     );
+    if (reqId !== countsReqRef.current) return;
     setCounts(Object.fromEntries(entries.filter(([, v]) => v !== undefined)));
   }, [me?.id]);
 
@@ -196,7 +204,10 @@ export default function CrmQueuePage() {
       <Card className="space-y-3 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Tabs value={tab} onValueChange={(v) => changeTab(v as QueueTab)}>
-            <TabsList>
+            {/* Xuống dòng khi hẹp: 5 tab với nhãn đầy đủ dài ~914px, tràn khỏi
+                viewport <1250px và đẩy tab cuối ra ngoài màn. Cùng cách 4 trang
+                anh em đang dùng (bookings, driver-penalties, driver-cancel-review). */}
+            <TabsList className="h-auto flex-wrap">
               {QUEUE_TAB_ORDER.map((k) => {
                 const n = counts[k];
                 return (
@@ -378,7 +389,12 @@ export default function CrmQueuePage() {
         <BookingDetail
           bookingId={detailId}
           onClose={() => setDetailId(null)}
-          onCallRecorded={load}
+          // Ghi từ dialog cũng làm việc rời tab -> số trên nhãn tab phải nạp lại.
+          // Chỉ gọi `load` là badge đứng số cũ tới khi F5.
+          onCallRecorded={() => {
+            void load();
+            void loadCounts();
+          }}
         />
       )}
     </div>
