@@ -112,6 +112,26 @@ export function formatWaited(sinceIso: string | null | undefined, nowMs: number)
   return remH ? `${days} ngày ${remH} giờ` : `${days} ngày`;
 }
 
+/**
+ * Mức khẩn theo thời gian chờ, để tô màu cột "Đã chờ".
+ *
+ * Ngưỡng CỐ Ý khác ngưỡng "quá hạn" của backend: cái kia là luật nghiệp vụ ops chỉnh được
+ * trong Cài đặt, cái này chỉ là tín hiệu MẮT NHÌN trên một cột. Nếu buộc hai thứ vào nhau
+ * thì FE phải biết con số của backend — đúng thứ đã cố ý tránh.
+ */
+export type WaitTone = 'normal' | 'warn' | 'danger';
+
+export function waitTone(sinceIso: string | null | undefined, nowMs: number): WaitTone {
+  if (!sinceIso) return 'normal';
+  const t = new Date(sinceIso).getTime();
+  if (Number.isNaN(t)) return 'normal';
+  const hours = (nowMs - t) / 3_600_000;
+  if (hours < 0) return 'normal'; // lệch đồng hồ
+  if (hours >= 48) return 'danger';
+  if (hours >= 12) return 'warn';
+  return 'normal';
+}
+
 export function paramsForTab(tab: QueueTab, adminId: string): QueueParams {
   switch (tab) {
     case 'before':

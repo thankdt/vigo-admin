@@ -24,6 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 import { getBookings, getCustomerCallReasons, recordBookingCustomerCall } from '@/lib/api';
 import type { Booking, CustomerCallStatus } from '@/lib/types';
+import { cn } from '@/lib/utils';
 import { formatVnDateTime } from '../leakage-review/leakage-labels';
 import { BookingDetail } from '../bookings/components/booking-detail';
 import {
@@ -33,6 +34,7 @@ import {
   formatWaited,
   paramsForTab,
   rowIsBeforePhase,
+  waitTone,
   waitedSince,
   type QueueTab,
 } from './queue-tabs';
@@ -67,6 +69,15 @@ export default function CrmQueuePage() {
   // Phân biệt "hết việc" với "không tải được" — hai thứ này trông giống hệt nhau
   // trên một bảng rỗng, mà hành động của CSKH thì khác hẳn.
   const [loadFailed, setLoadFailed] = React.useState(false);
+  /**
+   * Số việc của TỪNG tab, hiện ngay trên nhãn tab.
+   *
+   * Đây là thứ đắt giá nhất của màn này: không có nó, CSKH mở trang ra phải bấm lần lượt
+   * 5 tab mới biết hôm nay việc nằm ở đâu. Mỗi tab một request `limit: 1` chỉ để lấy
+   * `total` — rẻ, và chỉ nạp lại khi có việc được xử lý xong (không nạp theo từng lần
+   * đổi tab hay lật trang).
+   */
+  const [counts, setCounts] = React.useState<Partial<Record<QueueTab, number>>>({});
 
   // Đồng hồ cho cột "Đã chờ". Chốt một mốc mỗi lần tải thay vì gọi Date.now() trong
   // lúc render: các dòng phải cùng một mốc, và render không được phụ thuộc thời điểm.
@@ -113,6 +124,26 @@ export default function CrmQueuePage() {
     load();
   }, [load]);
 
+  const loadCounts = React.useCallback(async () => {
+    if (!me?.id) return;
+    const entries = await Promise.all(
+      QUEUE_TAB_ORDER.map(async (t) => {
+        try {
+          const res = await getBookings({ ...paramsForTab(t, me.id), page: 1, limit: 1 });
+          return [t, res.total] as const;
+        } catch {
+          // Một tab lỗi không được làm hỏng con số của 4 tab kia.
+          return [t, undefined] as const;
+        }
+      }),
+    );
+    setCounts(Object.fromEntries(entries.filter(([, v]) => v !== undefined)));
+  }, [me?.id]);
+
+  React.useEffect(() => {
+    loadCounts();
+  }, [loadCounts]);
+
   // Danh mục lý do do ops sửa trong Cài đặt — tải một lần, hỏng thì để rỗng chứ không
   // chặn cả màn: ghi cuộc gọi vẫn được vì `reason` không bắt buộc.
   React.useEffect(() => {
@@ -141,6 +172,8 @@ export default function CrmQueuePage() {
       toast({ title: status === 'CLAIMED' ? 'Đã nhận việc gọi' : 'Đã ghi kết quả gọi' });
       // Tải lại để dòng vừa xử lý rời khỏi tab — đó là tín hiệu "việc đã xong".
       await load();
+      // Việc vừa chuyển từ tab này sang tab khác -> con số của CẢ HAI tab đều sai.
+      void loadCounts();
     } catch (err) {
       toastApiError(err, 'Không ghi được cuộc gọi');
     } finally {
@@ -164,21 +197,38 @@ export default function CrmQueuePage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Tabs value={tab} onValueChange={(v) => changeTab(v as QueueTab)}>
             <TabsList>
-              {QUEUE_TAB_ORDER.map((k) => (
-                <TabsTrigger key={k} value={k}>
-                  {QUEUE_TAB_LABEL[k]}
-                </TabsTrigger>
-              ))}
+              {QUEUE_TAB_ORDER.map((k) => {
+                const n = counts[k];
+                return (
+                  <TabsTrigger key={k} value={k} className="gap-1.5">
+                    {QUEUE_TAB_LABEL[k]}
+                    {n !== undefined && (
+                      <span
+                        className={cn(
+                          'rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums',
+                          n === 0
+                            ? 'bg-muted text-muted-foreground'
+                            : k === 'overdue'
+                              ? 'bg-destructive/15 text-destructive'
+                              : 'bg-primary/15 text-primary',
+                        )}
+                      >
+                        {n.toLocaleString('vi-VN')}
+                      </span>
+                    )}
+                  </TabsTrigger>
+                );
+              })}
             </TabsList>
           </Tabs>
           <div className="text-sm text-muted-foreground">
-            {loading ? 'Đang tải…' : `${total.toLocaleString('vi-VN')} việc`}
+            {loading ? 'Đang tải…' : total > PAGE_SIZE ? `${total.toLocaleString('vi-VN')} việc` : null}
           </div>
         </div>
 
         {/* Giải thích tab ĐANG ĐỨNG. Nhãn tab một mình không nói được gọi để LÀM GÌ, và
             người mới không đoán được vì sao việc vừa nhận lại biến mất khỏi tab hiện tại. */}
-        <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+        <p className="border-l-2 border-muted-foreground/30 pl-3 text-sm text-muted-foreground">
           {QUEUE_TAB_HINT[tab]}
         </p>
 
@@ -226,7 +276,21 @@ export default function CrmQueuePage() {
                       {formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm">
-                      {formatWaited(waitedSince(b), nowMs)}
+                      {(() => {
+                        const since = waitedSince(b);
+                        const tone = waitTone(since, nowMs);
+                        return (
+                          <span
+                            className={cn(
+                              'tabular-nums',
+                              tone === 'danger' && 'font-semibold text-destructive',
+                              tone === 'warn' && 'font-medium text-amber-600 dark:text-amber-500',
+                            )}
+                          >
+                            {formatWaited(since, nowMs)}
+                          </span>
+                        );
+                      })()}
                     </TableCell>
                     {showOwnerCol && (
                       <TableCell className="whitespace-nowrap text-sm">
