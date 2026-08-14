@@ -7,6 +7,7 @@ import {
   waitedSince,
   formatWaited,
   rowIsBeforePhase,
+  waitTone,
 } from './queue-tabs';
 
 describe('paramsForTab', () => {
@@ -163,5 +164,27 @@ describe('formatWaited', () => {
   // Đồng hồ máy admin lệch so với server là chuyện có thật; hiện "-5 phút" trông như bug.
   it('mốc ở tương lai (lệch đồng hồ) → gạch ngang, không hiện số âm', () => {
     expect(formatWaited(ago(-5), now)).toBe('—');
+  });
+});
+
+describe('waitTone — tín hiệu mắt nhìn cho cột "Đã chờ"', () => {
+  const now = new Date('2026-08-14T12:00:00Z').getTime();
+  const ago = (h: number) => new Date(now - h * 3_600_000).toISOString();
+
+  it('dưới 12 giờ là bình thường', () => {
+    expect(waitTone(ago(0), now)).toBe('normal');
+    expect(waitTone(ago(11.9), now)).toBe('normal');
+  });
+
+  it('từ 12 giờ chuyển cảnh báo, từ 48 giờ thành nguy', () => {
+    expect(waitTone(ago(12), now)).toBe('warn');
+    expect(waitTone(ago(47), now)).toBe('warn');
+    expect(waitTone(ago(48), now)).toBe('danger');
+  });
+
+  it('thiếu mốc / mốc hỏng / mốc tương lai đều không tô màu', () => {
+    expect(waitTone(null, now)).toBe('normal');
+    expect(waitTone('rác', now)).toBe('normal');
+    expect(waitTone(ago(-5), now)).toBe('normal');
   });
 });

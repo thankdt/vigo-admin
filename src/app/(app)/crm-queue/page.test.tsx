@@ -188,3 +188,42 @@ describe('CrmQueuePage — ranh giới quyền', () => {
     }
   });
 });
+
+/**
+ * Số việc trên nhãn tab. Sai số ở đây tệ hơn KHÔNG có số: CSKH tin "tab đó trống" rồi bỏ
+ * qua việc thật. Ba thứ phải đúng — đếm cho đủ 5 tab, cập nhật sau khi xử lý xong một
+ * việc, và một tab lỗi không được xoá số của 4 tab kia.
+ */
+describe('CrmQueuePage — số việc trên tab', () => {
+  it('đếm đủ 5 tab, mỗi tab một truy vấn nhẹ (limit 1)', async () => {
+    getBookings.mockResolvedValue(page([], { total: 7 }));
+    render(<CrmQueuePage />);
+
+    await waitFor(() => expect(screen.getAllByText('7').length).toBeGreaterThan(0));
+    const countCalls = getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 1);
+    expect(countCalls).toHaveLength(5);
+  });
+
+  it('xử lý xong một việc thì đếm lại — không để số cũ nằm lì', async () => {
+    getBookings.mockResolvedValue(page([mkBooking()], { total: 1 }));
+    render(<CrmQueuePage />);
+
+    await waitFor(() => expect(getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 1)).toHaveLength(5));
+    await userEvent.click(await screen.findByRole('button', { name: /nhận gọi/i }));
+
+    await waitFor(() =>
+      expect(getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 1).length).toBeGreaterThan(5),
+    );
+  });
+
+  it('một tab đếm lỗi thì các tab còn lại vẫn có số', async () => {
+    let n = 0;
+    getBookings.mockImplementation(async (p: any) => {
+      if (p?.limit === 1 && ++n === 2) throw new Error('tab này lỗi');
+      return page([], { total: 4 });
+    });
+    render(<CrmQueuePage />);
+
+    await waitFor(() => expect(screen.getAllByText('4').length).toBeGreaterThanOrEqual(4));
+  });
+});
