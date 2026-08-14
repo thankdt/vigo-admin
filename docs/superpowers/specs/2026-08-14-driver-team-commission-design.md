@@ -631,14 +631,22 @@ nặng không index.
   **Mức độ: vệ sinh dữ liệu, KHÔNG phải rò rỉ giữa các bên.** Đã kiểm từng điểm — snapshot
   chỉ ghi lúc NHẬN chuyến, nên:
 
-  | Điểm | Ai nhận | Giá trị |
-  |---|---|---|
-  | `buildOfferPayload` | nhiều tài xế | chuyến **chưa có tài** → luôn `NULL` |
-  | `:854 { ...booking, shareLink }` | khách (đây là `createBooking`) | chuyến vừa tạo → luôn `NULL` |
-  | `attachDriverEarnings*`, chi tiết chuyến | chính tài xế đó, hoặc admin | mức của **chính mình** |
+  | Điểm | Ai nhận | Trạng thái chuyến | Giá trị |
+  |---|---|---|---|
+  | `buildOfferPayload` `dispatch.processor.ts:158-160` | nhiều tài xế | chưa có tài | `NULL` |
+  | `booking.service.ts:854` (`createBooking`) | khách | vừa tạo | `NULL` |
+  | `attachDriverEarnings` / `…List` | chính tài xế đó, hoặc admin | mọi | mức của chính mình |
+  | **`getOne` `:2880`** | **khách** | **mọi** | **non-null** |
+  | **`getCurrentBooking` `:3077`** | **khách** | **ACCEPTED…PICKED_UP** | **non-null** |
+  | **`getHistory` `:1471`** | **khách** | **COMPLETED** | **non-null** |
 
-  Không có đường nào để tài A đọc mức của tài B, hay khách đọc mức của tài. Gán tay ở điểm
-  trả về cho khách là đủ.
+  Tài A **không** đọc được mức của tài B. Nhưng **khách ĐỌC ĐƯỢC mức hoa hồng VIGO thu của
+  tài xế chở mình** qua 3 đường in đậm — rò rỉ thương mại thật, phải gỡ tay ở cả 6 điểm.
+
+  > *Đính chính: bản trước của mục này viết "khách luôn nhận `NULL`". Sai — kết luận đó rút
+  > ra từ 2 điểm đầu rồi suy rộng. Hai điểm cuối trả **thẳng entity**, không `spread`, nên
+  > dò theo dấu `...booking` sẽ không thấy. `getOne` `:2892-2895` có sẵn chú thích kể lại
+  > bug leak `driverEarnings` ngày 2026-06-10 — đúng loại này.*
 
   ⛔ **KHÔNG dùng `@Column({ select: false })`** cho 2 cột này. Nó đổi một vấn đề không tồn
   tại lấy một lỗi tiền im lặng: `complete()` đọc `lockedBooking` để dựng `earningsBreakdown`
@@ -664,7 +672,11 @@ nặng không index.
 
 Ca mới:
 
-1. Tài 0%, không HTX → trừ ví 0đ, `vigoCommission = 0`, `htxCommission = 0`.
+1. Tài 0%, không HTX → trừ ví 0đ. ⚠️ Đây là **unit test truyền thẳng `htxCommissionRate: 0`**
+   vào `computeTripEarnings`, KHÔNG phải hành vi qua đường thật: `resolveHtxCommissionRate`
+   rơi về `DEFAULT = 0.05` cho tài không HTX (§7.5), nên chạy thật sẽ ra `htxCommission =
+   50.000` / `vigoCommission = −50.000`. Ca này khoá **công thức**; hành vi đường thật khoá
+   ở ca 19.
 2. Tài 0%, HTX 5% → trừ ví 0đ, `htxCommission` **y hệt** mức chung, `vigoCommission` **âm**.
 3. Tài 0%, HTX 5% → **`htxVatRemit` và `vigoVatRemit`** đúng theo §4.4 *(bản 1 thiếu ca này
    — chính là lỗ hổng để CHẶN-2 lọt qua)*.
@@ -684,6 +696,12 @@ Ca mới:
     của mình, snapshot ghi đè theo tài mới.
 14. Guard (Q5 = **chỉ super admin**): tài khoản non-super **dù có đủ mọi quyền chức năng**
     → 403; super admin → 200. *(Ca cũ viết theo phương án "cả 2 quyền" đã bị bỏ.)*
+15. Dispatch: payload mời chuyến cho tài có mức riêng hiện đúng số của tài đó.
+16. FE: `hasNewSplit` với `0/0` vẫn vào nhánh mới; `platformFee` âm không in hai dấu trừ.
+17. `htx-recon-shared.test.ts`: ca `vigoCommission` âm — kiểm `driverNet`/`driverIncome` đọc
+    được và không vượt cước, và cột 20 "Phí HTX" = 50.000 đứng cạnh cột 10 "Phí APP trước
+    VAT" = 0 thì có cột giải thích. *(KHÔNG dùng `customerTotal == grossRevenue`: đó là đồng
+    nhất thức theo cấu tạo, độc lập với `r`, luôn xanh và không bảo vệ gì.)*
 18. **`r > R`** — `CHECK` cho phép 0..1 nên super admin đặt `0.5` là hợp lệ. Khi đó
     `forgoneCommission` **âm** và tài xế bị thu **nhiều hơn** mức chuẩn. Kiểm: mọi trường
     vẫn nhất quán, và UI cảnh báo **cả hai chiều** (§8) — chiều này gây thiệt cho tài xế.
@@ -691,9 +709,6 @@ Ca mới:
     không được vào thẻ.
 20. **Tạo thành viên thẳng ở trạng thái "Trong team"** → có ghi `0.0000` và có **2 dòng
     nhật ký** (đổi trạng thái + đặt mức). Khoá lỗi `patchMember` ở §7.4.
-15. Dispatch: payload mời chuyến cho tài có mức riêng hiện đúng số của tài đó.
-16. FE: `hasNewSplit` với `0/0` vẫn vào nhánh mới; `platformFee` âm không in hai dấu trừ.
-17. `htx-recon-shared.test.ts`: ca `vigoCommission` âm, kiểm `customerTotal == grossRevenue`.
 
 Kiểm tĩnh: `TZ=UTC npx tsc --noEmit && TZ=UTC npx jest` (backend);
 `npx tsc --noEmit && npx vitest run` (admin).

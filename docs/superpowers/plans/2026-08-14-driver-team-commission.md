@@ -30,6 +30,11 @@ Task 1–14 ở backend. Task 15–18 ở admin. Task 19 đụng cả hai.
 - Không thêm giá trị enum mới nào (app tài xế ném lỗi khi gặp `TransactionType` lạ).
 - Timezone: mọi mốc ngày là VN (UTC+7); backend chạy `TZ=UTC`. Chạy test bằng `TZ=UTC npx jest`.
 - Commit message kết bằng `Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>`.
+- **`git add` phải giới hạn theo đường dẫn của task, KHÔNG dùng `-A` hay `.`.** Cả hai repo
+  đang có file untracked không liên quan (`docs/audits/`, `scripts/audit-missing-routes.js`,
+  `scripts/inspect-carpool-pricing.ts`, `scripts/tmp-verify-gps-watch.ts`, mấy file
+  `docs/superpowers/*.md`) — `-A` sẽ nuốt sạch vào commit đầu tiên. Mỗi bước commit trong
+  kế hoạch này đã ghi sẵn đường dẫn đúng; giữ nguyên, đừng nới rộng.
 
 ## Cấu trúc file
 
@@ -155,7 +160,7 @@ Expected: không lỗi.
 ```bash
 cd /Volumes/exSSD/dev/projects/vigo-backend-driver-commission
 rm src/booking/trip-earnings.equivalence.spec.ts
-git add -A
+git add src/booking/
 git commit -m "refactor(booking): xoá bản sao buildDriverEarnings, dùng computeTripEarnings
 
 Hai hàm đã được chứng minh tương đương bằng test (7 ca biên + 500 input
@@ -331,7 +336,7 @@ Expected: tất cả PASS, **không sửa số nào trong test cũ**.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat(earnings): computeTripEarnings nhận mức hoa hồng riêng theo tài
+git add src/booking/trip-earnings.util.ts src/booking/trip-earnings.util.spec.ts && git commit -m "feat(earnings): computeTripEarnings nhận mức hoa hồng riêng theo tài
 
 Hai tỉ lệ tách bạch: bookingCommissionRate (chuẩn) chia phần HTX,
 driverCommissionRate (riêng) tính tiền tài xế + VAT thực thu. Mặc định
@@ -426,9 +431,24 @@ nên ở `buildOfferPayload` (chuyến chưa có tài) và `:854` (`createBookin
 `NULL`**; ở `attachDriverEarnings*` và chi tiết chuyến thì tài xế chỉ thấy mức **của chính
 mình**. Không có đường nào để tài A đọc mức của tài B.
 
-`buildOfferPayload` dùng `...booking` (`dispatch.processor.ts:158-160`), `booking.service.ts:851` `return { ...booking, shareLink }`, `attachDriverEarningsList` cũng spread. Hai cột mới sẽ chảy ra payload `new_booking_request` gửi app tài xế — vừa là thay đổi shape, vừa **rò rỉ vùng dữ liệu riêng của đội tài**.
+Đã bỏ cơ chế tự động (`select: false`) nên **danh sách gỡ tay phải ĐỦ**. Đừng dò theo dấu
+`...booking` — hai điểm cuối bảng dưới trả **thẳng entity**, không spread, nên dò kiểu đó
+sẽ không thấy chúng.
 
-Thêm helper vào `src/booking/booking.service.ts` và dùng ở mọi chỗ spread booking ra response:
+| Điểm | Ai nhận | Trạng thái chuyến | Giá trị |
+|---|---|---|---|
+| `buildOfferPayload` `dispatch.processor.ts:158-160` | nhiều tài xế | chưa có tài | `NULL` |
+| `booking.service.ts:854` `{ ...booking, shareLink }` (`createBooking`) | khách | vừa tạo | `NULL` |
+| `attachDriverEarnings` / `…List` | chính tài xế đó, hoặc admin | mọi | mức của chính mình |
+| **`getOne` `:2880` `{ ...booking, … }`** | **khách** | **mọi** | **non-null** |
+| **`getCurrentBooking` `:3077` `return bookings`** | **khách** | **ACCEPTED…PICKED_UP** | **non-null** |
+| **`getHistory` `:1471` `Object.assign(b, { pointsEarned })`** | **khách** | **COMPLETED** | **non-null** |
+
+Ba dòng in đậm là **khách đọc được mức hoa hồng VIGO thu của tài xế chở mình** — rò rỉ
+thương mại thật. Chính `getOne` đã có tiền lệ đúng loại này: chú thích ở `:2892-2895` kể lại
+bug leak `driverEarnings` ngày 2026-06-10.
+
+Thêm helper vào `src/booking/booking.service.ts` và dùng ở **cả 6** điểm trên:
 
 ```ts
 /**
@@ -489,7 +509,7 @@ Expected: PASS.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A && git commit -m "feat(db): thêm cột mức hoa hồng riêng + snapshot trên booking/đơn đặt hộ
+git add src/database/migrations/ src/driver-team/entities/ src/booking/entities/ src/multi-stop-order/entities/ src/booking/booking.service.ts && git commit -m "feat(db): thêm cột mức hoa hồng riêng + snapshot trên booking/đơn đặt hộ
 
 5 cột NULL-able, transformer numeric->number trên cả 3 entity, CHECK 0..1
 trên driver_team_member (bảng đang 0 dòng nên an toàn). lock_timeout 5s vì
@@ -770,7 +790,7 @@ Expected: PASS.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add -A && git commit -m "feat(commission): service phân giải tỉ lệ hoa hồng duy nhất
+git add src/commission/ src/app.module.ts && git commit -m "feat(commission): service phân giải tỉ lệ hoa hồng duy nhất
 
 Tách 2 class: DriverCommissionService đọc tươi (luồng tiền) và
 DriverCommissionDisplayService cache 10s (chỉ hiển thị), kèm test tĩnh cấm
@@ -875,7 +895,7 @@ Expected: PASS, `EXPECTED_COMMISSION = 18400` không đổi.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A && git commit -m "feat(booking): trừ hoa hồng theo mức riêng + chốt snapshot tỉ lệ
+git add src/booking/ && git commit -m "feat(booking): trừ hoa hồng theo mức riêng + chốt snapshot tỉ lệ
 
 Gom bản sao inline của Vi-now claim về computeBookingCommission. Thêm guard
 commission > 0 cho accept/Vi-now/confirmSchedule (đồng bộ 5/5 luồng). Giữ
@@ -960,7 +980,7 @@ Expected: PASS, `multi-stop-lifecycle.service.spec.ts` cũ không đổi số.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "feat(multi-stop): chốt snapshot tỉ lệ lúc nhận đơn, complete đọc snapshot
+git add src/multi-stop-order/ && git commit -m "feat(multi-stop): chốt snapshot tỉ lệ lúc nhận đơn, complete đọc snapshot
 
 orderSettlement chạy ở CẢ accept lẫn complete. Complete resolve lại theo
 driverId sẽ lệch thuế giữ hộ khi tài đổi mức giữa chừng (30k/đơn 10 triệu,
@@ -1028,7 +1048,7 @@ Run: `TZ=UTC npx jest && npx tsc --noEmit`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A && git commit -m "feat(booking): breakdown + API thu nhập đọc tỉ lệ đã chốt
+git add src/booking/ && git commit -m "feat(booking): breakdown + API thu nhập đọc tỉ lệ đã chốt
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1102,14 +1122,42 @@ Tính ngay trong `loadTripEarnings` (đã load sẵn mọi chuyến trong kỳ, 
   // Không lọc thì thẻ báo VIGO lỗ tiền mặt cho khoản KHÔNG HỀ CHI RA, trên ~57% số
   // chuyến — mà đây đúng là con số CEO dùng để quyết định.
   //
-  // Điều kiện: tcId IS NOT NULL AND tc."htxCommissionRate" > 0.
+  // Điều kiện: tcId IS NOT NULL AND tc."htxCommissionRate" THẬT > 0.
   // Lọc theo tcId KHÔNG THÔI là chưa đủ — nhánh raw <= 0 -> DEFAULT vẫn để lọt.
 ```
+
+⛔ **KHÔNG lọc bằng `r.earnings.htxCommissionRate > 0` — luôn true, bộ lọc thành vô nghĩa.**
+Trường đó là tỉ lệ **đã bị default-hoá** ở `:320-323` / `:378-381` rồi mới truyền vào
+`computeTripEarnings`, nên nó không bao giờ nhỏ hơn `0.05`. `TripEarningsRow` hiện **không
+mang** tỉ lệ HTX thô, nên người code bám đúng comment vẫn viết ra bộ lọc không lọc gì.
+
+Phải mang cờ từ nguồn. Trong **cả hai** loader, tính TRƯỚC nhánh `→ DEFAULT`:
+
+```ts
+// finance.service.ts — TripEarningsRow thêm một trường
+type TripEarningsRow = { /* … */ hasRealHtx: boolean };
+
+// loadTripEarnings (:318-323)
+const rawHtx = Number(driver?.transportCompany?.htxCommissionRate);
+const hasRealHtx = driver?.transportCompanyId != null && Number.isFinite(rawHtx) && rawHtx > 0;
+let htxCommissionRate = rawHtx;
+if (!Number.isFinite(htxCommissionRate) || htxCommissionRate <= 0 || htxCommissionRate > 1) {
+  htxCommissionRate = DEFAULT_HTX_RATE;   // giữ nguyên — đổi sẽ vỡ bất biến §10
+}
+// … trả về { earnings, hasRealHtx, … }
+
+// loadMultiStopEarnings (:376-381) — y hệt, đọc r.htxRate (getRawMany → Number())
+```
+
+Thẻ lỗ tiền mặt: `trips.filter(t => t.hasRealHtx).reduce((s, t) => s + Math.max(0, -t.earnings.vigoCommission), 0)`.
+
+Ca test bắt buộc: **chuyến của tài độc lập (không HTX) KHÔNG vào thẻ lỗ tiền mặt**, dù
+`earnings.htxCommission = 50.000` và `vigoCommission = −50.000`.
 
 - [ ] **Step 6: Chạy + commit**
 
 ```bash
-TZ=UTC npx jest src/finance && git add -A && git commit -m "feat(finance): báo cáo đọc tỉ lệ đã chốt + cột giải thích ưu đãi
+TZ=UTC npx jest src/finance && git add src/finance/ && git commit -m "feat(finance): báo cáo đọc tỉ lệ đã chốt + cột giải thích ưu đãi
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1144,7 +1192,7 @@ tự tạo index trên PROD — quy tắc user: index chạy tay, không qua CI/
 - [ ] **Step 4: Chạy + commit**
 
 ```bash
-TZ=UTC npx jest src/htx && git add -A && git commit -m "feat(htx): portal tính hoa hồng theo tỉ lệ từng chuyến
+TZ=UTC npx jest src/htx && git add src/htx/ && git commit -m "feat(htx): portal tính hoa hồng theo tỉ lệ từng chuyến
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1199,7 +1247,7 @@ sẵn**; sửa sẽ đổi số hiển thị của mọi tài xế. Nợ riêng.
 - [ ] **Step 5: Chạy + commit**
 
 ```bash
-TZ=UTC npx jest src/wallet src/drivers src/dispatch && git add -A && git commit -m "feat(driver): thu nhập và lời mời chuyến theo mức hoa hồng của tài
+TZ=UTC npx jest src/wallet src/drivers src/dispatch && git add src/wallet/ src/drivers/ src/dispatch/ && git commit -m "feat(driver): thu nhập và lời mời chuyến theo mức hoa hồng của tài
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1309,7 +1357,7 @@ it('response KHÔNG có key data/meta (TransformInterceptor sẽ nuốt members)
 
 ```bash
 TZ=UTC npx jest src/driver-team && npx tsc --noEmit
-git add -A && git commit -m "feat(driver-team): endpoint danh sách thành viên đội
+git add src/driver-team/ && git commit -m "feat(driver-team): endpoint danh sách thành viên đội
 
 Đi từ driver_team_member chứ không từ booking: tài mới mời vào team mà chưa
 chạy chuyến nào trước đây không hiện ở đâu cả. Khoảng ngày chỉ dùng để đếm
@@ -1405,7 +1453,7 @@ Run: `TZ=UTC npx jest src/driver-team && npx tsc --noEmit`
 - [ ] **Step 5: Commit**
 
 ```bash
-git add -A && git commit -m "fix(driver-team): tạo thành viên thẳng ở một trạng thái vẫn sinh sự kiện
+git add src/driver-team/ && git commit -m "fix(driver-team): tạo thành viên thẳng ở một trạng thái vẫn sinh sự kiện
 
 member được create() với stage đã gán rồi mới so sánh với chính nó, nên
 dòng mới không bao giờ sinh STAGE_CHANGE. So với trạng thái cũ thật sự
@@ -1494,7 +1542,7 @@ nhớ vì sao.
 
 ```bash
 TZ=UTC npx jest src/driver-team src/rbac && npx tsc --noEmit
-git add -A && git commit -m "feat(driver-team): endpoint sửa % hoa hồng riêng, chỉ super admin
+git add src/driver-team/ && git commit -m "feat(driver-team): endpoint sửa % hoa hồng riêng, chỉ super admin
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1524,7 +1572,7 @@ Expected: PASS toàn bộ, không sửa số nào trong test cũ.
 - [ ] **Step 4: Commit + đẩy nhánh**
 
 ```bash
-git add -A && git commit -m "refactor(commission): xoá 9 bản sao đọc tỉ lệ hoa hồng
+git add src/wallet/ src/drivers/ src/finance/ src/htx/ src/multi-stop-order/ && git commit -m "refactor(commission): xoá 9 bản sao đọc tỉ lệ hoa hồng
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 git push -u origin feat/driver-commission
@@ -1619,7 +1667,7 @@ Run: `npx vitest run && npx tsc --noEmit`
 - [ ] **Step 6: Commit**
 
 ```bash
-git add -A && git commit -m "feat(driver-team): tab Đội tài — danh sách thành viên không phụ thuộc khoảng ngày
+git add src/app/\(app\)/driver-team/ src/lib/driver-team-export.ts && git commit -m "feat(driver-team): tab Đội tài — danh sách thành viên không phụ thuộc khoảng ngày
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ```
@@ -1697,7 +1745,7 @@ Run: `npx vitest run && npx tsc --noEmit`
 - [ ] **Step 5: Commit + đẩy nhánh**
 
 ```bash
-git add -A && git commit -m "fix(admin): các màn tài chính chịu được hoa hồng VIGO âm
+git add src/app/\(app\)/bookings/ src/app/\(app\)/finance/ src/app/\(app\)/dashboard/ src/app/\(app\)/htx-reconciliation/ && git commit -m "fix(admin): các màn tài chính chịu được hoa hồng VIGO âm
 
 Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 git push -u origin feat/driver-commission
