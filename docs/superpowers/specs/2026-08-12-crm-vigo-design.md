@@ -483,9 +483,13 @@ lúc thật sự cần tạo role hẹp.
 
 ### 13.7 Những chỗ spec tự mâu thuẫn, cần chốt trước khi làm tiếp
 
-- **Che SĐT khách**: §11 rủi ro #8 đề xuất che một phần ở `/crm-queue`, nhưng §6.1 lại yêu cầu
-  dòng hiển thị "khách + SĐT". GĐ1 ship theo §6.1 (hiện đủ). Cần chốt lại ở GĐ2 khi hồ sơ 360
-  ra đời, kèm audit log truy cập.
+- **Che SĐT khách** — ĐÃ CHỐT 2026-08-14: **giữ hiện đủ** ở `/crm-queue`.
+  §11 rủi ro #8 đề xuất che một phần, nhưng §6.1 lại yêu cầu dòng hiển thị "khách + SĐT" —
+  spec tự mâu thuẫn, và ở GĐ1 chưa có nút bấm-để-gọi nên che đi thì CSKH phải mở dialog mới
+  đọc được số, tức là mất đúng cái tốc độ mà màn này sinh ra để có.
+  **Xem lại ở GĐ2**, khi hồ sơ 360 gom "SĐT + tuyến quen + khung giờ quen + timeline" vào một
+  chỗ — lúc đó rủi ro tra cứu người quen/đối thủ mới thành thật, và phải đi kèm audit log
+  truy cập (hiện backend KHÔNG có bảng audit nào).
 - **Cửa sổ thời gian hàng đợi**: §6.1 định nghĩa tab bằng truy vấn nhưng không kẹp thời gian.
   Tab "Cần gọi sau" vì thế bao trọn mọi chuyến COMPLETED lịch sử (cột `callAfterStatus` mới
   thêm nên dữ liệu cũ đều NULL). Phải đếm dữ liệu thật rồi mới quyết.
