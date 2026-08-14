@@ -3,6 +3,7 @@ import {
   paramsForTab,
   QUEUE_TAB_ORDER,
   QUEUE_TAB_LABEL,
+  QUEUE_TAB_HINT,
   waitedSince,
   formatWaited,
   rowIsBeforePhase,
@@ -53,6 +54,23 @@ describe('paramsForTab', () => {
     for (const tab of QUEUE_TAB_ORDER) {
       expect(QUEUE_TAB_LABEL[tab]).toBeTruthy();
     }
+  });
+
+  // Nhãn tab một mình không nói được gọi để LÀM GÌ. Thêm tab mới mà quên câu giải thích
+  // là CSKH nhìn vào một rổ việc không hiểu để làm gì.
+  it('mọi tab đều có câu giải thích cho CSKH', () => {
+    for (const tab of QUEUE_TAB_ORDER) {
+      expect(QUEUE_TAB_HINT[tab]?.length ?? 0).toBeGreaterThan(30);
+    }
+  });
+
+  /**
+   * Ngưỡng quá hạn nằm trong system_config để ops đổi không cần deploy. Viết cứng con số
+   * vào câu giải thích là ngày nào đó ops đổi 24 -> 12 thì màn hình nói dối mà không cổng
+   * nào bắt được.
+   */
+  it('câu giải thích tab "Quá hạn" KHÔNG viết cứng số giờ', () => {
+    expect(QUEUE_TAB_HINT.overdue).not.toMatch(/\d+\s*(giờ|tiếng|h)\b/i);
   });
 
   // Chỉ tab "mine" được phép mang claimedBy. Rò sang tab khác là CSKH thấy thiếu việc
