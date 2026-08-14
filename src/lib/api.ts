@@ -758,8 +758,8 @@ export async function getBookings(params: {
   q?: string;
   // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
   bookingId?: string;
-  // Sắp xếp server-side (sắp cả bảng, không chỉ trang hiện tại). BE whitelist
-  // cột: createdAt|updatedAt|price|status|scheduledTime. Mặc định createdAt DESC.
+  // Sắp xếp server-side (sắp cả bảng, không chỉ trang hiện tại). BE whitelist cột:
+  // createdAt|updatedAt|completedAt|price|status|scheduledTime. Mặc định createdAt DESC.
   sortBy?: string;
   order?: 'ASC' | 'DESC';
   // Lọc loại chuyến cho 2 tab admin "Chuyến thường / Đặt lịch". true = đặt lịch
@@ -779,6 +779,15 @@ export async function getBookings(params: {
   // callBefore='called' + callAfter='uncalled' = "đã gọi trước, CHƯA gọi lại sau hoàn thành".
   callBefore?: CustomerCallFilter;
   callAfter?: CustomerCallFilter;
+  // ─── Hàng đợi CSKH (/crm-queue) ────────────────────────────────────────────
+  // Chỉ chuyến admin này đang GIỮ VIỆC chưa xong ở một trong hai pha (BE lọc
+  // callBeforeById/callAfterById + trạng thái CLAIMED).
+  claimedBy?: string;
+  // CSV trạng thái cần loại trừ, vd 'COMPLETED,CANCELLED'.
+  excludeStatus?: string;
+  // true = chỉ chuyến hoàn thành quá lâu mà chưa gọi sau. Ngưỡng giờ do BE đọc từ
+  // system_config (CSKH_CALL_AFTER_OVERDUE_HOURS) — FE cố ý KHÔNG biết con số này.
+  overdue?: boolean;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -799,6 +808,9 @@ export async function getBookings(params: {
     ...(params.agentOnly && { agentOnly: 'true' }),
     ...(params.callBefore && { callBefore: params.callBefore }),
     ...(params.callAfter && { callAfter: params.callAfter }),
+    ...(params.claimedBy && { claimedBy: params.claimedBy }),
+    ...(params.excludeStatus && { excludeStatus: params.excludeStatus }),
+    ...(params.overdue && { overdue: 'true' }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);

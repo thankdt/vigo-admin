@@ -326,6 +326,15 @@ export function UsersTable() {
                 <TableRow>
                     <TableCell colSpan={9} className="h-24 text-center">
                     Không tìm thấy người dùng.
+                    {/* Mặc định lọc role=USER (nhóm CRM) nên tra SĐT của TÀI XẾ hoặc ADMIN
+                        sẽ trả rỗng — dễ kết luận nhầm "không có tài khoản này". Chỉ nhắc khi
+                        người dùng ĐANG tìm và ĐANG lọc, để không làm ồn ở trạng thái rỗng thường. */}
+                    {searchTerm.trim() && roleFilter !== 'ALL' && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Đang lọc theo vai trò “{roleFilter === 'USER' ? 'Khách' : 'Chủ HTX'}”. Tài xế và
+                        admin không nằm trong danh sách này — đổi bộ lọc Vai trò sang “Tất cả” để tìm tiếp.
+                      </p>
+                    )}
                     </TableCell>
                 </TableRow>
             ) : (

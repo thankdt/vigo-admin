@@ -26,6 +26,7 @@ import {
   TrendingDown,
   PieChart,
   Headset,
+  PhoneCall,
   Star,
   Handshake,
   type LucideIcon,
@@ -82,6 +83,9 @@ export const navGroups: NavGroup[] = [
     // (ví, hoa hồng, công nợ), không phải khách đi xe — xem spec §3.4.
     label: 'Khách hàng (CRM)',
     items: [
+      // Đầu nhóm là CỐ Ý: màn CSKH mở nhiều nhất trong ngày, và nó thành trang đích
+      // sau đăng nhập cho người chỉ có quyền CSKH.
+      { href: '/crm-queue', label: 'Hàng đợi CSKH', icon: PhoneCall },
       { href: '/users', label: 'Khách hàng', icon: Users },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { PriceBreakdownCard, BookingDetail } from './bookings-table';
+import { PriceBreakdownCard, BookingDetail } from './booking-detail';
 import { getBookingDetails } from '@/lib/api';
 import type { Booking, PriceBreakdown } from '@/lib/types';
 
