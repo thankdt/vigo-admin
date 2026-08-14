@@ -48,6 +48,7 @@ import {
 } from '@/lib/driver-presence';
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
+import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
 import type { Booking, BookingStatus, Driver, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -915,6 +916,24 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   const [query, setQuery] = React.useState('');
   const { toast } = useToast();
 
+  // Khung giờ đón của CHÍNH chuyến đang đổi tài — backend chỉ ẩn tài chồng giờ với
+  // nó. Chuyến đi ngay (không có mốc hẹn) → bỏ trống, backend hiểu là "bây giờ".
+  //
+  // Chuyến ĐANG CHẠY (đổi tài để cứu chuyến kẹt): giờ đón đã trôi qua, lọc theo nó
+  // là lọc theo một cửa sổ chết. Cần tài rảnh BÂY GIỜ → bỏ hẳn khung giờ đi.
+  // (Backend cũng kẹp về `now`, đây là lớp thứ hai cho rõ ý.)
+  const rescueInProgress =
+    booking?.status === 'ARRIVED' ||
+    booking?.status === 'PICKED_UP' ||
+    booking?.status === 'DELAYED_WAITING';
+  const assignFromIso = rescueInProgress
+    ? undefined
+    : booking?.scheduledFromTime ?? booking?.scheduledTime ?? undefined;
+  const assignToIso = rescueInProgress ? undefined : booking?.scheduledToTime ?? undefined;
+  // Chính chuyến đang đổi tài không phải cam kết cản trở — nếu không, tài đang ôm nó
+  // sẽ bị cảnh báo đỏ về đúng chuyến admin đang thao tác.
+  const excludeBookingId = booking?.id;
+
   React.useEffect(() => {
     const fetchDrivers = async () => {
       if (!open) return;
@@ -922,7 +941,11 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
       setQuery('');
       setSelectedDriverId(null);
       try {
-        const response = await getAvailableDrivers();
+        const response = await getAvailableDrivers({
+          scheduledFrom: assignFromIso,
+          scheduledTo: assignToIso,
+          excludeBookingId,
+        });
         setDrivers(response);
       } catch (err: any) {
         toast({ variant: 'destructive', title: 'Không thể tải danh sách tài xế', description: err.message });
@@ -931,7 +954,7 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
       }
     };
     fetchDrivers();
-  }, [open, toast]);
+  }, [open, toast, assignFromIso, assignToIso, excludeBookingId]);
 
   const handleReassign = async () => {
     if (!booking || !selectedDriverId) return;
@@ -1037,6 +1060,9 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                       {!route && !plate ? 'Chưa có thông tin xe' : ''}
                     </div>
                     <div className="flex items-center gap-2 justify-end">
+                      {/* Tài đang giữ cam kết ở khung giờ khác giờ VẪN hiện trong danh
+                          sách (fix 14/08/2026) — phải nói rõ họ đang giữ chuyến gì. */}
+                      <DriverCommitmentBadge commitments={driver.activeCommitments} />
                       {/* `status` chỉ là trạng thái KHAI BÁO — tài bỏ app vẫn ONLINE mãi.
                           Hiện tín hiệu thật để admin không đẩy chuyến vào một máy đã chết. */}
                       {(() => {
