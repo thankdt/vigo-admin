@@ -139,6 +139,21 @@ export type Driver = {
   // này khi Redis lỗi. Xem `driverOnlineState`.
   presence?: DriverPresence;
   rejectionReason?: string | null;
+  /**
+   * Chuyến tài xế ĐANG giữ (đã nhận, chưa chạy xong) — chỉ có ở danh sách gán
+   * chuyến của admin. Từ 14/08/2026 danh sách đó không còn ẩn tài chỉ vì họ giữ
+   * một cam kết ở khung giờ KHÁC, nên admin phải nhìn thấy cam kết đó trước khi
+   * bấm gán. `overlapsCandidate` = cam kết này chồng giờ với chuyến đang tạo.
+   */
+  activeCommitments?: Array<{
+    bookingId: string;
+    serviceType?: string | null;
+    status?: string | null;
+    scheduledFrom?: string | null;
+    scheduledTo?: string | null;
+    confirmedPickupTime?: string | null;
+    overlapsCandidate?: boolean;
+  }>;
   // CSKH: loại mốc "lịch sử làm việc" gần nhất (trạng thái cuối) + thời điểm — hiện badge ở danh sách.
   csLastCallType?: string | null;
   csLastCallAt?: string | null;

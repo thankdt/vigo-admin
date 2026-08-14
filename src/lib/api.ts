@@ -895,10 +895,27 @@ export async function voidCompletedBooking(
   return result.data ?? result;
 }
 
-export async function getAvailableDrivers(lat?: number, long?: number): Promise<Driver[]> {
+/**
+ * Danh sách tài xế cho màn gán chuyến.
+ *
+ * `scheduledFrom`/`scheduledTo` (ISO) = khung giờ đón của chuyến đang tạo/đang
+ * đổi tài. Backend dùng nó để chỉ ẩn tài THẬT SỰ chồng giờ; không gửi thì backend
+ * coi như chuyến đi ngay, và tài đang giữ cam kết ở khung khác vẫn hiện.
+ */
+export async function getAvailableDrivers(opts?: {
+  lat?: number;
+  long?: number;
+  scheduledFrom?: string;
+  scheduledTo?: string;
+  /** Chuyến đang đổi tài — không tính là cam kết cản trở của tài đang giữ nó. */
+  excludeBookingId?: string;
+}): Promise<Driver[]> {
   const query = new URLSearchParams();
-  if (lat) query.set('lat', String(lat));
-  if (long) query.set('long', String(long));
+  if (opts?.lat) query.set('lat', String(opts.lat));
+  if (opts?.long) query.set('long', String(opts.long));
+  if (opts?.scheduledFrom) query.set('scheduledFrom', opts.scheduledFrom);
+  if (opts?.scheduledTo) query.set('scheduledTo', opts.scheduledTo);
+  if (opts?.excludeBookingId) query.set('excludeBookingId', opts.excludeBookingId);
   const response = await fetchWithAuth(`/bookings/admin/available-drivers?${query.toString()}`);
   const result = await response.json();
   return result.data;

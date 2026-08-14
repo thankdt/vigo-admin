@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
 import { fmtVnd, isVoucherSelectable, voucherLabel } from './voucher-utils';
 import { validateWindow, toIso, formatLocal } from './schedule-utils';
+import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { isVehicleTypeApplicable, resolveRequestedVehicleType } from './vehicle-type-utils';
 import type { BookingDraft } from './duplicate-utils';
 
@@ -223,22 +224,70 @@ export function CreateBookingDialog({
   const [isLoadingDrivers, setIsLoadingDrivers] = React.useState(false);
   const [selectedDriverId, setSelectedDriverId] = React.useState<string | null>(null);
   const [driverSearch, setDriverSearch] = React.useState('');
+  // Đọc lựa chọn hiện tại BÊN TRONG effect nạp danh sách mà không phải đưa
+  // `selectedDriverId` vào deps — làm vậy sẽ nạp lại danh sách mỗi lần bấm chọn.
+  const selectedDriverIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    selectedDriverIdRef.current = selectedDriverId;
+  }, [selectedDriverId]);
 
+  // Khung giờ đón gửi kèm khi hỏi danh sách tài xế: backend chỉ ẩn tài CHỒNG GIỜ
+  // với chuyến này. Chuyến đi ngay → bỏ trống (backend hiểu là "bây giờ"). Ngày
+  // gõ dở trong ô datetime-local là Invalid Date → bỏ qua, đừng ném vào API.
+  const assignFromIso = React.useMemo(() => {
+    if (!isScheduled || !scheduledFrom) return undefined;
+    const d = new Date(scheduledFrom);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }, [isScheduled, scheduledFrom]);
+  const assignToIso = React.useMemo(() => {
+    if (!isScheduled || !scheduledTo) return undefined;
+    const d = new Date(scheduledTo);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }, [isScheduled, scheduledTo]);
+
+  // Đổi khung giờ đón = đổi tập tài xế rảnh → nạp lại danh sách.
+  //
+  // Ô `datetime-local` bắn onChange MỖI LẦN sửa một thành phần (gõ "1" rồi "5" của
+  // 15 giờ = hai lần), nên phải có cả hai lớp chống:
+  //  - debounce: một lần sửa giờ không thành 4-8 request (mỗi request là 3 query DB
+  //    trên toàn pool);
+  //  - seq guard: phản hồi của khung giờ CŨ về sau không được ghi đè danh sách của
+  //    khung giờ MỚI — admin sẽ nhìn danh sách ứng với 01:00 trong khi ô ghi 15:00
+  //    rồi gán nhầm, và tệ hơn là bị bỏ chọn oan bởi nhánh dưới.
+  const driverFetchSeqRef = React.useRef(0);
   React.useEffect(() => {
     if (!open || mode === 'agent') return; // agent can't force-assign a driver → skip the fetch
+    const seq = ++driverFetchSeqRef.current;
     const fetchDrivers = async () => {
       setIsLoadingDrivers(true);
       try {
-        const data = await getAvailableDrivers();
+        const data = await getAvailableDrivers({
+          scheduledFrom: assignFromIso,
+          scheduledTo: assignToIso,
+        });
+        if (seq !== driverFetchSeqRef.current) return; // phản hồi cũ → vứt
         setDrivers(data);
+        // Đổi khung giờ có thể làm tài ĐANG CHỌN rơi khỏi danh sách (giờ mới chồng
+        // với cam kết của họ). Lúc đó UI hiện lại ô tìm kiếm — trông như chưa chọn
+        // ai — trong khi `selectedDriverId` vẫn còn và vẫn được gửi lúc tạo chuyến.
+        // Bỏ chọn hẳn và nói rõ, đừng gán ngầm một người admin tưởng đã bỏ.
+        const stillSelected = selectedDriverIdRef.current;
+        if (stillSelected && !data.some((d) => getDriverId(d) === stillSelected)) {
+          setSelectedDriverId(null);
+          toast({
+            title: 'Đã bỏ chọn tài xế',
+            description: 'Tài xế vừa chọn bận ở khung giờ mới — vui lòng chọn lại.',
+          });
+        }
       } catch {
         // Ignore — driver list is optional
       } finally {
-        setIsLoadingDrivers(false);
+        if (seq === driverFetchSeqRef.current) setIsLoadingDrivers(false);
       }
     };
-    fetchDrivers();
-  }, [open]);
+    const timer = setTimeout(fetchDrivers, 350);
+    return () => clearTimeout(timer);
+  }, [open, mode, assignFromIso, assignToIso, toast]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -963,7 +1012,12 @@ export function CreateBookingDialog({
                   <AvatarFallback>{getDriverName(selectedDriver).charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-sm">
-                  <div className="font-semibold">{getDriverName(selectedDriver)}</div>
+                  <div className="font-semibold flex items-center gap-2">
+                    {getDriverName(selectedDriver)}
+                    {/* Giữ nhãn cả sau khi chọn: cảnh báo mà biến mất lúc bấm chọn
+                        thì đúng lúc cần nhất lại không có. */}
+                    <DriverCommitmentBadge commitments={selectedDriver.activeCommitments} />
+                  </div>
                   <div className="text-muted-foreground">
                     {selectedDriver.phone}
                     {selectedDriver.fixedRoute?.name ? ` • ${selectedDriver.fixedRoute.name}` : ''}
@@ -1009,7 +1063,12 @@ export function CreateBookingDialog({
                             <span className="text-muted-foreground ml-2">{driver.phone}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {(driver as any).availableSeats != null && (
+                            <DriverCommitmentBadge commitments={driver.activeCommitments} />
+                            {/* Ẩn khi 0: `accept()` zero hoá `availableSeats` cho chuyến
+                                không-ghép, nên tài lọt vào danh sách nhờ luật khung giờ mới
+                                gần như luôn hiện "còn 0 ghế khách" — bày ra để gán mà lại
+                                ghi 0 ghế thì UI tự mâu thuẫn. Số ghế thật nằm ở nhãn cam kết. */}
+                            {(driver as any).availableSeats > 0 && (
                               <Badge variant="outline" className="text-xs">
                                 còn {(driver as any).availableSeats} ghế khách
                               </Badge>
