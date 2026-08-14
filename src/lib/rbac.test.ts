@@ -87,6 +87,57 @@ describe('rbac catalog mirror', () => {
     });
   });
 
+  /**
+   * 2026-08-12 (CRM GĐ0): gom /users + /cskh-activity + /acquisition vào nhóm mới
+   * "Khách hàng (CRM)". Cùng loại rủi ro với lần tách "Xử lý vi phạm": nhóm chỉ là
+   * trình bày, nhưng thứ tự nhóm quyết định TRANG ĐÍCH sau đăng nhập
+   * (app/page.tsx -> firstAllowedRoute(navItems)). Khoá lại bằng test.
+   */
+  describe('nhóm Khách hàng (CRM)', () => {
+    const CRM_HREFS = ['/users', '/cskh-activity', '/acquisition'];
+
+    it('nhóm tồn tại và gồm đúng 3 mục, ĐÚNG THỨ TỰ', () => {
+      const crm = navGroups.find((g) => g.label === 'Khách hàng (CRM)');
+      expect(crm).toBeDefined();
+      expect(crm!.items.map((i) => i.href)).toEqual(CRM_HREFS);
+    });
+
+    it('3 mục KHÔNG còn nằm ở nhóm cũ (không bị nhân đôi trong menu)', () => {
+      for (const href of CRM_HREFS) {
+        expect(navItems.filter((i) => i.href === href)).toHaveLength(1);
+      }
+    });
+
+    it('giữ nguyên function key — không ai bị cắt quyền vì đổi nhóm', () => {
+      for (const href of CRM_HREFS) {
+        expect(MENU_FUNCTION_BY_HREF[href]).toBe(href.replace(/^\//, ''));
+      }
+      const cskh = mkMe({ functions: ['cskh-activity'] });
+      expect(isMenuVisible('/cskh-activity', cskh)).toBe(true);
+      expect(isRouteAllowed('/cskh-activity', cskh)).toBe(true);
+    });
+
+    it('nhóm CRM đứng sau "Xử lý vi phạm" và trước "Người dùng & Đối tác"', () => {
+      const labels = navGroups.map((g) => g.label);
+      expect(labels.indexOf('Khách hàng (CRM)')).toBe(labels.indexOf('Xử lý vi phạm') + 1);
+      expect(labels.indexOf('Khách hàng (CRM)')).toBeLessThan(labels.indexOf('Người dùng & Đối tác'));
+    });
+
+    // Ảnh hưởng ĐÃ LƯỜNG của việc đổi nhóm: người có cả users lẫn cskh-activity
+    // trước đây tiếp đất ở /cskh-activity (nhóm Vận hành đứng trước), nay là /users.
+    // Ghi lại thành test để lần sau ai đổi thứ tự sẽ thấy hệ quả, không phải đoán.
+    it('trang đích sau đăng nhập: /users đứng trước /cskh-activity', () => {
+      const me = mkMe({ functions: ['users', 'cskh-activity'] });
+      expect(firstAllowedRoute(me, navItems.map((i) => i.href))).toBe('/users');
+    });
+
+    it('người không có quyền nào trong nhóm thì nhóm biến mất, không hiện tiêu đề rỗng', () => {
+      const chiCoBookings = mkMe({ functions: ['bookings'] });
+      const crm = navGroups.find((g) => g.label === 'Khách hàng (CRM)')!;
+      expect(crm.items.filter((i) => isMenuVisible(i.href, chiCoBookings))).toHaveLength(0);
+    });
+  });
+
   it('each menu function key = its href without the leading slash', () => {
     for (const [href, fn] of Object.entries(MENU_FUNCTION_BY_HREF)) {
       expect(fn).toBe(href.replace(/^\//, ''));
