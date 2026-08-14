@@ -38,7 +38,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
-import { BookingDetail, CustomerCallBadge } from './booking-detail';
+import { BookingDetail } from './booking-detail';
 import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, statusLabelMap } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
@@ -50,7 +50,7 @@ import {
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
-import type { Booking, BookingStatus, Driver, CustomerCallFilter} from '@/lib/types';
+import type { Booking, BookingStatus, Driver} from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -85,10 +85,6 @@ type FetchArgs = {
   routeFilter: string;
   sort: { key: SortKey; direction: 'ascending' | 'descending' };
   tripKind: TripKind;
-  customerCall: CustomerCallFilter | 'ALL';
-  /** Lọc riêng từng pha gọi CSKH (trước / sau khi chuyến hoàn thành). */
-  callBefore?: CustomerCallFilter | 'ALL';
-  callAfter?: CustomerCallFilter | 'ALL';
   dateFrom: string;
   dateTo: string;
 };
@@ -310,11 +306,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // we cast back to number | 'none' when calling the API.
   const [selectedRouteId, setSelectedRouteId] = React.useState<string>('ALL');
   // Lọc "gọi check khách": 'ALL' = không lọc; called/unreached/uncalled = trạng thái.
-  const [customerCallFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
   // Lọc riêng từng pha. Dùng đồng thời được: "đã gọi trước" + "chưa gọi sau" = danh
   // sách chuyến CSKH còn nợ cuộc gọi hậu mãi.
-  const [callBeforeFilter, setCallBeforeFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
-  const [callAfterFilter, setCallAfterFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
   // Lọc khoảng ngày ĐẶT chuyến (createdAt). VN-local YYYY-MM-DD; '' = không lọc.
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
@@ -343,7 +336,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall, callBefore, callAfter, dateFrom, dateTo }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -383,10 +376,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       // Trip-type: 'all' omits the param (no filter); the other two map to the boolean.
       if (tripKind === 'scheduled') params.scheduled = true;
       else if (tripKind === 'regular') params.scheduled = false;
-      // Gọi check khách: 'ALL' bỏ param; còn lại truyền thẳng cho backend.
-      if (customerCall !== 'ALL') params.customerCall = customerCall;
-      if (callBefore && callBefore !== 'ALL') params.callBefore = callBefore;
-      if (callAfter && callAfter !== 'ALL') params.callAfter = callAfter;
       if (dateFrom) params.from = dateFrom;
       if (dateTo) params.to = dateTo;
       if (agentOnly) params.agentOnly = true;
@@ -410,16 +399,16 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, callBefore: callBeforeFilter, callAfter: callAfterFilter, dateFrom, dateTo });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, callBeforeFilter, callAfterFilter, dateFrom, dateTo]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, callBefore: callBeforeFilter, callAfter: callAfterFilter, dateFrom, dateTo });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, callBeforeFilter, callAfterFilter, dateFrom, dateTo]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -559,12 +548,12 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const visibleTabKeys = tripKind === 'regular' ? tabKeys.filter((k) => k !== 'SCHEDULED') : tabKeys;
 
   // The "Đặt lịch" tab adds a "Giờ hẹn đón" column. Column count for the loading/empty/error rows:
-  // base 8 (gồm cột "Gọi check" luôn hiện), +1 for COMPLETED (Ngày hoàn thành), +3 for CANCELLED
-  // (huỷ cols), +1 for the scheduled column — these stack.
+  // base 7, +1 for COMPLETED (Ngày hoàn thành), +3 for CANCELLED (huỷ cols),
+  // +1 for the scheduled column — these stack.
+  // 2026-08-12: 2 cột gọi khách đã chuyển sang /crm-queue (CRM GĐ1) -> 9 xuống 7.
   const showScheduledCol = tripKind === 'scheduled';
-  // +1: cột "Gọi check" tách thành 2 (Gọi trước / Gọi sau hoàn thành).
   const colSpan =
-    9 +
+    7 +
     (activeTab === 'COMPLETED' ? 1 : 0) +
     (activeTab === 'CANCELLED' ? 3 : 0) +
     (showScheduledCol ? 1 : 0);
@@ -610,27 +599,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               ))}
             </SelectContent>
           </Select>
-          {([
-            { label: 'Gọi trước HT', value: callBeforeFilter, set: setCallBeforeFilter },
-            { label: 'Gọi sau HT', value: callAfterFilter, set: setCallAfterFilter },
-          ] as const).map((f) => (
-            <Select
-              key={f.label}
-              value={f.value}
-              onValueChange={(val) => { f.set(val as CustomerCallFilter | 'ALL'); setCurrentPage(1); }}
-            >
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder={f.label} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="ALL">{f.label}: tất cả</SelectItem>
-                <SelectItem value="uncalled">Chưa gọi</SelectItem>
-                <SelectItem value="claimed">Đã nhận gọi</SelectItem>
-                <SelectItem value="called">Đã gọi được</SelectItem>
-                <SelectItem value="unreached">Không liên lạc được</SelectItem>
-              </SelectContent>
-            </Select>
-          ))}
           <div className='relative'>
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -723,12 +691,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                {/* Gọi check khách — trạng thái CSKH đã gọi verify khách hay chưa. */}
-                {/* CSKH gọi 2 lần cho mỗi chuyến: trước khi hoàn thành và sau khi hoàn
-                    thành. Hai việc độc lập nên phải là 2 cột — trước đây gộp 1 cột nên
-                    lần gọi sau đè mất dấu vết lần gọi trước. */}
-                <TableHead>Gọi trước HT</TableHead>
-                <TableHead>Gọi sau HT</TableHead>
                 {/* CANCELLED tab gets 3 extra columns so admin can read who
                     cancelled and why without opening each detail dialog. Other
                     tabs keep the original 7-column layout. */}
@@ -840,28 +802,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         {booking.status === 'PROCESSING' && booking.adminClaimedAt && booking.adminClaimedBy && (
                           <span className="text-[11px] text-muted-foreground">
                             {booking.adminClaimedBy.fullName || booking.adminClaimedBy.phone || 'Admin'}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    {/* Hai pha gọi độc lập. Bấm vào chuyến để ghi nhận (khối "Gọi check
-                        khách" trong dialog chi tiết tự chọn pha theo trạng thái chuyến). */}
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5 items-start">
-                        <CustomerCallBadge status={booking.callBeforeStatus} />
-                        {booking.callBeforeAt && (
-                          <span className="text-[11px] text-muted-foreground">
-                            {format(new Date(booking.callBeforeAt), 'dd/MM HH:mm')}
-                          </span>
-                        )}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-col gap-0.5 items-start">
-                        <CustomerCallBadge status={booking.callAfterStatus} />
-                        {booking.callAfterAt && (
-                          <span className="text-[11px] text-muted-foreground">
-                            {format(new Date(booking.callAfterAt), 'dd/MM HH:mm')}
                           </span>
                         )}
                       </div>
