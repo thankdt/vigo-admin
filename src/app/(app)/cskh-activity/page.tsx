@@ -221,8 +221,17 @@ export default function CskhActivityPage() {
    */
   const [missedBefore, setMissedBefore] = React.useState<number | null>(null);
   React.useEffect(() => {
-    getBookings({ callBefore: 'uncalled', status: 'COMPLETED', limit: 1 })
-      .then((r) => setMissedBefore(r.total))
+    // PHẢI cộng CẢ HAI lớp, không chỉ 'uncalled':
+    //  - uncalled = chưa ai đụng vào (callBeforeStatus IS NULL)
+    //  - claimed  = có người NHẬN việc gọi trước rồi chuyến chạy xong trước khi họ ghi
+    //               kết quả. Lớp này cũng rơi khỏi CẢ 5 tab hàng đợi (tab "Cần gọi trước"
+    //               lọc IS NULL; tab "Đang có người giữ" và "Việc của tôi" đều đòi
+    //               completedAt IS NULL) — bỏ sót nó là ô này nói dối đúng chỗ nó hứa.
+    Promise.all([
+      getBookings({ callBefore: 'uncalled', status: 'COMPLETED', limit: 1 }),
+      getBookings({ callBefore: 'claimed', status: 'COMPLETED', limit: 1 }),
+    ])
+      .then(([a, b]) => setMissedBefore(a.total + b.total))
       // Hỏng thì để null -> ô hiện '—'. Không chặn cả trang vì một chỉ số phụ.
       .catch(() => setMissedBefore(null));
   }, []);
@@ -326,12 +335,17 @@ export default function CskhActivityPage() {
               value={fmt(t.distinctTargets)}
               hint="Đếm theo người, gọi 1 người nhiều lần chỉ tính 1"
             />
-            <StatCard
-              title="Sót gọi trước hoàn thành"
-              value={missedBefore === null ? '—' : fmt(missedBefore)}
-              hint="Chuyến đã đi xong mà chưa ai gọi xác nhận trước đó. Không vào hàng đợi được nữa — đây là chỗ duy nhất đếm chúng."
-            />
           </div>
+
+          {/* CỐ Ý tách khỏi lưới 4 ô phía trên: 4 ô kia đếm theo KHOẢNG NGÀY đang chọn
+              (mặc định "Hôm nay"), còn ô này là TỒN KHO toàn thời gian — chỉ tăng, gồm cả
+              thời kỳ chưa có tính năng. Đặt lẫn vào lưới là mời người đọc hiểu nhầm thành
+              "sót trong kỳ". */}
+          <StatCard
+            title="Sót gọi trước hoàn thành — toàn thời gian"
+            value={missedBefore === null ? '—' : fmt(missedBefore)}
+            hint="KHÔNG theo khoảng ngày đang chọn. Chuyến đã đi xong mà việc gọi xác nhận trước đó chưa bao giờ được ghi kết quả (chưa ai nhận, hoặc nhận rồi bỏ dở). Những chuyến này không còn vào hàng đợi được nữa."
+          />
 
           <Card>
             <CardHeader>
