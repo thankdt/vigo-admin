@@ -11,7 +11,10 @@
  * chính lý do tách file.
  */
 import * as React from 'react';
-import { format } from 'date-fns';
+// KHÔNG dùng date-fns `format` cho mốc người dùng thấy: nó theo múi giờ TRÌNH DUYỆT.
+// Bảng /crm-queue hiển thị giờ VN, nên admin ở TZ khác sẽ thấy cùng một chuyến lệch
+// 7 tiếng giữa dòng và dialog mở từ chính dòng đó. CLAUDE.md: mọi mốc là giờ VN.
+import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { Button } from '@/components/ui/button';
 import { Loader2, Car, User, Clock, Zap, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -19,19 +22,13 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons } from '@/lib/api';
 import { CANCELLED_BY_ROLE_LABEL, getStatusBadge } from './booking-shared';
-import {} from './void-booking-dialog';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import type {} from '@/lib/types';
-import {} from '@/lib/utils';
-import {} from './create-booking-dialog';
 import type { Booking, CustomerCallStatus, BookingCustomerCallEvent } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
-import {} from '@/components/ui/input';
-import {} from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import {} from '@/lib/utils';
 
 
 const paymentMethodMap: Record<string, string> = {
@@ -522,7 +519,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   </div>
                   <div className="flex-1 text-sm">
                     <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Hẹn giờ</div>
-                    <div className="font-semibold">{format(new Date(booking.scheduledTime), "HH:mm — dd/MM/yyyy")}</div>
+                    <div className="font-semibold">{formatVnDateTime(booking.scheduledTime)}</div>
                   </div>
                 </Card>
               )}
@@ -658,7 +655,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   {booking.customerCallCheckedBy && (
                     <span className="text-[11px] text-muted-foreground">
                       {booking.customerCallCheckedBy.fullName || booking.customerCallCheckedBy.phone || 'Admin'}
-                      {booking.customerCallCheckedAt ? ` · ${format(new Date(booking.customerCallCheckedAt), "dd/MM HH:mm")}` : ''}
+                      {booking.customerCallCheckedAt ? ` · ${formatVnDateTime(booking.customerCallCheckedAt)}` : ''}
                     </span>
                   )}
                 </div>
@@ -724,7 +721,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                           <span className="font-medium">
                             {CUSTOMER_CALL_LABEL[e.status] ?? e.status} · {e.byAdminName || '—'}
                           </span>
-                          <span className="text-muted-foreground">{format(new Date(e.createdAt), "dd/MM/yyyy HH:mm")}</span>
+                          <span className="text-muted-foreground">{formatVnDateTime(e.createdAt)}</span>
                         </div>
                         {e.reason && (
                           <div className="mt-1">
@@ -753,7 +750,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   {booking.cancelledAt && (
                     <div className="text-xs text-muted-foreground">
                       <span className="font-medium">Thời gian huỷ:</span>{' '}
-                      {format(new Date(booking.cancelledAt), "dd/MM/yyyy HH:mm")}
+                      {formatVnDateTime(booking.cancelledAt)}
                     </div>
                   )}
                   {booking.cancelledByRole && (
@@ -776,12 +773,12 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
               <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-3">
                 <div>
                   <span className="font-medium">Thời gian đặt:</span>{' '}
-                  {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
+                  {formatVnDateTime(booking.createdAt)}
                 </div>
                 {booking.updatedAt && (
                   <div>
                     <span className="font-medium">Cập nhật:</span>{' '}
-                    {format(new Date(booking.updatedAt), "dd/MM/yyyy HH:mm")}
+                    {formatVnDateTime(booking.updatedAt)}
                   </div>
                 )}
               </div>

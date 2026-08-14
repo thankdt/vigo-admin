@@ -5,6 +5,7 @@ import {
   QUEUE_TAB_LABEL,
   waitedSince,
   formatWaited,
+  rowIsBeforePhase,
 } from './queue-tabs';
 
 describe('paramsForTab', () => {
@@ -65,23 +66,43 @@ describe('paramsForTab', () => {
   });
 });
 
-describe('waitedSince — đếm chờ từ mốc nào', () => {
-  const bk = { createdAt: '2026-08-01T00:00:00Z', completedAt: '2026-08-02T00:00:00Z' };
-
-  it('tab gọi TRƯỚC đếm từ lúc khách đặt', () => {
-    expect(waitedSince('before', bk)).toBe(bk.createdAt);
-    expect(waitedSince('mine', bk)).toBe(bk.createdAt);
+describe('rowIsBeforePhase — suy pha theo DÒNG, không theo tab', () => {
+  /**
+   * Đây là ca CHẶN từng lọt: tab "Việc của tôi" lọc bằng `claimedBy`, mà SQL của backend
+   * OR CẢ HAI pha, nên tab đó chứa lẫn dòng gọi-trước lẫn gọi-sau. Suy pha theo tab sẽ
+   * đọc nhầm việc gọi-trước sang cột callAfter* (luôn NULL) -> dòng hiện lại nút "Nhận gọi"
+   * -> bấm lại ghi thêm event CLAIMED -> lặp vô hạn, không có đường đóng việc gọi-trước.
+   */
+  it('chưa hoàn thành = pha TRƯỚC, đã hoàn thành = pha SAU', () => {
+    expect(rowIsBeforePhase({ completedAt: null })).toBe(true);
+    expect(rowIsBeforePhase({})).toBe(true);
+    expect(rowIsBeforePhase({ completedAt: '2026-08-02T00:00:00Z' })).toBe(false);
   });
 
-  // Dùng createdAt ở tab gọi-sau sẽ hiện tuổi của CHUYẾN chứ không phải tuổi của VIỆC —
+  // Trùng đúng quy tắc của backend recordCustomerCall: pha suy từ completedAt, client
+  // KHÔNG chọn được pha. Lệch quy tắc này là FE và BE ghi vào hai bộ cột khác nhau.
+  it('không phụ thuộc tab — cùng một dòng cho cùng kết quả ở mọi tab', () => {
+    const claimedBefore = { createdAt: '2026-08-01T00:00:00Z', completedAt: null };
+    expect(rowIsBeforePhase(claimedBefore)).toBe(true);
+  });
+});
+
+describe('waitedSince — đếm chờ từ mốc nào', () => {
+  const before = { createdAt: '2026-08-01T00:00:00Z', completedAt: null };
+  const after = { createdAt: '2026-08-01T00:00:00Z', completedAt: '2026-08-02T00:00:00Z' };
+
+  it('việc gọi TRƯỚC đếm từ lúc khách đặt', () => {
+    expect(waitedSince(before)).toBe(before.createdAt);
+  });
+
+  // Dùng createdAt cho việc gọi-sau sẽ hiện tuổi của CHUYẾN chứ không phải tuổi của VIỆC —
   // chuyến đặt trước 3 ngày, hoàn thành 10 phút trước, mà cột hiện "3 ngày".
-  it('tab gọi SAU và Quá hạn đếm từ lúc chuyến hoàn thành', () => {
-    expect(waitedSince('after', bk)).toBe(bk.completedAt);
-    expect(waitedSince('overdue', bk)).toBe(bk.completedAt);
+  it('việc gọi SAU đếm từ lúc chuyến hoàn thành', () => {
+    expect(waitedSince(after)).toBe(after.completedAt);
   });
 
   it('thiếu mốc thì trả null, không rơi về mốc khác', () => {
-    expect(waitedSince('after', { createdAt: bk.createdAt, completedAt: null })).toBeNull();
+    expect(waitedSince({ createdAt: null, completedAt: null })).toBeNull();
   });
 });
 

@@ -31,12 +31,14 @@ import {
   QUEUE_TAB_ORDER,
   formatWaited,
   paramsForTab,
+  rowIsBeforePhase,
   waitedSince,
   type QueueTab,
 } from './queue-tabs';
 
 const PAGE_SIZE = 20;
-const COLS = 6;
+// 5 cột cố định + cột "Người giữ việc" chỉ có ở tab "Việc của tôi".
+const BASE_COLS = 5;
 
 /**
  * Hàng đợi CSKH — mỗi dòng là MỘT VIỆC, không phải một chuyến.
@@ -61,6 +63,9 @@ export default function CrmQueuePage() {
   const [reasons, setReasons] = React.useState<string[]>([]);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [detailId, setDetailId] = React.useState<string | null>(null);
+  // Phân biệt "hết việc" với "không tải được" — hai thứ này trông giống hệt nhau
+  // trên một bảng rỗng, mà hành động của CSKH thì khác hẳn.
+  const [loadFailed, setLoadFailed] = React.useState(false);
 
   // Đồng hồ cho cột "Đã chờ". Chốt một mốc mỗi lần tải thay vì gọi Date.now() trong
   // lúc render: các dòng phải cùng một mốc, và render không được phụ thuộc thời điểm.
@@ -75,15 +80,28 @@ export default function CrmQueuePage() {
     if (!me?.id) return;
     const reqId = ++reqIdRef.current;
     setLoading(true);
+    setLoadFailed(false);
     try {
       const res = await getBookings({ page, limit: PAGE_SIZE, ...paramsForTab(tab, me.id) });
       if (reqId !== reqIdRef.current) return;
+      // Xử lý nốt dòng cuối của trang cuối làm tổng trang co lại. Không kẹp thì `page` treo
+      // ở số cũ, request sau trả rỗng -> bảng báo "hết việc" (sai) MÀ khối phân trang bị ẩn
+      // vì totalPages===1 -> không còn nút Trước để quay lại. Chỉ thoát được bằng F5.
+      if (page > res.totalPages) {
+        setPage(Math.max(1, res.totalPages));
+        return; // effect chạy lại với page đã kẹp
+      }
       setRows(res.data);
       setTotalPages(res.totalPages);
       setTotal(res.total);
       setNowMs(Date.now());
     } catch (err) {
       if (reqId !== reqIdRef.current) return;
+      // Dọn bảng: giữ lại 20 dòng của tab TRƯỚC dưới header của tab MỚI là hiện dữ liệu
+      // sai kèm nhãn cột sai, tệ hơn hẳn bảng rỗng.
+      setRows([]);
+      setTotal(0);
+      setLoadFailed(true);
       toastApiError(err, 'Không tải được hàng đợi');
     } finally {
       if (reqId === reqIdRef.current) setLoading(false);
@@ -129,11 +147,9 @@ export default function CrmQueuePage() {
     }
   };
 
-  // Pha đang xét theo tab: tab gọi-trước đọc cột callBefore*, còn lại đọc callAfter*.
-  const isBeforePhase = tab === 'before';
-  const phaseStatus = (b: Booking) =>
-    isBeforePhase ? b.callBeforeStatus : b.callAfterStatus;
-  const phaseOwner = (b: Booking) => (isBeforePhase ? b.callBeforeBy : b.callAfterBy);
+  // Chỉ tab "Việc của tôi" mới có người giữ việc: 3 tab kia lọc `uncalled` nên theo đúng
+  // định nghĩa bộ lọc, không dòng nào có người giữ — cột đó sẽ luôn là gạch ngang.
+  const showOwnerCol = tab === 'mine';
 
   return (
     <div className="space-y-6">
@@ -163,29 +179,33 @@ export default function CrmQueuePage() {
             <TableRow>
               <TableHead>Khách</TableHead>
               <TableHead>Tuyến</TableHead>
-              <TableHead>{isBeforePhase ? 'Giờ đón' : 'Hoàn thành'}</TableHead>
+              <TableHead>Giờ đón / hoàn thành</TableHead>
               <TableHead>Đã chờ</TableHead>
-              <TableHead>Người giữ việc</TableHead>
+              {showOwnerCol && <TableHead>Người giữ việc</TableHead>}
               <TableHead className="text-right">Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {authLoading || loading ? (
               <TableRow>
-                <TableCell colSpan={COLS} className="h-24 text-center">
+                <TableCell colSpan={BASE_COLS + (showOwnerCol ? 1 : 0)} className="h-24 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : rows.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={COLS} className="h-24 text-center text-muted-foreground">
-                  Không còn việc nào trong tab này.
+                <TableCell colSpan={BASE_COLS + (showOwnerCol ? 1 : 0)} className="h-24 text-center text-muted-foreground">
+                    {loadFailed
+                    ? 'Không tải được danh sách — xem thông báo lỗi rồi thử lại.'
+                    : 'Không còn việc nào trong tab này.'}
                 </TableCell>
               </TableRow>
             ) : (
               rows.map((b) => {
-                const owner = phaseOwner(b);
-                const claimed = phaseStatus(b) === 'CLAIMED';
+                // Pha theo DÒNG, không theo tab — tab "Việc của tôi" chứa lẫn cả hai pha.
+                const isBefore = rowIsBeforePhase(b);
+                const owner = isBefore ? b.callBeforeBy : b.callAfterBy;
+                const claimed = (isBefore ? b.callBeforeStatus : b.callAfterStatus) === 'CLAIMED';
                 const busy = busyId === b.id;
                 return (
                   <TableRow key={b.id}>
@@ -195,18 +215,20 @@ export default function CrmQueuePage() {
                     </TableCell>
                     <TableCell className="text-sm">{b.route?.name || '—'}</TableCell>
                     <TableCell className="whitespace-nowrap text-sm">
-                      {formatVnDateTime(isBeforePhase ? b.scheduledTime : b.completedAt)}
+                      {formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}
                     </TableCell>
                     <TableCell className="whitespace-nowrap text-sm">
-                      {formatWaited(waitedSince(tab, b), nowMs)}
+                      {formatWaited(waitedSince(b), nowMs)}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {owner?.fullName ? (
-                        <Badge variant="secondary">{owner.fullName}</Badge>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </TableCell>
+                    {showOwnerCol && (
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {owner?.fullName ? (
+                          <Badge variant="secondary">{owner.fullName}</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    )}
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {!claimed && (
@@ -255,7 +277,7 @@ export default function CrmQueuePage() {
           </TableBody>
         </Table>
 
-        {totalPages > 1 && (
+        {(totalPages > 1 || page > 1) && (
           <div className="flex items-center justify-end gap-2">
             <span className="text-sm text-muted-foreground">
               Trang {page}/{totalPages}

@@ -33,16 +33,31 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
 export type QueueParams = Partial<NonNullable<Parameters<typeof getBookings>[0]>>;
 
 /**
- * Mốc bắt đầu ĐẾM CHỜ của từng tab. Tab gọi-trước tính từ lúc khách đặt; tab gọi-sau
- * (kể cả "Quá hạn") tính từ lúc chuyến hoàn thành — dùng chung `createdAt` cho cả hai
- * thì cột "Đã chờ" ở tab gọi-sau sẽ hiện tuổi của CHUYẾN, không phải tuổi của VIỆC.
+ * Pha của MỘT DÒNG, suy đúng như backend suy: `recordCustomerCall` chọn pha theo
+ * `booking.completedAt` có hay không, client không chọn được pha.
+ *
+ * 🚨 KHÔNG suy pha theo TAB. Tab "Việc của tôi" lọc bằng `claimedBy`, mà SQL của nó OR
+ * CẢ HAI pha, nên một tab chứa lẫn cả hai loại dòng. Suy theo tab thì mọi việc gọi-TRƯỚC
+ * trong tab đó bị đọc nhầm sang cột `callAfter*` (luôn NULL vì nhánh before yêu cầu
+ * `completedAt IS NULL`) -> dòng hiện lại nút "Nhận gọi" thay vì 2 nút ghi kết quả ->
+ * bấm lại ghi thêm một event CLAIMED -> lặp vô hạn, và không có đường đóng việc gọi-trước.
  */
-export function waitedSince(
-  tab: QueueTab,
-  booking: { createdAt?: string | null; completedAt?: string | null },
-): string | null {
-  if (tab === 'after' || tab === 'overdue') return booking.completedAt ?? null;
-  return booking.createdAt ?? null;
+export function rowIsBeforePhase(booking: { completedAt?: string | null }): boolean {
+  return !booking.completedAt;
+}
+
+/**
+ * Mốc bắt đầu ĐẾM CHỜ của một dòng. Việc gọi-trước tính từ lúc khách đặt; việc gọi-sau
+ * tính từ lúc chuyến hoàn thành — dùng chung `createdAt` cho cả hai thì cột "Đã chờ" ở
+ * việc gọi-sau sẽ hiện tuổi của CHUYẾN, không phải tuổi của VIỆC.
+ *
+ * Theo DÒNG chứ không theo tab, cùng lý do với `rowIsBeforePhase`.
+ */
+export function waitedSince(booking: {
+  createdAt?: string | null;
+  completedAt?: string | null;
+}): string | null {
+  return rowIsBeforePhase(booking) ? (booking.createdAt ?? null) : (booking.completedAt ?? null);
 }
 
 /**
