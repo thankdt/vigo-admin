@@ -215,7 +215,9 @@ describe('UsersTable — danh bạ khách (CRM GĐ0)', () => {
   // /users nằm trong nhóm CRM nên mặc định phải là DANH BẠ KHÁCH, không lẫn chủ HTX.
   it('lần tải đầu tiên lọc role=USER, không phải tất cả', async () => {
     render(<UsersTable />);
-    await waitFor(() => expect(getUsers).toHaveBeenCalled());
+    // Danh sách có debounce 500ms trước khi gọi API — mặc định waitFor chỉ 1000ms,
+    // sát mép trên máy CI chậm. Nới hẳn ra để không đỏ vì lý do không liên quan.
+    await waitFor(() => expect(getUsers).toHaveBeenCalled(), { timeout: 3000 });
     expect(vi.mocked(getUsers).mock.calls[0][0]).toMatchObject({ role: 'USER' });
   });
 });

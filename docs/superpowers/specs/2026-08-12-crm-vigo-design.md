@@ -1,7 +1,9 @@
 # Spec — CRM ViGo: tách nhóm khách hàng khỏi Chuyến đi & giải pháp tổng thể
 
 - **Ngày**: 2026-08-12
-- **Trạng thái**: Thiết kế (chưa có plan thực hiện, chưa code). Đã qua 1 lượt review đối kháng độc lập.
+- **Trạng thái**: **GĐ0 + GĐ1 đã code xong và ở nhánh `dev`** (2026-08-14), chờ test DEV.
+  GĐ2–7 chưa bắt đầu. Đã qua 1 lượt review đối kháng lúc thiết kế, và thêm 2 lượt soát
+  độc lập sau khi code (xem §13).
 - **Phạm vi**: `vigo-admin` (chính) + `vigo-backend` (bảng & endpoint mới, **kể cả ở giai đoạn 1**)
 - **Không thuộc phạm vi**: app khách (`vigo`), app tài xế (`vigo-driver`) — CRM là công cụ nội bộ
 
@@ -412,3 +414,78 @@ Các giai đoạn 2–6 chỉ **thêm** bảng và endpoint mới, không sửa 
 3. **Hạn mức đền bù theo vai trò** — chốt trước GĐ3.
 4. **Công thức RFM và ngưỡng `churnRisk`** — chưa có định nghĩa: cửa sổ tính bao lâu, chia bin theo ngũ phân vị hay mốc cứng, ngưỡng nào là "nguy cơ rời bỏ". Không chốt thì hai người implement ra hai kết quả khác nhau và không viết được test §11.3. **Chốt trước GĐ4.**
 5. **Ngưỡng "quá hạn"** của tab hàng đợi (N giờ sau `completedAt`) — ops chốt trước GĐ1, để trong `system_config`.
+
+---
+
+## 13. Bài học từ GĐ0 + GĐ1 — viết SAU khi ship, đọc TRƯỚC khi làm GĐ2
+
+Mục này ghi lại những thứ chỉ lộ ra lúc code, không phải lúc thiết kế. Mỗi mục đều là lỗi
+THẬT đã lọt qua ít nhất một vòng kiểm.
+
+### 13.1 Thêm function RBAC = PHẢI kèm migration cấp quyền
+
+Thêm key vào `MENU_FUNCTIONS` chỉ làm key **hợp lệ**, KHÔNG gán cho ai. Hai migration seed
+role (`1788000000000`, `1789000000000`) đều `ON CONFLICT DO NOTHING` và đã chạy xong trên
+prod, nên hàng `admin_role` hiện có **không bao giờ được cập nhật lại**.
+
+GĐ1 suýt deploy mà thiếu bước này: role `cskh` seed đúng
+`[dashboard, feedback, bookings, users, notifications]`, trong khi cùng đợt đó admin GỠ 2 bộ
+lọc gọi khách khỏi `/bookings` — nhân viên CSKH sẽ mất **cả đường cũ lẫn đường mới**.
+
+⇒ **Áp cho MỌI giai đoạn còn lại**: `crm-tickets`, `crm-compensate` (GĐ3), `crm-segments`
+(GĐ4), `crm-campaigns` (GĐ5), `crm-accounts` (GĐ6) — mỗi cái một migration cấp quyền, khuôn
+ở `1791700000000-GrantCskhActivityToManagerRoles.ts` và `1793200200000-GrantCrmQueueToCskhRoles.ts`.
+
+### 13.2 Đừng suy trạng thái của DÒNG từ bộ lọc của TAB
+
+Lỗi CHẶN nặng nhất của GĐ1: FE suy pha cuộc gọi theo tab (`tab === 'before'`), trong khi
+backend suy theo dữ liệu của chính dòng (`booking.completedAt` có hay không). Tab "Việc của
+tôi" lọc bằng `claimedBy` mà SQL của nó OR **cả hai pha**, nên tab đó chứa lẫn hai loại dòng
+— và mọi việc gọi-trước trong đó bị đọc nhầm sang cột `callAfter*` (luôn NULL), khiến dòng
+hiện lại nút "Nhận gọi" thay vì nút ghi kết quả: **vòng lặp không lối ra**.
+
+⇒ Quy tắc: khi backend đã có quy tắc suy trạng thái, FE **soi gương đúng quy tắc đó**, không
+tự suy lại từ ngữ cảnh màn hình. GĐ3 (ticket có `status` + `slaDueAt`) và GĐ5 (chiến dịch có
+`deliveryStatus`) đều có cùng cái bẫy.
+
+### 13.3 Màn mới PHẢI có test cấp trang, không chỉ test hàm thuần
+
+`/crm-queue` ship với `queue-tabs.test.ts` (hàm thuần, 17 ca) nhưng `page.tsx` 358 dòng
+**không một dòng test**. Bốn finding — kể cả lỗi CHẶN ở 13.2 — đều nằm gọn trong khoảng
+trống đó. Test hàm thuần không chứng minh được gì về thứ người dùng bấm.
+
+### 13.4 `import {} from '...'` sống sót qua SWC
+
+Cắt file mà để lại `import {} from './x';` thì `tsc` **elide** (nên `noUnusedLocals` im, và
+repo **không cài eslint**), nhưng SWC của Next **giữ** thành `import './x'` — side-effect
+import thật. GĐ1 để sót 17 dòng như vậy, khiến `/crm-queue` vẫn kéo `create-booking-dialog`
+vào bundle và việc tách file gần như vô nghĩa (200 → 182 kB sau khi dọn).
+
+⇒ Sau mỗi lần tách file: `grep -rn "^import {} from" src/` và đối chiếu size bằng `next build`.
+
+### 13.5 `CREATE INDEX CONCURRENTLY IF NOT EXISTS` chưa đủ an toàn
+
+CIC bị huỷ giữa chừng để lại index **INVALID nhưng vẫn tồn tại**; lần chạy lại `IF NOT EXISTS`
+no-op im lặng rồi đánh dấu migration đã áp dụng ⇒ index vô dụng vĩnh viễn, không log nào báo.
+Phải kiểm `pg_index.indisvalid` và DROP trước khi tạo lại (khuôn:
+`1792800200000-ReplaceBookingTeamIndexWithPartial.ts`).
+
+### 13.6 Nợ kỹ thuật chặn GĐ3
+
+`User.password` thiếu `select: false` (`vigo-backend/src/users/user.entity.ts`), trong khi
+`isSuperAdmin` ngay dưới thì có. Hệ quả: `GET /bookings/:id` — endpoint **app khách và app
+tài xế** gọi — nạp `relations: ['customer','driver.user']` rồi spread thẳng ra response, nên
+tài xế nhận bcrypt hash của khách và ngược lại.
+
+Không chặn GĐ0/GĐ1 (cả 3 role được cấp `crm-queue` đều đã có `bookings` từ trước nên mức lộ
+không đổi), nhưng **phải vá trước GĐ3**: GĐ3 đẻ ra `crm-compensate` — quyền tiền thật, và là
+lúc thật sự cần tạo role hẹp.
+
+### 13.7 Những chỗ spec tự mâu thuẫn, cần chốt trước khi làm tiếp
+
+- **Che SĐT khách**: §11 rủi ro #8 đề xuất che một phần ở `/crm-queue`, nhưng §6.1 lại yêu cầu
+  dòng hiển thị "khách + SĐT". GĐ1 ship theo §6.1 (hiện đủ). Cần chốt lại ở GĐ2 khi hồ sơ 360
+  ra đời, kèm audit log truy cập.
+- **Cửa sổ thời gian hàng đợi**: §6.1 định nghĩa tab bằng truy vấn nhưng không kẹp thời gian.
+  Tab "Cần gọi sau" vì thế bao trọn mọi chuyến COMPLETED lịch sử (cột `callAfterStatus` mới
+  thêm nên dữ liệu cũ đều NULL). Phải đếm dữ liệu thật rồi mới quyết.

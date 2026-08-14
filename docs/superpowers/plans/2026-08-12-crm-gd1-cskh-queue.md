@@ -10,6 +10,12 @@
 
 ## Global Constraints
 
+> ⚠️ **SỐ DÒNG TRONG PLAN NÀY ĐÃ CŨ.** Viết ngày 2026-08-12; `booking.service.ts` đã trôi
+> ~+10..+18 dòng ngay hôm sau. Luôn định vị bằng **TÊN HÀM / TÊN KÝ HIỆU**, đừng nhảy tới số
+> dòng. Riêng 5 dòng `@RequireFunction` thì bám vào dòng `@Get`/`@Post` NGAY DƯỚI nó — plan đã
+> dặn vậy và đó là lý do không ai lỡ tay mở `admin/available-drivers` (điều tài) cho CSKH.
+
+
 - Spec nguồn: `docs/superpowers/specs/2026-08-12-crm-vigo-design.md` (§4, §6.1, §7, GĐ1 trong §9).
 - **Thứ tự rollout bắt buộc: `vigo-backend` merge + deploy TRƯỚC, `vigo-admin` sau.** Đảo thứ tự thì admin gọi param backend chưa có → hàng đợi trắng.
 - **Any-of, không thay thế:** `@RequireFunction('bookings')` đổi thành `@RequireFunction('bookings', 'crm-queue')`. Vai trò cũ chỉ có `bookings` phải dùng được y như trước.
@@ -82,9 +88,9 @@
 ### Task 1: Mở quyền `crm-queue` cho 5 endpoint gọi khách
 
 **Files:**
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/rbac/rbac.constants.ts:20`
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.controller.ts` (5 chỗ)
-- Test: `/Volumes/exSSD/dev/projects/vigo-backend/src/rbac/rbac.constants.spec.ts`
+- Modify: `/Users/vigo/Development/Projects/vigo-backend/src/rbac/rbac.constants.ts:20`
+- Modify: `/Users/vigo/Development/Projects/vigo-backend/src/booking/booking.controller.ts` (5 chỗ)
+- Test: `/Users/vigo/Development/Projects/vigo-backend/src/rbac/rbac.constants.spec.ts`
 
 **Interfaces:**
 - Consumes: `MENU_FUNCTIONS`, `ALL_FUNCTION_KEYS` (rbac.constants.ts), `@RequireFunction(...keys)` — guard đã hỗ trợ any-of (`function-access.guard.ts:24`: `required.some((f) => eff.has(f))`).
@@ -108,7 +114,7 @@ Expected: FAIL — `'crm-queue'` chưa có trong mảng.
 
 - [ ] **Step 3: Thêm function key**
 
-`src/rbac/rbac.constants.ts`, ngay sau `'driver-penalties',` (dòng 20):
+`src/rbac/rbac.constants.ts`, ngay sau `'driver-penalties',` (**dòng 19**, không phải 20 — dòng 20 là `] as const;`):
 
 ```ts
   // 2026-08-12 (CRM GĐ1): "Hàng đợi CSKH" — màn nhận việc gọi khách, tách khỏi trang
@@ -161,8 +167,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 2: Hai cột người-giữ-việc theo pha + backfill
 
 **Files:**
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/entities/booking.entity.ts` (sau dòng 315)
-- Create: `/Volumes/exSSD/dev/projects/vigo-backend/src/database/migrations/1793200000000-AddBookingCallPhaseOwner.ts`
+- Modify: `/Users/vigo/Development/Projects/vigo-backend/src/booking/entities/booking.entity.ts` (sau dòng 315)
+- Create: `/Users/vigo/Development/Projects/vigo-backend/src/database/migrations/1793200000000-AddBookingCallPhaseOwner.ts`
 
 **Interfaces:**
 - Consumes: `booking_customer_call_event` (`bookingId`, `phase`, `status`, `byAdminUserId`, `createdAt`).
@@ -318,8 +324,8 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 3: `recordCustomerCall` ghi người giữ việc theo pha
 
 **Files:**
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.ts:3773-3784` (khối `phasePatch` + `manager.update`)
-- Test: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.customer-call.spec.ts`
+- Modify: `/Users/vigo/Development/Projects/vigo-backend/src/booking/booking.service.ts:3773-3784` (khối `phasePatch` + `manager.update`)
+- Test: `/Users/vigo/Development/Projects/vigo-backend/src/booking/booking.service.customer-call.spec.ts`
 
 > ⚠️ Test của `recordCustomerCall` **KHÔNG** nằm trong `booking.service.spec.ts` (`grep -c recordCustomerCall` = 0) mà ở file riêng `booking.service.customer-call.spec.ts`. File đó **không dùng `jest.fn()`** cho `manager.update` — nó gom patch vào mảng và trả qua `getUpdates()`. Viết assertion kiểu `expect(updateSpy).toHaveBeenCalledWith(...)` sẽ là `ReferenceError`.
 
@@ -391,7 +397,7 @@ Expected: PASS, 5 test `recordCustomerCall` cũ vẫn xanh.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/booking/booking.service.ts src/booking/booking.service.spec.ts
+git add src/booking/booking.service.ts src/booking/booking.service.customer-call.spec.ts
 git commit -m "feat(crm): recordCustomerCall ghi người giữ việc theo từng pha
 
 customerCallCheckedById vẫn giữ 'lần gọi mới nhất' cho cột/filter cũ — không
@@ -405,9 +411,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 ### Task 4: Ba tham số lọc cho hàng đợi
 
 **Files:**
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.ts` (`findAllBookings`, dòng 3454+ và khối lọc ~3595-3625)
-- Modify: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.controller.ts:272-330`
-- Test: `/Volumes/exSSD/dev/projects/vigo-backend/src/booking/booking.service.spec.ts`
+- Modify: `/Users/vigo/Development/Projects/vigo-backend/src/booking/booking.service.ts` (`findAllBookings`, dòng 3454+ và khối lọc ~3595-3625)
+- Modify: `/Users/vigo/Development/Projects/vigo-backend/src/booking/booking.controller.ts:272-330`
+- Test: `/Users/vigo/Development/Projects/vigo-backend/src/booking/booking.service.spec.ts`
 
 **Interfaces:**
 - Consumes: `this.masterDataService.getSystemConfig(key)` (mẫu dùng ở `booking.service.ts:3795`).
@@ -469,7 +475,20 @@ Thêm vào `src/booking/booking.service.spec.ts`:
 >    ```ts
 >    const masterDataMock = { getSystemConfig: jest.fn(async () => null as string | null) };
 >    ```
->    đặt **đúng vị trí 16** (đếm kỹ — dãy `{} as any` không đánh số). Để nguyên `{}` thì `getSystemConfig` là `undefined`; gọi vào ném **TypeError đồng bộ**, `.catch()` gắn sau **không đỡ được**, test đỏ vì lý do sai và người thực thi sẽ đi sửa nhầm chỗ.
+>    đặt **đúng vị trí 16**. Để nguyên `{}` thì `getSystemConfig` là `undefined`; gọi vào ném
+>    **TypeError đồng bộ**, `.catch()` gắn sau **không đỡ được**, test đỏ vì lý do sai và người
+>    thực thi sẽ đi sửa nhầm chỗ.
+>
+>    🚨 **`build()` PHẢI TRẢ `masterDataMock` RA NGOÀI** (`return { service, qb, masterDataMock }`),
+>    nếu không test gọi `masterDataMock.getSystemConfig.mockResolvedValueOnce(...)` sẽ
+>    `ReferenceError`. Và đừng đếm `{} as any` bằng mắt — dựng bằng MẢNG theo đúng lối
+>    `booking.service.customer-call.spec.ts` đã có sẵn:
+>    ```ts
+>    const deps: any[] = Array(27).fill({} as any);
+>    deps[0] = bookingRepository;   // 1
+>    deps[15] = masterDataMock;     // 16
+>    const service = new (BookingService as any)(...deps);
+>    ```
 
 - [ ] **Step 2: Chạy test để xác nhận nó ĐỎ**
 
@@ -662,7 +681,7 @@ Expected: PASS. Đây là refactor thuần — test cũ xanh **là** bằng ch�
 
 Kiểm thêm bằng mắt: `grep -n "from './bookings-table'" src/app/\(app\)/bookings/components/booking-detail.tsx` phải **rỗng** — có kết quả nghĩa là vòng import đã hình thành.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 6: Commit**
 
 ```bash
 git add src/app/\(app\)/bookings/components/
