@@ -5,6 +5,11 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    // Lưới bắt import/biến thừa. `npm run lint` KHÔNG dùng được (repo không cài eslint,
+    // `next lint` rơi vào prompt cài đặt), nên nếu tắt cờ này thì không có cổng nào bắt
+    // được code chết — đúng thứ sinh ra nhiều nhất khi bóc một màn ra khỏi màn khác.
+    // KHÔNG bật `noUnusedParameters`: chữ ký callback/handler thường phải giữ đủ tham số.
+    "noUnusedLocals": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",

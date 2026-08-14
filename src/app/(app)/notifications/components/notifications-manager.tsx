@@ -3,7 +3,6 @@ import * as React from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { format } from 'date-fns';
 import {
     getScheduledNotifications,
     createScheduledNotification,
@@ -12,7 +11,7 @@ import {
     previewNotificationAudience,
     type NotificationPayload,
 } from '@/lib/api';
-import type { ScheduledNotification, GetApiResponse, NotificationAudience } from '@/lib/types';
+import type { ScheduledNotification, NotificationAudience } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';

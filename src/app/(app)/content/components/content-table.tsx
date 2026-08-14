@@ -15,7 +15,7 @@ import { Input } from '@/components/ui/input';
 type SortKey = keyof Article;
 
 export function ContentTable() {
-  const [articles, setArticles] = React.useState(mockArticles);
+  const [articles] = React.useState(mockArticles);
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
 

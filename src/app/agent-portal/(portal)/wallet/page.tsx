@@ -15,7 +15,6 @@ import {
   updateMyBankInfo,
   submitMyWithdrawal,
   listAgentBookings,
-  agentCanSelfWithdraw,
   agentCanRequestWithdrawal,
   type AgentMe,
   type KolWithdrawal,

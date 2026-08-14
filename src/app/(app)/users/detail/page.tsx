@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { format } from 'date-fns';
 import Link from 'next/link';
 import {
@@ -61,13 +61,6 @@ const ROLE_LABEL: Record<string, string> = {
   TRANSPORT_COMPANY_OWNER: 'Chủ HTX',
 };
 
-const WALLET_LABEL: Record<string, string> = {
-  USER: 'Ví khách hàng',
-  USER_REFERRAL: 'Ví affiliate',
-  DRIVER_MAIN: 'Ví tài xế (chính)',
-  DRIVER_DEPOSIT: 'Ví tài xế (ký quỹ)',
-};
-
 const BOOKING_STATUS_LABEL: Record<string, string> = {
   CREATED: 'Mới tạo',
   SEARCHING: 'Đang tìm',
@@ -103,7 +96,6 @@ function addressString(addr: Booking['pickupAddress'] | Booking['dropoffAddress'
 }
 
 export default function UserDetailPage() {
-  const router = useRouter();
   const params = useSearchParams();
   const id = params.get('id');
   const { toast } = useToast();

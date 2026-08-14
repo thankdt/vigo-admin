@@ -24,7 +24,6 @@ import type { DriverReputationRankRow } from '@/lib/types';
 
 vi.mock('@/lib/api', () => ({
   getDriverReputationRanking: vi.fn(),
-  parseApiError: (msg: string) => msg,
 }));
 
 import { getDriverReputationRanking } from '@/lib/api';

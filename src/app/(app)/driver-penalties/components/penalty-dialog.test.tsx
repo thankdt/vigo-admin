@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { PenaltyDialog } from './penalty-dialog';
+import { buildApiError } from '@/lib/api-error';
 
 const previewPenalty = vi.fn();
 const createPenalty = vi.fn();
 
-// Giữ NGUYÊN `parseApiError` thật: nó chính là thứ biến envelope JSON của
-// `fetchWithAuth` thành câu người đọc được, nên mock nó đi là mất luôn ý nghĩa của
-// hai ca test bên dưới.
+// Spread module THẬT rồi chỉ chặn đúng 2 endpoint. Liệt kê tay từng export thì mỗi
+// lần dialog thêm một import lại đỏ một test chẳng liên quan gì.
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
   return {
@@ -17,8 +17,15 @@ vi.mock('@/lib/api', async (importOriginal) => {
   };
 });
 
-const toast = vi.fn();
-vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
+// Khai CẢ `toast` lẻ, không chỉ `useToast`: `toastApiError` (đường lỗi lúc GHI) import
+// thẳng `toast` từ module này. Thiếu nó thì lúc nào đó thêm test cho nhánh phạt-thất-bại
+// sẽ ăn "No toast export is defined on the mock" — lỗi trỏ sai hoàn toàn nguyên nhân.
+//
+// PHẢI qua `vi.hoisted`: `vi.mock` bị nâng lên trên mọi import, mà `toast` ở đây là
+// giá trị ĐỌC NGAY khi factory chạy (khác `useToast` — closure, đọc muộn). Khai bằng
+// `const` thường sẽ ném "Cannot access 'toast' before initialization".
+const { toast } = vi.hoisted(() => ({ toast: vi.fn() }));
+vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }), toast }));
 
 const OK_PREVIEW = {
   amount: 20000,
@@ -91,19 +98,21 @@ describe('PenaltyDialog', () => {
   });
 
   /**
-   * `fetchWithAuth` ném `Error(JSON.stringify(envelope))` chứ KHÔNG phải câu tiếng
-   * Việt trần (api.ts:137). Test cũ mock một Error với câu sạch → xanh, trong khi
-   * production hiện nguyên khối JSON cho admin. Mock ĐÚNG hình dạng thật ở đây.
+   * `fetchWithAuth` ném `ApiError` dựng bằng `buildApiError` (api.ts), KHÔNG phải
+   * `Error(JSON.stringify(envelope))` như trước 2026-08-12. Dựng lỗi bằng chính
+   * `buildApiError` để test đi qua đúng đường production: mock một `Error` câu sạch
+   * sẽ xanh giả trong khi admin vẫn nhìn thấy nguyên cục JSON.
    */
   it('preview lỗi 403: hiện CÂU của backend, không phải JSON thô', async () => {
     previewPenalty.mockRejectedValue(
-      new Error(
-        JSON.stringify({
+      buildApiError({
+        body: {
           success: false,
           error: { code: 'Forbidden', message: 'Chuyến này không thuộc phạm vi bạn được soát.' },
-          path: '/admin/driver-penalties/preview',
-        }),
-      ),
+        },
+        httpStatus: 403,
+        path: 'GET /admin/driver-penalties/preview',
+      }),
     );
     renderDialog();
     await waitFor(() =>
@@ -117,12 +126,30 @@ describe('PenaltyDialog', () => {
 
   it('envelope kiểu cũ ({ message }) cũng bóc được', async () => {
     previewPenalty.mockRejectedValue(
-      new Error(JSON.stringify({ message: 'Chuyến này đã bị phạt rồi.', statusCode: 400 })),
+      buildApiError({
+        body: { message: 'Chuyến này đã bị phạt rồi.', statusCode: 400 },
+        httpStatus: 400,
+        path: 'GET /admin/driver-penalties/preview',
+      }),
     );
     renderDialog();
     await waitFor(() =>
       expect(screen.getByText('Chuyến này đã bị phạt rồi.')).toBeInTheDocument(),
     );
+  });
+
+  /**
+   * Ca `e` KHÔNG phải Error — thư viện/bug ném chuỗi trần. Không có nhánh dự phòng thì
+   * ô lỗi in ra "undefined" và admin không biết chuyện gì xảy ra. Khoá lại vì đây đúng
+   * là chỗ dễ mất khi ai đó rút gọn thành `setError(e.message)`.
+   */
+  it('lỗi không phải Error vẫn ra câu dự phòng, không phải "undefined"', async () => {
+    previewPenalty.mockRejectedValue('bể rồi');
+    renderDialog();
+    await waitFor(() =>
+      expect(screen.getByText('Không đọc được thông tin chuyến.')).toBeInTheDocument(),
+    );
+    expect(confirmButton()).toBeDisabled();
   });
 
   it('không gọi preview khi dialog đóng', () => {
