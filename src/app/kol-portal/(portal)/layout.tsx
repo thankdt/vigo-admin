@@ -13,7 +13,7 @@ import {
   SidebarMenuButton,
   SidebarInset,
 } from '@/components/ui/sidebar';
-import { LayoutDashboard, LogOut, Wallet, Crown } from 'lucide-react';
+import { LayoutDashboard, LogOut, Wallet } from 'lucide-react';
 import { getKolMe } from '@/lib/api';
 import React from 'react';
 

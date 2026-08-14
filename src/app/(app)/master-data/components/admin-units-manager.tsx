@@ -18,7 +18,6 @@ import { Plane } from 'lucide-react';
 
 export function AdminUnitsManager() {
     const [units, setUnits] = React.useState<AdminUnit[]>([]);
-    const [provinces, setProvinces] = React.useState<AdminUnit[]>([]);
     const [isLoading, setIsLoading] = React.useState(true);
     const [isFormOpen, setIsFormOpen] = React.useState(false);
     const [currentPage, setCurrentPage] = React.useState(1);
@@ -30,7 +29,6 @@ export function AdminUnitsManager() {
         try {
             const data = await getAdminUnits();
             setUnits(data);
-            setProvinces(data.filter(u => u.level === 'PROVINCE'));
         } catch (err: any) {
             toast({ variant: 'destructive', title: 'Không thể tải đơn vị hành chính', description: err.message });
         } finally {

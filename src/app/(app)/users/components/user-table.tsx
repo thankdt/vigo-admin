@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Calendar, Share2, Plus, Trash2, RotateCcw } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Lock, Unlock, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Share2, Trash2, RotateCcw } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { getUsers, lockUser, unlockUser, deleteAdminUser, restoreUser, adminGetUserReferralStats, type AdminUserReferralStats } from '@/lib/api';
@@ -43,7 +43,6 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
@@ -61,8 +60,6 @@ export function UsersTable() {
   const [roleFilter, setRoleFilter] = React.useState<'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER'>('ALL');
   // Trạng thái xoá: 'active' = user sống (mặc định); 'deleted' = user đã xoá (để khôi phục).
   const [deletedScope, setDeletedScope] = React.useState<'active' | 'deleted'>('active');
-  const [isFormOpen, setIsFormOpen] = React.useState(false);
-  const [editingUser, setEditingUser] = React.useState<User | null>(null);
 
   // Affiliate stats viewer — admin support tool. Targets the same /referrals/me data the
   // mobile app shows but for any user, so support can answer "what's my balance?" without
@@ -160,16 +157,6 @@ export function UsersTable() {
       direction = 'descending';
     }
     setSortConfig({ key, direction });
-  };
-  
-  const handleOpenForm = (user: User | null) => {
-    setEditingUser(user);
-    setIsFormOpen(true);
-  };
-  
-  const handleCloseForm = () => {
-    setEditingUser(null);
-    setIsFormOpen(false);
   };
   
   // Soft-delete the user via the new admin DELETE endpoint. Reuses the
