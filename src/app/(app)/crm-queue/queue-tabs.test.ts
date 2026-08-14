@@ -46,8 +46,8 @@ describe('paramsForTab', () => {
     expect(p).not.toHaveProperty('overdueHours');
   });
 
-  it('4 tab, đúng thứ tự hiển thị', () => {
-    expect(QUEUE_TAB_ORDER).toEqual(['before', 'after', 'mine', 'overdue']);
+  it('5 tab, đúng thứ tự hiển thị', () => {
+    expect(QUEUE_TAB_ORDER).toEqual(['before', 'after', 'mine', 'holding', 'overdue']);
   });
 
   it('mọi tab đều có nhãn tiếng Việt', () => {
@@ -71,6 +71,17 @@ describe('paramsForTab', () => {
    */
   it('câu giải thích tab "Quá hạn" KHÔNG viết cứng số giờ', () => {
     expect(QUEUE_TAB_HINT.overdue).not.toMatch(/\d+\s*(giờ|tiếng|h)\b/i);
+  });
+
+  /**
+   * Tab "Đang có người giữ" là TẦM NHÌN QUẢN LÝ: việc của mọi người, không lọc theo ai.
+   * Lọc kèm người là biến nó thành bản sao của "Việc của tôi" và mất đúng công dụng —
+   * phát hiện việc bị ai đó ôm rồi bỏ quên.
+   */
+  it('tab "holding" lọc theo cờ claimed, KHÔNG kèm claimedBy', () => {
+    const p = paramsForTab('holding', 'admin-1');
+    expect(p).toMatchObject({ claimed: true });
+    expect(p).not.toHaveProperty('claimedBy');
   });
 
   // Chỉ tab "mine" được phép mang claimedBy. Rò sang tab khác là CSKH thấy thiếu việc

@@ -148,9 +148,10 @@ export default function CrmQueuePage() {
     }
   };
 
-  // Chỉ tab "Việc của tôi" mới có người giữ việc: 3 tab kia lọc `uncalled` nên theo đúng
-  // định nghĩa bộ lọc, không dòng nào có người giữ — cột đó sẽ luôn là gạch ngang.
-  const showOwnerCol = tab === 'mine';
+  // Chỉ 2 tab này mới có người giữ việc. Ba tab kia lọc `uncalled` nên theo đúng định
+  // nghĩa bộ lọc, không dòng nào có người giữ — cột đó sẽ luôn là gạch ngang.
+  // Ở "Đang có người giữ" thì cột này là THÔNG TIN CHÍNH: nó trả lời "ai đang ôm việc".
+  const showOwnerCol = tab === 'mine' || tab === 'holding';
 
   return (
     <div className="space-y-6">

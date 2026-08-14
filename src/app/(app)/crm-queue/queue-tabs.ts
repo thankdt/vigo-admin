@@ -10,9 +10,9 @@
  */
 import type { getBookings } from '@/lib/api';
 
-export type QueueTab = 'before' | 'after' | 'mine' | 'overdue';
+export type QueueTab = 'before' | 'after' | 'mine' | 'holding' | 'overdue';
 
-export const QUEUE_TAB_ORDER: QueueTab[] = ['before', 'after', 'mine', 'overdue'];
+export const QUEUE_TAB_ORDER: QueueTab[] = ['before', 'after', 'mine', 'holding', 'overdue'];
 
 /**
  * Nhãn PHẢI có chữ "hoàn thành". "Gọi trước / gọi sau" một mình là mơ hồ — trước/sau CÁI GÌ?
@@ -24,6 +24,7 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
   before: 'Cần gọi trước hoàn thành',
   after: 'Cần gọi sau hoàn thành',
   mine: 'Việc của tôi',
+  holding: 'Đang có người giữ',
   // Không phải "quá hạn" chung chung: đây là việc gọi SAU hoàn thành bị để lâu.
   overdue: 'Quá hạn gọi sau',
 };
@@ -44,7 +45,9 @@ export const QUEUE_TAB_HINT: Record<QueueTab, string> = {
   after:
     'Chuyến ĐÃ hoàn thành, chưa ai gọi lại. Gọi hỏi chuyến có ổn không, tài xế thế nào.',
   mine:
-    'Việc bạn đã bấm "Nhận gọi" nhưng chưa ghi kết quả. Người khác không nhìn thấy các việc này — gọi xong nhớ ghi kết quả để việc rời hàng đợi.',
+    'Việc bạn đã bấm "Nhận gọi" nhưng chưa ghi kết quả. Gọi xong nhớ ghi kết quả để việc rời hàng đợi.',
+  holding:
+    'Việc đã có người nhận nhưng chưa ghi kết quả — của MỌI nhân viên, kể cả bạn. Dùng để không bỏ sót khách khi ai đó nhận việc rồi nghỉ hoặc quên.',
   overdue:
     'Chuyến hoàn thành đã lâu mà vẫn chưa ai gọi lại (ngưỡng giờ đặt trong Cài đặt). Đây chỉ là danh sách ưu tiên — cùng chuyến vẫn nằm ở tab "Cần gọi sau hoàn thành".',
 };
@@ -125,6 +128,10 @@ export function paramsForTab(tab: QueueTab, adminId: string): QueueParams {
       return { callAfter: 'uncalled', status: 'COMPLETED', sortBy: 'completedAt', order: 'ASC' };
     case 'mine':
       return { claimedBy: adminId, sortBy: 'createdAt', order: 'ASC' };
+    case 'holding':
+      // KHÔNG lọc theo người: đây là tầm nhìn quản lý. Chờ lâu nhất lên đầu vì việc giữ
+      // càng lâu càng đáng ngờ là đã bị bỏ quên.
+      return { claimed: true, sortBy: 'createdAt', order: 'ASC' };
     case 'overdue':
       // Ngưỡng giờ CỐ Ý không nằm ở FE — backend đọc từ system_config
       // (CSKH_CALL_AFTER_OVERDUE_HOURS) để ops đổi được mà không cần deploy admin.
