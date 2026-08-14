@@ -391,6 +391,21 @@ export type Booking = {
     fullName?: string | null;
     phone?: string | null;
   } | null;
+  // Ai đang GIỮ VIỆC gọi ở từng pha (BE: booking.callBeforeById/callAfterById). Khác
+  // customerCallCheckedBy — cột đó là "lần gọi mới nhất", dùng chung hai pha nên bị đè.
+  // Nguồn của tab "Việc của tôi" và cột "Người giữ việc" ở hàng đợi CSKH.
+  callBeforeById?: string | null;
+  callAfterById?: string | null;
+  callBeforeBy?: {
+    id: string;
+    fullName?: string | null;
+    phone?: string | null;
+  } | null;
+  callAfterBy?: {
+    id: string;
+    fullName?: string | null;
+    phone?: string | null;
+  } | null;
 }
 
 /** Trạng thái CSKH gọi check khách. Luồng: (chưa gọi) → CLAIMED (đã nhận gọi) →
