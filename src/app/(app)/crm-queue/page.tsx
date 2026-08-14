@@ -27,6 +27,7 @@ import type { Booking, CustomerCallStatus } from '@/lib/types';
 import { formatVnDateTime } from '../leakage-review/leakage-labels';
 import { BookingDetail } from '../bookings/components/booking-detail';
 import {
+  QUEUE_TAB_HINT,
   QUEUE_TAB_LABEL,
   QUEUE_TAB_ORDER,
   formatWaited,
@@ -155,7 +156,7 @@ export default function CrmQueuePage() {
     <div className="space-y-6">
       <PageHeader
         title="Hàng đợi CSKH"
-        description="Việc gọi khách, tách khỏi trang Chuyến đi. Mỗi dòng là một việc: nhận gọi, ghi kết quả, xong là dòng rời khỏi tab."
+        description="Mỗi dòng là MỘT VIỆC gọi khách. Bấm “Nhận gọi” để lấy việc về mình, gọi xong ghi kết quả — việc sẽ tự rời khỏi hàng đợi. Một chuyến cần gọi 2 lần: trước khi đi (xác nhận) và sau khi đi xong (hỏi thăm)."
       />
 
       <Card className="space-y-3 p-4">
@@ -173,6 +174,12 @@ export default function CrmQueuePage() {
             {loading ? 'Đang tải…' : `${total.toLocaleString('vi-VN')} việc`}
           </div>
         </div>
+
+        {/* Giải thích tab ĐANG ĐỨNG. Nhãn tab một mình không nói được gọi để LÀM GÌ, và
+            người mới không đoán được vì sao việc vừa nhận lại biến mất khỏi tab hiện tại. */}
+        <p className="rounded-md bg-muted/60 px-3 py-2 text-sm text-muted-foreground">
+          {QUEUE_TAB_HINT[tab]}
+        </p>
 
         <Table>
           <TableHeader>

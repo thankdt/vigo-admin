@@ -22,6 +22,27 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
 };
 
 /**
+ * Giải thích hiện NGAY TRÊN MÀN cho CSKH, không phải comment cho lập trình viên.
+ *
+ * Nhãn tab một mình không đủ: "gọi trước / gọi sau" không nói được là gọi để LÀM GÌ, và
+ * người mới vào không đoán được vì sao việc mình vừa nhận lại biến mất khỏi tab đang đứng.
+ *
+ * ⚠️ Tab "Quá hạn" CỐ Ý không ghi con số giờ: ngưỡng nằm trong `system_config`
+ * (CSKH_CALL_AFTER_OVERDUE_HOURS) để ops đổi không cần deploy — viết cứng "24 giờ" ở đây
+ * là ngày nào đó ops đổi thành 12 thì màn hình nói dối mà không ai biết.
+ */
+export const QUEUE_TAB_HINT: Record<QueueTab, string> = {
+  before:
+    'Khách SẮP đi, chưa ai gọi xác nhận. Gọi để chắc khách còn đi và đón đúng chỗ — tránh khách huỷ ngang hoặc không ra.',
+  after:
+    'Khách ĐÃ đi xong, chưa ai gọi lại. Gọi hỏi chuyến có ổn không, tài xế thế nào.',
+  mine:
+    'Việc bạn đã bấm "Nhận gọi" nhưng chưa ghi kết quả. Người khác không nhìn thấy các việc này — gọi xong nhớ ghi kết quả để việc rời hàng đợi.',
+  overdue:
+    'Việc gọi sau bị để quá lâu (ngưỡng giờ đặt trong Cài đặt). Đây chỉ là danh sách ưu tiên — cùng chuyến vẫn nằm ở tab "Cần gọi sau".',
+};
+
+/**
  * Kiểu buộc theo đúng tham số của getBookings. KHÔNG dùng Record<string, unknown>:
  * spread một index-signature vào getBookings sẽ tắt hết kiểm kiểu ở call-site, gõ sai
  * `sortby` hay `callbefore` sẽ im lặng trôi qua và tab trả sai dữ liệu.
