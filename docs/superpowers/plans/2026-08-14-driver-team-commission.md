@@ -18,7 +18,7 @@ session `docs/crm-spec` kết thúc):
 - Backend: `/Volumes/exSSD/dev/projects/vigo-backend`
 - Admin: `/Volumes/exSSD/dev/projects/vigo-admin`
 
-Task 1–13 ở backend. Task 14–17 ở admin. Task 18 đụng cả hai.
+Task 1–14 ở backend. Task 15–18 ở admin. Task 19 đụng cả hai.
 
 ## Global Constraints
 
@@ -234,6 +234,18 @@ describe('computeTripEarnings — mức riêng', () => {
     expect(Number.isFinite(e.htxShareRate)).toBe(true);
   });
 
+  it('mức riêng CAO HƠN mức chuẩn (0.5 > 0.2) ⇒ forgone âm, tài xế bị thu nhiều hơn', () => {
+    // CHECK cho phép 0..1 nên super admin đặt 0.5 là hợp lệ. Chiều này gây thiệt cho
+    // TÀI XẾ, ngược với chiều ưu đãi — công thức phải nhất quán ở cả hai chiều.
+    const e = computeTripEarnings(TRIP, { ...BASE, driverCommissionRate: 0.5 });
+    expect(e.commissionAmount).toBe(500_000);
+    expect(e.forgoneCommission).toBe(-300_000);
+    expect(e.htxCommission).toBe(50_000);            // vẫn KHÔNG đổi
+    expect(e.vigoCommission).toBe(450_000);          // 150.000 − (−300.000)
+    expect(e.vigoVatRemit).toBe(40_000);
+    expect(e.tripCashKept).toBeGreaterThanOrEqual(0);
+  });
+
   it('tài 0% + khuyến mãi lớn ⇒ chỉ vigoCommission được âm', () => {
     const trip = { price: 1_250_000, finalPrice: 1_080_000,
                    priceBreakdown: { vatAmount: 80_000, promotionDiscount: 250_000 } };
@@ -362,10 +374,13 @@ export class AddDriverCommissionRate1793500000000 implements MigrationInterface 
       CHECK ("commissionRate" IS NULL OR ("commissionRate" >= 0 AND "commissionRate" <= 1))
     `);
 
-    await q.query(`ALTER TABLE "booking" ADD COLUMN "driverCommissionRate" numeric(5,4)`);
-    await q.query(`ALTER TABLE "booking" ADD COLUMN "standardCommissionRate" numeric(5,4)`);
-    await q.query(`ALTER TABLE "multi_stop_order" ADD COLUMN "driverCommissionRate" numeric(5,4)`);
-    await q.query(`ALTER TABLE "multi_stop_order" ADD COLUMN "standardCommissionRate" numeric(5,4)`);
+    // GỘP 2 cột cùng bảng vào MỘT câu ALTER — lấy ACCESS EXCLUSIVE một lần thay vì hai.
+    await q.query(`ALTER TABLE "booking"
+      ADD COLUMN "driverCommissionRate" numeric(5,4),
+      ADD COLUMN "standardCommissionRate" numeric(5,4)`);
+    await q.query(`ALTER TABLE "multi_stop_order"
+      ADD COLUMN "driverCommissionRate" numeric(5,4),
+      ADD COLUMN "standardCommissionRate" numeric(5,4)`);
   }
 
   public async down(q: QueryRunner): Promise<void> {
@@ -399,7 +414,17 @@ Vào cả 3 file, dùng đúng mẫu `transport-company.entity.ts:45-51`:
 
 Với `Booking` và `MultiStopOrder` là `driverCommissionRate` và `standardCommissionRate`.
 
-- [ ] **Step 3: Chặn rò rỉ 2 cột mới ra response**
+⛔ **KHÔNG dùng `@Column({ select: false })`.** Nó trông gọn nhưng đổi một vấn đề nhỏ lấy
+một lỗi tiền im lặng: `complete()` đọc `lockedBooking` để dựng `earningsBreakdown` — cột
+không được select thì `undefined`, `ratesForBooking` rơi về config, và **số chốt sổ ghi sai
+mức, không lỗi, không log**.
+
+- [ ] **Step 3: Gỡ 2 cột mới khỏi response khách hàng**
+
+Mức độ: **vệ sinh dữ liệu, không phải rò rỉ giữa các bên.** Snapshot chỉ ghi lúc NHẬN chuyến
+nên ở `buildOfferPayload` (chuyến chưa có tài) và `:854` (`createBooking`) giá trị **luôn
+`NULL`**; ở `attachDriverEarnings*` và chi tiết chuyến thì tài xế chỉ thấy mức **của chính
+mình**. Không có đường nào để tài A đọc mức của tài B.
 
 `buildOfferPayload` dùng `...booking` (`dispatch.processor.ts:158-160`), `booking.service.ts:851` `return { ...booking, shareLink }`, `attachDriverEarningsList` cũng spread. Hai cột mới sẽ chảy ra payload `new_booking_request` gửi app tài xế — vừa là thay đổi shape, vừa **rò rỉ vùng dữ liệu riêng của đội tài**.
 
@@ -1068,9 +1093,17 @@ Tính ngay trong `loadTripEarnings` (đã load sẵn mọi chuyến trong kỳ, 
 
 ```ts
   // GET /admin/driver-team/subsidy-summary?from&to
-  // forgone   = Σ forgoneCommission            → "Doanh thu bỏ qua"
-  // cashLoss  = Σ max(0, −vigoCommission)      → "Lỗ tiền mặt VIGO bù cho HTX"
-  // Hai con số này KHÁC nhau (200k vs 50k trên chuyến 1 triệu) — phải gắn nhãn tách bạch.
+  // forgone  = Σ forgoneCommission                              → "Doanh thu bỏ qua"
+  // cashLoss = Σ max(0, −vigoCommission) CHỈ chuyến có HTX THẬT  → "Lỗ tiền mặt bù HTX"
+  // Hai con số KHÁC nhau (200k vs 50k trên chuyến 1 triệu) — phải gắn nhãn tách bạch.
+  //
+  // ⚠️ Bộ lọc HTX là BẮT BUỘC. resolveHtxCommissionRate rơi về DEFAULT = 0.05 khi tài
+  // KHÔNG thuộc HTX nào, và cả khi HTX có rate <= 0 (~25/111 HTX trên PROD để 0.0000).
+  // Không lọc thì thẻ báo VIGO lỗ tiền mặt cho khoản KHÔNG HỀ CHI RA, trên ~57% số
+  // chuyến — mà đây đúng là con số CEO dùng để quyết định.
+  //
+  // Điều kiện: tcId IS NOT NULL AND tc."htxCommissionRate" > 0.
+  // Lọc theo tcId KHÔNG THÔI là chưa đủ — nhánh raw <= 0 -> DEFAULT vẫn để lọt.
 ```
 
 - [ ] **Step 6: Chạy + commit**
@@ -1287,7 +1320,103 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 12: API sửa mức riêng — chỉ super admin, có nhật ký
+## Task 12: Sửa lỗi CÓ SẴN — tạo thành viên thẳng ở một trạng thái không sinh sự kiện
+
+**Lỗi này có sẵn, độc lập với hoa hồng. Commit riêng, làm TRƯỚC Task 13** — vì hook auto-ghi
+`0.0000` sẽ treo ở đúng nhánh đang hỏng.
+
+`driver-team.service.ts:67-78`:
+
+```ts
+const member = existing ?? this.members.create({ stage: body.stage ?? CONTACTED });
+if (body.stage !== undefined && body.stage !== member.stage) {   // 'JOINED' !== 'JOINED' → false
+```
+
+Với tài **chưa có dòng nào**, `stage` được gán vào `member` TRƯỚC khi so sánh nên điều kiện
+luôn `false`. Hôm nay: tạo thành viên thẳng ở "Trong team" **không sinh dòng `STAGE_CHANGE`**.
+Sau Task 13 mà không sửa: `commissionRate` ở lại `NULL` → resolver rơi về mức chung →
+**tài xế bị thu 20% trong khi CEO tưởng đã miễn**, im lặng, không log.
+
+**Files:**
+- Modify: `src/driver-team/driver-team.service.ts:60-86`
+- Test: `src/driver-team/driver-team.service.spec.ts` (bổ sung)
+
+**Interfaces:**
+- Produces: `patchMember` sinh `STAGE_CHANGE` với `fromStage = existing?.stage ?? null` cho **cả** dòng mới lẫn dòng cũ
+
+- [ ] **Step 1: Viết test**
+
+```ts
+describe('patchMember — sinh sự kiện đổi trạng thái', () => {
+  it('tài CHƯA có dòng, PATCH stage=JOINED ⇒ sinh STAGE_CHANGE với fromStage = null', async () => {
+    // existing = null, body.stage = 'JOINED'
+    // kỳ vọng: 1 event { type: STAGE_CHANGE, fromStage: null, toStage: 'JOINED' }
+  });
+
+  it('tài CHƯA có dòng, PATCH chỉ note ⇒ stage mặc định CONTACTED, VẪN sinh STAGE_CHANGE', async () => {
+    // đường đi có thật từ drawer: ghi chú cho một tài "Tiềm năng"
+  });
+
+  it('tài ĐÃ có dòng ở CONTACTED, PATCH stage=JOINED ⇒ fromStage = CONTACTED', async () => {});
+
+  it('tài ĐÃ có dòng ở JOINED, PATCH stage=JOINED ⇒ KHÔNG sinh sự kiện (không đổi gì)', async () => {});
+});
+```
+
+- [ ] **Step 2: Chạy — ca 1 và ca 2 phải FAIL**
+
+Run: `cd /Volumes/exSSD/dev/projects/vigo-backend && TZ=UTC npx jest src/driver-team/driver-team.service.spec.ts`
+Expected: ca 1, 2 FAIL (không có event nào). Ca 3, 4 PASS.
+
+- [ ] **Step 3: Sửa**
+
+```ts
+    const existing = await this.members.findOne({ where: { driverId } });
+    const now = new Date();
+
+    // So với trạng thái CŨ THẬT SỰ (null nếu chưa có dòng), KHÔNG so với member.stage:
+    // member vừa được create() với stage đã gán, nên 'JOINED' !== 'JOINED' luôn false và
+    // dòng mới không bao giờ sinh sự kiện.
+    const prevStage: DriverTeamStage | null = existing?.stage ?? null;
+    const nextStage: DriverTeamStage = body.stage ?? existing?.stage ?? DriverTeamStage.CONTACTED;
+
+    const member =
+      existing ??
+      this.members.create({
+        driverId,
+        stage: nextStage,
+        assignedRouteIds: [],
+        createdByAdminUserId: adminUserId,
+      });
+
+    const pending: Partial<DriverTeamEvent>[] = [];
+
+    if (nextStage !== prevStage) {
+      pending.push({ type: DriverTeamEventType.STAGE_CHANGE, fromStage: prevStage, toStage: nextStage });
+      member.stage = nextStage;
+      member.stageChangedAt = now;
+    }
+```
+
+- [ ] **Step 4: Chạy — cả 4 ca PASS, test driver-team cũ không đổi**
+
+Run: `TZ=UTC npx jest src/driver-team && npx tsc --noEmit`
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add -A && git commit -m "fix(driver-team): tạo thành viên thẳng ở một trạng thái vẫn sinh sự kiện
+
+member được create() với stage đã gán rồi mới so sánh với chính nó, nên
+dòng mới không bao giờ sinh STAGE_CHANGE. So với trạng thái cũ thật sự
+(null nếu chưa có dòng).
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 13: API sửa mức riêng — chỉ super admin, có nhật ký
 
 **Files:**
 - Modify: `src/driver-team/driver-team-admin.controller.ts`, `driver-team.service.ts`, `dto/driver-team.dto.ts`, `driver-team.enums.ts`
@@ -1304,7 +1433,13 @@ it('super admin ⇒ 200 và lưu đúng giá trị', async () => {});
 it('rate < 0 hoặc > 1 ⇒ 400', async () => {});
 it('mỗi lần đổi ghi 1 dòng driver_team_event kèm giá trị cũ và mới', async () => {});
 it('chuyển stage sang JOINED khi commissionRate NULL ⇒ tự ghi 0 KÈM một dòng sự kiện', async () => {});
+it('TẠO THẲNG thành viên ở stage JOINED ⇒ cũng tự ghi 0 + sự kiện (phụ thuộc Task 12)', async () => {});
 it('sửa xong thì cache hiển thị bị xoá', async () => {});
+it('gửi commissionRate qua PATCH :driverId chung ⇒ bị bỏ qua, KHÔNG ghi vào DB', async () => {
+  // Chặn hai lớp: main.ts:74 whitelist:true strip field không decorator, và patchMember
+  // gán TỪNG field có tên (không Object.assign). Test này khoá cả hai lại.
+});
+it('mức riêng > mức chuẩn (vd 0.5) vẫn lưu được, nhưng forgone âm và UI phải cảnh báo', async () => {});
 ```
 
 - [ ] **Step 2: Chạy — FAIL**
@@ -1366,7 +1501,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 13: Backend — dọn 9 bản sao đọc tỉ lệ, chạy trọn bộ kiểm
+## Task 14: Backend — dọn 9 bản sao đọc tỉ lệ, chạy trọn bộ kiểm
 
 **Files:**
 - Modify: `src/wallet/wallet.service.ts:236`, `src/drivers/drivers.service.ts:1288`, `src/finance/finance.service.ts:293`, `src/htx/htx.service.ts:206`, `:612`, `src/multi-stop-order/multi-stop-lifecycle.service.ts:64`
@@ -1397,7 +1532,7 @@ git push -u origin feat/driver-commission
 
 ---
 
-## Task 14: Admin — kiểu dữ liệu + hàm gọi API
+## Task 15: Admin — kiểu dữ liệu + hàm gọi API
 
 **Files:**
 - Modify: `/Volumes/exSSD/dev/projects/vigo-admin-driver-commission/src/lib/types.ts`, `src/lib/api.ts`
@@ -1428,7 +1563,7 @@ Thêm `commissionRate?: number | null` vào `TeamMemberState`/`DriverTeamDetail`
 
 ---
 
-## Task 15: Admin — tab "Đội tài", danh sách thành viên
+## Task 16: Admin — tab "Đội tài", danh sách thành viên
 
 Màn Đội tài hiện chỉ có **một** lối vào: cây tuyến, phụ thuộc khoảng ngày. Nó tốt cho việc
 *tìm người mới* (tuyến nào nhiều tài chạy tốt) nhưng không dùng để *quản người đã có* —
@@ -1491,7 +1626,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 16: Admin — ô nhập % + cảnh báo + hai thẻ tổng
+## Task 17: Admin — ô nhập % + cảnh báo + hai thẻ tổng
 
 **Files:**
 - Modify: `src/app/(app)/driver-team/components/driver-team-drawer.tsx`, `driver-team-screen.tsx`
@@ -1519,17 +1654,22 @@ it('mức riêng = mức chuẩn ⇒ không cảnh báo', () => {});
 
 ---
 
-## Task 17: Admin — chịu được số âm ở mọi màn tài chính
+## Task 18: Admin — chịu được số âm ở mọi màn tài chính
 
 **Files:**
-- Modify: `src/app/(app)/bookings/components/bookings-table.tsx:183`, `:191`, `~:214`; `src/app/(app)/finance/components/finance-stat-cards.tsx:35`; `src/app/(app)/finance/components/finance-drilldown-chart.tsx:68`; `src/app/(app)/dashboard/page.tsx:149`
+- Modify: `src/app/(app)/bookings/components/bookings-table.tsx:190`, `:198`, `:222`; `src/app/(app)/finance/components/finance-stat-cards.tsx:35`; `src/app/(app)/finance/components/finance-drilldown-chart.tsx:68`; `src/app/(app)/dashboard/page.tsx:149`
 - Test: `src/app/(app)/htx-reconciliation/htx-recon-shared.test.ts` (bổ sung)
 
 - [ ] **Step 1: Viết test**
 
 ```ts
-it('vigoCommission âm ⇒ customerTotal vẫn khớp grossRevenue', () => {});
 it('hasNewSplit đúng khi htxCommission = 0 và vigoCommission = 0', () => {});
+it('vigoCommission âm ⇒ driverNet và driverIncome vẫn đọc được, không vượt cước', () => {});
+it('cột 20 "Phí HTX" = 50.000 đứng cạnh cột 10 "Phí APP trước VAT" = 0 — có cột giải thích', () => {
+  // Đây mới là ca đáng test. customerTotal == grossRevenue là đồng nhất thức ĐỘC LẬP
+  // với r (htxFareBeforeVat + appFeeBeforeVat luôn = priceBeforeVat theo cấu tạo)
+  // nên luôn xanh và không bảo vệ được gì.
+});
 ```
 
 - [ ] **Step 2: Chạy — FAIL**
@@ -1537,7 +1677,7 @@ it('hasNewSplit đúng khi htxCommission = 0 và vigoCommission = 0', () => {});
 - [ ] **Step 3: Sửa 4 chỗ**
 
 ```ts
-// bookings-table.tsx:191 — kiểm SỰ TỒN TẠI, không kiểm dấu.
+// bookings-table.tsx:198 — kiểm SỰ TỒN TẠI, không kiểm dấu.
 // Cũ: htxCommission > 0 || vigoCommission > 0
 // Với tài 0% không thuộc HTX thì cả hai = 0 → rơi nhánh legacy dành cho chuyến
 // trước migration 1782000000000, mất luôn ô "Tổng kiểm tra".
@@ -1545,7 +1685,7 @@ const hasNewSplit =
   earnings.htxCommission !== undefined && earnings.vigoCommission !== undefined;
 ```
 
-- `bookings-table.tsx` ~`:214`: bỏ dấu `-` cứng khi giá trị đã âm (tránh `--40.000`).
+- `bookings-table.tsx:222`: bỏ dấu `-` cứng khi giá trị đã âm (tránh `--40.000`).
 - `finance-stat-cards.tsx:35` và `dashboard/page.tsx:149`: màu theo dấu, thêm chú thích
   khi âm ("gồm phần VIGO bù cho HTX của tài hưởng ưu đãi").
 - `finance-drilldown-chart.tsx:68`: `radius={0}` — recharts không lật bo góc cho cột âm.
@@ -1565,7 +1705,7 @@ git push -u origin feat/driver-commission
 
 ---
 
-## Task 18: Review đối kháng code + triển khai
+## Task 19: Review đối kháng code + triển khai
 
 - [ ] **Step 1: Review đối kháng — LƯỢT DUY NHẤT còn lại**
 
@@ -1607,19 +1747,24 @@ git worktree remove /Volumes/exSSD/dev/projects/vigo-admin-driver-commission
 ## Tự soát kế hoạch
 
 **Phủ spec:** §3 → Task 3; §4 → Task 2; §5A → Task 5–6; §5B/C → Task 7; §5D → Task 10;
-§5E → Task 10; §5F → Task 8; §5G → Task 9; §5G′ → Task 17; §6.1 → Task 13; §6.2 → Task 4;
-§6.3 → Task 1; §7 → Task 12; §8 → Task 16; §9 → Task 3 Step 3; §10 → rải khắp; §13 → Task 18.
+§5E → Task 10; §5F → Task 8; §5G → Task 9; §5G′ → Task 18; §6.1 → Task 14; §6.2 → Task 4;
+§6.3 → Task 1; §7.1/7.2 → Task 13; §7.3 → Task 11 + 16; §7.4 → Task 12; §7.5 → Task 8;
+§8 → Task 17; §9 → Task 3 Step 3; §10 → rải khắp; §13 → Task 19.
 
-**Ngoài spec, phát hiện khi lập kế hoạch:** Task 11 + 15 (danh sách thành viên đội). Spec
-giả định người trong team luôn nhìn thấy được để đặt %; thực tế màn hình dựng từ chuyến đã
-hoàn thành trong kỳ nên tài chưa chạy chuyến nào là vô hình. Không có 2 task này thì Task
-12/16 không dùng được.
+**Ngoài spec ban đầu, phát hiện khi lập kế hoạch và khi review:**
+- Task 11 + 16 (danh sách thành viên đội) — spec giả định người trong team luôn nhìn thấy
+  được để đặt %; thực tế màn hình dựng từ chuyến hoàn thành trong kỳ nên tài chưa chạy
+  chuyến nào là vô hình.
+- Task 12 (sửa `patchMember`) — lỗi có sẵn khiến hook auto-0% không bao giờ chạy cho thành
+  viên tạo thẳng ở "Trong team".
+- Task 8 bộ lọc HTX thật cho thẻ "Lỗ tiền mặt" — nếu không, thẻ báo lỗ cho ~57% chuyến của
+  tài độc lập, do 5% "phần HTX" ảo có sẵn trong `resolveHtxCommissionRate`.
 
 **Nhất quán tên:** `effectiveRate` / `standardRate` / `customRateMapByUserIdForDisplayOnly`
 dùng thống nhất Task 4 → 5 → 6 → 10. `driverCommissionRate` / `standardCommissionRate` là
 tên cột DB, tên trường entity, và tên trong `TripEarningsRates` — cùng một chuỗi ở mọi nơi.
 
-**Khoảng trống đã biết:** Task 5, 6, 8–12, 14–17 ghi tiêu đề test thay vì thân
+**Khoảng trống đã biết:** Task 5, 6, 8–13, 15–18 ghi tiêu đề test thay vì thân
 test đầy đủ. Người thực hiện phải viết thân test **trước** khi cài đặt (TDD), theo mẫu mock
 của spec liền kề trong cùng thư mục. Task 1–4 có thân test đầy đủ vì đó là phần công thức
 tiền — nơi sai một dấu là sai tiền mà không có gì báo.

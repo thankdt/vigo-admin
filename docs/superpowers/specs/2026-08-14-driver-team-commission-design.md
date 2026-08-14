@@ -184,7 +184,7 @@ Dòng tiền **cân** ở cả `r = R` lẫn `r = 0` (reviewer đã kiểm sổ 
 Bản 1 viết `vigoVatRemit = vatAmount × R` (giữ theo mức chuẩn). **Sai**, vì:
 
 Bảng đối soát HTX ở admin **tự suy ra VAT** từ phí nền tảng thực thu, không dùng số
-backend trả (`htx-recon-shared.ts:68-70`):
+backend trả (`htx-recon-shared.ts:67-70`):
 
 ```ts
 const appFeeBeforeVat = f.platformFeeGross;                  // = commissionAmount (theo r)
@@ -229,7 +229,7 @@ Chuyến 1.000.000đ (đã trừ VAT), VAT 80.000đ, tài thuộc HTX 5%, không
 Chỉ đúng những đại lượng này, **kể cả đại lượng FE tự cộng ra**:
 
 - `vigoCommission`, `vigoTotalReceived` (backend)
-- `platformFee = htxCommission + vigoCommission` (FE: `bookings-table.tsx:183`,
+- `platformFee = htxCommission + vigoCommission` (FE: `bookings-table.tsx:190`,
   `htx-recon-shared.ts:58`) — âm khi tài 0% **và có bất kỳ khuyến mãi nào**
 - `driverDeductTotal`, và `driverIncome` có thể **lớn hơn cước** (`htx-recon-shared.ts:83`)
 - Thẻ "Doanh thu VIGO" ở dashboard/finance
@@ -346,9 +346,15 @@ số của MỌI tài xế) → nợ riêng. Đợt này chỉ sửa rate và **
 
 `loadTripEarnings` `finance.service.ts:292-325`, `loadMultiStopEarnings` `:349-405`.
 
-Đang **tính lại theo config hiện tại**. Không sửa thì Q3 không thành sự thật. Select thêm
-2 cột snapshot, truyền vào `computeTripEarnings` (nhớ `Number()` — `getRawMany` không qua
-transformer).
+Đang **tính lại theo config hiện tại**. Không sửa thì Q3 không thành sự thật.
+
+Hai hàm có **hai rủi ro khác nhau**, đừng kiểm nhầm chỗ:
+
+- `loadTripEarnings` dùng `.select([...]).getMany()` (`:304-310`) → transformer **có** chạy.
+  Rủi ro là **quên thêm** `'b.driverCommissionRate'` vào mảng select → `undefined` im lặng
+  → rơi về mức chuẩn.
+- `loadMultiStopEarnings` dùng `.getRawMany()` (`:374`) → transformer **không** chạy. Rủi ro
+  là quên `Number(...)` → so sánh/nhân trên chuỗi.
 
 **Bổ sung — bảng đối soát HTX của admin** (`listHtxReconciliation` `:765-810`,
 `listHtxTrips` `:812-850`): hằng đẳng thức `platformFeeGross − km = htxCommission + vigoCommission`
@@ -394,8 +400,8 @@ Hiển thị đúng an toàn hơn.
 
 | Điểm | File | Vấn đề |
 |---|---|---|
-| Chi tiết chuyến | `bookings-table.tsx:191` | `hasNewSplit = htxCommission > 0 \|\| vigoCommission > 0` → tài 0% **không HTX** cho `0/0` → rơi nhánh **legacy** (dành cho chuyến trước migration `1782000000000`), mất ô "Tổng kiểm tra". Sửa: kiểm **sự tồn tại của trường**, không kiểm dấu |
-| Chi tiết chuyến | `bookings-table.tsx:183, ~214` | in `-{fmtVnd(platformFee)}` → `platformFee` âm ra `--40.000` (hai dấu trừ) |
+| Chi tiết chuyến | `bookings-table.tsx:198` | `hasNewSplit = htxCommission > 0 \|\| vigoCommission > 0` → tài 0% **không HTX** cho `0/0` → rơi nhánh **legacy** (dành cho chuyến trước migration `1782000000000`), mất ô "Tổng kiểm tra". Sửa: kiểm **sự tồn tại của trường**, không kiểm dấu |
+| Chi tiết chuyến | `bookings-table.tsx:190, :222` | in `-{fmtVnd(platformFee)}` → `platformFee` âm ra `--40.000` (hai dấu trừ) |
 | Đối soát HTX | `htx-recon-shared.ts:58-96` | xem §4.4 — dùng `× r` thì tự khớp, **không phải vá FE**. Vẫn cần test cho `vigoCommission` âm |
 | Stats công ty vận tải | `transport-companies-table.tsx:821` | `commissionAmount` cùng nguồn dashboard HTX ⇒ cũng tụt. Đây là màn **admin**, không phải portal |
 | Thẻ "Doanh thu VIGO" | `finance-stat-cards.tsx:35`, `dashboard/page.tsx:149` | gán cứng `green` ⇒ số **âm vẫn xanh lá**. Đổi màu theo dấu + hint khi âm |
@@ -545,6 +551,41 @@ Phải bổ sung trước khi làm ô nhập %:
 `null` và `0` phải hiện **khác nhau** trên bảng: `null` = "Mức chung", `0` = "0%" kèm dấu
 cảnh báo. Lẫn hai cái là hiểu sai 200.000đ/chuyến 1 triệu.
 
+## 7.4 LỖI CÓ SẴN phải sửa TRƯỚC: tạo thành viên thẳng ở "Trong team" không kích hoạt hook
+
+`driver-team.service.ts:67-78`:
+
+```ts
+const member = existing ?? this.members.create({ stage: body.stage ?? CONTACTED });
+if (body.stage !== undefined && body.stage !== member.stage) {   // 'JOINED' !== 'JOINED' → false
+```
+
+Với tài **chưa có dòng nào**, `stage` được gán vào `member` TRƯỚC khi so sánh, nên điều kiện
+luôn `false`. Hôm nay hậu quả là **không sinh dòng `STAGE_CHANGE`** khi tạo thành viên thẳng
+ở một trạng thái. Với tính năng này, hook auto-ghi `0.0000` (§3.3) và dòng nhật ký (§7.2)
+treo ở đúng nhánh đó cũng bị bỏ qua ⇒ **tài nằm trong team nhưng `commissionRate = NULL`**
+⇒ resolver (`IS NOT NULL`) rơi về mức chung ⇒ **tài xế bị thu 20% trong khi CEO tưởng đã
+miễn**, im lặng, không log.
+
+Sửa: tính `nextStage` rồi so với `existing?.stage ?? null`, **không** so với `member.stage`.
+
+Đây là lỗi có sẵn, độc lập với tính năng hoa hồng → **task riêng, commit riêng**, làm trước
+khi thêm hook.
+
+## 7.5 Nợ CÓ SẴN, cố ý không sửa: 5% "phần HTX" ảo cho tài độc lập
+
+`resolveHtxCommissionRate` (`booking.service.ts:418-431`) và `finance.service.ts:322,380`
+đều rơi về `DEFAULT = 0.05` khi tài **không thuộc HTX nào**, và cả khi HTX có
+`htxCommissionRate <= 0` (~25 trong 111 HTX trên PROD đang để `0.0000`).
+
+Hệ quả hôm nay: `aggregateBreakdown:478` cộng `vigoRevenue += vigoCommission` cho **mọi**
+chuyến ⇒ **doanh thu VIGO đang hụt sẵn 5% cho ~57% số chuyến** (7.169/12.619 tài không thuộc
+HTX), và 50.000đ/chuyến "phần HTX" ảo rơi vào rổ `__none__` nhãn *"Không thuộc HTX (độc lập)"*
+(`:772`).
+
+**Không sửa trong đợt này** — đổi `DEFAULT_HTX_RATE` sẽ làm vỡ bất biến §10 (đổi số của mọi
+chuyến hiện có). Nhưng nó buộc §8 phải lọc, xem ngay dưới.
+
 ## 8. Màn admin
 
 Trong ngăn kéo chi tiết tài:
@@ -559,7 +600,17 @@ cùng một chuyến — chốt chặn mà mập mờ đơn vị thì phản tá
 | Thẻ | Công thức | Chuyến 1 triệu, tài 0% |
 |---|---|---|
 | **Doanh thu bỏ qua** | Σ `forgoneCommission` | 200.000đ |
-| **Lỗ tiền mặt** (VIGO móc túi trả HTX) | Σ `max(0, −vigoCommission)` | 50.000đ |
+| **Lỗ tiền mặt** (VIGO móc túi trả HTX) | Σ `max(0, −vigoCommission)` **chỉ chuyến có HTX thật** | 50.000đ |
+
+⚠️ **Bộ lọc của thẻ "Lỗ tiền mặt" là bắt buộc, không phải tinh chỉnh.** Vì §7.5, tài **không
+thuộc HTX nào** vẫn cho `htxCommission = 50.000` và `vigoCommission = −50.000` — thẻ sẽ báo
+VIGO lỗ tiền mặt cho khoản **không hề chi ra**, mà đây chính là con số CEO dùng để quyết định.
+
+Điều kiện: `tcId IS NOT NULL` **VÀ** `tc."htxCommissionRate" > 0`. Lọc theo `tcId` không thôi
+là **chưa đủ** — nhánh `raw <= 0 → DEFAULT` khiến ~25 HTX để mức `0.0000` vẫn lọt.
+
+Cảnh báo đỏ dưới ô nhập phải chạy **cả hai chiều**: `r < R` là VIGO chịu thiệt; `r > R` là
+**tài xế** chịu thiệt (`CHECK` cho phép tới 1.0).
 
 **Nguồn số — KHÔNG quét jsonb.** `earningsBreakdown` không có ai đọc, chỉ tồn tại ở chuyến
 `COMPLETED` **sau** deploy, `multi_stop_order` **không có** cột đó, và
@@ -573,12 +624,26 @@ nặng không index.
 ## 9. Tương thích ngược (CLAUDE.md mục 4)
 
 - 5 cột DB **thêm mới, NULL-able**; `earningsBreakdown` chỉ **thêm** trường.
-- **Chặn rò rỉ trường ra response** — thêm cột vào entity `Booking` là thêm field vào **mọi**
-  response trả nguyên booking: `buildOfferPayload` dùng `...booking`
-  (`dispatch.processor.ts:158-160`), `booking.service.ts:851` `return { ...booking, shareLink }`,
-  `attachDriverEarningsList`. Payload `new_booking_request` sẽ mang `driverCommissionRate`.
-  Ngoài chuyện tương thích, đây là **rò rỉ vùng dữ liệu riêng** (§3.3) ra app tài xế và mọi
-  client. → **phải loại 2 field ở tầng serialize.**
+- **Gỡ 2 cột tỉ lệ khỏi response khách hàng** — thêm cột vào entity `Booking` là thêm field
+  vào mọi response trả nguyên booking (`dispatch.processor.ts:158-160` `...booking`,
+  `booking.service.ts:854` `{ ...booking, shareLink }`, `attachDriverEarningsList`).
+
+  **Mức độ: vệ sinh dữ liệu, KHÔNG phải rò rỉ giữa các bên.** Đã kiểm từng điểm — snapshot
+  chỉ ghi lúc NHẬN chuyến, nên:
+
+  | Điểm | Ai nhận | Giá trị |
+  |---|---|---|
+  | `buildOfferPayload` | nhiều tài xế | chuyến **chưa có tài** → luôn `NULL` |
+  | `:854 { ...booking, shareLink }` | khách (đây là `createBooking`) | chuyến vừa tạo → luôn `NULL` |
+  | `attachDriverEarnings*`, chi tiết chuyến | chính tài xế đó, hoặc admin | mức của **chính mình** |
+
+  Không có đường nào để tài A đọc mức của tài B, hay khách đọc mức của tài. Gán tay ở điểm
+  trả về cho khách là đủ.
+
+  ⛔ **KHÔNG dùng `@Column({ select: false })`** cho 2 cột này. Nó đổi một vấn đề không tồn
+  tại lấy một lỗi tiền im lặng: `complete()` đọc `lockedBooking` để dựng `earningsBreakdown`
+  — cột không được select thì `undefined`, `ratesForBooking` rơi về config, và **số chốt sổ
+  ghi sai mức, không lỗi, không log**. Đúng loại lỗi mà cả thiết kế này đang đi diệt.
 - **Đã kiểm chứng, không ghi suông**: grep `disallowUnrecognizedKeys` trong
   `vigo-driver/lib` và `vigo/lib` → **0 kết quả**. Thêm field mới an toàn.
 - **Không thêm loại giao dịch mới** — `TransactionType` trong app tài xế **ném lỗi** khi
@@ -617,7 +682,15 @@ Ca mới:
     `driver-team.sql.integration.spec.ts`), khoá lỗi `numeric`→string ở §3.1.
 13. Gán lại tài giữa tài 20% và tài 0%: tài cũ hoàn đúng số đã trừ, tài mới trừ theo mức
     của mình, snapshot ghi đè theo tài mới.
-14. Guard: thiếu `settings.pricing` → 403; thiếu `driver-team` → 403; có cả hai → 200.
+14. Guard (Q5 = **chỉ super admin**): tài khoản non-super **dù có đủ mọi quyền chức năng**
+    → 403; super admin → 200. *(Ca cũ viết theo phương án "cả 2 quyền" đã bị bỏ.)*
+18. **`r > R`** — `CHECK` cho phép 0..1 nên super admin đặt `0.5` là hợp lệ. Khi đó
+    `forgoneCommission` **âm** và tài xế bị thu **nhiều hơn** mức chuẩn. Kiểm: mọi trường
+    vẫn nhất quán, và UI cảnh báo **cả hai chiều** (§8) — chiều này gây thiệt cho tài xế.
+19. **Thẻ "Lỗ tiền mặt"** chỉ cộng chuyến có HTX **thật** (§8) — chuyến của tài độc lập
+    không được vào thẻ.
+20. **Tạo thành viên thẳng ở trạng thái "Trong team"** → có ghi `0.0000` và có **2 dòng
+    nhật ký** (đổi trạng thái + đặt mức). Khoá lỗi `patchMember` ở §7.4.
 15. Dispatch: payload mời chuyến cho tài có mức riêng hiện đúng số của tài đó.
 16. FE: `hasNewSplit` với `0/0` vẫn vào nhánh mới; `platformFee` âm không in hai dấu trừ.
 17. `htx-recon-shared.test.ts`: ca `vigoCommission` âm, kiểm `customerTotal == grossRevenue`.
@@ -678,6 +751,13 @@ còn cách nào biết thay đổi này có an toàn hay không.
 
    → Bắt buộc `SET LOCAL lock_timeout = '5s'` (theo tiền lệ
    `1793000200000-AddLeakageTraceNotifiedAt.ts:32`), chạy ngoài giờ cao điểm, retry được.
+
+   → **Gộp 2 cột cùng bảng vào MỘT câu `ALTER`** (`ADD COLUMN a, ADD COLUMN b`) để lấy
+   `ACCESS EXCLUSIVE` một lần thay vì hai.
+
+   → Hệ quả nếu hết giờ khoá: migration fail → **app từ chối boot khi còn migration pending**
+   → phải chạy lại migration TRƯỚC khi đẩy image. Đây là lý do chọn khung giờ thấp điểm,
+   không phải để cho đẹp.
 
    `CHECK` constraint trên `driver_team_member` an toàn vì bảng đang 0 dòng — **không copy
    pattern đó sang `booking`**.
