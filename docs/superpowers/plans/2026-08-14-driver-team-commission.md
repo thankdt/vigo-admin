@@ -12,12 +12,13 @@
 
 ## Thư mục làm việc
 
-Hai worktree đã tạo sẵn, **không đổi nhánh tại chỗ** ở repo gốc (session khác đang mở):
+Cả hai repo dùng thư mục chính, nhánh `feat/driver-commission` (worktree tạm đã gỡ sau khi
+session `docs/crm-spec` kết thúc):
 
-- Backend: `/Volumes/exSSD/dev/projects/vigo-backend-driver-commission` — nhánh `feat/driver-commission`
-- Admin: `/Volumes/exSSD/dev/projects/vigo-admin-driver-commission` — nhánh `feat/driver-commission`
+- Backend: `/Volumes/exSSD/dev/projects/vigo-backend`
+- Admin: `/Volumes/exSSD/dev/projects/vigo-admin`
 
-Task 1–11 chạy ở worktree backend. Task 12–15 chạy ở worktree admin.
+Task 1–13 ở backend. Task 14–17 ở admin. Task 18 đụng cả hai.
 
 ## Global Constraints
 
@@ -1172,7 +1173,121 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 11: API sửa mức riêng — chỉ super admin, có nhật ký
+## Task 11: Backend — danh sách thành viên đội, KHÔNG đi qua booking
+
+Màn Đội tài hiện dựng **toàn bộ** từ chuyến đã hoàn thành trong khoảng ngày đang chọn —
+kể cả danh sách người trong team (`driver-team.sql.ts:124-127` là
+`FROM "booking" b JOIN "driver_team_member" m ... AND b."completedAt" BETWEEN $1 AND $2`).
+
+Hệ quả: **tài mới mời vào team mà chưa chạy chuyến nào thì không hiện ở đâu cả**, và tài
+trong team không chạy chuyến nào trong kỳ đang lọc thì biến mất. Không thể đặt % hoa hồng
+cho người mà màn hình không hiện ra → đây là điều kiện tiên quyết của Task 12.
+
+**Files:**
+- Modify: `src/driver-team/driver-team.sql.ts`, `driver-team-stats.service.ts`, `driver-team-admin.controller.ts`, `dto/driver-team.dto.ts`
+- Test: `src/driver-team/driver-team-members.sql.integration.spec.ts` (tạo, theo mẫu `driver-team.sql.integration.spec.ts` — testcontainers, Postgres thật)
+
+**Interfaces:**
+- Produces: `GET /admin/driver-team/members?stage=&q=&ownerId=&from=&to=` → `{ members: TeamMemberRow[] }`
+  ```ts
+  type TeamMemberRow = {
+    driverId: string; fullName: string | null; phone: string | null;
+    stage: DriverTeamStage; commissionRate: number | null;
+    ownerAdminUserId: string | null; ownerName: string | null;
+    assignedRouteIds: number[]; assignedRouteNames: string[];
+    nextFollowUpAt: string | null; stageChangedAt: string | null; createdAt: string;
+    completedTripsInRange: number;   // tham khảo, CÓ THỂ 0
+    lastCompletedAt: string | null;
+  };
+  ```
+
+- [ ] **Step 1: Viết test tích hợp**
+
+```ts
+// src/driver-team/driver-team-members.sql.integration.spec.ts
+it('tài trong team CHƯA có chuyến nào vẫn hiện, completedTripsInRange = 0', async () => {});
+it('khoảng ngày chỉ ảnh hưởng completedTripsInRange, KHÔNG lọc bớt thành viên', async () => {});
+it('lọc stage=JOINED trả đúng người trong team', async () => {});
+it('q khớp tên hoặc số điện thoại', async () => {});
+it('assignedRouteNames giữ tuyến đã xoá mềm dưới dạng "Tuyến đã xoá (#id)"', async () => {});
+it('commissionRate trả về SỐ, không phải chuỗi numeric', async () => {});
+```
+
+- [ ] **Step 2: Chạy — FAIL**
+
+Run: `cd /Volumes/exSSD/dev/projects/vigo-backend && TZ=UTC npx jest src/driver-team/driver-team-members.sql.integration.spec.ts`
+
+- [ ] **Step 3: Viết SQL trong `driver-team.sql.ts`**
+
+```ts
+/**
+ * Danh sách thành viên đội — đi từ `driver_team_member`, KHÔNG từ `booking`.
+ *
+ * Đây là khác biệt cốt lõi so với MEMBER_CTE của màn theo tuyến: ở đó thành viên chỉ
+ * hiện khi có chuyến hoàn thành trong kỳ, nên tài mới mời vào team (chưa chạy chuyến
+ * nào) vô hình. Ở đây khoảng ngày CHỈ dùng để đếm `completedTripsInRange`, không bao
+ * giờ lọc bớt dòng — LEFT JOIN, không phải JOIN.
+ */
+export const MEMBERS_SQL = `
+  SELECT m."driverId", m.stage, m."commissionRate", m."ownerAdminUserId",
+         m."assignedRouteIds", m."nextFollowUpAt", m."stageChangedAt", m."createdAt",
+         u."fullName", u.phone,
+         COALESCE(t."trips", 0)::int AS "completedTripsInRange",
+         t."lastCompletedAt"
+    FROM "driver_team_member" m
+    JOIN "driver" d ON d.id = m."driverId"
+    LEFT JOIN "user" u ON u.id = d."userId"
+    LEFT JOIN (
+      SELECT b."driverId", COUNT(*)::int AS "trips", MAX(b."completedAt") AS "lastCompletedAt"
+        FROM "booking" b
+       WHERE b.status = 'COMPLETED' AND b."driverId" IS NOT NULL
+         AND b."completedAt" >= $1 AND b."completedAt" <= $2
+       GROUP BY b."driverId"
+    ) t ON t."driverId" = m."driverId"
+   WHERE ($3::text IS NULL OR m.stage = $3::driver_team_stage_enum)
+     AND ($4::text IS NULL OR u."fullName" ILIKE $4 OR u.phone ILIKE $4)
+     AND ($5::uuid IS NULL OR m."ownerAdminUserId" = $5)
+   ORDER BY m."stageChangedAt" DESC NULLS LAST, m."createdAt" DESC`;
+```
+
+- [ ] **Step 4: Service + controller**
+
+Trong `driver-team-stats.service.ts` thêm `listMembers(params)`. Nhớ:
+- `Number(row.commissionRate)` tường minh — `query()` thô **không** đi qua transformer.
+- Bơm `ownerName` bằng `withOwnerName()` sẵn có.
+- Đổi `assignedRouteIds` → tên tuyến, tuyến xoá mềm hiện `Tuyến đã xoá (#id)`.
+- Trả `{ members }` — **KHÔNG** trả `{ data, meta }`: `TransformInterceptor` dựng lại mọi
+  object có `data`+`meta` và **vứt bỏ mọi field khác** (đã dính lỗi này 2026-08-10).
+
+Controller: thêm `@Get('members')` **TRƯỚC** route `:driverId`, giữ `@RequireFunction('driver-team')`
+ở class (không cần super admin — đây chỉ là đọc danh sách).
+
+- [ ] **Step 5: Test response shape**
+
+```ts
+it('response KHÔNG có key data/meta (TransformInterceptor sẽ nuốt members)', () => {
+  const out = service.listMembers(params);
+  expect(Object.keys(out)).not.toContain('data');
+  expect(Object.keys(out)).not.toContain('meta');
+});
+```
+
+- [ ] **Step 6: Chạy + kiểm tĩnh + commit**
+
+```bash
+TZ=UTC npx jest src/driver-team && npx tsc --noEmit
+git add -A && git commit -m "feat(driver-team): endpoint danh sách thành viên đội
+
+Đi từ driver_team_member chứ không từ booking: tài mới mời vào team mà chưa
+chạy chuyến nào trước đây không hiện ở đâu cả. Khoảng ngày chỉ dùng để đếm
+số chuyến, không lọc bớt thành viên.
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 12: API sửa mức riêng — chỉ super admin, có nhật ký
 
 **Files:**
 - Modify: `src/driver-team/driver-team-admin.controller.ts`, `driver-team.service.ts`, `dto/driver-team.dto.ts`, `driver-team.enums.ts`
@@ -1251,7 +1366,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 ---
 
-## Task 12: Backend — dọn 9 bản sao đọc tỉ lệ, chạy trọn bộ kiểm
+## Task 13: Backend — dọn 9 bản sao đọc tỉ lệ, chạy trọn bộ kiểm
 
 **Files:**
 - Modify: `src/wallet/wallet.service.ts:236`, `src/drivers/drivers.service.ts:1288`, `src/finance/finance.service.ts:293`, `src/htx/htx.service.ts:206`, `:612`, `src/multi-stop-order/multi-stop-lifecycle.service.ts:64`
@@ -1282,14 +1397,17 @@ git push -u origin feat/driver-commission
 
 ---
 
-## Task 13: Admin — kiểu dữ liệu + hàm gọi API
+## Task 14: Admin — kiểu dữ liệu + hàm gọi API
 
 **Files:**
 - Modify: `/Volumes/exSSD/dev/projects/vigo-admin-driver-commission/src/lib/types.ts`, `src/lib/api.ts`
 - Test: `src/lib/api-driver-commission.test.ts` (tạo)
 
 **Interfaces:**
-- Produces: `updateTeamCommissionRate(driverId: string, rate: number | null): Promise<DriverTeamDetail>`; `getTeamSubsidySummary(range): Promise<{ forgone: number; cashLoss: number }>`
+- Produces:
+  - `updateTeamCommissionRate(driverId: string, rate: number | null): Promise<DriverTeamDetail>`
+  - `getTeamSubsidySummary(range): Promise<{ forgone: number; cashLoss: number }>`
+  - `getTeamMembers(params: { from: string; to: string; stage?: string; q?: string; ownerId?: string }): Promise<{ members: TeamMemberRow[] }>` — đọc `{ members }`, **không** `{ data, meta }`
 
 - [ ] **Step 1: Viết test** (theo mẫu `api-driver-team.test.ts` sẵn có)
 
@@ -1310,7 +1428,70 @@ Thêm `commissionRate?: number | null` vào `TeamMemberState`/`DriverTeamDetail`
 
 ---
 
-## Task 14: Admin — ô nhập % + cảnh báo + hai thẻ tổng
+## Task 15: Admin — tab "Đội tài", danh sách thành viên
+
+Màn Đội tài hiện chỉ có **một** lối vào: cây tuyến, phụ thuộc khoảng ngày. Nó tốt cho việc
+*tìm người mới* (tuyến nào nhiều tài chạy tốt) nhưng không dùng để *quản người đã có* —
+tài chưa chạy chuyến nào trong kỳ thì không hiện.
+
+Thêm **hai tab**, giữ nguyên phần theo tuyến đang có:
+- **Theo tuyến** — như hiện tại, tìm người mới.
+- **Đội tài** — bảng phẳng từ endpoint Task 11, không phụ thuộc khoảng ngày.
+
+**Files:**
+- Create: `src/app/(app)/driver-team/components/team-members-table.tsx`
+- Modify: `src/app/(app)/driver-team/components/driver-team-screen.tsx`, `src/lib/driver-team-export.ts`
+- Test: `src/app/(app)/driver-team/components/team-members-table.test.ts`
+
+**Interfaces:**
+- Consumes: `getTeamMembers(params)` từ Task 14
+- Produces: `<TeamMembersTable rows onOpenDriver />` — bấm dòng gọi `onOpenDriver(driverId)`, mở đúng `DriverTeamDrawer` sẵn có
+
+- [ ] **Step 1: Viết test cho phần logic thuần**
+
+```ts
+it('tài chưa chạy chuyến nào ⇒ cột "Chuyến trong kỳ" hiện 0, KHÔNG ẩn dòng', () => {});
+it('sắp xếp mặc định: người vào team gần nhất lên đầu', () => {});
+it('mức riêng null ⇒ hiện "Mức chung", mức 0 ⇒ hiện "0%" kèm dấu cảnh báo', () => {});
+it('xuất Excel có cột % hoa hồng', () => {});
+```
+
+Ca thứ ba là ca dễ sai nhất: `null` và `0` phải hiện **khác nhau** — `null` là "chưa set,
+ăn chia bình thường", `0` là "miễn hoa hồng". Lẫn hai cái là hiểu sai 200.000đ/chuyến.
+
+- [ ] **Step 2: Chạy — FAIL**
+
+Run: `cd /Volumes/exSSD/dev/projects/vigo-admin && npx vitest run src/app/\(app\)/driver-team`
+
+- [ ] **Step 3: Dựng bảng**
+
+Cột: tài xế (tên + SĐT) · trạng thái · **% hoa hồng** · người phụ trách · tuyến phụ trách ·
+hẹn gọi lại · ngày vào team · chuyến trong kỳ · chuyến gần nhất.
+
+Lọc: trạng thái (mặc định **Trong team**), người phụ trách, tìm tên/SĐT. Bấm dòng mở
+`DriverTeamDrawer`. Nút xuất Excel dùng lại `driver-team-export.ts`.
+
+- [ ] **Step 4: Thêm tab vào `driver-team-screen.tsx`**
+
+Giữ nguyên toàn bộ phần theo tuyến. Bộ lọc khoảng ngày vẫn áp cho cả hai tab, nhưng ở tab
+Đội tài nó **chỉ đổi cột "chuyến trong kỳ"**, không lọc bớt người — ghi rõ câu này lên UI
+để không ai tưởng danh sách bị thiếu.
+
+- [ ] **Step 5: Chạy + kiểm tĩnh**
+
+Run: `npx vitest run && npx tsc --noEmit`
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add -A && git commit -m "feat(driver-team): tab Đội tài — danh sách thành viên không phụ thuộc khoảng ngày
+
+Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
+```
+
+---
+
+## Task 16: Admin — ô nhập % + cảnh báo + hai thẻ tổng
 
 **Files:**
 - Modify: `src/app/(app)/driver-team/components/driver-team-drawer.tsx`, `driver-team-screen.tsx`
@@ -1338,7 +1519,7 @@ it('mức riêng = mức chuẩn ⇒ không cảnh báo', () => {});
 
 ---
 
-## Task 15: Admin — chịu được số âm ở mọi màn tài chính
+## Task 17: Admin — chịu được số âm ở mọi màn tài chính
 
 **Files:**
 - Modify: `src/app/(app)/bookings/components/bookings-table.tsx:183`, `:191`, `~:214`; `src/app/(app)/finance/components/finance-stat-cards.tsx:35`; `src/app/(app)/finance/components/finance-drilldown-chart.tsx:68`; `src/app/(app)/dashboard/page.tsx:149`
@@ -1384,7 +1565,7 @@ git push -u origin feat/driver-commission
 
 ---
 
-## Task 16: Review đối kháng code + triển khai
+## Task 18: Review đối kháng code + triển khai
 
 - [ ] **Step 1: Review đối kháng — LƯỢT DUY NHẤT còn lại**
 
@@ -1426,14 +1607,19 @@ git worktree remove /Volumes/exSSD/dev/projects/vigo-admin-driver-commission
 ## Tự soát kế hoạch
 
 **Phủ spec:** §3 → Task 3; §4 → Task 2; §5A → Task 5–6; §5B/C → Task 7; §5D → Task 10;
-§5E → Task 10; §5F → Task 8; §5G → Task 9; §5G′ → Task 15; §6.1 → Task 12; §6.2 → Task 4;
-§6.3 → Task 1; §7 → Task 11; §8 → Task 14; §9 → Task 3 Step 3; §10 → rải khắp; §13 → Task 16.
+§5E → Task 10; §5F → Task 8; §5G → Task 9; §5G′ → Task 17; §6.1 → Task 13; §6.2 → Task 4;
+§6.3 → Task 1; §7 → Task 12; §8 → Task 16; §9 → Task 3 Step 3; §10 → rải khắp; §13 → Task 18.
+
+**Ngoài spec, phát hiện khi lập kế hoạch:** Task 11 + 15 (danh sách thành viên đội). Spec
+giả định người trong team luôn nhìn thấy được để đặt %; thực tế màn hình dựng từ chuyến đã
+hoàn thành trong kỳ nên tài chưa chạy chuyến nào là vô hình. Không có 2 task này thì Task
+12/16 không dùng được.
 
 **Nhất quán tên:** `effectiveRate` / `standardRate` / `customRateMapByUserIdForDisplayOnly`
 dùng thống nhất Task 4 → 5 → 6 → 10. `driverCommissionRate` / `standardCommissionRate` là
 tên cột DB, tên trường entity, và tên trong `TripEarningsRates` — cùng một chuỗi ở mọi nơi.
 
-**Khoảng trống đã biết:** Task 5, 6, 8, 9, 10, 11, 13, 14, 15 ghi tiêu đề test thay vì thân
+**Khoảng trống đã biết:** Task 5, 6, 8–12, 14–17 ghi tiêu đề test thay vì thân
 test đầy đủ. Người thực hiện phải viết thân test **trước** khi cài đặt (TDD), theo mẫu mock
 của spec liền kề trong cùng thư mục. Task 1–4 có thân test đầy đủ vì đó là phần công thức
 tiền — nơi sai một dấu là sai tiền mà không có gì báo.

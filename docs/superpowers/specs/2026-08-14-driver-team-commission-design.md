@@ -522,6 +522,29 @@ hồng** mới bị siết về super admin.
 - Chuyển stage sang `JOINED` mà **tự động** ghi `0.0000` cũng phải ghi một dòng — nếu
   không sẽ có tài hưởng 0% mà không ai nhớ vì sao.
 
+## 7.3 Điều kiện tiên quyết: phải NHÌN THẤY người trong đội
+
+Phát hiện khi lập kế hoạch (2026-08-14), spec bản 1–2 bỏ sót.
+
+Màn Đội tài dựng **toàn bộ** từ chuyến đã hoàn thành trong khoảng ngày đang chọn — kể cả
+danh sách thành viên (`driver-team.sql.ts:124-127`:
+`FROM "booking" b JOIN "driver_team_member" m ... AND b."completedAt" BETWEEN $1 AND $2`).
+
+⇒ **Tài mới mời vào team mà chưa chạy chuyến nào thì không hiện ở đâu cả.** Không thể đặt
+% hoa hồng cho người màn hình không hiện ra.
+
+Phải bổ sung trước khi làm ô nhập %:
+
+- Endpoint `GET /admin/driver-team/members` — đi từ `driver_team_member`, `LEFT JOIN`
+  booking. Khoảng ngày **chỉ** dùng để đếm `completedTripsInRange`, không lọc bớt dòng.
+  Trả `{ members }` — **không** `{ data, meta }` (`TransformInterceptor` vứt bỏ field khác).
+- Tab **"Đội tài"** bên cạnh tab "Theo tuyến" hiện có. Bảng phẳng, mặc định lọc
+  "Trong team", liệt kê được mọi trạng thái.
+- Quyền: giữ `driver-team` như các endpoint đọc khác. Chỉ **sửa %** mới cần super admin.
+
+`null` và `0` phải hiện **khác nhau** trên bảng: `null` = "Mức chung", `0` = "0%" kèm dấu
+cảnh báo. Lẫn hai cái là hiểu sai 200.000đ/chuyến 1 triệu.
+
 ## 8. Màn admin
 
 Trong ngăn kéo chi tiết tài:
