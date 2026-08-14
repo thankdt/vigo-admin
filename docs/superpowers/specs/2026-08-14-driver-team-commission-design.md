@@ -1,7 +1,7 @@
 # Thiết kế: % hoa hồng riêng cho tài xế trong Đội tài chuyên nghiệp
 
 - Ngày: 2026-08-14
-- Trạng thái: **BẢN 2 — đã qua review đối kháng, CHỜ DUYỆT**
+- Trạng thái: **BẢN 3 — ĐÃ CHỐT ĐỦ, SẴN SÀNG CODE**
 - Repo đụng: `vigo-backend`, `vigo-admin` (KHÔNG đụng app tài xế / app khách)
 - Tiếp nối: [2026-08-10-driver-team-design.md](./2026-08-10-driver-team-design.md)
 - Phân loại rủi ro (CLAUDE.md 0.5.b): **CAO** — tiền/ví, số thuế, đa điểm chạm
@@ -24,8 +24,10 @@ CEO: tài xế đã vào Đội tài chuyên nghiệp cần đặt được **% 
 | Q2 | Áp cho chuyến nào | **Mọi chuyến** của tài đó — cả chuyến thường lẫn Vi-now |
 | Q3 | Hiệu lực | **Chỉ chuyến mới**. Chuyến đã hoàn thành giữ nguyên số đã chốt |
 | Q4 | Phần ăn chia với HTX | **HTX ăn đủ như cũ, VIGO chịu lỗ** |
-| Q5 | Quyền sửa % | Phải có **CẢ** `driver-team` **VÀ** `settings.pricing` |
+| Q5 | Quyền sửa % | **CHỈ super admin** (chốt lại 2026-08-14, thay cho phương án "cả 2 quyền") |
 | Q6 | Tài rời "Trong team" | Mức riêng **mất hiệu lực ngay**. Số % vẫn lưu để mời lại thì khôi phục |
+| Q7 | Chia VAT | **Theo hoa hồng THỰC THU** — kế toán chốt 2026-08-14. Tài 0% ⇒ VIGO kê 0đ, HTX kê hộ toàn bộ |
+| Q8 | Phạt huỷ chuyến với tài 0% | **Chấp nhận không phạt được**, không viết code đặc biệt |
 
 Số thực tế trên PROD (đã truy vấn DB, không lấy từ seed migration):
 
@@ -166,7 +168,18 @@ Reviewer đã kiểm tay 5 ca gồm mọi ca biên (`D > commission`, `finalPric
 
 Dòng tiền **cân** ở cả `r = R` lẫn `r = 0` (reviewer đã kiểm sổ hai chiều).
 
-### 4.4 VAT — SỬA so với bản 1, cần bạn xác nhận
+### 4.4 VAT — ĐÃ CHỐT: chia theo hoa hồng thực thu
+
+> **Kế toán chốt 2026-08-14: phần VAT đó chuyển full cho HTX.** Tức
+> `vigoVatRemit = round(vatAmount × r)` — VIGO chỉ kê VAT trên phần hoa hồng THỰC THU;
+> tài 0% ⇒ VIGO kê 0đ, HTX kê hộ toàn bộ 80.000đ.
+>
+> Quy tắc tổng quát cho mọi mức: VAT chia **theo doanh thu thực của từng bên**. Tài 10% ⇒
+> VIGO kê `80.000 × 10% = 8.000`, HTX kê 72.000.
+>
+> Điều này KHÔNG làm đổi tổng thuế nộp ngân sách, cũng không đổi số tiền tài xế nhận —
+> tài xế vẫn bị giữ đủ `pitAmount + vatAmount` (`booking.service.ts:1618`). Chỉ đổi hai
+> **cột báo cáo** ghi ai đứng tên kê khai phần nào.
 
 Bản 1 viết `vigoVatRemit = vatAmount × R` (giữ theo mức chuẩn). **Sai**, vì:
 
@@ -192,7 +205,10 @@ theo về phía HTX/tài xế.
 
 Vẫn thoả bất biến §4.3 (khi `r = R` thì `× r` ≡ `× R`).
 
-→ **§11.2: cần bạn xác nhận với kế toán.**
+**Hệ quả tốt: bảng đối soát HTX KHÔNG phải sửa gì về VAT.** Vì
+`appFeeVat = platformFeeGross × 8% = 0.08 × (P × r)` và `vigoVatRemit = vatAmount × r = (0.08 × P) × r`
+là **cùng một biểu thức** — hai lăng kính tự khớp với mọi mức `r`. (Bảng đối soát vẫn phải
+sửa các việc khác ở §5G′: số âm, `hasNewSplit`.)
 
 ### 4.5 Ví dụ
 
@@ -478,29 +494,27 @@ Không được vừa gom vừa đổi công thức: nếu số lệch thì khô
 
 ## 7. Quyền & nhật ký
 
-### 7.1 RBAC hiện tại KHÔNG diễn đạt được Q5 — phải mở rộng hạ tầng
+### 7.1 Chỉ super admin — dùng `SuperOnlyGuard` có sẵn
 
-Đã kiểm code thật (`function-access.guard.ts:12-26`):
+Gắn `@UseGuards(SuperOnlyGuard)` ở **mức method** lên đúng endpoint sửa `commissionRate`
+(`super-only.guard.ts` — đã dùng cho các route quản trị RBAC, gắn method-level đúng theo
+thiết kế của nó).
 
-```ts
-const required = this.reflector.getAllAndOverride(REQUIRE_FUNCTION_KEY, [
-  ctx.getHandler(), ctx.getClass(),          // ← method GHI ĐÈ class
-]);
-if (required.some((f) => eff.has(f))) return true;   // ← OR, không phải AND
-```
+Ngữ nghĩa ghép đúng ngay, không cần hạ tầng mới:
+- Non-super → `SuperOnlyGuard` ném `AUTH_003` (403), bất kể có quyền `driver-team` hay không.
+- Super → đi qua `SuperOnlyGuard`, và cũng đi qua `FunctionAccessGuard` ở class vì
+  `isSuperAdmin` được kiểm **trước** (`function-access.guard.ts:21`).
 
-Hai hệ quả:
-- `@RequireFunction('driver-team','settings.pricing')` → **chỉ cần MỘT** trong hai.
-- Đặt `@RequireFunction('settings.pricing')` ở method → **vứt bỏ** metadata `driver-team`
-  của class (`driver-team-admin.controller.ts:41`) → tài khoản chỉ có quyền chỉnh giá
-  vừa sửa được % hoa hồng, **vừa lọt vào vùng dữ liệu riêng của đội tài**.
+> **Ghi lại để người sau không lặp lại:** phương án ban đầu là "cần CẢ `driver-team` VÀ
+> `settings.pricing`". Hạ tầng RBAC hiện tại **không diễn đạt được** yêu cầu đó —
+> `function-access.guard.ts:24` dùng `required.some(...)` (**HOẶC**), và
+> `getAllAndOverride([handler, class])` khiến decorator ở method **xoá** decorator ở class.
+> Làm theo cách hiển nhiên sẽ để tài khoản chỉ có `settings.pricing` vừa sửa được % vừa lọt
+> vào vùng dữ liệu riêng của đội tài. Muốn quay lại phương án 2-quyền thì phải thêm
+> `@RequireAllFunctions` + `every()` trước.
 
-**Phải làm:**
-- Thêm `REQUIRE_ALL_FUNCTIONS_KEY` + `@RequireAllFunctions(...)`, guard dùng `every()`.
-- Hợp nhất metadata class + method (hoặc tách endpoint sang controller riêng để không bị
-  ghi đè).
-- `route-coverage.spec.ts` hiện **chỉ** kiểm "có decorator + có guard", **không** kiểm ngữ
-  nghĩa AND → phải thêm assert riêng cho endpoint này.
+Các endpoint đọc/ghi khác của đội tài giữ nguyên `driver-team` như cũ — chỉ **sửa % hoa
+hồng** mới bị siết về super admin.
 
 ### 7.2 Nhật ký
 
@@ -590,26 +604,23 @@ Kiểm tĩnh: `TZ=UTC npx tsc --noEmit && TZ=UTC npx jest` (backend);
 
 ## 11. CẦN BẠN QUYẾT trước khi code
 
-### 11.1 Tài team 0% sẽ không thể bị phạt huỷ chuyến
+### 11.1 Tài team 0% không bị phạt huỷ chuyến — ĐÃ CHỐT: chấp nhận
 
 Cơ chế phạt = thu lại đúng khoản hoa hồng của chuyến bị huỷ. Không có hoa hồng → hệ thống
-trả lý do `NO_COMMISSION` và chặn phạt. Tài team có thể huỷ chuyến mà không mất gì.
+trả lý do `NO_COMMISSION` và chặn phạt.
 
-1. **Chấp nhận** — đội do CEO trực tiếp chăm, xử lý bằng quan hệ. *(khuyến nghị đợt 1)*
-2. Phạt theo **mức chuẩn** dù được ưu đãi — giữ răn đe, nhưng mâu thuẫn với "0% hoa hồng".
-3. Mức phạt riêng cho tài team — thêm phạm vi, để đợt sau.
+**Chốt 2026-08-14: chấp nhận, không làm gì thêm.** Lý do CEO đưa ra: đây là tài đã được
+chọn vào đội, không lo chuyện huỷ chuyến. Không viết code đặc biệt cho tình huống này —
+hành vi `NO_COMMISSION` sẵn có là đủ.
 
-### 11.2 Xác nhận quy tắc VAT (§4.4)
+### 11.2 Quy tắc VAT — ĐÃ CHỐT (§4.4)
 
-Bản 1 giữ `vigoVatRemit = vatAmount × R`; bản 2 đổi thành `× r`. Lý do kỹ thuật vững (hết
-mâu thuẫn giữa bảng đối soát HTX và dashboard tài chính, và đây là quan hệ **đại số**, không
-phải vá). Nhưng đây là **số thuế**, không phải số hiển thị:
+Kế toán chốt 2026-08-14: **chia theo hoa hồng thực thu**, phần VAT của chuyến tài 0%
+chuyển full cho HTX kê khai. Không còn câu hỏi treo.
 
-- `× r`: VIGO nộp VAT đầu ra **0đ** trên chuyến của tài 0%; toàn bộ VAT cước về phía HTX.
-- `× R`: VIGO nộp 16.000đ VAT trên chuyến 1 triệu **dù không thu đồng hoa hồng nào** — và
-  bảng đối soát ký với HTX sẽ ghi con số khác dashboard.
-
-**Cần kế toán xác nhận.** Tôi khuyến nghị `× r`.
+Căn cứ trình kế toán (bảng doanh thu ngầm định = VAT ÷ 8%): phương án này cho con số kê
+khai **khớp doanh thu thực của cả hai bên** ở mọi mức hoa hồng; phương án giữ tỉ lệ cài đặt
+làm cả hai bên kê lệch 200.000đ trên chuyến 1 triệu.
 
 ## 12. Ngoài phạm vi (đã cân nhắc, cố ý không làm)
 
