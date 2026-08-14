@@ -10,15 +10,23 @@
  */
 import type { getBookings } from '@/lib/api';
 
-export type QueueTab = 'before' | 'after' | 'mine' | 'overdue';
+export type QueueTab = 'before' | 'after' | 'mine' | 'holding' | 'overdue';
 
-export const QUEUE_TAB_ORDER: QueueTab[] = ['before', 'after', 'mine', 'overdue'];
+export const QUEUE_TAB_ORDER: QueueTab[] = ['before', 'after', 'mine', 'holding', 'overdue'];
 
+/**
+ * Nhãn PHẢI có chữ "hoàn thành". "Gọi trước / gọi sau" một mình là mơ hồ — trước/sau CÁI GÌ?
+ * Backend đặt tên hai pha là BEFORE_COMPLETE / AFTER_COMPLETE, tức mốc chia là lúc chuyến
+ * HOÀN THÀNH; và trang /bookings cũ cũng dùng đúng chữ "Gọi trước HT / Gọi sau HT" nên CSKH
+ * đã quen. Bỏ chữ đó đi là bắt người dùng đoán.
+ */
 export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
-  before: 'Cần gọi trước',
-  after: 'Cần gọi sau',
+  before: 'Cần gọi trước hoàn thành',
+  after: 'Cần gọi sau hoàn thành',
   mine: 'Việc của tôi',
-  overdue: 'Quá hạn',
+  holding: 'Đang có người giữ',
+  // Không phải "quá hạn" chung chung: đây là việc gọi SAU hoàn thành bị để lâu.
+  overdue: 'Quá hạn gọi sau',
 };
 
 /**
@@ -33,13 +41,15 @@ export const QUEUE_TAB_LABEL: Record<QueueTab, string> = {
  */
 export const QUEUE_TAB_HINT: Record<QueueTab, string> = {
   before:
-    'Khách SẮP đi, chưa ai gọi xác nhận. Gọi để chắc khách còn đi và đón đúng chỗ — tránh khách huỷ ngang hoặc không ra.',
+    'Chuyến CHƯA hoàn thành, chưa ai gọi xác nhận. Gọi để chắc khách còn đi và đón đúng chỗ — tránh khách huỷ ngang hoặc không ra.',
   after:
-    'Khách ĐÃ đi xong, chưa ai gọi lại. Gọi hỏi chuyến có ổn không, tài xế thế nào.',
+    'Chuyến ĐÃ hoàn thành, chưa ai gọi lại. Gọi hỏi chuyến có ổn không, tài xế thế nào.',
   mine:
-    'Việc bạn đã bấm "Nhận gọi" nhưng chưa ghi kết quả. Người khác không nhìn thấy các việc này — gọi xong nhớ ghi kết quả để việc rời hàng đợi.',
+    'Việc bạn đã bấm "Nhận gọi" nhưng chưa ghi kết quả. Gọi xong nhớ ghi kết quả để việc rời hàng đợi.',
+  holding:
+    'Việc đã có người nhận nhưng chưa ghi kết quả — của MỌI nhân viên, kể cả bạn. Dùng để không bỏ sót khách khi ai đó nhận việc rồi nghỉ hoặc quên.',
   overdue:
-    'Việc gọi sau bị để quá lâu (ngưỡng giờ đặt trong Cài đặt). Đây chỉ là danh sách ưu tiên — cùng chuyến vẫn nằm ở tab "Cần gọi sau".',
+    'Chuyến hoàn thành đã lâu mà vẫn chưa ai gọi lại (ngưỡng giờ đặt trong Cài đặt). Đây chỉ là danh sách ưu tiên — cùng chuyến vẫn nằm ở tab "Cần gọi sau hoàn thành".',
 };
 
 /**
@@ -118,6 +128,10 @@ export function paramsForTab(tab: QueueTab, adminId: string): QueueParams {
       return { callAfter: 'uncalled', status: 'COMPLETED', sortBy: 'completedAt', order: 'ASC' };
     case 'mine':
       return { claimedBy: adminId, sortBy: 'createdAt', order: 'ASC' };
+    case 'holding':
+      // KHÔNG lọc theo người: đây là tầm nhìn quản lý. Chờ lâu nhất lên đầu vì việc giữ
+      // càng lâu càng đáng ngờ là đã bị bỏ quên.
+      return { claimed: true, sortBy: 'createdAt', order: 'ASC' };
     case 'overdue':
       // Ngưỡng giờ CỐ Ý không nằm ở FE — backend đọc từ system_config
       // (CSKH_CALL_AFTER_OVERDUE_HOURS) để ops đổi được mà không cần deploy admin.

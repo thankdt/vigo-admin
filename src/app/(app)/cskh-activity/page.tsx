@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
+  getBookings,
   getCskhActivityFeed,
   getCskhActivitySummary,
   getCskhActivityStaff,
@@ -84,6 +85,7 @@ function StatCard({ title, value, hint }: { title: string; value: React.ReactNod
  * chứ không tra được đúng người. Dán SĐT vào ô tìm kiếm bên đó là cách dùng thật.
  */
 function TargetCell({ row }: { row: CskhCallRow }) {
+
   return (
     <div className="min-w-0">
       <div className="font-medium">
@@ -205,6 +207,25 @@ export default function CskhActivityPage() {
 
   const t = summary?.totals;
 
+
+  /**
+   * Chuyến bị SÓT GỌI TRƯỚC — chuyến đã hoàn thành mà chưa ai gọi xác nhận trước đó.
+   *
+   * Chỉ số này là ĐIỀU KIỆN của một quyết định thiết kế, không phải trang trí: hàng đợi
+   * CSKH cố ý LOẠI những chuyến này khỏi tab "Cần gọi trước hoàn thành" (cơ hội gọi trước
+   * đã qua, giữ lại thì hàng đợi không bao giờ vơi). Spec §6.1 cho phép loại VỚI ĐIỀU KIỆN
+   * đếm được ở đây — thiếu ô này thì chúng biến mất khỏi mọi tầm nhìn.
+   *
+   * Không phụ thuộc bộ lọc ngày của trang: đây là TỒN KHO tại thời điểm hiện tại, không
+   * phải số phát sinh trong kỳ. `limit: 1` vì chỉ cần `total`.
+   */
+  const [missedBefore, setMissedBefore] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    getBookings({ callBefore: 'uncalled', status: 'COMPLETED', limit: 1 })
+      .then((r) => setMissedBefore(r.total))
+      // Hỏng thì để null -> ô hiện '—'. Không chặn cả trang vì một chỉ số phụ.
+      .catch(() => setMissedBefore(null));
+  }, []);
   return (
     <div className="space-y-6">
       <div>
@@ -304,6 +325,11 @@ export default function CskhActivityPage() {
               title="Khách/tài xế đã gọi"
               value={fmt(t.distinctTargets)}
               hint="Đếm theo người, gọi 1 người nhiều lần chỉ tính 1"
+            />
+            <StatCard
+              title="Sót gọi trước hoàn thành"
+              value={missedBefore === null ? '—' : fmt(missedBefore)}
+              hint="Chuyến đã đi xong mà chưa ai gọi xác nhận trước đó. Không vào hàng đợi được nữa — đây là chỗ duy nhất đếm chúng."
             />
           </div>
 

@@ -788,6 +788,9 @@ export async function getBookings(params: {
   // true = chỉ chuyến hoàn thành quá lâu mà chưa gọi sau. Ngưỡng giờ do BE đọc từ
   // system_config (CSKH_CALL_AFTER_OVERDUE_HOURS) — FE cố ý KHÔNG biết con số này.
   overdue?: boolean;
+  // true = việc ĐANG có người giữ (CLAIMED chưa ghi kết quả), của BẤT KỲ ai. Khác
+  // `claimedBy` (chỉ việc của một người). Nguồn của tab "Đang giữ".
+  claimed?: boolean;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -811,6 +814,7 @@ export async function getBookings(params: {
     ...(params.claimedBy && { claimedBy: params.claimedBy }),
     ...(params.excludeStatus && { excludeStatus: params.excludeStatus }),
     ...(params.overdue && { overdue: 'true' }),
+    ...(params.claimed && { claimed: 'true' }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
