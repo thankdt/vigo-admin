@@ -57,7 +57,11 @@ export function UsersTable() {
 
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [searchTerm, setSearchTerm] = React.useState('');
-  const [roleFilter, setRoleFilter] = React.useState<'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER'>('ALL');
+  // Mặc định KHÁCH: trang này nằm trong nhóm "Khách hàng (CRM)" nên phải là danh bạ
+  // khách, không lẫn chủ HTX. Vẫn GIỮ lựa chọn 'ALL'/'TRANSPORT_COMPANY_OWNER' làm
+  // đường tra cứu: chủ HTX chưa gán công ty nào thì không có chỗ nào khác tìm ra họ
+  // (dialog "Gán chủ HTX" là công cụ GHI — nó reset mật khẩu, không phải để tra).
+  const [roleFilter, setRoleFilter] = React.useState<'ALL' | 'USER' | 'TRANSPORT_COMPANY_OWNER'>('USER');
   // Trạng thái xoá: 'active' = user sống (mặc định); 'deleted' = user đã xoá (để khôi phục).
   const [deletedScope, setDeletedScope] = React.useState<'active' | 'deleted'>('active');
 
