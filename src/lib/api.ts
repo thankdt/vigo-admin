@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -779,6 +779,11 @@ export async function getBookings(params: {
   // callBefore='called' + callAfter='uncalled' = "đã gọi trước, CHƯA gọi lại sau hoàn thành".
   callBefore?: CustomerCallFilter;
   callAfter?: CustomerCallFilter;
+  // Cờ "chuyến test": 'exclude' = ẩn chuyến test, 'only' = chỉ chuyến test.
+  // undefined = hiện cả hai (mặc định — admin phải thấy chuyến mình đánh dấu để
+  // sửa nếu gạt nhầm). Caller truyền undefined thay vì 'all' để param không bị
+  // gửi thừa, và để an toàn khi backend chưa deploy.
+  testFilter?: TestTripFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -799,6 +804,7 @@ export async function getBookings(params: {
     ...(params.agentOnly && { agentOnly: 'true' }),
     ...(params.callBefore && { callBefore: params.callBefore }),
     ...(params.callAfter && { callAfter: params.callAfter }),
+    ...(params.testFilter && { testFilter: params.testFilter }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -835,6 +841,29 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
   });
   const result = await response.json();
   return result.data;
+}
+
+/**
+ * Gạt công tắc "chuyến test". Backend loại chuyến khỏi mọi số liệu tổng hợp
+ * (dashboard, tài chính, hoá đơn VAT, đối soát HTX) và ghi vết vào adminNote.
+ *
+ * Trả về payload GỌN `{ id, isTestTrip }` — CỐ Ý không phải cả Booking: response
+ * của backend không kèm quan hệ customer/driver, nên caller phải vá đúng field
+ * `isTestTrip` vào state chứ đừng thay cả object (sẽ làm trắng dialog chi tiết).
+ *
+ * Lưu ý nghiệp vụ: nếu chuyến ĐÃ hoàn thành thì tiền (ví tài xế, hoa hồng) đã
+ * chuyển rồi — cờ này chỉ giấu chuyến khỏi báo cáo, không hoàn tiền. Muốn đảo
+ * ngược thật phải dùng `voidCompletedBooking`.
+ */
+export async function setBookingTestFlag(
+  id: string,
+  isTest: boolean,
+): Promise<{ id: string; isTestTrip: boolean }> {
+  const response = await fetchWithAuth(`/bookings/admin/${id}/test-flag`, {
+    method: 'POST',
+    body: JSON.stringify({ isTest }),
+  });
+  return unwrap<{ id: string; isTestTrip: boolean }>(response);
 }
 
 // CSKH ghi nhận đã gọi check khách cho chuyến (append-only + denormalize trạng thái
