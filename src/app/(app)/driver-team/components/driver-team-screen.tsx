@@ -8,6 +8,7 @@ import {
   getTeamOwners,
   getTeamRouteDrivers,
   getTeamRoutes,
+  getTeamSubsidySummary,
   getTeamSummary,
   patchTeamMember,
 } from '@/lib/api';
@@ -52,6 +53,9 @@ const ALL = '__all__';
  */
 const NOT_CONTACTED = '__not_contacted__';
 const EXPORT_CAP = 1000;
+
+const fmtVnd = (v: number) =>
+  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(v);
 
 export type TeamFilters = {
   stage: string;
@@ -180,6 +184,28 @@ export function DriverTeamScreen() {
   // đổi tick này để báo TeamMembersTable tải lại sau khi lưu ở drawer, nếu không
   // bảng phẳng sẽ hiện stage/mức hoa hồng/người phụ trách CŨ tới khi đổi bộ lọc.
   const [memberRefreshTick, setMemberRefreshTick] = React.useState(0);
+
+  // Hai thẻ "Doanh thu bỏ qua" / "Lỗ tiền mặt (bù HTX)" — TÁCH state riêng khỏi
+  // effect routes+summary ở trên (không cần tải lại toàn bộ tuyến mỗi lần đổi %
+  // hoa hồng), nhưng PHẢI tải lại khi `memberRefreshTick` đổi — nếu không, sau khi
+  // sửa % ở ngăn kéo, hai thẻ vẫn hiện số cũ và người dùng tưởng chưa lưu được.
+  const [subsidy, setSubsidy] = React.useState<{ forgone: number; cashLoss: number } | null>(
+    null,
+  );
+
+  React.useEffect(() => {
+    let cancelled = false;
+    getTeamSubsidySummary(range)
+      .then((s) => {
+        if (!cancelled) setSubsidy(s);
+      })
+      .catch(() => {
+        if (!cancelled) setSubsidy(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [range, memberRefreshTick]);
 
   const handleSaved = React.useCallback(
     (driverId: string, team: DriverTeamDetail['team']) => {
@@ -361,6 +387,30 @@ export function DriverTeamScreen() {
   return (
     <div className="space-y-6">
       <FinanceFilter value={range} onChange={setRange} isLoading={loading} initialPreset="thisYear" />
+
+      {/*
+        HAI thẻ TÁCH BẠCH (spec §8) — cố ý KHÔNG gộp làm một, hai con số lệch nhau
+        trên cùng một chuyến (vd 200.000 vs 50.000): "Doanh thu bỏ qua" là phần VIGO
+        chủ động giảm cho tài (kế toán), "Lỗ tiền mặt" là tiền VIGO thực chi ra bù
+        HTX (dòng tiền thật). Gộp hoặc đặt nhãn mơ hồ là phản tác dụng vì CEO dùng
+        đúng hai số này để quyết định.
+      */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <TeamStatCard
+          title="Doanh thu bỏ qua"
+          value={subsidy ? fmtVnd(subsidy.forgone) : undefined}
+        />
+        <TeamStatCard
+          title="Lỗ tiền mặt (bù HTX)"
+          value={subsidy ? fmtVnd(subsidy.cashLoss) : undefined}
+        />
+      </div>
+      <p className="-mt-3 text-xs text-muted-foreground">
+        &quot;Doanh thu bỏ qua&quot; = phần hoa hồng VIGO chủ động giảm cho tài so với mức chuẩn.
+        &quot;Lỗ tiền mặt (bù HTX)&quot; = tiền mặt VIGO thực sự phải bỏ thêm để trả đủ cho HTX khi
+        mức riêng thấp hơn phần HTX ăn — hai số KHÁC NHAU, đừng gộp. Cả hai chỉ đếm chuyến
+        <strong> đã hoàn thành</strong> trong khoảng ngày đang chọn ở trên.
+      </p>
 
       {/*
         Hai tab dùng CHUNG khoảng ngày ở trên (FinanceFilter nằm ngoài Tabs) — xem
