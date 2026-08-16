@@ -146,7 +146,17 @@ export default function DashboardPage() {
           <SectionTitle>Kinh doanh (theo kỳ đã chọn)</SectionTitle>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Stat icon={<Banknote className="h-5 w-5" />} label="GMV (tổng tiền chuyến)" value={fmtVnd(fin.cashFlow.totalTripIncludingTax)} hint="Tiền khách trả (chuyến hoàn thành)" />
-            <Stat icon={<DollarSign className="h-5 w-5" />} label="Doanh thu VIGO" value={fmtVnd(fin.breakdown.vigoRevenue)} accent="text-green-600 dark:text-green-400" hint="Hoa hồng VIGO giữ" />
+            <Stat
+              icon={<DollarSign className="h-5 w-5" />}
+              label="Doanh thu VIGO"
+              value={fmtVnd(fin.breakdown.vigoRevenue)}
+              // vigoRevenue có thể ÂM: tài hưởng mức riêng thấp thì VIGO vẫn
+              // phải bù đủ phần HTX của họ.
+              accent={fin.breakdown.vigoRevenue < 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}
+              hint={fin.breakdown.vigoRevenue < 0
+                ? 'Hoa hồng VIGO giữ. ÂM: gồm phần VIGO bù cho HTX của tài hưởng mức riêng thấp.'
+                : 'Hoa hồng VIGO giữ'}
+            />
             <Stat icon={<Activity className="h-5 w-5" />} label="Giá TB / chuyến" value={fmtVnd(avgFare)} hint="GMV / chuyến hoàn thành" />
           </div>
 

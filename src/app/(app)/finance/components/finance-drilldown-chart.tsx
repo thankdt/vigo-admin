@@ -65,7 +65,10 @@ export function FinanceDrilldownChart({
               <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={16} />
               <YAxis tick={{ fontSize: 11 }} width={56} tickFormatter={fmtCompact} />
               <Tooltip formatter={(v: number) => [fmtFull(v), label]} />
-              <Bar dataKey="value" fill="#2563eb" radius={[3, 3, 0, 0]} />
+              {/* radius={0} thay vì [3,3,0,0]: metric này (vd vigoRevenue) có thể
+                  ÂM, mà recharts không tự lật bo góc cho cột âm — bo góc cố định
+                  ở "trên" sẽ vẽ ngược (lõm) khi cột đi xuống dưới trục 0. */}
+              <Bar dataKey="value" fill="#2563eb" radius={0} />
             </BarChart>
           </ResponsiveContainer>
         )}
