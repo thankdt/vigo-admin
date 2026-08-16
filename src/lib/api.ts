@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -3258,6 +3258,56 @@ export async function patchTeamMember(
     await fetchWithAuth(`/admin/driver-team/${driverId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
+    }),
+  );
+}
+
+/**
+ * Danh sách thành viên đội (cấp phẳng, đi thẳng từ driver_team_member). Shape trả
+ * về là {members} — cố ý KHÔNG phải {data, meta}: TransformInterceptor của backend
+ * thấy cặp data+meta sẽ dựng lại response và VỨT mọi field khác (xem getTeamRoutes
+ * ở trên, cùng bẫy). unwrap() vẫn đúng ở đây vì body chỉ có {success, data}.
+ */
+export async function getTeamMembers(params: {
+  from: string;
+  to: string;
+  stage?: string;
+  q?: string;
+  ownerId?: string;
+}): Promise<{ members: TeamMemberRow[] }> {
+  const q = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.stage) q.set('stage', params.stage);
+  if (params.q) q.set('q', params.q);
+  if (params.ownerId) q.set('ownerId', params.ownerId);
+  return unwrap<{ members: TeamMemberRow[] }>(
+    await fetchWithAuth(`/admin/driver-team/members?${q}`),
+  );
+}
+
+/** Số liệu ưu đãi (forgone commission + cash loss thực) cho khoảng ngày đang xem. */
+export async function getTeamSubsidySummary(
+  range: { from: string; to: string },
+): Promise<{ forgone: number; cashLoss: number }> {
+  const q = new URLSearchParams({ from: range.from, to: range.to });
+  return unwrap<{ forgone: number; cashLoss: number }>(
+    await fetchWithAuth(`/admin/driver-team/subsidy-summary?${q}`),
+  );
+}
+
+/**
+ * Sửa % hoa hồng riêng của một tài. Chỉ super admin gọi được — non-super nhận 403
+ * (SuperOnlyGuard ở backend). `rate` BẮT BUỘC gửi thật trong body kể cả khi là `0`
+ * hay `null`: `0` là giá trị HỢP LỆ ("miễn hoa hồng"), `null` là "gỡ mức riêng,
+ * dùng mức chung" — hai nghĩa khác nhau, TUYỆT ĐỐI không lọc bằng `||`/truthiness.
+ */
+export async function updateTeamCommissionRate(
+  driverId: string,
+  rate: number | null,
+): Promise<TeamMemberState> {
+  return unwrap<TeamMemberState>(
+    await fetchWithAuth(`/admin/driver-team/${driverId}/commission-rate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ commissionRate: rate }),
     }),
   );
 }
