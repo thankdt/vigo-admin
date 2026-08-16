@@ -277,6 +277,12 @@ export type DriverEarnings = {
   htxCommissionRate?: number;
   htxShareRate?: number;
   vigoShareRate?: number;
+  // % hoa hồng CHUẨN áp dụng chuyến này (trước khi trừ mức riêng của tài, nếu
+  // có) + phần hoa hồng VIGO "nhường" cho tài khi tài có mức riêng thấp hơn
+  // chuẩn (âm nếu mức riêng CAO hơn chuẩn). Optional — chuyến trước tính năng
+  // % hoa hồng riêng theo tài team không có 2 field này.
+  standardCommissionRate?: number;
+  forgoneCommission?: number;
 };
 
 export type Booking = {
@@ -805,6 +811,8 @@ export type TeamMemberState = {
   nextFollowUpAt: string | null;
   note: string | null;
   stageChangedAt: string | null;
+  /** null = chưa set (dùng mức chung); 0 là giá trị HỢP LỆ nghĩa "miễn hoa hồng". */
+  commissionRate?: number | null;
 };
 
 /** Một dòng cấp 1. routeId null = hàng gộp "Không gắn tuyến". */
@@ -887,3 +895,27 @@ export type DriverTeamDetail = {
 };
 
 export type TeamOwner = { id: string; fullName: string | null; phone: string | null };
+
+/**
+ * Dòng danh sách thành viên đội — trả về từ GET /admin/driver-team/members, đi
+ * thẳng từ driver_team_member (KHÔNG từ booking). commissionRate: null = chưa
+ * set (dùng mức chung); 0 là giá trị HỢP LỆ nghĩa "miễn hoa hồng" — khác nhau,
+ * đừng gộp bằng `||`.
+ */
+export type TeamMemberRow = {
+  driverId: string;
+  fullName: string | null;
+  phone: string | null;
+  stage: DriverTeamStage;
+  commissionRate: number | null;
+  ownerAdminUserId: string | null;
+  ownerName: string | null;
+  assignedRouteIds: number[];
+  /** Cùng độ dài + cùng thứ tự với assignedRouteIds. Tuyến xoá mềm → "Tuyến đã xoá (#id)". */
+  assignedRouteNames: string[];
+  nextFollowUpAt: string | null;
+  stageChangedAt: string | null;
+  createdAt: string;
+  completedTripsInRange: number;
+  lastCompletedAt: string | null;
+};

@@ -98,7 +98,13 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
     const totalReceived = Number(
       earnings.driverTotalReceived ?? cashKept + bonus,
     );
-    const hasNewSplit = htxCommission > 0 || vigoCommission > 0;
+    // Kiểm SỰ TỒN TẠI của trường, không kiểm dấu: tài 0% không thuộc HTX có
+    // htxCommission = vigoCommission = 0, và giờ vigoCommission còn có thể ÂM
+    // (Vigo bù cho HTX của tài hưởng mức riêng thấp) — kiểm `> 0` sẽ rơi nhầm
+    // vào nhánh legacy (dành cho chuyến trước migration
+    // 1782000000000-AddBookingEarningsBreakdown) và mất ô "Tổng kiểm tra".
+    const hasNewSplit =
+      earnings.htxCommission !== undefined && earnings.vigoCommission !== undefined;
 
     if (hasNewSplit) {
       // Tổng kiểm tra: TX + HTX + Vigo must reconcile to Khách trả within
@@ -122,7 +128,10 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
             </div>
             <div className="flex justify-between text-red-600">
               <span>− Phí nền tảng</span>
-              <span>-{fmtVnd(platformFee)}</span>
+              {/* platformFee = htxCommission + vigoCommission có thể ÂM (Vigo bù
+                  cho HTX của tài hưởng mức riêng thấp). fmtVnd đã tự in dấu "-"
+                  cho số âm — thêm "-" cứng ở đây sẽ ra "--40.000". */}
+              <span>{platformFee < 0 ? fmtVnd(platformFee) : `-${fmtVnd(platformFee)}`}</span>
             </div>
             {pit > 0 && (
               <div className="flex justify-between text-red-600">

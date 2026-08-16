@@ -77,6 +77,69 @@ describe('expandHtxRow', () => {
   });
 });
 
+describe('expandHtxRow — vigoCommission âm (tài team hưởng mức riêng thấp)', () => {
+  // Ca gốc từ spec §4.5: chuyến 1.000.000đ (trước VAT), VAT 80.000đ, tài
+  // thuộc HTX 5%, hưởng mức riêng 0% (không khuyến mãi):
+  //   trừ ví tài xế = 0, HTX nhận (hoa hồng) = 50.000, VIGO (hoa hồng) = −50.000,
+  //   VAT VIGO nộp = 0, VAT HTX nộp = 80.000, thuế TNCN nộp hộ = 15.000,
+  //   tài xế cầm về = 985.000.
+  // (docs/superpowers/specs/2026-08-14-driver-team-commission-design.md §4.5)
+  //
+  // CỐ Ý không dùng ca test kiểu `customerTotal === grossRevenue`: đó là đồng
+  // nhất thức theo cấu tạo (htxFareBeforeVat + appFeeBeforeVat luôn cộng lại
+  // = priceBeforeVat), luôn xanh bất kể mức hoa hồng — không bảo vệ được gì.
+  // Test dưới đây gắn với SỐ CỤ THỂ từ ví dụ đã chốt trong spec.
+  const ZERO_PERCENT_NO_PROMO: HtxFinancials = {
+    grossRevenue: 1_080_000, // 1.000.000 + VAT 80.000
+    totalVat: 80_000,
+    htxCommission: 50_000, // y hệt mức chung — không phụ thuộc mức riêng của tài
+    htxVatRemit: 80_000, // r = 0 ⇒ VIGO kê 0đ, HTX kê hộ toàn bộ VAT
+    htxTotalReceived: 145_000, // 50.000 + 80.000 + 15.000 (thuế TNCN)
+    vigoCommission: -50_000, // ÂM: platformFee (=0, tài 0% không khuyến mãi) − htxCommission
+    vigoVatRemit: 0,
+    platformFeeGross: 0, // tài 0% ⇒ trừ ví tài xế = 0
+    km: 0, // không khuyến mãi
+  };
+
+  it('driverNet khớp đúng "tài xế cầm về" trong spec; driverNet/driverIncome vẫn đọc được và KHÔNG vượt cước (không khuyến mãi)', () => {
+    const r = expandHtxRow(ZERO_PERCENT_NO_PROMO);
+    expect(r.platformFee).toBe(0); // 16 = htxCommission + vigoCommission = 50.000 − 50.000
+    expect(Number.isFinite(r.driverIncome)).toBe(true);
+    expect(Number.isFinite(r.driverNet)).toBe(true);
+    expect(r.driverIncome).toBe(1_000_000); // 13 = priceBeforeVat − platformFee(0)
+    expect(r.driverNet).toBe(985_000); // == "tài xế cầm về" trong spec §4.5
+    // "không vượt cước": khi platformFee chỉ chạm biên 0 (chưa thực sự âm),
+    // driverIncome/driverNet vẫn nằm trong cước trước VAT, không vượt.
+    expect(r.driverIncome).toBeLessThanOrEqual(r.priceBeforeVat);
+    expect(r.driverNet).toBeLessThanOrEqual(r.priceBeforeVat);
+    // Vẫn cân đối 3 bên (không phải test duy nhất — chỉ là một ràng buộc phụ).
+    expect(r.driverNet + r.htxTotal + r.vigoTotal).toBe(r.customerTotal);
+  });
+
+  it('platformFee thực sự ÂM khi tài 0% CỘNG khuyến mãi ⇒ driverIncome được phép lớn hơn cước, driverNet vẫn đọc được và cân đối', () => {
+    // Cùng chuyến trên nhưng có thêm khuyến mãi nền tảng tài trợ 10.000đ —
+    // theo spec §4.6: platformFee = htxCommission + vigoCommission ÂM khi tài
+    // 0% VÀ có bất kỳ khuyến mãi nào (không còn dừng ở biên 0 như ca trên).
+    const withPromo: HtxFinancials = {
+      ...ZERO_PERCENT_NO_PROMO,
+      vigoCommission: -60_000, // âm SÂU hơn để platformFeeGross(0) − km(10.000) = htxCommission + vigoCommission
+      km: 10_000,
+    };
+    const r = expandHtxRow(withPromo);
+    expect(r.platformFee).toBe(-10_000); // âm thật, không chỉ chạm biên 0
+    expect(Number.isFinite(r.driverIncome)).toBe(true);
+    expect(Number.isFinite(r.driverNet)).toBe(true);
+    // §4.6: "driverIncome có thể lớn hơn cước" — đây là ca đó, KHÔNG phải bug.
+    expect(r.driverIncome).toBe(1_010_000);
+    expect(r.driverIncome).toBeGreaterThan(r.priceBeforeVat);
+    // driverNet vẫn đọc được và vẫn bị chặn bởi tổng tiền của chuyến (không
+    // "nổ" ra một số vô nghĩa lớn hơn cả những gì khách + VIGO bỏ vào).
+    expect(r.driverNet).toBe(995_000);
+    expect(r.driverNet).toBeLessThanOrEqual(r.customerTotal);
+    expect(r.driverNet + r.htxTotal + r.vigoTotal).toBe(r.customerTotal);
+  });
+});
+
 describe('HTX_LEAF_COLS', () => {
   it('lists the 19 leaf columns in spec order with the right groups', () => {
     expect(HTX_LEAF_COLS.map((c) => c.key)).toEqual([
