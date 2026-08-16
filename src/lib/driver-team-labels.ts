@@ -41,6 +41,23 @@ export function formatShare(share: number | null | undefined): string {
   return `${(share * 100).toFixed(1).replace('.', ',')}%`;
 }
 
+/**
+ * % hoa hồng riêng của tài (0..1, xem `TeamMemberRow.commissionRate`).
+ * `null` và `0` PHẢI hiện khác nhau — lẫn hai cái là hiểu sai 200.000đ trên mỗi
+ * chuyến 1 triệu:
+ *  - null  = chưa set mức riêng → tài ăn chia theo MỨC CHUNG, hiện "Mức chung".
+ *  - 0     = mức riêng ĐÃ set = 0 → VIGO không thu đồng nào, hiện "0%" kèm cờ
+ *    `warn: true` để UI gắn dấu cảnh báo, tránh đọc nhầm thành "chưa set".
+ */
+export function commissionRateLabel(
+  rate: number | null | undefined,
+): { text: string; warn: boolean } {
+  if (rate == null) return { text: 'Mức chung', warn: false };
+  const pct = rate * 100;
+  const text = `${Number.isInteger(pct) ? pct : pct.toFixed(1).replace('.', ',')}%`;
+  return { text, warn: rate === 0 };
+}
+
 /** Cảnh báo mạnh nhất trước — ban > tạm khoá > chưa duyệt. */
 export function driverWarning(row: TeamDriverRow): string | null {
   if (row.isBanned) return 'Đang bị khoá';
