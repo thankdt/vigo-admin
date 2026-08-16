@@ -1705,7 +1705,7 @@ it('mức riêng = mức chuẩn ⇒ không cảnh báo', () => {});
 ## Task 18: Admin — chịu được số âm ở mọi màn tài chính
 
 **Files:**
-- Modify: `src/app/(app)/bookings/components/bookings-table.tsx:190`, `:198`, `:222`; `src/app/(app)/finance/components/finance-stat-cards.tsx:35`; `src/app/(app)/finance/components/finance-drilldown-chart.tsx:68`; `src/app/(app)/dashboard/page.tsx:149`
+- Modify: `src/app/(app)/bookings/components/bookings-table.tsx:191`, `:199`, `:223`; `src/app/(app)/finance/components/finance-stat-cards.tsx:35`; `src/app/(app)/finance/components/finance-drilldown-chart.tsx:68`; `src/app/(app)/dashboard/page.tsx:149`
 - Test: `src/app/(app)/htx-reconciliation/htx-recon-shared.test.ts` (bổ sung)
 
 - [ ] **Step 1: Viết test**
@@ -1725,7 +1725,7 @@ it('cột 20 "Phí HTX" = 50.000 đứng cạnh cột 10 "Phí APP trước VAT"
 - [ ] **Step 3: Sửa 4 chỗ**
 
 ```ts
-// bookings-table.tsx:198 — kiểm SỰ TỒN TẠI, không kiểm dấu.
+// bookings-table.tsx:199 — kiểm SỰ TỒN TẠI, không kiểm dấu.
 // Cũ: htxCommission > 0 || vigoCommission > 0
 // Với tài 0% không thuộc HTX thì cả hai = 0 → rơi nhánh legacy dành cho chuyến
 // trước migration 1782000000000, mất luôn ô "Tổng kiểm tra".
@@ -1733,7 +1733,7 @@ const hasNewSplit =
   earnings.htxCommission !== undefined && earnings.vigoCommission !== undefined;
 ```
 
-- `bookings-table.tsx:222`: bỏ dấu `-` cứng khi giá trị đã âm (tránh `--40.000`).
+- `bookings-table.tsx:223`: bỏ dấu `-` cứng khi giá trị đã âm (tránh `--40.000`).
 - `finance-stat-cards.tsx:35` và `dashboard/page.tsx:149`: màu theo dấu, thêm chú thích
   khi âm ("gồm phần VIGO bù cho HTX của tài hưởng ưu đãi").
 - `finance-drilldown-chart.tsx:68`: `radius={0}` — recharts không lật bo góc cho cột âm.

@@ -229,7 +229,7 @@ Chuyến 1.000.000đ (đã trừ VAT), VAT 80.000đ, tài thuộc HTX 5%, không
 Chỉ đúng những đại lượng này, **kể cả đại lượng FE tự cộng ra**:
 
 - `vigoCommission`, `vigoTotalReceived` (backend)
-- `platformFee = htxCommission + vigoCommission` (FE: `bookings-table.tsx:190`,
+- `platformFee = htxCommission + vigoCommission` (FE: `bookings-table.tsx:191`,
   `htx-recon-shared.ts:58`) — âm khi tài 0% **và có bất kỳ khuyến mãi nào**
 - `driverDeductTotal`, và `driverIncome` có thể **lớn hơn cước** (`htx-recon-shared.ts:83`)
 - Thẻ "Doanh thu VIGO" ở dashboard/finance
@@ -302,10 +302,16 @@ theo mô tả. Hiện chưa với tới được vì reassign chặn trạng th�
 
 Thêm vào jsonb: `standardCommissionRate`, `forgoneCommission`.
 
-**Bắt buộc ghi chú vào chính chỗ ghi:** sau thay đổi, `bookingCommissionRate = r` nhưng
-`htxShareRate = clamp01(h / R)`. Ai suy ngược `htxShareRate = htxCommissionRate / bookingCommissionRate`
-(công thức gốc đang được document ở `trip-earnings.util.ts:54`) sẽ nhận `0.05 / 0 = Infinity`.
-→ **mẫu số của `htxShareRate` / `vigoShareRate` là `standardCommissionRate`.**
+**Ngữ nghĩa hai trường tỉ lệ trong snapshot** (chốt khi thực thi Task 2 — Ruling 3):
+
+| Trường | Giá trị | Nghĩa |
+|---|---|---|
+| `bookingCommissionRate` | `R` | mức CHUẨN theo config — mẫu số của `htxShareRate`/`vigoShareRate` |
+| `standardCommissionRate` | `R` | như trên, tên tường minh |
+| `commissionRate` (alias cũ) | `r` | mức tài xế THỰC chịu — app tài xế đọc trường này |
+
+Nhờ giữ `bookingCommissionRate = R`, suy ngược `htxShareRate = htxCommissionRate /
+bookingCommissionRate` vẫn đúng, không còn khả năng ra `Infinity` với tài 0%.
 
 ### C. API trả cho app tài xế / admin
 
@@ -400,8 +406,8 @@ Hiển thị đúng an toàn hơn.
 
 | Điểm | File | Vấn đề |
 |---|---|---|
-| Chi tiết chuyến | `bookings-table.tsx:198` | `hasNewSplit = htxCommission > 0 \|\| vigoCommission > 0` → tài 0% **không HTX** cho `0/0` → rơi nhánh **legacy** (dành cho chuyến trước migration `1782000000000`), mất ô "Tổng kiểm tra". Sửa: kiểm **sự tồn tại của trường**, không kiểm dấu |
-| Chi tiết chuyến | `bookings-table.tsx:190, :222` | in `-{fmtVnd(platformFee)}` → `platformFee` âm ra `--40.000` (hai dấu trừ) |
+| Chi tiết chuyến | `bookings-table.tsx:199` | `hasNewSplit = htxCommission > 0 \|\| vigoCommission > 0` → tài 0% **không HTX** cho `0/0` → rơi nhánh **legacy** (dành cho chuyến trước migration `1782000000000`), mất ô "Tổng kiểm tra". Sửa: kiểm **sự tồn tại của trường**, không kiểm dấu |
+| Chi tiết chuyến | `bookings-table.tsx:191, :223` | in `-{fmtVnd(platformFee)}` → `platformFee` âm ra `--40.000` (hai dấu trừ) |
 | Đối soát HTX | `htx-recon-shared.ts:58-96` | xem §4.4 — dùng `× r` thì tự khớp, **không phải vá FE**. Vẫn cần test cho `vigoCommission` âm |
 | Stats công ty vận tải | `transport-companies-table.tsx:821` | `commissionAmount` cùng nguồn dashboard HTX ⇒ cũng tụt. Đây là màn **admin**, không phải portal |
 | Thẻ "Doanh thu VIGO" | `finance-stat-cards.tsx:35`, `dashboard/page.tsx:149` | gán cứng `green` ⇒ số **âm vẫn xanh lá**. Đổi màu theo dấu + hint khi âm |
