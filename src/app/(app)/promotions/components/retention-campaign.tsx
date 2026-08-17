@@ -78,7 +78,20 @@ const campaignSchema = z
   .refine((v) => v.discountType !== 'PERCENTAGE' || v.discountValue <= 100, {
     message: 'Giảm theo % không được vượt quá 100',
     path: ['discountValue'],
-  });
+  })
+  // KIỂU FIXED THÌ ÉP `maxDiscount = null` — không phải dọn dẹp, đây là chặn một lỗi
+  // TIỀN im lặng.
+  //
+  // Ô `maxDiscount` chỉ render khi kiểu là `%`, nhưng `shouldUnregister` của
+  // react-hook-form mặc định `false` nên giá trị của field ĐÃ UNMOUNT vẫn nằm trong
+  // form values và vẫn được `handleSubmit` gửi đi. Kịch bản: chiến dịch đang là
+  // `PERCENTAGE 10% / trần 20.000đ`, admin đổi sang `FIXED 50.000đ` rồi Lưu →
+  // `maxDiscount = 20000` đi kèm và được ghi. Từ đó mọi mã tặng ra mang trần 20.000đ,
+  // mà `calculateDiscount` ở backend chặn CẢ kiểu FIXED
+  // (`if (promotion.maxDiscount) discount = Math.min(...)`) → khách được giảm
+  // 20.000đ thay vì 50.000đ. Không lỗi, không cảnh báo, và admin nhìn form vẫn thấy
+  // "50.000đ" vì ô trần đang ẩn.
+  .transform((v) => (v.discountType === 'PERCENTAGE' ? v : { ...v, maxDiscount: null }));
 
 export type CampaignFormValues = z.infer<typeof campaignSchema>;
 

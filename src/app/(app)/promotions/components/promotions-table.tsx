@@ -152,7 +152,31 @@ function PromotionForm({
     return () => { alive = false; };
   }, [mode, initial]);
 
+  // Voucher TARGETED KHÔNG được lưu khi chưa gán ai.
+  //
+  // `findAllActive` loại TARGETED khỏi nhánh công khai, và nhánh còn lại đi qua
+  // `user_promotion` — nên một voucher TARGETED không gán ai là voucher KHÔNG AI
+  // NHÌN THẤY, kể cả người được "nhắm tới". Trước đó form vẫn cho lưu và báo "Đã tạo
+  // voucher thành công", tạo ra rác im lặng.
+  //
+  // Kiểm ở đây chứ không trong zod schema: `picked` là React state, không nằm trong
+  // form values nên `.refine` không thấy được nó.
+  const targetedWithoutAssignee =
+    visibility === 'TARGETED' &&
+    picked.length === 0 &&
+    // Ở chế độ SỬA, người đã gán từ trước cũng tính — admin chỉ đang đổi câu chữ.
+    (mode === 'create' || existingAssignees.length === 0);
+
   const onSubmit = async (data: PromotionFormValues) => {
+    if (data.visibility === 'TARGETED' && targetedWithoutAssignee) {
+      toast({
+        variant: 'destructive',
+        title: 'Chưa chọn khách nào',
+        description:
+          'Voucher chỉ định phải gán cho ít nhất một khách, nếu không sẽ không ai nhìn thấy nó.',
+      });
+      return;
+    }
     try {
       const payload = {
         ...data,
@@ -415,7 +439,7 @@ function PromotionForm({
       </div>
       <DialogFooter className="pt-4">
         <Button variant="outline" onClick={onCancel} type="button">Hủy</Button>
-        <Button type="submit" disabled={isSubmitting}>
+        <Button type="submit" disabled={isSubmitting || targetedWithoutAssignee}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isEdit ? 'Lưu thay đổi' : 'Lưu Voucher'}
         </Button>

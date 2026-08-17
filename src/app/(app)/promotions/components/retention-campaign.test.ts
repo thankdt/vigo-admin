@@ -74,6 +74,30 @@ describe('voucherCampaignSchema', () => {
     expect(paths).toContain('discountValue');
   });
 
+  // Ca hỏng TIỀN, im lặng. Ô `maxDiscount` chỉ render khi `%`, nhưng RHF giữ giá trị
+  // của field ĐÃ UNMOUNT (`shouldUnregister` mặc định false) nên nó vẫn được gửi đi.
+  // Chiến dịch `% / trần 20k` đổi sang `FIXED 50k` mà trần cũ còn treo → mọi mã tặng
+  // ra bị `calculateDiscount` (chặn CẢ kiểu FIXED) bóp xuống 20k. Không lỗi, không
+  // cảnh báo, và admin nhìn form vẫn thấy 50k vì ô trần đang ẩn.
+  it('đổi sang FIXED thì trần cũ bị ÉP về null, không treo lại', () => {
+    const res = voucherCampaignSchema.safeParse({
+      ...valid,
+      discountType: 'FIXED',
+      discountValue: 50000,
+      maxDiscount: 20000, // giá trị còn sót từ lúc còn là PERCENTAGE
+    });
+    expect(res.success).toBe(true);
+    if (res.success) expect(res.data.maxDiscount).toBeNull();
+  });
+
+  it('kiểu % thì GIỮ nguyên trần', () => {
+    const res = voucherCampaignSchema.safeParse({
+      ...valid, discountType: 'PERCENTAGE', discountValue: 10, maxDiscount: 20000,
+    });
+    expect(res.success).toBe(true);
+    if (res.success) expect(res.data.maxDiscount).toBe(20000);
+  });
+
   it('kiểu FIXED không đòi giảm tối đa', () => {
     expect(voucherCampaignSchema.safeParse({ ...valid, maxDiscount: null }).success).toBe(true);
   });
