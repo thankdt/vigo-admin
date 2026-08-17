@@ -168,7 +168,7 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 | `driver_trip_rating` | Có `customerId` + `stars` + `comment` + `tags`, index `(customerId, driverId)` → **nguồn CSAT theo khách đã tồn tại**, chưa ai khai thác |
 | `referral` | Ai giới thiệu ai |
 | `booking` | Chuyến đi |
-| `notification` | Có `userId` từng bản ghi → push đo được. **Không có index nào ngoài FK** (xem §5.3) |
+| `notification` | Có `userId` từng bản ghi → push đo được. **KHÔNG có index nào ngoài PRIMARY KEY trên `id`** — ràng buộc FK `userId → user(id)` có tồn tại nhưng Postgres **không** tự tạo index cho cột FK, nên lọc theo khách là seq-scan trên **510.397 dòng / 144 MB** (đo DB DEV 2026-08-17). Xem §5.3 |
 | `scheduled_notifications` | Đã có lịch gửi + `targetType`/`targetData` + `previewAudience` |
 
 ### 5.2 Lớp 2 — Bảng CRM mới
@@ -176,7 +176,7 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 | Bảng | Vai trò | Thiết kế |
 |---|---|---|
 | `crm_customer_metrics` | Chỉ số tính sẵn theo khách | **UNIQUE(`userId`)** — chốt chặn ở DB, không kiểm trong service (theo tiền lệ `uq_dtr_booking`); cron chạy chồng do retry/deploy trùng sẽ không đẻ dòng trùng. Trường: `firstTripAt`, `lastTripAt`, `tripsCompleted`, `tripsCancelled`, `gmv`, `avgStarsGiven`, `favoriteRouteId`, `rScore`/`fScore`/`mScore`, `segment`, `churnRisk` |
-| `crm_customer_tag` | Nhãn thủ công | Danh mục nhãn để trong `system_config` — ops sửa không cần deploy, đúng mẫu `CSKH_CALL_REASONS` |
+| `crm_customer_tag` | Nhãn thủ công | Danh mục nhãn để trong `system_config`, đúng mẫu `CSKH_CALL_REASONS` — sửa được **không cần deploy**, nhưng ĐỪNG hiểu là "ops tự sửa": xem cảnh báo quyền ngay dưới bảng |
 | `crm_customer_note` | Ghi chú về **khách** | Khác `booking_customer_call_event.note` (ghi chú về **chuyến**) |
 | `crm_ticket` | Khiếu nại khách | `code` sinh bằng **sequence ở DB** (không đếm trong service — tránh race); `customerUserId`, `bookingId?`, `driverId?`, `category`, `severity`, `status`, `assigneeAdminId`, `slaDueAt`, `resolution`, `compensationAmount`, `source` |
 | `crm_ticket_event` | Lịch sử xử lý ticket | Append-only, đúng mẫu `BookingCustomerCallEvent` |
@@ -187,6 +187,23 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 | `crm_account_member` | Nhân viên công ty đang đặt xe | Nối `crm_account` ↔ `user` thật |
 | `crm_account_event` | Lịch sử pipeline B2B | Append-only |
 
+> **CẢNH BÁO QUYỀN — "để trong `system_config`" ≠ "ops sửa được"** (đo DB DEV 2026-08-17).
+> `POST /master-data/system-config` tự gate theo key: `functionForConfigKey(key)` =
+> `settings.${settingsGroupForKey(key)}` (`vigo-backend/src/rbac/rbac.constants.ts:41-57`).
+> Key `CRM_*` / `CSKH_*` **không khớp tiền tố nào** ⇒ rơi vào nhóm `misc` ⇒ đòi function
+> **`settings.misc`**, mà `settings.misc` hiện chỉ có **đúng một role: `full-access-legacy`**
+> (super-admin). Ba role CRM thật — `cskh`, `quan-ly-chung`, `van-hanh` — **không sửa được**.
+>
+> Vậy nên khi làm GĐ2 phải chọn một trong ba, đừng mặc định:
+> 1. **Giữ nguyên** — danh mục tag do super-admin sửa hộ. Rẻ nhất, nhưng đúng như hiện trạng
+>    `CSKH_CALL_REASONS`, tức là mỗi lần thêm tag phải nhờ người khác.
+> 2. **Đặt tên key theo tiền tố đã có nhóm** để rơi vào function ops đã cầm — mẹo lách, dễ gây
+>    hiểu nhầm về sau, không khuyến nghị.
+> 3. **Thêm nhánh `crm` vào `settingsGroupForKey`** (`key.startsWith('CRM_') → 'crm'`) + function
+>    `settings.crm` + migration cấp quyền. Sạch nhất, nhưng **phải sửa song song FE
+>    `system-config-groups.ts`** — comment ngay trên hàm đó ghi rõ "Sửa gì PHẢI đổi cùng FE
+>    (thứ tự + rule giống hệt)" — và nhớ bài học §13.1: thêm function = phải kèm migration cấp.
+
 ### 5.3 Lớp 3 — Timeline hợp nhất: cố tình KHÔNG tạo bảng
 
 `GET /crm/customers/:id/timeline` gộp `UNION ALL` từ lớp 1 + lớp 2, sắp theo thời gian, phân trang bằng cursor.
@@ -195,8 +212,35 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 
 **Ba điều kiện bắt buộc, nếu không thì UNION sai hoặc chậm:**
 
-1. **Chuẩn hoá kiểu thời gian.** Các nguồn không đồng nhất: `booking_customer_call_event.createdAt` là `timestamptz`, còn `driver_trip_rating.createdAt` và `notification.createdAt` là `timestamp` (không tz). `UNION ALL` trộn hai kiểu sẽ để Postgres ép theo **TimeZone của session** → sắp xếp và cursor lệch giờ giữa app node và job. Mọi nhánh phải ép tường minh về `timestamptz` (`"createdAt" AT TIME ZONE 'UTC'` cho nguồn không-tz). Mâu thuẫn với §8.2 nếu bỏ qua.
-2. **Thêm index** `notification(userId, "createdAt" DESC)` — bảng này hiện **không có index nào ngoài FK**, nên lọc theo khách là seq-scan; đúng khách VIP nhiều thông báo là đúng chỗ chậm nhất. Một migration index thuần, không đổi shape.
+1. **Chuẩn hoá kiểu thời gian — ĐỌC KỸ, ĐÂY LÀ CHỖ DỄ SAI NHẤT.**
+   `UNION ALL` trộn `timestamp` với `timestamptz` sẽ để Postgres ép theo **TimeZone của
+   session** → sắp xếp và cursor lệch giờ giữa app node và job. Mâu thuẫn với §8.2 nếu bỏ qua.
+
+   Bảng kiểu **thật**, đo `information_schema.columns` trên DB DEV 2026-08-17 (bản spec trước
+   chỉ liệt kê 3 trong 6 nguồn, thiếu đúng nguồn gây bẫy):
+
+   | Nguồn timeline | Cột | Kiểu thật |
+   |---|---|---|
+   | `booking_customer_call_event` | `createdAt` | **timestamptz** |
+   | `driver_customer_call_event` | `createdAt` | **timestamptz** |
+   | `driver_trip_rating` | `createdAt`, `tripCompletedAt` | timestamp (không tz) |
+   | `notification` | `createdAt` | timestamp (không tz) |
+   | `booking` | `createdAt`, `completedAt` | timestamp (không tz) |
+   | `referral` | `createdAt` | timestamp (không tz) |
+
+   **Bẫy: `AT TIME ZONE 'UTC'` không phải hàm "ép về timestamptz" — nó ĐỔI CHIỀU theo kiểu đầu vào.**
+   - `timestamp AT TIME ZONE 'UTC'` → **timestamptz** (đọc giờ trần như giờ UTC). Đúng ý ta, dùng cho **4 nguồn không-tz**.
+   - `timestamptz AT TIME ZONE 'UTC'` → **timestamp**, tức **RỚT tz**. Áp nhầm lên 2 nguồn tz-aware
+     thì giá trị bị hạ cấp, rồi khi UNION lại được diễn giải theo TimeZone session (`+07`) → **lệch 7 giờ, im lặng, không lỗi nào bắn ra**.
+
+   ⇒ Quy tắc: **chỉ bọc `AT TIME ZONE 'UTC'` cho 4 nguồn không-tz**; hai nguồn `*_call_event`
+   để nguyên. Viết test khẳng định kiểu trả về của mọi nhánh UNION là `timestamptz` trước khi tin.
+2. **Thêm index** `notification(userId, "createdAt" DESC)`. Hiện trạng còn tệ hơn bản spec cũ mô
+   tả: bảng **chỉ có PRIMARY KEY trên `id`**, FK `userId` **không** kèm index (Postgres không tự
+   tạo index cho cột FK — chỉ tự tạo cho PK/UNIQUE). Nên lọc theo khách là seq-scan trên
+   **510.397 dòng / 144 MB**; đúng khách VIP nhiều thông báo là đúng chỗ chậm nhất. Một migration
+   index thuần, không đổi shape — nhưng bảng cỡ này thì **phải `CREATE INDEX CONCURRENTLY`** kèm
+   chốt `indisvalid` theo §13.5.
 3. **Join `booking`** cho nhánh cuộc gọi, vì `booking_customer_call_event` không mang `customerId`.
 
 Ngược lại, `crm_customer_metrics` **phải** là bảng thật: lọc phân khúc mà quét `booking` mỗi lần thì không chạy nổi, và RFM cần mốc cắt cố định để hai lần chạy so sánh được với nhau.
@@ -467,8 +511,13 @@ vào bundle và việc tách file gần như vô nghĩa (200 → 182 kB sau khi 
 
 CIC bị huỷ giữa chừng để lại index **INVALID nhưng vẫn tồn tại**; lần chạy lại `IF NOT EXISTS`
 no-op im lặng rồi đánh dấu migration đã áp dụng ⇒ index vô dụng vĩnh viễn, không log nào báo.
-Phải kiểm `pg_index.indisvalid` và DROP trước khi tạo lại (khuôn:
-`1792800200000-ReplaceBookingTeamIndexWithPartial.ts`).
+Phải kiểm `pg_index.indisvalid` và DROP trước khi tạo lại.
+
+**Khuôn để copy:** `vigo-backend/src/database/migrations/1793200050000-AddBookingCallPhaseOwnerIndexes.ts`.
+(Bản spec trước trỏ vào `1792800200000-ReplaceBookingTeamIndexWithPartial.ts` — file đó **không
+tồn tại**; kiểm 2026-08-17 thì trong 222 migration chỉ đúng một file dùng `indisvalid`, là file
+nêu trên. Cũng lưu ý migration thật nằm ở `src/database/migrations/`, **không** phải
+`src/migrations/` — thư mục sau chỉ có 2 file và dễ nhầm.)
 
 ### 13.6 Nợ kỹ thuật chặn GĐ3
 
@@ -480,6 +529,25 @@ tài xế nhận bcrypt hash của khách và ngược lại.
 Không chặn GĐ0/GĐ1 (cả 3 role được cấp `crm-queue` đều đã có `bookings` từ trước nên mức lộ
 không đổi), nhưng **phải vá trước GĐ3**: GĐ3 đẻ ra `crm-compensate` — quyền tiền thật, và là
 lúc thật sự cần tạo role hẹp.
+
+> **TRẠNG THÁI 2026-08-17 — ĐÃ VIẾT XONG NHƯNG HOÃN VÔ THỜI HẠN (user chốt).**
+> Bản vá đã hoàn chỉnh và xanh (`npx tsc --noEmit` sạch, 217 suite / 3116 test pass): thêm
+> `select: false` cho `User.password`, thêm `findByPhoneWithPassword()` cho đúng đường đăng
+> nhập, các đường còn lại (kể cả `register`) giữ nguyên `findByPhone`. Đã merge vào `dev` rồi
+> **revert** (`git revert -m 1`) theo yêu cầu user: *"nếu phải động đến pass của user thì bỏ
+> bước đấy đi, cho vào quên lãng, sau này tính sau"*.
+>
+> - Code còn nguyên trên nhánh **`fix/user-password-select-false`** (vigo-backend) — lấy lại
+>   được, không phải viết lại.
+> - `dev` hiện **không** còn dấu vết `findByPhoneWithPassword`; đã đo lại trên DB DEV sau khi
+>   revert: 22.392 tài khoản, `password IS NULL` = **0** ở cả 4 role ⇒ revert không hỏng dữ liệu.
+> - Cảnh báo revert đã gây thiệt hại phụ: nó xoá kèm
+>   `docs/superpowers/plans/2026-08-17-reactivate-deleted-account-on-register.md` (file người
+>   khác, lọt vào commit vì `git add -A`) — đã khôi phục.
+>
+> **Hệ quả cho GĐ3:** điều kiện "vá trước GĐ3" ở trên **chưa được thoả**. Trước khi mở GĐ3
+> phải quay lại hỏi user: hoặc bật lại nhánh trên, hoặc chấp nhận rủi ro có văn bản. Đừng
+> lặng lẽ làm GĐ3 như thể mục này đã xong.
 
 ### 13.7 Những chỗ spec tự mâu thuẫn, cần chốt trước khi làm tiếp
 
