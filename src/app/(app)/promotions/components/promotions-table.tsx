@@ -4,8 +4,16 @@ import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { format } from 'date-fns';
-import { getVouchers, createVoucher, updateVoucher } from '@/lib/api';
-import type { Promotion } from '@/lib/types';
+import {
+  getVouchers,
+  createVoucher,
+  updateVoucher,
+  assignPromotionToUsers,
+  getPromotionAssignees,
+  revokePromotionFromUser,
+} from '@/lib/api';
+import type { Promotion, PromotionVisibility } from '@/lib/types';
+import { AssigneePicker, type PickedCustomer } from './assignee-picker';
 import { useToast } from '@/hooks/use-toast';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -62,9 +70,18 @@ const promotionSchema = z.object({
     z.coerce.number().positive({ message: "Giảm tối đa phải là số dương" }).optional(),
   ),
   isActive: z.boolean().default(true),
+  // Ai THẤY voucher trong danh sách app khách. Mặc định PUBLIC = đúng hành vi có
+  // trước khi có cột này, nên voucher cũ và thói quen tạo voucher cũ không đổi gì.
+  visibility: z.enum(['PUBLIC', 'TARGETED', 'CODE_ONLY']).default('PUBLIC'),
 });
 
 type PromotionFormValues = z.infer<typeof promotionSchema>;
+
+const VISIBILITY_HINT: Record<PromotionVisibility, string> = {
+  PUBLIC: 'Mọi khách đều thấy voucher này trong danh sách.',
+  TARGETED: 'Chỉ những khách được gán bên dưới mới thấy và dùng được.',
+  CODE_ONLY: 'Không hiện trong danh sách. Khách phải tự gõ đúng mã ở ô "Nhập mã" mới sở hữu.',
+};
 
 // Backend stores discountType as 'FIXED' | 'PERCENTAGE'; the form uses
 // 'FIXED_AMOUNT' to match the Promotion type union. Normalize the loaded value
@@ -102,9 +119,11 @@ function PromotionForm({
         pointCost: initial.pointCost ?? 0,
         imageUrl: initial.imageUrl ?? '',
         isActive: initial.isActive,
+        // Voucher tạo trước đợt này không có cột — coi như PUBLIC, đúng hành vi cũ.
+        visibility: initial.visibility ?? 'PUBLIC',
       };
     }
-    return { discountType: 'FIXED_AMOUNT', pointCost: 0, isActive: true };
+    return { discountType: 'FIXED_AMOUNT', pointCost: 0, isActive: true, visibility: 'PUBLIC' as const };
   }, [mode, initial]);
 
   const { register, handleSubmit, control, watch, formState: { errors, isSubmitting }, reset } = useForm<PromotionFormValues>({
@@ -113,6 +132,25 @@ function PromotionForm({
   });
 
   const discountType = watch('discountType');
+  const visibility = watch('visibility');
+
+  // Khách được gán khi visibility = TARGETED. Ở chế độ SỬA, danh sách này là những
+  // người sẽ được THÊM — người đã gán từ trước nạp riêng ở `existingAssignees` bên
+  // dưới để admin nhìn thấy và gỡ được.
+  const [picked, setPicked] = React.useState<PickedCustomer[]>([]);
+  const [existingAssignees, setExistingAssignees] = React.useState<
+    { userId: string; fullName: string | null; phone: string | null }[]
+  >([]);
+
+  React.useEffect(() => {
+    if (mode !== 'edit' || !initial) return;
+    if ((initial.visibility ?? 'PUBLIC') === 'PUBLIC') return;
+    let alive = true;
+    getPromotionAssignees(initial.id)
+      .then((rows) => { if (alive) setExistingAssignees(rows); })
+      .catch(() => undefined); // danh sách gán hỏng không được chặn việc sửa voucher
+    return () => { alive = false; };
+  }, [mode, initial]);
 
   const onSubmit = async (data: PromotionFormValues) => {
     try {
@@ -125,13 +163,24 @@ function PromotionForm({
         // Don't allow code changes — already issued to customers.
         const { code: _code, ...patch } = payload;
         await updateVoucher(initial.id, patch);
+        if (picked.length) {
+          await assignPromotionToUsers(initial.id, picked.map((p) => p.id));
+        }
         toast({ title: 'Đã cập nhật', description: `Voucher "${initial.code}" được cập nhật.` });
       } else {
-        await createVoucher(payload);
+        // Gửi kèm `assignUserIds` để backend tạo voucher + gán khách trong CÙNG một
+        // lần gọi. Nếu tách thành hai request, request thứ hai hỏng sẽ để lại một
+        // voucher TARGETED không ai thấy — đúng loại rác im lặng khó lần ra nhất.
+        await createVoucher({
+          ...payload,
+          ...(data.visibility === 'TARGETED' && picked.length
+            ? { assignUserIds: picked.map((p) => p.id) }
+            : {}),
+        });
         toast({ title: "Thành công", description: "Đã tạo voucher thành công." });
       }
       onSaveSuccess();
-      if (mode === 'create') reset();
+      if (mode === 'create') { reset(); setPicked([]); }
     } catch (err: any) {
       // Khối JSON.parse cũ ở đây là CODE CHẾT: nó đọc `errorObj.details` và
       // `errorObj.message` ở tầng gốc, trong khi envelope backend lồng chúng dưới
@@ -295,6 +344,64 @@ function PromotionForm({
             />
           </div>
         </div>
+        <div className="space-y-2 sm:col-span-2">
+          <Label>Ai thấy voucher này</Label>
+          <Controller
+            name="visibility"
+            control={control}
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} value={field.value ?? 'PUBLIC'}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="PUBLIC">Công khai</SelectItem>
+                  <SelectItem value="TARGETED">Chỉ định khách</SelectItem>
+                  <SelectItem value="CODE_ONLY">Ẩn — gõ mã mới dùng được</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          />
+          <p className="text-xs text-muted-foreground">
+            {VISIBILITY_HINT[(visibility ?? 'PUBLIC') as PromotionVisibility]}
+          </p>
+        </div>
+
+        {visibility === 'TARGETED' && (
+          <div className="space-y-3 sm:col-span-2">
+            <AssigneePicker value={picked} onChange={setPicked} disabled={isSubmitting} />
+
+            {isEdit && existingAssignees.length > 0 && (
+              <div className="space-y-2 rounded-md border p-3">
+                <Label className="text-xs text-muted-foreground">Đã gán trước đó</Label>
+                <div className="flex flex-wrap gap-2">
+                  {existingAssignees.map((a) => (
+                    <Badge key={a.userId} variant="outline" className="gap-1 py-1">
+                      {a.fullName ? `${a.fullName} · ${a.phone ?? ''}` : (a.phone ?? a.userId)}
+                      <button
+                        type="button"
+                        aria-label={`Gỡ ${a.phone ?? a.userId}`}
+                        className="ml-1 rounded-sm hover:text-destructive"
+                        onClick={async () => {
+                          if (!initial) return;
+                          try {
+                            await revokePromotionFromUser(initial.id, a.userId);
+                            setExistingAssignees((prev) =>
+                              prev.filter((x) => x.userId !== a.userId),
+                            );
+                          } catch (err) {
+                            toastApiError(err, 'Không gỡ được khách khỏi voucher');
+                          }
+                        }}
+                      >
+                        ×
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="pointCost">Chi phí điểm thưởng</Label>
           <Input id="pointCost" type="number" {...register('pointCost')} />
@@ -410,6 +517,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                 <TableHead>Mã</TableHead>
                 <TableHead>Mô tả</TableHead>
                 <TableHead>Giảm giá</TableHead>
+                <TableHead>Hiển thị</TableHead>
                 <TableHead>Hiệu lực</TableHead>
                 <TableHead>Đã dùng</TableHead>
                 <TableHead>Trạng thái</TableHead>
@@ -418,13 +526,13 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
             <TableBody>
               {isLoading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                   </TableCell>
                 </TableRow>
               ) : promotions.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="h-24 text-center">
+                  <TableCell colSpan={7} className="h-24 text-center">
                     Không tìm thấy voucher.
                   </TableCell>
                 </TableRow>
@@ -445,6 +553,16 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                       {promo.discountType === 'PERCENTAGE'
                         ? `${promo.discountValue}%`
                         : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(promo.discountValue)}
+                    </TableCell>
+                    <TableCell>
+                      {/* Voucher tạo trước đợt này không có cột → PUBLIC, đúng hành vi cũ. */}
+                      {(promo.visibility ?? 'PUBLIC') === 'PUBLIC' ? (
+                        <span className="text-muted-foreground">Công khai</span>
+                      ) : (
+                        <Badge variant="secondary">
+                          {promo.visibility === 'TARGETED' ? 'Chỉ định' : 'Gõ mã'}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell>
                       {format(new Date(promo.startDate), 'dd/MM/yy')} - {format(new Date(promo.endDate), 'dd/MM/yy')}

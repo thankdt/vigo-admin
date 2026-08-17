@@ -520,7 +520,68 @@ export type Promotion = {
   // Max times this voucher can be redeemed in a single calendar day across
   // all users (resets at midnight Asia/Ho_Chi_Minh). 0/omitted = unlimited.
   dailyUsageLimit?: number;
+  // Ai THẤY voucher trong danh sách app khách. Bỏ trống → backend mặc định PUBLIC
+  // (đúng hành vi trước khi có cột này).
+  visibility?: PromotionVisibility;
+  // Chiến dịch tự tặng đã sinh ra mã. null = voucher admin tạo tay.
+  campaignId?: string | null;
 }
+
+/**
+ * PUBLIC   — ai cũng thấy trong danh sách (hành vi có từ trước).
+ * TARGETED — chỉ khách được gán mới thấy; voucher tự tặng dùng mức này.
+ * CODE_ONLY— không hiện trong danh sách, phải gõ đúng mã mới sở hữu.
+ */
+export type PromotionVisibility = 'PUBLIC' | 'TARGETED' | 'CODE_ONLY';
+
+/** Khách đang được gán một voucher TARGETED. */
+export type PromotionAssignee = {
+  userId: string;
+  fullName: string | null;
+  phone: string | null;
+  assignedAt: string;
+};
+
+/**
+ * Cấu hình chiến dịch "tặng mã giữ khách" — trang `Khuyến mãi › Tặng mã giữ khách`.
+ * Ba cột tiền là `numeric` ở Postgres nên API trả về dạng CHUỖI; type khai
+ * `number | string` để chỗ đọc buộc phải đi qua `Number()`.
+ */
+export type VoucherCampaign = {
+  id: string;
+  isActive: boolean;
+  discountType: 'FIXED' | 'PERCENTAGE';
+  discountValue: number | string;
+  maxDiscount: number | string | null;
+  minOrderValue: number | string;
+  /** N — số ngày sống của mã kể từ lúc tặng. */
+  validDays: number;
+  /** Loại dịch vụ được tặng. Mảng rỗng = mọi loại. */
+  serviceTypes: string[];
+  maxGrantsPerUser: number | null;
+  maxGrantsPerUserWindowDays: number | null;
+  maxTotalGrants: number | null;
+  /** Khoảng cách tối thiểu giữa hai lần BÁO cho cùng một khách. */
+  minNotifyGapMinutes: number;
+  popupGrantedTitle: string;
+  popupGrantedBody: string;
+  popupReminderTitle: string;
+  popupReminderBody: string;
+  pushTitle: string;
+  pushBody: string;
+};
+
+export type VoucherCampaignStats = {
+  /** Số MÃ đã sinh (đếm mã, không đếm lượt báo). */
+  granted: number;
+  /** Số mã đã tiêu trên một chuyến chưa huỷ. */
+  used: number;
+  usedRate: number;
+  /** Tổng tiền giảm THỰC TẾ, không phải discountValue × số mã. */
+  totalDiscount: number;
+  /** Mã chưa tiêu và còn hạn. */
+  active: number;
+};
 
 /** App nào nhận thông báo. Lọc theo BẢN CÀI APP, không theo vai trò tài khoản. */
 export type NotificationAppTarget = 'CUSTOMER' | 'DRIVER';
