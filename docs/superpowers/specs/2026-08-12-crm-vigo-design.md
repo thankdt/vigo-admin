@@ -1,9 +1,11 @@
 # Spec — CRM ViGo: tách nhóm khách hàng khỏi Chuyến đi & giải pháp tổng thể
 
 - **Ngày**: 2026-08-12
-- **Trạng thái**: **GĐ0 + GĐ1 đã code xong và ở nhánh `dev`** (2026-08-14), chờ test DEV.
-  GĐ2–7 chưa bắt đầu. Đã qua 1 lượt review đối kháng lúc thiết kế, và thêm 2 lượt soát
-  độc lập sau khi code (xem §13).
+- **Trạng thái** (cập nhật 2026-08-17): **GĐ0 + GĐ1 + GĐ2 đã code xong và ở nhánh `dev`**,
+  chờ test DEV (chưa ai bấm thử). **GĐ3–7 chưa bắt đầu.** Chưa có gì lên `main`/prod — đúng
+  luật nhịp deploy "ở lại nhánh feature tới khi xong hết spec CRM".
+  Review: 1 lượt đối kháng lúc thiết kế + 2 lượt soát sau khi code GĐ0/GĐ1 (§13), và 1 lượt
+  reviewer độc lập cho **backend** GĐ2 (§15). Phần **admin GĐ2 chưa qua reviewer độc lập**.
 - **Phạm vi**: `vigo-admin` (chính) + `vigo-backend` (bảng & endpoint mới, **kể cả ở giai đoạn 1**)
 - **Không thuộc phạm vi**: app khách (`vigo`), app tài xế (`vigo-driver`) — CRM là công cụ nội bộ
 
@@ -744,3 +746,104 @@ nó cần đúng hai thứ, cả hai đều rẻ hơn nhiều so với GĐ4–G�
 GĐ4/GĐ5, hoặc ít nhất tách phần "báo cáo lý do không quay lại" ra làm sớm. Xây bộ máy phân
 khúc + chiến dịch cho 18 khách là đầu tư sai chỗ. **Cần user quyết** — spec đang xếp GĐ7 là
 "tuỳ chọn", số liệu này nói ngược lại.
+
+---
+
+## 15. Kết quả GĐ2 + bài học — viết SAU khi ship, đọc TRƯỚC khi làm GĐ3
+
+Ngày 2026-08-17. Cả hai đợt đã ở `dev`: backend `feat/crm-queue-api`, admin `feat/crm-queue`
+(tiếp nhánh GĐ1, KHÔNG cắt nhánh mới — theo luật nhịp deploy).
+
+### 15.0 Đã ship những gì
+
+| Lớp | Nội dung |
+|---|---|
+| DB | `crm_customer_tag`, `crm_customer_note`, `crm_customer_access_log` (**bảng audit đầu tiên của hệ thống**) + index `notification(userId, createdAt DESC)` |
+| API | 11 route dưới `admin/crm`, gate `@RequireFunction('users')` cấp class — **không đẻ function RBAC mới**, nên không cần migration cấp quyền và không phải bump số đếm cứng |
+| Admin | 3 khối trên `/users/detail` (Nguồn khách · Nhãn & ghi chú · Timeline) + `PhoneCell` ở `/users` và `/users/detail` |
+
+Kiểm: backend 226 suite / 3222 test + 12/12 integration; admin 82 file test / 861 test,
+`next build` xanh.
+
+### 15.1 Mock KHÔNG thay được SQL thật — lỗi mà chỉ integration spec bắt được
+
+Trong `UNION ALL`, tên cột của cả CTE lấy từ nhánh **ĐẦU TIÊN**. Ban đầu chỉ nhánh `CALL`
+khai alias, nên mọi truy vấn có `sources` **không chứa** `CALL` (vd bật "hiện cả thông báo")
+đều chết với `column ev.kind does not exist`.
+
+Test mock `dataSource.query` **xanh 100%** với lỗi này — nó chỉ kiểm chuỗi SQL trông ra sao,
+không kiểm Postgres có chấp nhận hay không.
+
+⇒ Quy tắc: nhánh UNION nào cũng phải khai alias tường minh, và **mọi câu SQL thô mới phải có
+một ca chạy trên Postgres thật** trước khi tin. Áp cho GĐ4 (cron RFM) và GĐ7 (cohort) — hai
+giai đoạn viết SQL tổng hợp nặng nhất.
+
+### 15.2 Merge: file MỚI TÁCH RA không báo xung đột, nên thay đổi của `main` biến mất ÂM THẦM
+
+GĐ1 bóc `BookingDetail` + `PriceBreakdownCard` từ `bookings-table.tsx` sang
+`booking-detail.tsx`. Khi merge `main` vào nhánh feature:
+
+- `bookings-table.tsx` báo xung đột (đúng, ai cũng thấy);
+- `booking-detail.tsx` **KHÔNG** báo xung đột — vì `main` không có file đó.
+
+Nghĩa là nếu chỉ "giải xung đột" ở file cũ bằng cách xoá khối đã bóc, thì **toàn bộ thay đổi
+của `main` trong `BookingDetail` bốc hơi mà git không nói một lời**.
+
+⇒ Sau MỖI lần tách file, khi merge nhánh khác vào phải hỏi: *nhánh kia có sửa gì trong phần
+đã bị bóc không?* Cách kiểm rẻ: `git log --oneline --no-merges origin/main..<nhánh> -- <nhóm file>`.
+
+### 15.3 `dev` từng hỏng vì đúng cái bẫy 15.2 — và `next build` không chặn
+
+Lần giải xung đột trước đó trên `dev` đã đánh rơi `import { Switch }` khỏi
+`bookings-table.tsx`, trong khi file vẫn dùng `<Switch>` ở dialog **"Gán tài xế"**. Hệ quả:
+mở dialog đó trên DEV là `ReferenceError`. `npx next build` **không** bắt vì
+`next.config.ts` bật `ignoreBuildErrors` — chỉ `npx tsc --noEmit` mới thấy.
+
+⇒ Nhắc lại gotcha đã có trong CLAUDE.md, giờ đã có nạn nhân thật: **`tsc` mới là cổng, không
+phải `build`.** Chạy `tsc` sau MỌI lần giải xung đột, kể cả xung đột "trông như chỉ là comment".
+
+### 15.4 Che dữ liệu: che nửa vời = không che
+
+Reviewer độc lập tìm ra: sau khi che SĐT ở `users/admin/list` + `users/admin/:id`,
+`GET admin/crm/customers/:id/source` vẫn trả **SĐT đầy đủ của người giới thiệu, không ghi
+vết** — ngay trên chính trang vừa làm chặt. Mà **ai chia sẻ mã giới thiệu cũng thành
+referrer**, nên duyệt danh bạ rồi mở lần lượt từng hồ sơ là gom được SĐT của cả tập
+khách-là-referrer, hoàn toàn không để lại dấu vết.
+
+⇒ Khi che một trường, phải liệt kê **MỌI endpoint trả trường đó** rồi mới tuyên bố đã che.
+Ghi rõ giới hạn: GĐ2 chỉ bảo vệ nhánh quyền `users`; `referral.service.ts` vẫn trả đầy đủ cả
+`referrer.phone` lẫn `referee.phone` cho người có function `referrals` — bề mặt CÓ SẴN, ngoài
+phạm vi GĐ2, **đừng hiểu nhầm là "SĐT khách đã được bảo vệ"**.
+
+### 15.5 Test giờ VN trên máy giờ VN là XANH GIẢ
+
+`/users/detail` có 3 mốc dùng `date-fns.format()` (giờ TRÌNH DUYỆT). Viết 7 ca test giờ thì
+**6 ca xanh** — vì máy dev đang ở `Asia/Ho_Chi_Minh` nên giờ trình duyệt tình cờ trùng giờ VN.
+Chỉ ca ghim `process.env.TZ = 'America/New_York'` mới đỏ.
+
+⇒ Mọi ca test giờ VN phải có **ít nhất một ca ghim múi giờ không-VN không-UTC**, nếu không
+nó chỉ đang kiểm chính cấu hình máy chạy test.
+
+### 15.6 Nợ chặn GĐ3 — CHƯA thoả
+
+`User.password` thiếu `select: false` (§13.6) vẫn **hoãn vô thời hạn** theo quyết định user.
+`getAdminUserDetail` vẫn `return { ...user }`, tức vẫn trả bcrypt hash cho admin.
+
+GĐ2 cố ý **không** đụng (đúng phạm vi), và reviewer xác nhận code mới **không mở rộng** bề
+mặt rò. Nhưng điều kiện "vá trước GĐ3" của §13.6 vì thế **chưa được thoả**, trong khi GĐ3
+chính là lúc đẻ `crm-compensate` — quyền tiền thật, và là lúc thật sự cần tạo role hẹp.
+
+**Trước khi mở GĐ3 phải hỏi user** một trong ba: (a) bật lại nhánh
+`fix/user-password-select-false`; (b) làm bản vá hẹp hơn — chỉ loại field `password` khỏi
+riêng response `getAdminUserDetail`, không đụng luồng auth; (c) chấp nhận rủi ro có văn bản.
+
+### 15.7 Việc CÒN LẠI của GĐ2
+
+- **Test DEV** (chưa ai bấm): xem `docs/superpowers/runbooks/2026-08-17-crm-gd0-gd1-test-dev.md`
+  cho GĐ0/GĐ1, và mục "Hoàn tất GĐ2" trong plan GĐ2 cho GĐ2.
+  Hai mục dễ quên nhất: `indisvalid = t` của `IDX_notification_user_created` (§13.5), và ca
+  đối chiếu giờ giữa một nguồn `timestamptz` với một nguồn `timestamp` xảy ra cùng buổi.
+- **Admin GĐ2 chưa qua reviewer độc lập** (cap 1 lượt/thay đổi đã dùng cho backend).
+- Finding GÓP Ý cố ý bỏ qua: UNIQUE `(userId, tag)` phân biệt HOA/thường. Sửa đúng cách cần
+  unique trên `lower("tag")`, mà TypeORM không diễn đạt được index biểu thức nên `@Index` ở
+  entity sẽ lệch DB và `migration:generate` đẻ diff giả. FE dùng dropdown nên đường vào hẹp.
