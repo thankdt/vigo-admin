@@ -37,7 +37,7 @@ import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, Clock, 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons } from '@/lib/api';
+import { getBookings, getBookingDetails, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag } from '@/lib/api';
 import { VoidBookingDialog } from './void-booking-dialog';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import type { Route } from '@/lib/types';
@@ -50,7 +50,8 @@ import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
-import type { Booking, BookingStatus, Driver, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent } from '@/lib/types';
+import type { Booking, BookingStatus, Driver, CustomerCallStatus, CustomerCallFilter, TestTripFilter, BookingCustomerCallEvent } from '@/lib/types';
+import { Switch } from '@/components/ui/switch';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -91,6 +92,14 @@ type FetchArgs = {
   callAfter?: CustomerCallFilter | 'ALL';
   dateFrom: string;
   dateTo: string;
+  /**
+   * Lọc "Chuyến test". 'ALL' = hiện cả hai (mặc định).
+   *
+   * CỐ Ý bắt buộc (không `?:`): tsc phải đỏ ở CẢ HAI call-site nếu quên truyền —
+   * đúng lý do type này tồn tại (xem chú thích trên). Mảng deps của useEffect thì
+   * không có gì chặn được, vì next.config bật ignoreDuringBuilds.
+   */
+  testFilter: TestTripFilter | 'ALL';
 };
 
 const tabKeys: TabKey[] = [
@@ -448,17 +457,34 @@ function CustomerCallBadge({ status }: { status?: CustomerCallStatus | null }) {
   return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Chưa gọi</Badge>;
 }
 
+/**
+ * Nhãn "chuyến test" — dùng CHUNG cho hàng danh sách và header dialog chi tiết, để
+ * hai nơi không trôi dạt về màu/chữ. Tím đặc: cố ý không trùng bảng màu trạng thái
+ * (xanh/đỏ/hổ phách) vì đây không phải một trạng thái chuyến, mà là "đừng tin số này".
+ */
+export function TestTripBadge() {
+  return (
+    <Badge className="bg-purple-600 text-white hover:bg-purple-600 text-[10px] px-1.5 py-0">
+      🧪 TEST
+    </Badge>
+  );
+}
+
 // Exported (only the keyword — no behavior/signature change) so it can be
 // unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
 // test mock getBookingDetails() and assert on badges (e.g.
 // switchedToWholeCar) without mounting the whole BookingsTable.
-export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: {
+export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded, onTestFlagChanged }: {
   bookingId: string,
   onClose: () => void,
   // Bỏ trống (vd trong unit test) → không hiện nút "Nhân bản chuyến".
   onDuplicate?: (booking: Booking) => void,
   // CSKH gọi check khách xong → báo danh sách refetch cột "Gọi check".
   onCallRecorded?: () => void,
+  // Gạt công tắc "chuyến test" xong → báo danh sách refetch để badge TEST ngoài
+  // bảng cập nhật. Dialog có state RIÊNG, không có callback này thì hàng ngoài
+  // đứng im tới khi F5. Optional vì test render component này trần.
+  onTestFlagChanged?: () => void,
 }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -472,6 +498,12 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
   // Lý do chuẩn hoá — danh mục lấy từ backend (system_config) nên ops sửa được, không hardcode.
   const [callReason, setCallReason] = React.useState<string>('');
   const [reasonOptions, setReasonOptions] = React.useState<string[]>([]);
+
+  // Công tắc "chuyến test". `testSaving` khoá Switch trong lúc gọi API — bấm nhanh
+  // 2 lần sẽ sinh 2 request đua nhau và kết quả cuối cùng là ngẫu nhiên.
+  const [testSaving, setTestSaving] = React.useState(false);
+  // Giá trị đang chờ xác nhận (chỉ dùng cho chuyến ĐÃ hoàn thành). null = không hỏi gì.
+  const [pendingTestFlag, setPendingTestFlag] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
     // Phần phụ: lỗi thì dropdown rỗng, không chặn thao tác ghi nhận cuộc gọi.
@@ -531,6 +563,48 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
     }
   };
 
+  /**
+   * Gạt công tắc "chuyến test".
+   *
+   * Cập nhật lạc quan rồi revert về GIÁ TRỊ CŨ ĐÃ CHỤP nếu lỗi — không revert bằng
+   * `!next` như mẫu ở promotions-table: ở đó `isActive` là boolean bắt buộc, còn
+   * `isTestTrip` optional nên `!undefined === true` sẽ bịa ra một chuyến test.
+   */
+  const applyTestFlag = async (next: boolean) => {
+    if (!booking) return;
+    const previous = booking.isTestTrip;
+    setTestSaving(true);
+    setBooking((prev) => (prev ? { ...prev, isTestTrip: next } : prev));
+    try {
+      await setBookingTestFlag(booking.id, next);
+      toast({
+        title: next ? 'Đã đánh dấu chuyến test' : 'Đã bỏ đánh dấu chuyến test',
+        description: next
+          ? 'Chuyến này không còn được tính vào dashboard, tài chính, hoá đơn và đối soát HTX.'
+          : 'Chuyến này được tính lại vào các báo cáo như bình thường.',
+      });
+      onTestFlagChanged?.();
+    } catch (err: any) {
+      // Vá lại đúng object đang có, KHÔNG nuốt response của API: response chỉ có
+      // { id, isTestTrip }, gán cả object vào state sẽ làm trắng dialog.
+      setBooking((prev) => (prev ? { ...prev, isTestTrip: previous } : prev));
+      toast({ variant: 'destructive', title: 'Không lưu được', description: err.message });
+    } finally {
+      setTestSaving(false);
+    }
+  };
+
+  // Chuyến ĐÃ hoàn thành: tiền (ví tài xế, hoa hồng) đã chuyển rồi, cờ chỉ giấu chuyến
+  // khỏi báo cáo. Hỏi xác nhận trước để admin biết mình đang làm gì.
+  const handleTestToggle = (next: boolean) => {
+    if (!booking) return;
+    if (booking.status === 'COMPLETED') {
+      setPendingTestFlag(next);
+      return;
+    }
+    void applyTestFlag(next);
+  };
+
   const serviceTypeMap: Record<string, string> = {
     RIDE: '🚗 Bao xe',
     DELIVERY: '📦 Giao hàng',
@@ -574,6 +648,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   scans a single line for the booking's at-a-glance summary. */}
               <div className="flex items-center gap-2 flex-wrap">
                 {getStatusBadge(booking)}
+                {booking.isTestTrip && <TestTripBadge />}
                 {booking.serviceType && (
                   <Badge variant="outline" className="text-xs">
                     {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
@@ -601,6 +676,79 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   </Badge>
                 )}
               </div>
+
+              {/* Công tắc "chuyến test" — đặt ngay dưới hàng badge vì nó quyết định
+                  liệu MỌI con số của chuyến này có được tính hay không. */}
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="test-trip-toggle" className="text-sm font-medium">
+                    Chuyến test
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Bật để loại chuyến khỏi dashboard, tài chính, hoá đơn và đối soát HTX.
+                    {booking.status !== 'COMPLETED' &&
+                      ' Bật trước khi chuyến hoàn thành thì chuyến cũng không chuyển tiền thật.'}
+                  </p>
+                </div>
+                <Switch
+                  id="test-trip-toggle"
+                  // `=== true` chứ không phải giá trị trần: field optional, `checked={undefined}`
+                  // biến Radix Switch thành uncontrolled và công tắc kẹt cứng.
+                  checked={booking.isTestTrip === true}
+                  disabled={testSaving}
+                  onCheckedChange={handleTestToggle}
+                  aria-label="Đánh dấu chuyến test"
+                />
+              </div>
+
+              {/* Xác nhận cho chuyến ĐÃ HOÀN THÀNH — nói thẳng cái cờ này KHÔNG làm được,
+                  để admin không tưởng nó hoàn tiền.
+                  CỐ Ý là khối inline chứ không phải AlertDialog: lồng modal Radix trong
+                  Dialog này tạo hai focus scope tranh nhau — đúng họ lỗi mà file đã phải vá
+                  3 lần bằng workaround pointer-events (L551, L1904, L1949), và ở jsdom nó
+                  lặp focus vô hạn tới mức treo test. Một khối cảnh báo tại chỗ vừa tránh
+                  hẳn vấn đề, vừa đỡ phải bắt người dùng đọc modal-trên-modal. */}
+              {pendingTestFlag !== null && (
+                <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 space-y-2">
+                  <p className="text-sm font-medium">
+                    {pendingTestFlag
+                      ? 'Đánh dấu chuyến ĐÃ HOÀN THÀNH là chuyến test?'
+                      : 'Bỏ đánh dấu chuyến test?'}
+                  </p>
+                  {pendingTestFlag ? (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>
+                        Chuyến sẽ biến khỏi <b>hoá đơn VAT</b> và <b>đối soát HTX</b> — kể cả khi
+                        hoá đơn/hợp đồng đã xuất cho khách.
+                      </p>
+                      <p>
+                        Tiền <b>KHÔNG được hoàn</b>: ví tài xế và hoa hồng đã cộng vẫn giữ nguyên.
+                        Muốn đảo ngược tiền thật, dùng &ldquo;Huỷ chuyến (đã hoàn thành)&rdquo;
+                        thay vì công tắc này.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Chuyến sẽ được tính lại vào mọi báo cáo, gồm cả hoá đơn và đối soát HTX.
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPendingTestFlag(null)}>
+                      Huỷ
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const next = pendingTestFlag;
+                        setPendingTestFlag(null);
+                        if (next !== null) void applyTestFlag(next);
+                      }}
+                    >
+                      Xác nhận
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Vi-now — customer used the 6-digit code flow instead of
                   going through dispatch. The journey differs enough that
@@ -1185,6 +1333,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // Lọc khoảng ngày ĐẶT chuyến (createdAt). VN-local YYYY-MM-DD; '' = không lọc.
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
+  // Lọc "Chuyến test". Mặc định 'ALL' = hiện cả hai: đây là màn admin gạt cờ, giấu
+  // chuyến test đi thì chuyến gạt nhầm biến mất khỏi tầm mắt, không sửa lại được.
+  const [testFilter, setTestFilter] = React.useState<TestTripFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
@@ -1210,7 +1361,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall, callBefore, callAfter, dateFrom, dateTo }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, customerCall, callBefore, callAfter, dateFrom, dateTo, testFilter }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -1257,6 +1408,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       if (dateFrom) params.from = dateFrom;
       if (dateTo) params.to = dateTo;
       if (agentOnly) params.agentOnly = true;
+      // Chuyến test: 'ALL' bỏ hẳn param (mặc định backend cũng là hiện cả hai) — gửi
+      // thừa không sai, nhưng bỏ hẳn thì màn này vẫn chạy cả khi backend chưa deploy.
+      if (testFilter !== 'ALL') params.testFilter = testFilter;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -1277,16 +1431,18 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, callBefore: callBeforeFilter, callAfter: callAfterFilter, dateFrom, dateTo });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, callBeforeFilter, callAfterFilter, dateFrom, dateTo]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, callBefore: callBeforeFilter, callAfter: callAfterFilter, dateFrom, dateTo, testFilter });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, callBeforeFilter, callAfterFilter, dateFrom, dateTo, testFilter]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, callBefore: callBeforeFilter, callAfter: callAfterFilter, dateFrom, dateTo });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, customerCall: customerCallFilter, callBefore: callBeforeFilter, callAfter: callAfterFilter, dateFrom, dateTo, testFilter });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, callBeforeFilter, callAfterFilter, dateFrom, dateTo]);
+    // ⚠️ testFilter PHẢI có trong deps: đây (không phải reload) mới là chỗ fetch khi
+    // bộ lọc đổi. Thiếu nó thì chọn filter xong bảng đứng im, không lỗi, không log.
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, customerCallFilter, callBeforeFilter, callAfterFilter, dateFrom, dateTo, testFilter]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -1498,6 +1654,21 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               </SelectContent>
             </Select>
           ))}
+          <Select
+            value={testFilter}
+            // setCurrentPage(1) như MỌI filter khác: đang ở trang 5 mà chọn "Chỉ chuyến
+            // test" thì trang 5 của tập nhỏ hơn là rỗng, và nút phân trang khoá luôn.
+            onValueChange={(val) => { setTestFilter(val as TestTripFilter | 'ALL'); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Chuyến test" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Chuyến test: tất cả</SelectItem>
+              <SelectItem value="exclude">Chỉ chuyến thật</SelectItem>
+              <SelectItem value="only">Chỉ chuyến test</SelectItem>
+            </SelectContent>
+          </Select>
           <div className='relative'>
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1694,6 +1865,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         {/* Trip-shape badges live under the status badge so the
                             "Trạng thái" column tells admin at a glance how
                             this trip was placed, not just where it's at. */}
+                        {/* Chuyến test đứng ĐẦU stack: nó là điều quan trọng nhất cần
+                            biết về dòng này (chuyến không tính vào bất kỳ báo cáo nào). */}
+                        {booking.isTestTrip && <TestTripBadge />}
                         {booking.isVinow && (
                           <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-100 text-[10px] px-1.5 py-0">
                             ⚡ Vi-now
@@ -1898,6 +2072,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
           onClose={() => setSelectedBookingId(null)}
           onDuplicate={startDuplicate}
           onCallRecorded={reload}
+          // Gạt công tắc test → refetch để badge TEST + bộ lọc ngoài bảng khớp lại.
+          onTestFlagChanged={reload}
         />
       )}
       {/* Form Tạo chuyến ở chế độ controlled — chỉ dùng cho luồng nhân bản (không có
