@@ -35,6 +35,11 @@ import {
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
+// ĐÁNH RƠI khi giải xung đột merge (nhánh GĐ1 bỏ khối gọi-khách khỏi cùng dòng import),
+// và vì next.config bật ignoreBuildErrors nên build vẫn xanh — chỉ nổ ReferenceError lúc
+// admin mở dialog gán tài xế. Đừng gộp dòng này vào cụm import khác.
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
