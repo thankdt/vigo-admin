@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import UserDetailPage from './page';
 
 /**
@@ -27,6 +28,13 @@ const getBookings = vi.fn();
 const adminGetUserReferralStats = vi.fn();
 const getCrmCustomerSource = vi.fn();
 const logCrmProfileView = vi.fn();
+const getCrmTagCatalog = vi.fn();
+const getCrmCustomerTags = vi.fn();
+const addCrmCustomerTag = vi.fn();
+const removeCrmCustomerTag = vi.fn();
+const getCrmCustomerNotes = vi.fn();
+const addCrmCustomerNote = vi.fn();
+const removeCrmCustomerNote = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -37,8 +45,24 @@ vi.mock('@/lib/api', async (importOriginal) => {
     adminGetUserReferralStats: (...a: any[]) => adminGetUserReferralStats(...a),
     getCrmCustomerSource: (...a: any[]) => getCrmCustomerSource(...a),
     logCrmProfileView: (...a: any[]) => logCrmProfileView(...a),
+    getCrmTagCatalog: (...a: any[]) => getCrmTagCatalog(...a),
+    getCrmCustomerTags: (...a: any[]) => getCrmCustomerTags(...a),
+    addCrmCustomerTag: (...a: any[]) => addCrmCustomerTag(...a),
+    removeCrmCustomerTag: (...a: any[]) => removeCrmCustomerTag(...a),
+    getCrmCustomerNotes: (...a: any[]) => getCrmCustomerNotes(...a),
+    addCrmCustomerNote: (...a: any[]) => addCrmCustomerNote(...a),
+    removeCrmCustomerNote: (...a: any[]) => removeCrmCustomerNote(...a),
   };
 });
+
+vi.mock('@/lib/auth-context', () => ({
+  useAuth: () => ({
+    me: { id: 'admin-1', fullName: 'Admin Một', phone: '0900', isSuperAdmin: false, functions: ['users'] },
+    loading: false,
+    can: () => true,
+    refresh: vi.fn(),
+  }),
+}));
 
 /**
  * `fetchUser` phụ thuộc `toast`; toast THẬT tạo hàm mới mỗi render → useCallback đổi liên
@@ -68,6 +92,20 @@ const mkUser = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/**
+ * Radix Select cần vài API con trỏ mà jsdom không có. Khuôn đã dùng ở
+ * `bookings/components/create-booking-dialog.test.tsx` — để scope trong file này, KHÔNG
+ * sửa `vitest.setup.ts` global (tránh ảnh hưởng test khác).
+ */
+beforeAll(() => {
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+  window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  if (!window.PointerEvent) {
+    (window as any).PointerEvent = MouseEvent;
+  }
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
   getAdminUserDetail.mockResolvedValue(mkUser());
@@ -75,6 +113,13 @@ beforeEach(() => {
   adminGetUserReferralStats.mockResolvedValue(null);
   getCrmCustomerSource.mockResolvedValue(null);
   logCrmProfileView.mockResolvedValue(undefined);
+  getCrmTagCatalog.mockResolvedValue(['Khách VIP', 'Hay huỷ chuyến']);
+  getCrmCustomerTags.mockResolvedValue([]);
+  getCrmCustomerNotes.mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0 } });
+  addCrmCustomerTag.mockResolvedValue({});
+  removeCrmCustomerTag.mockResolvedValue(undefined);
+  addCrmCustomerNote.mockResolvedValue({});
+  removeCrmCustomerNote.mockResolvedValue(undefined);
 });
 
 describe('/users/detail — lưới an toàn', () => {
@@ -219,6 +264,105 @@ describe('/users/detail — khối Nguồn khách (GĐ2)', () => {
     render(<UserDetailPage />);
     await screen.findByText('Khách A');
     expect(logCrmProfileView).not.toHaveBeenCalled();
+  });
+});
+
+describe('/users/detail — khối Nhãn & ghi chú (GĐ2)', () => {
+  const mkTag = (over = {}) => ({
+    id: 't1',
+    tag: 'Khách VIP',
+    createdAt: '2026-08-14T02:00:00Z',
+    byAdminUserId: 'admin-1',
+    byAdminName: 'Admin Một',
+    ...over,
+  });
+
+  it('hiện nhãn đã gắn dạng chip và gỡ được', async () => {
+    getCrmCustomerTags.mockResolvedValue([mkTag()]);
+    render(<UserDetailPage />);
+    await screen.findByText('Khách VIP');
+    await userEvent.click(screen.getByRole('button', { name: /Gỡ nhãn Khách VIP/ }));
+    await waitFor(() => expect(removeCrmCustomerTag).toHaveBeenCalledWith('u-1', 't1'));
+  });
+
+  // Nhãn đã gắn phải biến khỏi dropdown — chọn lại chỉ để nhận 409.
+  it('nhãn đã gắn không còn trong danh mục chọn', async () => {
+    getCrmCustomerTags.mockResolvedValue([mkTag()]);
+    render(<UserDetailPage />);
+    await screen.findByText('Khách VIP');
+    await userEvent.click(screen.getByRole('combobox', { name: /Chọn nhãn/ }));
+    expect(screen.queryByRole('option', { name: 'Khách VIP' })).toBeNull();
+    expect(screen.getByRole('option', { name: 'Hay huỷ chuyến' })).toBeInTheDocument();
+  });
+
+  it('ghi chú rỗng / chỉ khoảng trắng thì KHÔNG gửi request', async () => {
+    render(<UserDetailPage />);
+    const box = await screen.findByPlaceholderText(/Ghi chú về khách/);
+    await userEvent.type(box, '   ');
+    await userEvent.click(screen.getByRole('button', { name: /Ghi nhận/ }));
+    expect(addCrmCustomerNote).not.toHaveBeenCalled();
+  });
+
+  it('ghi chú hợp lệ: gửi bản đã trim rồi nạp lại danh sách', async () => {
+    render(<UserDetailPage />);
+    const box = await screen.findByPlaceholderText(/Ghi chú về khách/);
+    await userEvent.type(box, '  khách khó tính  ');
+    await userEvent.click(screen.getByRole('button', { name: /Ghi nhận/ }));
+    await waitFor(() =>
+      expect(addCrmCustomerNote).toHaveBeenCalledWith('u-1', 'khách khó tính'),
+    );
+    // Nạp lại = getCrmCustomerNotes được gọi lần thứ hai.
+    await waitFor(() => expect(getCrmCustomerNotes.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('ghi chú hiển thị mới→cũ, kèm người ghi và mốc giờ VN', async () => {
+    getCrmCustomerNotes.mockResolvedValue({
+      data: [
+        { id: 'n2', note: 'Mới hơn', createdAt: '2026-08-14T05:00:00Z', byAdminUserId: 'admin-1', byAdminName: 'Admin Một' },
+        { id: 'n1', note: 'Cũ hơn', createdAt: '2026-08-13T05:00:00Z', byAdminUserId: 'admin-2', byAdminName: 'Admin Hai' },
+      ],
+      meta: { page: 1, limit: 20, total: 2 },
+    });
+    render(<UserDetailPage />);
+    const items = await screen.findAllByTestId('crm-note');
+    expect(items[0]).toHaveTextContent('Mới hơn');
+    expect(items[0]).toHaveTextContent('12:00'); // 05:00Z = 12:00 VN
+    expect(items[1]).toHaveTextContent('Cũ hơn');
+  });
+
+  /**
+   * Nút xoá CHỈ hiện với ghi chú của CHÍNH MÌNH. BE vẫn là chốt cuối, nhưng hiện nút cho
+   * ghi chú của người khác là mời admin bấm rồi ăn 403 — và ghi chú là thứ CSKH dùng để
+   * đối chất, xoá được của nhau thì mất giá trị đó.
+   */
+  it('chỉ ghi chú của mình mới có nút Xoá', async () => {
+    getCrmCustomerNotes.mockResolvedValue({
+      data: [
+        { id: 'n2', note: 'Của tôi', createdAt: '2026-08-14T05:00:00Z', byAdminUserId: 'admin-1', byAdminName: 'Admin Một' },
+        { id: 'n1', note: 'Của người khác', createdAt: '2026-08-13T05:00:00Z', byAdminUserId: 'admin-2', byAdminName: 'Admin Hai' },
+      ],
+      meta: { page: 1, limit: 20, total: 2 },
+    });
+    render(<UserDetailPage />);
+    const items = await screen.findAllByTestId('crm-note');
+    expect(within(items[0]).getByRole('button', { name: /Xoá ghi chú/ })).toBeInTheDocument();
+    expect(within(items[1]).queryByRole('button', { name: /Xoá ghi chú/ })).toBeNull();
+  });
+
+  it('lỗi tải khối -> hiện chữ lỗi, không vỡ trang', async () => {
+    getCrmCustomerTags.mockRejectedValueOnce(new Error('toang'));
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Không tải được nhãn/)).toBeInTheDocument();
+    expect(screen.getByText('Khách A')).toBeInTheDocument();
+  });
+
+  it('role=DRIVER: không có khối Nhãn & ghi chú, không gọi API nào của nó', async () => {
+    getAdminUserDetail.mockResolvedValue(mkUser({ role: 'DRIVER' }));
+    render(<UserDetailPage />);
+    await screen.findByText('Khách A');
+    expect(screen.queryByText(/Nhãn/)).toBeNull();
+    expect(getCrmTagCatalog).not.toHaveBeenCalled();
+    expect(getCrmCustomerNotes).not.toHaveBeenCalled();
   });
 });
 

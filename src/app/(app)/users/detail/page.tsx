@@ -60,6 +60,7 @@ import { getImageUrl } from '@/lib/utils';
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { logCrmProfileView } from '@/lib/api';
 import { CustomerSourceCard } from './components/customer-source-card';
+import { CustomerTagsNotesCard } from './components/customer-tags-notes-card';
 
 const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
@@ -396,6 +397,7 @@ export default function UserDetailPage() {
       {user.role === 'USER' && (
         <div key={user.id} className="space-y-6">
           <CustomerSourceCard userId={user.id} />
+          <CustomerTagsNotesCard userId={user.id} />
         </div>
       )}
 
