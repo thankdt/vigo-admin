@@ -3541,3 +3541,172 @@ export async function reversePenalty(id: string, note?: string): Promise<DriverP
     }),
   );
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ2 — Hồ sơ khách 360 (Nguồn khách · tag/ghi chú · timeline · vết đọc)
+//
+// Toàn bộ gate bằng function `users` ở BE — CÙNG function với chính trang
+// /users/detail, nên không tồn tại ca "vào được trang mà khối bị 403".
+//
+// Khối đặt ở CUỐI file có chủ đích: GĐ1 sửa `getBookings` ở giữa file, để đây
+// thì merge giữa hai đợt không đụng nhau.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmTag = {
+  id: string;
+  tag: string;
+  createdAt: string;
+  byAdminUserId: string;
+  byAdminName: string | null;
+};
+
+export type CrmNote = {
+  id: string;
+  note: string;
+  createdAt: string;
+  byAdminUserId: string;
+  byAdminName: string | null;
+};
+
+export type CrmCustomerSource = {
+  referrer: {
+    id: string;
+    fullName: string | null;
+    /** ĐÃ CHE ở backend (vd `0912****78`). Muốn số đủ phải qua `revealCrmCustomerPhone`. */
+    phone: string | null;
+    /** BE quyết qua `kol_profile`. FE TUYỆT ĐỐI không tự suy từ mã giới thiệu. */
+    kind: 'KOL' | 'AFFILIATE';
+  };
+  codeUsed: string | null;
+  referredAt: string | null;
+};
+
+export type CrmTimelineKind =
+  | 'CALL'
+  | 'TRIP_CREATED'
+  | 'TRIP_COMPLETED'
+  | 'RATING'
+  | 'NOTE'
+  | 'NOTIFICATION';
+
+export type CrmTimelineItem = {
+  /** id của DÒNG NGUỒN — một booking sinh 2 mốc nên id TRÙNG nhau, khác `kind`. */
+  id: string;
+  kind: CrmTimelineKind;
+  /**
+   * ISO-8601 CÓ offset (…Z). BE ép mọi nhánh UNION về `timestamptz` — nếu một ngày nào đó
+   * chuỗi này mất offset thì `new Date()` sẽ hiểu theo giờ MÁY ADMIN và timeline lệch tới
+   * 7 tiếng mà không lỗi gì.
+   */
+  occurredAt: string;
+  /**
+   * Với `kind === 'CALL'` đây là MÃ trạng thái thô, KHÔNG phải nhãn hiển thị — map qua
+   * `BOOKING_CALL_STATUS_LABEL` (nguồn nhãn duy nhất). Các kind khác là tiếng Việt sẵn.
+   */
+  title: string | null;
+  detail: string | null;
+  meta: Record<string, unknown> | null;
+  byAdminUserId: string | null;
+  byAdminName: string | null;
+};
+
+/** Bề mặt phát sinh việc đọc — BE whitelist, gõ sai là 400. */
+export type CrmAccessSurface = 'users-list' | 'users-detail';
+
+export async function getCrmTagCatalog(): Promise<string[]> {
+  // KHÔNG đi qua `GET system-config`: key CRM_CUSTOMER_TAGS rơi vào nhóm `settings.misc`
+  // mà không starter role nào có → người chỉ có `users` sẽ nhận 403 trắng khối tag.
+  const response = await fetchWithAuth('/admin/crm/tag-catalog');
+  return unwrap<string[]>(response);
+}
+
+export async function getCrmCustomerTags(userId: string): Promise<CrmTag[]> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/tags`);
+  return unwrap<CrmTag[]>(response);
+}
+
+export async function addCrmCustomerTag(userId: string, tag: string): Promise<CrmTag> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/tags`, {
+    method: 'POST',
+    body: JSON.stringify({ tag }),
+  });
+  return unwrap<CrmTag>(response);
+}
+
+export async function removeCrmCustomerTag(userId: string, tagId: string): Promise<void> {
+  await fetchWithAuth(`/admin/crm/customers/${userId}/tags/${tagId}`, { method: 'DELETE' });
+}
+
+export async function getCrmCustomerNotes(
+  userId: string,
+  page = 1,
+  limit = 20,
+): Promise<{ data: CrmNote[]; meta: { page: number; limit: number; total: number } }> {
+  const query = new URLSearchParams({ page: String(page), limit: String(limit) });
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/notes?${query.toString()}`);
+  return unwrap<{ data: CrmNote[]; meta: { page: number; limit: number; total: number } }>(response);
+}
+
+export async function addCrmCustomerNote(userId: string, note: string): Promise<CrmNote> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+  return unwrap<CrmNote>(response);
+}
+
+export async function removeCrmCustomerNote(userId: string, noteId: string): Promise<void> {
+  await fetchWithAuth(`/admin/crm/customers/${userId}/notes/${noteId}`, { method: 'DELETE' });
+}
+
+/** Ai giới thiệu khách NÀY (chiều inbound). `null` = không qua giới thiệu. */
+export async function getCrmCustomerSource(userId: string): Promise<CrmCustomerSource | null> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/source`);
+  return unwrap<CrmCustomerSource | null>(response);
+}
+
+export async function getCrmCustomerTimeline(
+  userId: string,
+  p: { days?: number; limit?: number; cursor?: string; sources?: string } = {},
+): Promise<{ data: CrmTimelineItem[]; nextCursor: string | null }> {
+  // Chỉ gửi khoá khi CÓ giá trị: gửi chuỗi rỗng làm BE rơi vào nhánh parse khác thay vì
+  // dùng mặc định (90 ngày / 30 dòng).
+  const query = new URLSearchParams({
+    ...(p.days !== undefined && { days: String(p.days) }),
+    ...(p.limit !== undefined && { limit: String(p.limit) }),
+    // Cursor đi NGUYÊN VĂN chuỗi BE trả. Mọi phép "làm sạch" ở FE đều thành 400.
+    ...(p.cursor && { cursor: p.cursor }),
+    ...(p.sources && { sources: p.sources }),
+  });
+  const qs = query.toString();
+  const response = await fetchWithAuth(
+    `/admin/crm/customers/${userId}/timeline${qs ? `?${qs}` : ''}`,
+  );
+  return unwrap<{ data: CrmTimelineItem[]; nextCursor: string | null }>(response);
+}
+
+/**
+ * Ghi vết ĐỌC hồ sơ khách. POST vì có tác dụng phụ — GET dễ bị prefetch/retry làm nhiễu
+ * log, mà log nhiễu thì mất giá trị truy vết. BE tự gộp các lần gọi trong 10 phút.
+ */
+export async function logCrmProfileView(
+  userId: string,
+  surface: CrmAccessSurface,
+): Promise<void> {
+  await fetchWithAuth(`/admin/crm/customers/${userId}/view`, {
+    method: 'POST',
+    body: JSON.stringify({ surface }),
+  });
+}
+
+/** Mở SĐT đầy đủ + ghi vết `REVEAL_PHONE`. Chốt TRUY VẾT ĐƯỢC, không phải chặn được. */
+export async function revealCrmCustomerPhone(
+  userId: string,
+  surface: CrmAccessSurface,
+): Promise<{ phone: string | null }> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/reveal-phone`, {
+    method: 'POST',
+    body: JSON.stringify({ surface }),
+  });
+  return unwrap<{ phone: string | null }>(response);
+}
