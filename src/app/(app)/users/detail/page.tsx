@@ -61,6 +61,7 @@ import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { logCrmProfileView } from '@/lib/api';
 import { CustomerSourceCard } from './components/customer-source-card';
 import { CustomerTagsNotesCard } from './components/customer-tags-notes-card';
+import { CustomerTimelineCard } from './components/customer-timeline-card';
 
 const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
@@ -398,6 +399,7 @@ export default function UserDetailPage() {
         <div key={user.id} className="space-y-6">
           <CustomerSourceCard userId={user.id} />
           <CustomerTagsNotesCard userId={user.id} />
+          <CustomerTimelineCard userId={user.id} />
         </div>
       )}
 

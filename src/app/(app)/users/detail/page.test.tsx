@@ -35,6 +35,7 @@ const removeCrmCustomerTag = vi.fn();
 const getCrmCustomerNotes = vi.fn();
 const addCrmCustomerNote = vi.fn();
 const removeCrmCustomerNote = vi.fn();
+const getCrmCustomerTimeline = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -52,6 +53,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getCrmCustomerNotes: (...a: any[]) => getCrmCustomerNotes(...a),
     addCrmCustomerNote: (...a: any[]) => addCrmCustomerNote(...a),
     removeCrmCustomerNote: (...a: any[]) => removeCrmCustomerNote(...a),
+    getCrmCustomerTimeline: (...a: any[]) => getCrmCustomerTimeline(...a),
   };
 });
 
@@ -120,6 +122,7 @@ beforeEach(() => {
   removeCrmCustomerTag.mockResolvedValue(undefined);
   addCrmCustomerNote.mockResolvedValue({});
   removeCrmCustomerNote.mockResolvedValue(undefined);
+  getCrmCustomerTimeline.mockResolvedValue({ data: [], nextCursor: null });
 });
 
 describe('/users/detail — lưới an toàn', () => {
@@ -363,6 +366,108 @@ describe('/users/detail — khối Nhãn & ghi chú (GĐ2)', () => {
     expect(screen.queryByText(/Nhãn/)).toBeNull();
     expect(getCrmTagCatalog).not.toHaveBeenCalled();
     expect(getCrmCustomerNotes).not.toHaveBeenCalled();
+  });
+});
+
+describe('/users/detail — khối Timeline (GĐ2)', () => {
+  const mkItem = (over: Record<string, unknown> = {}) => ({
+    id: 'i1',
+    kind: 'NOTE',
+    occurredAt: '2026-08-14T05:00:00Z',
+    title: null,
+    detail: null,
+    meta: null,
+    byAdminUserId: null,
+    byAdminName: null,
+    ...over,
+  });
+
+  /**
+   * 🚨 Ca chốt của §13.2 ở hình dạng mới: MỖI DÒNG render theo `kind` của CHÍNH NÓ, không
+   * theo công tắc/bộ lọc đang chọn. GĐ1 đã dính đúng bẫy này (suy pha theo TAB) và nó là
+   * lỗi CHẶN.
+   */
+  it('trộn nhiều loại: mỗi DÒNG lấy nhãn theo kind của chính nó', async () => {
+    getCrmCustomerTimeline.mockResolvedValue({
+      data: [
+        mkItem({ id: 'a', kind: 'CALL', meta: { status: 'CALLED' }, occurredAt: '2026-08-14T06:00:00Z' }),
+        mkItem({ id: 'b', kind: 'TRIP_COMPLETED', occurredAt: '2026-08-14T05:00:00Z' }),
+        mkItem({ id: 'c', kind: 'RATING', meta: { stars: 5 }, occurredAt: '2026-08-14T04:00:00Z' }),
+        mkItem({ id: 'd', kind: 'NOTE', occurredAt: '2026-08-14T03:00:00Z' }),
+      ],
+      nextCursor: null,
+    });
+    render(<UserDetailPage />);
+    const rows = await screen.findAllByTestId('crm-timeline-item');
+    expect(rows).toHaveLength(4);
+    expect(rows[0]).toHaveTextContent('Gọi được');
+    expect(rows[1]).toHaveTextContent('Hoàn thành chuyến');
+    expect(rows[2]).toHaveTextContent('5');
+    expect(rows[3]).toHaveTextContent('Ghi chú CSKH');
+    expect(rows[0]).toHaveTextContent('13:00'); // 06:00Z = 13:00 VN
+  });
+
+  it('bấm "Xem thêm" gửi cursor trang trước và NỐI vào danh sách', async () => {
+    getCrmCustomerTimeline
+      .mockResolvedValueOnce({ data: [mkItem({ id: 'a' })], nextCursor: 'CUR1' })
+      .mockResolvedValueOnce({ data: [mkItem({ id: 'b' })], nextCursor: null });
+    render(<UserDetailPage />);
+    await userEvent.click(await screen.findByRole('button', { name: /Xem thêm/ }));
+    await waitFor(() =>
+      expect(screen.getAllByTestId('crm-timeline-item')).toHaveLength(2),
+    );
+    expect(getCrmCustomerTimeline).toHaveBeenLastCalledWith(
+      'u-1',
+      expect.objectContaining({ cursor: 'CUR1' }),
+    );
+  });
+
+  it('nextCursor null thì ẩn nút "Xem thêm"', async () => {
+    getCrmCustomerTimeline.mockResolvedValue({ data: [mkItem()], nextCursor: null });
+    render(<UserDetailPage />);
+    await screen.findAllByTestId('crm-timeline-item');
+    expect(screen.queryByRole('button', { name: /Xem thêm/ })).toBeNull();
+  });
+
+  // Rỗng ≠ lỗi: hai chữ khác nhau, nếu không admin không biết nên chờ hay nên báo.
+  it('rỗng hiện "Chưa có hoạt động nào", lỗi hiện "Không tải được"', async () => {
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Chưa có hoạt động nào/)).toBeInTheDocument();
+  });
+
+  it('lỗi API hiện chữ lỗi riêng, không nhầm với rỗng', async () => {
+    getCrmCustomerTimeline.mockRejectedValueOnce(new Error('toang'));
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Không tải được lịch sử/)).toBeInTheDocument();
+  });
+
+  it('mặc định KHÔNG gửi NOTIFICATION trong sources', async () => {
+    render(<UserDetailPage />);
+    await waitFor(() => expect(getCrmCustomerTimeline).toHaveBeenCalled());
+    const arg = getCrmCustomerTimeline.mock.calls[0][1];
+    expect(String(arg.sources)).not.toContain('NOTIFICATION');
+  });
+
+  it('bật công tắc thì gửi sources có NOTIFICATION và nạp lại TỪ ĐẦU', async () => {
+    getCrmCustomerTimeline.mockResolvedValue({ data: [mkItem()], nextCursor: 'CUR1' });
+    render(<UserDetailPage />);
+    await screen.findAllByTestId('crm-timeline-item');
+
+    await userEvent.click(screen.getByLabelText(/Hiện cả thông báo tự động/));
+    await waitFor(() => {
+      const last = getCrmCustomerTimeline.mock.calls.at(-1)![1];
+      expect(String(last.sources)).toContain('NOTIFICATION');
+      // Nạp lại từ đầu: KHÔNG được kèm cursor cũ, nếu không là trộn hai tập khác nhau.
+      expect(last.cursor).toBeUndefined();
+    });
+  });
+
+  it('role=DRIVER: không có timeline, không gọi API timeline', async () => {
+    getAdminUserDetail.mockResolvedValue(mkUser({ role: 'DRIVER' }));
+    render(<UserDetailPage />);
+    await screen.findByText('Khách A');
+    expect(screen.queryByText(/Lịch sử tương tác/)).toBeNull();
+    expect(getCrmCustomerTimeline).not.toHaveBeenCalled();
   });
 });
 
