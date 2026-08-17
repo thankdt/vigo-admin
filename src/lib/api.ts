@@ -922,6 +922,12 @@ export async function getAvailableDrivers(opts?: {
   scheduledTo?: string;
   /** Chuyến đang đổi tài — không tính là cam kết cản trở của tài đang giữ nó. */
   excludeBookingId?: string;
+  /**
+   * Hiện CẢ tài đang chồng giờ (ca chiều về: khách đặt lượt về cho ĐÚNG tài đang
+   * chở lượt đi). Backend chỉ nới bước lọc chồng giờ — gate duyệt/hồ sơ/khoá giữ
+   * nguyên. Tài lọt thêm luôn mang `overlapsCandidate: true` → nhãn đỏ cảnh báo.
+   */
+  includeBusy?: boolean;
 }): Promise<Driver[]> {
   const query = new URLSearchParams();
   if (opts?.lat) query.set('lat', String(opts.lat));
@@ -929,6 +935,8 @@ export async function getAvailableDrivers(opts?: {
   if (opts?.scheduledFrom) query.set('scheduledFrom', opts.scheduledFrom);
   if (opts?.scheduledTo) query.set('scheduledTo', opts.scheduledTo);
   if (opts?.excludeBookingId) query.set('excludeBookingId', opts.excludeBookingId);
+  // Chỉ gửi khi BẬT: backend đọc 'true'/'1', và không gửi = hành vi cũ y nguyên.
+  if (opts?.includeBusy) query.set('includeBusy', 'true');
   const response = await fetchWithAuth(`/bookings/admin/available-drivers?${query.toString()}`);
   const result = await response.json();
   return result.data;

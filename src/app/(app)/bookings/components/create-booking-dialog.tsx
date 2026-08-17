@@ -224,6 +224,9 @@ export function CreateBookingDialog({
   const [isLoadingDrivers, setIsLoadingDrivers] = React.useState(false);
   const [selectedDriverId, setSelectedDriverId] = React.useState<string | null>(null);
   const [driverSearch, setDriverSearch] = React.useState('');
+  // Ca CHIỀU VỀ: khách đặt lượt về cho ĐÚNG tài đang chở lượt đi. Mặc định TẮT —
+  // bật là hành động có chủ ý, và tài hiện thêm luôn kèm nhãn đỏ cảnh báo.
+  const [includeBusy, setIncludeBusy] = React.useState(false);
   // Đọc lựa chọn hiện tại BÊN TRONG effect nạp danh sách mà không phải đưa
   // `selectedDriverId` vào deps — làm vậy sẽ nạp lại danh sách mỗi lần bấm chọn.
   const selectedDriverIdRef = React.useRef<string | null>(null);
@@ -264,6 +267,7 @@ export function CreateBookingDialog({
         const data = await getAvailableDrivers({
           scheduledFrom: assignFromIso,
           scheduledTo: assignToIso,
+          includeBusy,
         });
         if (seq !== driverFetchSeqRef.current) return; // phản hồi cũ → vứt
         setDrivers(data);
@@ -276,7 +280,9 @@ export function CreateBookingDialog({
           setSelectedDriverId(null);
           toast({
             title: 'Đã bỏ chọn tài xế',
-            description: 'Tài xế vừa chọn bận ở khung giờ mới — vui lòng chọn lại.',
+            // Rơi khỏi danh sách vì ĐỔI KHUNG GIỜ hoặc vì TẮT ô "hiện tài đang bận".
+            // Câu chữ phải đúng cho cả hai, đừng khẳng định là do đổi giờ.
+            description: 'Tài xế vừa chọn đang bận trùng khung giờ — vui lòng chọn lại.',
           });
         }
       } catch {
@@ -287,7 +293,7 @@ export function CreateBookingDialog({
     };
     const timer = setTimeout(fetchDrivers, 350);
     return () => clearTimeout(timer);
-  }, [open, mode, assignFromIso, assignToIso, toast]);
+  }, [open, mode, assignFromIso, assignToIso, toast, includeBusy]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -333,6 +339,7 @@ export function CreateBookingDialog({
     setNote('');
     setSelectedDriverId(null);
     setDriverSearch('');
+    setIncludeBusy(false);
     setIsScheduled(false);
     setScheduledFrom('');
     setScheduledTo('');
@@ -367,6 +374,7 @@ export function CreateBookingDialog({
     // Tài xế và giá KHÔNG chép: chuyến mới tự dispatch, giá tự tính lại.
     setSelectedDriverId(null);
     setDriverSearch('');
+    setIncludeBusy(false);
     clearEstimate();
     setSelectedPromotionId(null);
     setPendingPromotionId(initial.promotionId);
@@ -1021,12 +1029,36 @@ export function CreateBookingDialog({
                   <div className="text-muted-foreground">
                     {selectedDriver.phone}
                     {selectedDriver.fixedRoute?.name ? ` • ${selectedDriver.fixedRoute.name}` : ''}
-                    {(selectedDriver as any).availableSeats != null ? ` • còn ${(selectedDriver as any).availableSeats} ghế khách` : ''}
+                    {/* `> 0` chứ không `!= null` — cùng luật với dòng danh sách bên dưới.
+                        Tài lọt vào nhờ công tắc "hiện tài đang bận" có availableSeats = 0
+                        (accept() zero hoá cho chuyến không-ghép); in "còn 0 ghế khách" ngay
+                        trên thẻ admin nhìn TRƯỚC KHI bấm Tạo chuyến là UI tự phủ định. */}
+                    {(selectedDriver as any).availableSeats > 0 ? ` • còn ${(selectedDriver as any).availableSeats} ghế khách` : ''}
                   </div>
                 </div>
               </Card>
             ) : (
               <div className="space-y-2">
+                {/* Ca CHIỀU VỀ: khách đặt lượt về cho đúng tài đang chở lượt đi.
+                    Lệnh gán vốn đã cho phép (không có guard bận) — chỗ này chỉ mở
+                    tầng hiển thị, nên tài hiện thêm luôn kèm nhãn đỏ. */}
+                <div className="flex items-start gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5">
+                  <Switch
+                    id="cb-include-busy"
+                    checked={includeBusy}
+                    onCheckedChange={setIncludeBusy}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="cb-include-busy" className="cursor-pointer text-xs font-medium">
+                      Hiện cả tài xế đang bận
+                    </Label>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Cho ca khách đặt chiều về cho đúng tài đang chở. Tài hiện thêm có
+                      nhãn đỏ — hệ thống không chặn double-book.
+                    </p>
+                  </div>
+                </div>
                 <Input
                   placeholder="Tìm tài xế theo tên, SĐT..."
                   value={driverSearch}
@@ -1039,7 +1071,10 @@ export function CreateBookingDialog({
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                   ) : filteredDrivers.length === 0 ? (
-                    <p className="text-center text-sm text-muted-foreground py-4">Không tìm thấy tài xế.</p>
+                    <p className="text-center text-sm text-muted-foreground py-4">
+                      Không tìm thấy tài xế.
+                      {!includeBusy && !driverSearch && ' Tài đang bận trùng khung giờ đang bị ẩn.'}
+                    </p>
                   ) : (
                     filteredDrivers.map(driver => {
                       const name = getDriverName(driver);
