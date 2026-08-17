@@ -409,11 +409,11 @@ Các giai đoạn 2–6 chỉ **thêm** bảng và endpoint mới, không sửa 
 
 ## 12. Điểm còn mở
 
-1. **Khiếu nại khách hiện đang được xử lý bằng cách nào?** (Zalo nhóm, Telegram, sổ tay) — ảnh hưởng thiết kế `crm_ticket`: có cần nhập liệu thủ công từ kênh cũ không.
-2. **Danh mục loại ticket và mức SLA** — ops chốt trước GĐ3, lưu trong `system_config` để sửa không cần deploy.
-3. **Hạn mức đền bù theo vai trò** — chốt trước GĐ3.
-4. **Công thức RFM và ngưỡng `churnRisk`** — chưa có định nghĩa: cửa sổ tính bao lâu, chia bin theo ngũ phân vị hay mốc cứng, ngưỡng nào là "nguy cơ rời bỏ". Không chốt thì hai người implement ra hai kết quả khác nhau và không viết được test §11.3. **Chốt trước GĐ4.**
-5. **Ngưỡng "quá hạn"** của tab hàng đợi (N giờ sau `completedAt`) — ops chốt trước GĐ1, để trong `system_config`.
+1. ~~Khiếu nại khách hiện xử lý bằng cách nào?~~ → **ĐÃ CHỐT 2026-08-17: qua NHÓM ZALO.** Hệ quả bắt buộc cho GĐ3, xem §14.1.
+2. ~~Danh mục loại ticket và mức SLA~~ → **ĐÃ CHỐT, xem §14.1.**
+3. ~~Hạn mức đền bù theo vai trò~~ → **ĐÃ CHỐT, xem §14.2.**
+4. ~~Công thức RFM và ngưỡng `churnRisk`~~ → **ĐÃ CHỐT, xem §14.3.**
+5. ~~Ngưỡng "quá hạn" của tab hàng đợi~~ → **ĐÃ CHỐT: 24 giờ**, key `CSKH_CALL_AFTER_OVERDUE_HOURS` trong `system_config` (GĐ1 đã seed).
 
 ---
 
@@ -493,3 +493,159 @@ lúc thật sự cần tạo role hẹp.
 - **Cửa sổ thời gian hàng đợi**: §6.1 định nghĩa tab bằng truy vấn nhưng không kẹp thời gian.
   Tab "Cần gọi sau" vì thế bao trọn mọi chuyến COMPLETED lịch sử (cột `callAfterStatus` mới
   thêm nên dữ liệu cũ đều NULL). Phải đếm dữ liệu thật rồi mới quyết.
+
+---
+
+## 14. Quyết định mở khoá GĐ3 + GĐ4 (chốt 2026-08-17)
+
+Bốn điểm mở của §12 đã được chốt. Mục này ghi lại **con số cụ thể và lý do chọn**, để hai
+người implement ra cùng một kết quả — đúng thứ §12.4 cảnh báo.
+
+> ⚠️ **Mọi ngưỡng dưới đây nằm trong `system_config`**, ops sửa không cần deploy (đúng mẫu
+> `CSKH_CALL_REASONS`). Con số ở đây là **giá trị khởi tạo**, không phải hằng số trong code.
+
+### 14.0 Số liệu nền — đo trên DB DEV ngày 2026-08-17
+
+Mọi ngưỡng bên dưới neo vào số thật, không lấy từ sách CRM:
+
+| Chỉ số | Giá trị |
+|---|---|
+| Khách (`role=USER`) | 10.486 |
+| Chuyến (mọi trạng thái) | 8.171 |
+| Chuyến **hoàn thành** | **142** |
+| Chuyến đầu tiên → gần nhất | 03/01/2026 → 10/08/2026 (~7 tháng) |
+| Giá chuyến hoàn thành | trung vị **300k** · p75 507k · p90 891k · max 1,67tr |
+| Phân bố tần suất | **105 khách đi đúng 1 chuyến** · 17 khách 2 chuyến · 1 khách 3 chuyến |
+| Độ mới | 62 khách ≤30 ngày · 53 khách 31–60 · 8 khách 61–90 |
+
+**Ba kết luận rút ra, ảnh hưởng trực tiếp tới thiết kế:**
+
+1. **Không dùng ngũ phân vị được.** §12.4 hỏi "ngũ phân vị hay mốc cứng" — dữ liệu trả lời:
+   105/123 khách có F đúng bằng 1, chia ngũ phân vị sẽ ra nhiều bin trùng giá trị và điểm số
+   nhảy loạn mỗi lần có thêm vài khách. **Dùng MỐC CỨNG.**
+2. **Cửa sổ phải ngắn.** Toàn bộ lịch sử mới 7 tháng; ngưỡng "180 ngày không đi = rời bỏ"
+   kiểu sách vở sẽ không phân loại được ai.
+3. **Bài toán số 1 của ViGo KHÔNG phải churn, mà là chuyến-thứ-hai.** 85% khách hoàn thành
+   đúng một chuyến rồi thôi. Xem §14.4 — đây là phát hiện quan trọng hơn cả bốn câu hỏi.
+
+> Cảnh báo: đây là số DEV. Trước khi bật GĐ4 trên prod phải chạy lại đúng bộ truy vấn này
+> trên prod và hiệu chỉnh ngưỡng nếu lệch lớn.
+
+### 14.1 Danh mục ticket + SLA
+
+**Nguồn khiếu nại là NHÓM ZALO** ⇒ hệ quả bắt buộc, không phải tuỳ chọn:
+- `crm_ticket.source` phải có giá trị `ZALO_GROUP` và đó là **mặc định**.
+- Phải có đường **nhập tay** đầy đủ (không có webhook Zalo group): người nhập chọn khách,
+  chuyến (tuỳ chọn), loại, mô tả. Thiếu đường này thì GĐ3 không dùng được ngày nào.
+- `slaDueAt` tính từ **thời điểm NHẬP**, không phải thời điểm khách kêu (không biết được).
+  Thêm ô tuỳ chọn "khách phản ánh lúc" để đo độ trễ của chính kênh Zalo.
+
+Danh mục cố ý **nhỏ và khớp từ vựng đã có** (`PenaltyReasonCode`, `CSKH_CALL_REASONS`) —
+đẻ bộ từ vựng thứ tư là sau này không đối chiếu được số liệu với nhau.
+
+| Mã | Nhãn | Phản hồi | Đóng | Vì sao mốc đó |
+|---|---|---|---|---|
+| `NO_SHOW_DRIVER` | Tài xế không đến / bỏ khách | **1h** | 8h | Khách đang đứng ngoài đường — khẩn nhất, mọi thứ khác chờ được |
+| `UNSAFE_DRIVING` | Chạy ẩu, mất an toàn | **1h** | 24h | An toàn: phải chặn tài xế đó nhận chuyến mới trước đã |
+| `LOST_ITEM` | Bỏ quên đồ trên xe | **2h** | 24h | Tài xế còn chạy tiếp; qua ngày là đồ đi xa hoặc mất dấu |
+| `OVERCHARGE` | Thu sai giá / thu thêm | 4h | 24h | Dính tiền, và thường kèm đền bù |
+| `DRIVER_ATTITUDE` | Thái độ tài xế | 4h | 24h | Không khẩn nhưng để lâu là mất khách |
+| `OFF_PLATFORM` | Rủ đi ngoài app | 8h | 48h | Khớp `PenaltyReasonCode.OFF_PLATFORM` — nối thẳng sang màn phạt |
+| `BOOKING_ISSUE` | Lỗi đặt chuyến / app | 8h | 48h | Thường là bug, không phải tranh chấp |
+| `OTHER` | Khác | 8h | 48h | Bắt buộc có, và phải theo dõi tỉ lệ — `OTHER` phình to nghĩa là danh mục sai |
+
+**Lưu ở `system_config`**, key `CRM_TICKET_CATEGORIES`, mỗi mục `MÃ|Nhãn|giờ phản hồi|giờ đóng`,
+ngăn bằng `;` — cùng lối `CSKH_CALL_REASONS` đang dùng.
+
+**SLA đếm theo GIỜ HÀNH CHÍNH hay giờ liên tục?** Chốt: **giờ liên tục (24/7)**, vì dịch vụ
+chạy 24/7 và khách bị bỏ lúc 22h không thể chờ tới 8h sáng. Nếu sau này ops thấy quá gắt thì
+chỉnh số giờ, đừng đổi sang giờ hành chính — đổi cách đếm làm mọi số liệu cũ hết so sánh được.
+
+### 14.2 Hạn mức đền bù
+
+Neo vào giá chuyến thật: trung vị **300k**, p90 **891k**.
+
+| Vai trò | Được làm gì | Trần / vụ | Trần / ngày |
+|---|---|---|---|
+| Có `crm-tickets` (CSKH tuyến đầu) | Tạo, xử lý, **ĐỀ XUẤT** mức đền bù | **0đ** — không tự duyệt được | — |
+| Có `crm-compensate` (giám sát) | Duyệt & thực hiện đền bù | **≤ 500.000đ** | **≤ 3.000.000đ** |
+| Super admin | Mọi mức | không trần | không trần |
+
+**Lý do các con số:**
+- **500k/vụ** ≈ p75 giá chuyến. Đủ để hoàn trọn một chuyến bình thường mà không cần ai duyệt
+  thêm — tức là xử lý xong tại chỗ đúng phần lớn ca thực tế.
+- **3tr/ngày** chặn kiểu rò rỉ nguy hiểm hơn: một người rải nhiều lần nhỏ. Trần/vụ một mình
+  không chặn được việc này.
+- **CSKH = 0đ** là theo đúng §6.4 (*"không gộp vào quyền xem ticket"*). Nhưng cho họ **đề xuất
+  mức** — nếu không, mọi ca đền bù đều phải kể lại câu chuyện cho giám sát, và giám sát sẽ
+  duyệt mù.
+
+**Bắt buộc kèm mọi lần đền bù** (không phải khuyến nghị):
+- Gắn `ticketId`, và `bookingId` nếu có.
+- Ghi vết **append-only** (mẫu `BookingCustomerCallEvent`): ai duyệt, bao nhiêu, lý do, lúc nào.
+- Vượt trần → **chặn ở BACKEND**, không chỉ ẩn nút ở FE.
+
+`system_config`: `CRM_COMPENSATE_MAX_PER_CASE=500000`, `CRM_COMPENSATE_MAX_PER_DAY=3000000`.
+
+### 14.3 Công thức RFM + ngưỡng rời bỏ
+
+**Mốc cứng, không ngũ phân vị** (§14.0 lý do 1). Cửa sổ tính **180 ngày**, khớp độ dài lịch sử
+thật. Chỉ đếm chuyến `COMPLETED`.
+
+**R — độ mới** (số ngày kể từ chuyến hoàn thành gần nhất):
+
+| Điểm | Ngưỡng |
+|---|---|
+| 5 | ≤ 14 ngày |
+| 4 | 15–30 |
+| 3 | 31–60 |
+| 2 | 61–90 |
+| 1 | > 90 ngày |
+
+**F — tần suất** (số chuyến hoàn thành trong 180 ngày): 1 → 1đ · 2 → 2đ · 3–5 → 3đ · 6–9 → 4đ ·
+≥10 → 5đ.
+
+**M — giá trị** (tổng `price` chuyến hoàn thành trong 180 ngày): <500k → 1đ · 500k–1tr → 2đ ·
+1–2tr → 3đ · 2–5tr → 4đ · ≥5tr → 5đ. *(Neo: 5tr ≈ 16 chuyến trung vị; 500k ≈ chưa tới 2 chuyến.)*
+
+**Phân khúc — suy ra từ điểm, KHÔNG lưu chuỗi tự do:**
+
+| Phân khúc | Điều kiện | Việc cần làm |
+|---|---|---|
+| `MOI_CHUA_QUAY_LAI` | F=1 **và** R≥3 | Kéo về chuyến thứ hai — nhóm lớn nhất, xem §14.4 |
+| `DANG_HOAT_DONG` | R≥4 **và** F≥3 | Giữ nguyên, đừng làm phiền |
+| `VIP` | F≥4 **và** M≥4 | Ưu tiên xử lý ticket, chăm riêng |
+| `NGUY_CO_ROI_BO` | F≥2 **và** R=2 | Win-back: từng đi đều, đang chững lại |
+| `DA_ROI_BO` | F≥2 **và** R=1 | Chiến dịch kéo lại, kỳ vọng thấp |
+| `MOT_LAN_ROI_THOI` | F=1 **và** R≤2 | Khác hẳn "rời bỏ" — xem dưới |
+
+**`churnRisk` — định nghĩa hẹp, cố ý:** chỉ tính cho khách **F≥2**. Khách mới đi 1 lần rồi
+biến mất **KHÔNG phải "rời bỏ"** — họ chưa bao giờ là khách quen để mà mất. Gộp hai nhóm này
+là hỏng cả số liệu lẫn hành động: một bên cần *win-back* (gọi lại, ưu đãi giữ chân), bên kia
+cần *onboarding* (lý do để đi lần hai). Trộn vào nhau thì mọi chiến dịch đều nhắm sai người.
+
+`churnRisk = HIGH` khi F≥2 và R≤2; `MEDIUM` khi F≥2 và R=3; còn lại `LOW`.
+
+Toàn bộ ngưỡng lưu ở `system_config` key `CRM_RFM_THRESHOLDS` (JSON), cron tính lại **03:00
+giờ VN** theo §8.2.
+
+### 14.4 Phát hiện quan trọng hơn cả 4 câu hỏi
+
+**105 trên 123 khách có chuyến hoàn thành chỉ đi đúng MỘT lần** (85%). 17 người đi 2 lần, 1
+người đi 3 lần.
+
+Nghĩa là toàn bộ khung CRM cổ điển — phân khúc VIP, cảnh báo rời bỏ, chiến dịch giữ chân —
+đang nhắm vào một tập gần như rỗng. Chỉ 18 khách có F≥2 để mà "giữ".
+
+Việc đáng tiền nhất của CRM ViGo lúc này là **chuyển khách đi-một-lần thành đi-lần-hai**, và
+nó cần đúng hai thứ, cả hai đều rẻ hơn nhiều so với GĐ4–GĐ5:
+
+1. **Biết vì sao họ không quay lại.** Dữ liệu này *đã có sẵn* mà chưa ai đọc:
+   `driver_trip_rating` (sao + bình luận + tag theo khách) và `booking_customer_call_event`
+   (lý do gọi). Chỉ cần một báo cáo, không cần bảng mới.
+2. **Một chiến dịch duy nhất, nhắm đúng nhóm `MOI_CHUA_QUAY_LAI`.**
+
+⇒ **Đề xuất đổi thứ tự lộ trình**: cân nhắc làm GĐ7 (Insights — cohort giữ chân, CSAT) *trước*
+GĐ4/GĐ5, hoặc ít nhất tách phần "báo cáo lý do không quay lại" ra làm sớm. Xây bộ máy phân
+khúc + chiến dịch cho 18 khách là đầu tư sai chỗ. **Cần user quyết** — spec đang xếp GĐ7 là
+"tuỳ chọn", số liệu này nói ngược lại.
