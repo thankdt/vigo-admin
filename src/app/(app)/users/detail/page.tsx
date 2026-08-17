@@ -58,6 +58,8 @@ import { getImageUrl } from '@/lib/utils';
 // Trước đây trang này dùng `format()` của date-fns = giờ TRÌNH DUYỆT, vi phạm CLAUDE.md.
 // Dời helper về `src/lib/` là refactor RIÊNG (đụng 5 file), không nhét vào GĐ2.
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
+import { logCrmProfileView } from '@/lib/api';
+import { CustomerSourceCard } from './components/customer-source-card';
 
 const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
@@ -143,6 +145,22 @@ export default function UserDetailPage() {
     fetchUser();
     fetchReferral();
   }, [fetchUser, fetchReferral]);
+
+  /**
+   * Ghi vết ĐỌC hồ sơ khách (spec §11 rủi ro #8) — CHỈ cho `role === 'USER'`: hồ sơ tài xế
+   * và chủ HTX không thuộc rủi ro "tra cứu người quen qua danh bạ khách".
+   *
+   * Lỗi ghi log bị NUỐT có chủ đích (BE cũng vậy): mất một dòng audit còn hơn làm CSKH
+   * không mở được hồ sơ khách. BE tự gộp các lần gọi trong 10 phút nên mở đi mở lại không
+   * làm phình bảng.
+   */
+  const loggedFor = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    if (!user || user.role !== 'USER') return;
+    if (loggedFor.current === user.id) return;
+    loggedFor.current = user.id;
+    void logCrmProfileView(user.id, 'users-detail').catch(() => {});
+  }, [user]);
 
   const handleToggleLock = async () => {
     if (!user) return;
@@ -355,7 +373,31 @@ export default function UserDetailPage() {
         </CardContent>
       </Card>
 
-      <UserBookingsCard customerId={user.id} />
+      {/*
+        `key={user.id}`: `UserBookingsCard` giữ `page` trong state với deps [customerId, page]
+        và KHÔNG reset khi `customerId` đổi — đang ở trang 3 mà bấm sang người khác là ra
+        bảng rỗng. GĐ2 chính là thứ tạo ra đường đi tới lỗi đó (link "Nguồn khách" chỉ đổi
+        `?id=` của CÙNG route nên Next không remount page).
+      */}
+      <UserBookingsCard key={user.id} customerId={user.id} />
+
+      {/*
+        Khối CRM (hồ sơ khách 360) — CHỈ role USER (spec §3.5/§6.3).
+
+        Gate này là ràng buộc CHỊU LỰC, không phải trang trí: trang này là hồ sơ tài khoản
+        DÙNG CHUNG. /leakage-review và /driver-cancel-review deep-link vào đây bằng userId
+        của TÀI XẾ, còn GĐ0 thêm đường từ /transport-companies bằng userId của CHỦ HTX.
+        Quên gate = 3 khối CRM vô nghĩa + 3 request thừa mỗi lần mở hồ sơ tài xế.
+
+        `key={user.id}` vì link "Nguồn khách" chỉ đổi `?id=` của CÙNG route → Next KHÔNG
+        remount page → state khối con (cursor timeline, trang ghi chú) sẽ giữ nguyên và
+        hiển thị dữ liệu NGƯỜI CŨ trên hồ sơ đang xem.
+      */}
+      {user.role === 'USER' && (
+        <div key={user.id} className="space-y-6">
+          <CustomerSourceCard userId={user.id} />
+        </div>
+      )}
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>
