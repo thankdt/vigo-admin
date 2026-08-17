@@ -1,14 +1,16 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth-context';
 import {
   addTeamEvent,
   getDriverCallHistory,
   getDriverReputation,
   getTeamDriverDetail,
   patchTeamMember,
+  updateTeamCommissionRate,
   type DriverCallEvent,
 } from '@/lib/api';
 import type {
@@ -18,7 +20,14 @@ import type {
   TeamDriverRow,
   TeamOwner,
 } from '@/lib/types';
-import { driverWarning, stageLabel, STAGE_ORDER, vnDay } from '@/lib/driver-team-labels';
+import {
+  commissionRateLabel,
+  driverWarning,
+  stageLabel,
+  STAGE_ORDER,
+  vnDay,
+} from '@/lib/driver-team-labels';
+import { commissionRateWarning } from './commission-warning';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -58,12 +67,23 @@ export function DriverTeamDrawer({
   onSaved: (driverId: string, team: DriverTeamDetail['team']) => void;
 }) {
   const { toast } = useToast();
+  const { me } = useAuth();
   const driverId = driver?.driverId ?? null;
   const [detail, setDetail] = React.useState<DriverTeamDetail | null>(null);
   const [reputation, setReputation] = React.useState<DriverReputation | null>(null);
   const [csCalls, setCsCalls] = React.useState<DriverCallEvent[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [callNote, setCallNote] = React.useState('');
+  // Nháp ô "% hoa hồng riêng" — TÁCH khỏi detail.team.commissionRate (số đã lưu)
+  // vì input hiện đơn vị PHẦN TRĂM (string) trong khi backend giữ PHÂN SỐ 0..1.
+  // Đồng bộ lại từ giá trị đã lưu mỗi khi nó đổi (tải xong / vừa lưu thành công).
+  const [rateDraft, setRateDraft] = React.useState('');
+
+  React.useEffect(() => {
+    setRateDraft(
+      detail?.team?.commissionRate != null ? String(detail.team.commissionRate * 100) : '',
+    );
+  }, [detail?.team?.commissionRate]);
 
   React.useEffect(() => {
     if (!driverId) return;
@@ -107,6 +127,62 @@ export function DriverTeamDrawer({
     }
   };
 
+  /**
+   * Sửa % hoa hồng riêng — endpoint RIÊNG (`updateTeamCommissionRate`, SuperOnlyGuard
+   * ở backend), khác `patchTeamMember` ở trên. `rate` gửi NGUYÊN — `null` là "gỡ mức
+   * riêng", `0` là "miễn hoa hồng" — hai nghĩa khác nhau, TUYỆT ĐỐI không lọc bằng
+   * `||`/truthiness ở đây hay ở nơi gọi.
+   */
+  const saveRate = async (rate: number | null) => {
+    if (!driverId) return;
+    try {
+      const team = await updateTeamCommissionRate(driverId, rate);
+      setDetail((d) => (d ? { ...d, team } : d));
+      onSaved(driverId, team);
+      toast({
+        title:
+          rate === null
+            ? 'Đã gỡ mức riêng — tài quay về mức chung'
+            : `Đã đặt mức riêng ${commissionRateLabel(rate).text}`,
+      });
+    } catch (e: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Không lưu được % hoa hồng riêng',
+        description: String(e?.message ?? e),
+      });
+    }
+  };
+
+  /**
+   * Chốt giá trị đang gõ ở ô % hoa hồng riêng (đơn vị PHẦN TRĂM) thành PHÂN SỐ
+   * 0..1 rồi lưu. Để trống ô KHÔNG xoá mức riêng — trả input về giá trị đã lưu
+   * thay vì âm thầm gửi `null`; muốn gỡ mức riêng PHẢI bấm nút riêng.
+   */
+  const commitRateDraft = () => {
+    const committed = detail?.team?.commissionRate ?? null;
+    const trimmed = rateDraft.trim();
+    if (trimmed === '') {
+      setRateDraft(committed != null ? String(committed * 100) : '');
+      return;
+    }
+    const pct = Number(trimmed);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      toast({
+        variant: 'destructive',
+        title: 'Tỉ lệ không hợp lệ',
+        description: 'Nhập một số từ 0 đến 100.',
+      });
+      setRateDraft(committed != null ? String(committed * 100) : '');
+      return;
+    }
+    // Giữ tối đa 2 chữ số thập phân của % (= 4 chữ số thập phân của phân số),
+    // tránh rác dấu phẩy động kiểu 0.1 + 0.2.
+    const rate = Math.round(pct * 100) / 10000;
+    if (rate === committed) return;
+    void saveRate(rate);
+  };
+
   const logCall = async () => {
     if (!driverId) return;
     try {
@@ -128,6 +204,14 @@ export function DriverTeamDrawer({
   );
   const registeredNotRun = (detail?.registeredRouteIds ?? []).filter((id) => !run.has(id));
   const warn = driver ? driverWarning(driver) : null;
+
+  // Cảnh báo % hoa hồng riêng tính trên giá trị ĐANG GÕ (nháp), không phải giá trị
+  // đã lưu — super admin thấy ngay hậu quả trước khi rời khỏi ô, không phải sau khi
+  // đã lưu xong mới biết.
+  const draftPct = rateDraft.trim() === '' ? null : Number(rateDraft);
+  const draftPctValid =
+    draftPct != null && Number.isFinite(draftPct) && draftPct >= 0 && draftPct <= 100;
+  const draftWarning = draftPctValid ? commissionRateWarning(draftPct! / 100) : null;
 
   return (
     <Sheet open={!!driverId} onOpenChange={(o) => !o && onClose()}>
@@ -171,6 +255,76 @@ export function DriverTeamDrawer({
                   </SelectContent>
                 </Select>
               </div>
+
+              {/* % hoa hồng riêng — CHỈ có hiệu lực ở stage "Trong team" (spec §8),
+                  nên chỉ hiện ô khi đúng trạng thái đó. Trạng thái khác ẩn hẳn,
+                  không phải disable, để khỏi ai tưởng nhầm mức riêng vẫn còn áp. */}
+              {detail.team?.stage === 'JOINED' ? (
+                <div>
+                  <Label className="text-xs text-muted-foreground">% hoa hồng riêng</Label>
+                  {me?.isSuperAdmin ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          max={100}
+                          step={0.1}
+                          className="w-28"
+                          placeholder="Mức chung"
+                          value={rateDraft}
+                          onChange={(e) => setRateDraft(e.target.value)}
+                          onBlur={commitRateDraft}
+                        />
+                        <span className="text-sm text-muted-foreground">%</span>
+                        {detail.team?.commissionRate != null ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void saveRate(null)}
+                          >
+                            Gỡ, dùng mức chung
+                          </Button>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        0% là mức HỢP LỆ (miễn hoa hồng) — để trống ô KHÔNG xoá mức riêng, bấm
+                        &quot;Gỡ, dùng mức chung&quot; để đưa tài về mức chung.
+                      </p>
+                      {draftWarning ? (
+                        <p
+                          className={`flex items-start gap-1.5 rounded-md p-2 text-xs ${
+                            draftWarning.direction === 'above'
+                              ? 'bg-red-100 text-red-800'
+                              : 'bg-amber-100 text-amber-800'
+                          }`}
+                        >
+                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                          <span>{draftWarning.message}</span>
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-2">
+                      {(() => {
+                        const c = commissionRateLabel(detail.team?.commissionRate);
+                        return c.warn ? (
+                          <Badge className="gap-1 bg-red-100 text-red-800 hover:bg-red-100">
+                            <AlertTriangle className="h-3 w-3" />
+                            {c.text}
+                          </Badge>
+                        ) : (
+                          <span className="text-sm">{c.text}</span>
+                        );
+                      })()}
+                      <span className="text-xs text-muted-foreground">
+                        Chỉ đọc — cần quyền super admin để sửa mức riêng.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : null}
 
               <div>
                 <Label className="text-xs text-muted-foreground">Người phụ trách</Label>
