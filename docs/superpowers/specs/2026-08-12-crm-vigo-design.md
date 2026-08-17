@@ -213,8 +213,20 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 **Ba điều kiện bắt buộc, nếu không thì UNION sai hoặc chậm:**
 
 1. **Chuẩn hoá kiểu thời gian — ĐỌC KỸ, ĐÂY LÀ CHỖ DỄ SAI NHẤT.**
-   `UNION ALL` trộn `timestamp` với `timestamptz` sẽ để Postgres ép theo **TimeZone của
-   session** → sắp xếp và cursor lệch giờ giữa app node và job. Mâu thuẫn với §8.2 nếu bỏ qua.
+
+   `UNION ALL` trộn `timestamp` với `timestamptz` để Postgres ép nhánh không-tz theo **TimeZone
+   của session**.
+
+   *Đính chính mức độ (kiểm 2026-08-17):* bản spec trước nói việc này gây "lệch giờ giữa app
+   node và job" — **không đúng hiện trạng**. Session TimeZone đã được ghim `UTC` ở **cả hai**
+   đường: `vigo-backend/src/app.module.ts:103` (`options: '-c timezone=UTC'`) và
+   `typeorm-cli.config.ts:12`. Với TZ = UTC, phép ép là đồng nhất về mặt số ⇒ app hiện **không**
+   lệch. Rủi ro thật nằm ở ba chỗ, vẫn đủ để bắt buộc ép tường minh:
+   - chạy tay bằng `psql` / BI tool từ máy `+07` → cùng câu SQL ra kết quả khác;
+   - ai đó gỡ hoặc bỏ sót cái ghim TZ ở một đường kết nối mới → hỏng im lặng, không lỗi;
+   - và quan trọng nhất: **ép SAI CHIỀU thì hỏng bất kể TZ** (xem bẫy bên dưới).
+
+   Mâu thuẫn với §8.2 nếu bỏ qua.
 
    Bảng kiểu **thật**, đo `information_schema.columns` trên DB DEV 2026-08-17 (bản spec trước
    chỉ liệt kê 3 trong 6 nguồn, thiếu đúng nguồn gây bẫy):
@@ -230,8 +242,10 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 
    **Bẫy: `AT TIME ZONE 'UTC'` không phải hàm "ép về timestamptz" — nó ĐỔI CHIỀU theo kiểu đầu vào.**
    - `timestamp AT TIME ZONE 'UTC'` → **timestamptz** (đọc giờ trần như giờ UTC). Đúng ý ta, dùng cho **4 nguồn không-tz**.
-   - `timestamptz AT TIME ZONE 'UTC'` → **timestamp**, tức **RỚT tz**. Áp nhầm lên 2 nguồn tz-aware
-     thì giá trị bị hạ cấp, rồi khi UNION lại được diễn giải theo TimeZone session (`+07`) → **lệch 7 giờ, im lặng, không lỗi nào bắn ra**.
+   - `timestamptz AT TIME ZONE 'UTC'` → **timestamp**, tức **RỚT tz**. Áp nhầm lên 2 nguồn
+     tz-aware là hạ cấp kiểu. Dưới session UTC hiện tại thì con số vẫn khớp nên **test sẽ xanh**
+     — đó mới là chỗ nguy: lỗi nằm im cho tới khi chạy dưới session `+07` (psql tay, BI, hoặc
+     một đường kết nối mới quên ghim TZ), lúc đó ra **lệch 7 giờ, không lỗi nào bắn ra**.
 
    ⇒ Quy tắc: **chỉ bọc `AT TIME ZONE 'UTC'` cho 4 nguồn không-tz**; hai nguồn `*_call_event`
    để nguyên. Viết test khẳng định kiểu trả về của mọi nhánh UNION là `timestamptz` trước khi tin.
