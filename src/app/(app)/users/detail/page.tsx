@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { useSearchParams } from 'next/navigation';
-import { format } from 'date-fns';
 import Link from 'next/link';
 import {
   ArrowLeft,
@@ -53,6 +52,12 @@ import {
 } from '@/lib/api';
 import type { Booking } from '@/lib/types';
 import { getImageUrl } from '@/lib/utils';
+// NGUỒN DUY NHẤT cho giờ VN hiển thị trong repo — 4 màn khác đã import đúng file này
+// (driver-penalties, cskh-activity, driver-cancel-review, drivers/driver-detail-dialog),
+// và `src/lib/cskh-call-labels.ts` ghi thành chữ "KHÔNG chép thêm một bản nữa".
+// Trước đây trang này dùng `format()` của date-fns = giờ TRÌNH DUYỆT, vi phạm CLAUDE.md.
+// Dời helper về `src/lib/` là refactor RIÊNG (đụng 5 file), không nhét vào GĐ2.
+import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 
 const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
@@ -269,9 +274,9 @@ export default function UserDetailPage() {
             <Field label="Mã giới thiệu" value={user.referralCode ?? '—'} />
             <Field label="Điểm tích luỹ" value={Number(user.loyaltyPoints ?? 0).toLocaleString('vi-VN')} />
             <Field label="Tổng chuyến đặt" value={Number(user.bookingCount ?? 0).toLocaleString('vi-VN')} />
-            <Field label="Ngày tham gia" value={user.createdAt ? format(new Date(user.createdAt), 'dd/MM/yyyy HH:mm') : '—'} />
+            <Field label="Ngày tham gia" value={formatVnDateTime(user.createdAt)} />
             {isDeleted && (
-              <Field label="Đã xoá lúc" value={format(new Date(user.deletedAt!), 'dd/MM/yyyy HH:mm')} />
+              <Field label="Đã xoá lúc" value={formatVnDateTime(user.deletedAt)} />
             )}
           </div>
 
@@ -452,7 +457,7 @@ function UserBookingsCard({ customerId }: { customerId: string }) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right text-sm">{fmtVnd(b.finalPrice ?? b.price)}</TableCell>
-                    <TableCell className="text-xs">{format(new Date(b.createdAt), 'dd/MM/yyyy HH:mm')}</TableCell>
+                    <TableCell className="text-xs">{formatVnDateTime(b.createdAt)}</TableCell>
                   </TableRow>
                 ))
               )}
