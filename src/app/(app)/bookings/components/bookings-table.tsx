@@ -120,6 +120,9 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   const [isReassigning, setIsReassigning] = React.useState(false);
   const [selectedDriverId, setSelectedDriverId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
+  // Ca CHIỀU VỀ: khách đặt lượt về cho ĐÚNG tài đang chở lượt đi. Mặc định TẮT —
+  // bật là hành động có chủ ý của admin, và tài hiện thêm luôn kèm nhãn đỏ.
+  const [includeBusy, setIncludeBusy] = React.useState(false);
   const { toast } = useToast();
 
   // Khung giờ đón của CHÍNH chuyến đang đổi tài — backend chỉ ẩn tài chồng giờ với
@@ -140,27 +143,56 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   // sẽ bị cảnh báo đỏ về đúng chuyến admin đang thao tác.
   const excludeBookingId = booking?.id;
 
+  // Reset TÁCH khỏi vòng nạp: gạt ô "hiện tài đang bận" cũng chạy lại effect nạp,
+  // mà gộp chung thì mỗi lần gạt sẽ xoá luôn ô tìm kiếm admin vừa gõ.
+  //
+  // Reset ở chiều ĐÓNG, không phải chiều MỞ. Component này luôn mounted (xem chỗ
+  // render `<ReassignDialog>`) nên state sống qua đóng/mở — nhưng reset lúc MỞ thì
+  // render đầu vẫn mang `includeBusy` cũ: effect nạp bắn 1 request thừa với giá trị
+  // cũ (mỗi request = 3 query DB trên toàn pool), và công tắc hiện BẬT một frame
+  // rồi mới lật TẮT. Reset lúc đóng ⇒ lần mở sau đã sạch từ render đầu.
   React.useEffect(() => {
+    if (open) return;
+    setQuery('');
+    setSelectedDriverId(null);
+    setIncludeBusy(false);
+  }, [open]);
+
+  // Seq guard: gạt qua gạt lại nhanh thì phản hồi của lần gạt CŨ có thể về sau và
+  // ghi đè danh sách của lần gạt MỚI — admin nhìn danh sách không khớp ô đang bật.
+  const driverFetchSeqRef = React.useRef(0);
+  React.useEffect(() => {
+    if (!open) return;
+    const seq = ++driverFetchSeqRef.current;
     const fetchDrivers = async () => {
-      if (!open) return;
       setIsLoading(true);
-      setQuery('');
-      setSelectedDriverId(null);
       try {
         const response = await getAvailableDrivers({
           scheduledFrom: assignFromIso,
           scheduledTo: assignToIso,
           excludeBookingId,
+          includeBusy,
         });
+        if (seq !== driverFetchSeqRef.current) return; // phản hồi cũ → vứt
         setDrivers(response);
+        // Tắt ô lại có thể làm tài ĐANG CHỌN rơi khỏi danh sách. Lúc đó UI trông
+        // như chưa chọn ai trong khi `selectedDriverId` vẫn còn và nút Xác nhận
+        // vẫn gán được — bỏ chọn hẳn và nói rõ, đừng gán ngầm người admin tưởng đã bỏ.
+        setSelectedDriverId((cur) =>
+          cur && !response.some((d) => getDriverId(d) === cur) ? null : cur,
+        );
       } catch (err: any) {
+        if (seq !== driverFetchSeqRef.current) return;
+        // Xoá danh sách cũ: giữ lại thì tắt công tắc mà request hỏng sẽ để nguyên
+        // danh sách CÓ tài bận dưới một công tắc đọc là TẮT — UI nói dối.
+        setDrivers([]);
         toast({ variant: 'destructive', title: 'Không thể tải danh sách tài xế', description: err.message });
       } finally {
-        setIsLoading(false);
+        if (seq === driverFetchSeqRef.current) setIsLoading(false);
       }
     };
     fetchDrivers();
-  }, [open, toast, assignFromIso, assignToIso, excludeBookingId]);
+  }, [open, toast, assignFromIso, assignToIso, excludeBookingId, includeBusy]);
 
   const handleReassign = async () => {
     if (!booking || !selectedDriverId) return;
@@ -215,8 +247,32 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
     <DialogContent className="sm:max-w-lg" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
       <DialogHeader>
         <DialogTitle>Chuyển quốc chuyến #{booking?.id?.slice(0, 8)}...</DialogTitle>
-        <DialogDescription>Chọn tài xế mới cho chuyến này. Chỉ hiển thị tài xế đang online.</DialogDescription>
+        {/* Câu cũ ("Chỉ hiển thị tài xế đang online") SAI: backend nhận cả ONLINE
+            lẫn BUSY, chỉ ẩn tài có cam kết CHỒNG GIỜ. Ops đọc câu đó thì kết luận
+            tài đang bận vốn không được hiện, và không báo lỗi khi cần gán chiều về. */}
+        <DialogDescription>
+          Chọn tài xế mới cho chuyến này. Mặc định ẩn tài đang bận trùng khung giờ.
+        </DialogDescription>
       </DialogHeader>
+      {/* Ca CHIỀU VỀ: khách đặt lượt về cho đúng tài đang chở lượt đi. Lệnh gán vốn
+          đã cho phép (không có guard bận) — chỗ này chỉ mở tầng hiển thị. */}
+      <div className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+        <Switch
+          id="reassign-include-busy"
+          checked={includeBusy}
+          onCheckedChange={setIncludeBusy}
+          className="mt-0.5"
+        />
+        <div className="space-y-0.5">
+          <Label htmlFor="reassign-include-busy" className="cursor-pointer text-sm font-medium">
+            Hiện cả tài xế đang bận
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Dùng khi khách đặt chiều về cho đúng tài đang chở. Tài hiện thêm sẽ có nhãn
+            đỏ — kiểm giờ trước khi gán, hệ thống không chặn double-book.
+          </p>
+        </div>
+      </div>
       <div className="relative mt-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -231,7 +287,12 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
         ) : drivers.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">Không tìm thấy tài xế khả dụng.</p>
+          // Danh sách rỗng KHÔNG có nghĩa là hết tài: tài đang chở khách bị lọc im
+          // lặng. Nói ra, nếu không ops kết luận "hết tài" rồi thôi không tìm nữa.
+          <p className="text-center text-muted-foreground py-8">
+            Không tìm thấy tài xế khả dụng.
+            {!includeBusy && ' Tài đang bận trùng khung giờ đang bị ẩn — bật công tắc phía trên để hiện.'}
+          </p>
         ) : filteredDrivers.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">Không có tài xế khớp với "{query}".</p>
         ) : (
@@ -284,7 +345,12 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                           </Badge>
                         );
                       })()}
-                      {(driver as any).availableSeats != null && (
+                      {/* Ẩn khi 0 (cùng luật với màn Tạo chuyến): `accept()` zero hoá
+                          `availableSeats` cho chuyến không-ghép, nên tài lọt vào danh
+                          sách nhờ khung giờ — hoặc nhờ công tắc "hiện tài đang bận" —
+                          gần như luôn hiện "còn 0 ghế khách". Bày ra để gán mà lại ghi
+                          0 ghế thì UI tự mâu thuẫn. Số ghế thật nằm ở nhãn cam kết. */}
+                      {(driver as any).availableSeats > 0 && (
                         <Badge variant="outline" className="text-xs">
                           {/* "ghế KHÁCH": số này là chỗ chở khách, KHÁC "xe N chỗ" (tổng
                               ghế kể ghế lái) trong thông báo BOK_013. Ghi tắt là gây hiểu nhầm. */}
@@ -301,7 +367,9 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
-        <Button onClick={handleReassign} disabled={!selectedDriverId || isReassigning}>
+        {/* Khoá cả khi đang nạp lại: tắt công tắc rồi bấm ngay trong cửa sổ fetch sẽ
+            gán đúng tài vừa bị loại — logic bỏ chọn chạy sau nên không cứu kịp. */}
+        <Button onClick={handleReassign} disabled={!selectedDriverId || isReassigning || isLoading}>
           {isReassigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Xác nhận chuyển quốc
         </Button>
