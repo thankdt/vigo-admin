@@ -168,7 +168,7 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 | `driver_trip_rating` | Có `customerId` + `stars` + `comment` + `tags`, index `(customerId, driverId)` → **nguồn CSAT theo khách đã tồn tại**, chưa ai khai thác |
 | `referral` | Ai giới thiệu ai |
 | `booking` | Chuyến đi |
-| `notification` | Có `userId` từng bản ghi → push đo được. **Không có index nào ngoài FK** (xem §5.3) |
+| `notification` | Có `userId` từng bản ghi → push đo được. **KHÔNG có index nào ngoài PRIMARY KEY trên `id`** — ràng buộc FK `userId → user(id)` có tồn tại nhưng Postgres **không** tự tạo index cho cột FK, nên lọc theo khách là seq-scan trên **510.397 dòng / 144 MB** (đo DB DEV 2026-08-17). Xem §5.3 |
 | `scheduled_notifications` | Đã có lịch gửi + `targetType`/`targetData` + `previewAudience` |
 
 ### 5.2 Lớp 2 — Bảng CRM mới
@@ -176,7 +176,7 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 | Bảng | Vai trò | Thiết kế |
 |---|---|---|
 | `crm_customer_metrics` | Chỉ số tính sẵn theo khách | **UNIQUE(`userId`)** — chốt chặn ở DB, không kiểm trong service (theo tiền lệ `uq_dtr_booking`); cron chạy chồng do retry/deploy trùng sẽ không đẻ dòng trùng. Trường: `firstTripAt`, `lastTripAt`, `tripsCompleted`, `tripsCancelled`, `gmv`, `avgStarsGiven`, `favoriteRouteId`, `rScore`/`fScore`/`mScore`, `segment`, `churnRisk` |
-| `crm_customer_tag` | Nhãn thủ công | Danh mục nhãn để trong `system_config` — ops sửa không cần deploy, đúng mẫu `CSKH_CALL_REASONS` |
+| `crm_customer_tag` | Nhãn thủ công | Danh mục nhãn để trong `system_config`, đúng mẫu `CSKH_CALL_REASONS` — sửa được **không cần deploy**, nhưng ĐỪNG hiểu là "ops tự sửa": xem cảnh báo quyền ngay dưới bảng |
 | `crm_customer_note` | Ghi chú về **khách** | Khác `booking_customer_call_event.note` (ghi chú về **chuyến**) |
 | `crm_ticket` | Khiếu nại khách | `code` sinh bằng **sequence ở DB** (không đếm trong service — tránh race); `customerUserId`, `bookingId?`, `driverId?`, `category`, `severity`, `status`, `assigneeAdminId`, `slaDueAt`, `resolution`, `compensationAmount`, `source` |
 | `crm_ticket_event` | Lịch sử xử lý ticket | Append-only, đúng mẫu `BookingCustomerCallEvent` |
@@ -187,6 +187,23 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 | `crm_account_member` | Nhân viên công ty đang đặt xe | Nối `crm_account` ↔ `user` thật |
 | `crm_account_event` | Lịch sử pipeline B2B | Append-only |
 
+> **CẢNH BÁO QUYỀN — "để trong `system_config`" ≠ "ops sửa được"** (đo DB DEV 2026-08-17).
+> `POST /master-data/system-config` tự gate theo key: `functionForConfigKey(key)` =
+> `settings.${settingsGroupForKey(key)}` (`vigo-backend/src/rbac/rbac.constants.ts:41-57`).
+> Key `CRM_*` / `CSKH_*` **không khớp tiền tố nào** ⇒ rơi vào nhóm `misc` ⇒ đòi function
+> **`settings.misc`**, mà `settings.misc` hiện chỉ có **đúng một role: `full-access-legacy`**
+> (super-admin). Ba role CRM thật — `cskh`, `quan-ly-chung`, `van-hanh` — **không sửa được**.
+>
+> Vậy nên khi làm GĐ2 phải chọn một trong ba, đừng mặc định:
+> 1. **Giữ nguyên** — danh mục tag do super-admin sửa hộ. Rẻ nhất, nhưng đúng như hiện trạng
+>    `CSKH_CALL_REASONS`, tức là mỗi lần thêm tag phải nhờ người khác.
+> 2. **Đặt tên key theo tiền tố đã có nhóm** để rơi vào function ops đã cầm — mẹo lách, dễ gây
+>    hiểu nhầm về sau, không khuyến nghị.
+> 3. **Thêm nhánh `crm` vào `settingsGroupForKey`** (`key.startsWith('CRM_') → 'crm'`) + function
+>    `settings.crm` + migration cấp quyền. Sạch nhất, nhưng **phải sửa song song FE
+>    `system-config-groups.ts`** — comment ngay trên hàm đó ghi rõ "Sửa gì PHẢI đổi cùng FE
+>    (thứ tự + rule giống hệt)" — và nhớ bài học §13.1: thêm function = phải kèm migration cấp.
+
 ### 5.3 Lớp 3 — Timeline hợp nhất: cố tình KHÔNG tạo bảng
 
 `GET /crm/customers/:id/timeline` gộp `UNION ALL` từ lớp 1 + lớp 2, sắp theo thời gian, phân trang bằng cursor.
@@ -195,8 +212,49 @@ Một trang chi tiết, một nguồn sự thật — repo này đã trả giá 
 
 **Ba điều kiện bắt buộc, nếu không thì UNION sai hoặc chậm:**
 
-1. **Chuẩn hoá kiểu thời gian.** Các nguồn không đồng nhất: `booking_customer_call_event.createdAt` là `timestamptz`, còn `driver_trip_rating.createdAt` và `notification.createdAt` là `timestamp` (không tz). `UNION ALL` trộn hai kiểu sẽ để Postgres ép theo **TimeZone của session** → sắp xếp và cursor lệch giờ giữa app node và job. Mọi nhánh phải ép tường minh về `timestamptz` (`"createdAt" AT TIME ZONE 'UTC'` cho nguồn không-tz). Mâu thuẫn với §8.2 nếu bỏ qua.
-2. **Thêm index** `notification(userId, "createdAt" DESC)` — bảng này hiện **không có index nào ngoài FK**, nên lọc theo khách là seq-scan; đúng khách VIP nhiều thông báo là đúng chỗ chậm nhất. Một migration index thuần, không đổi shape.
+1. **Chuẩn hoá kiểu thời gian — ĐỌC KỸ, ĐÂY LÀ CHỖ DỄ SAI NHẤT.**
+
+   `UNION ALL` trộn `timestamp` với `timestamptz` để Postgres ép nhánh không-tz theo **TimeZone
+   của session**.
+
+   *Đính chính mức độ (kiểm 2026-08-17):* bản spec trước nói việc này gây "lệch giờ giữa app
+   node và job" — **không đúng hiện trạng**. Session TimeZone đã được ghim `UTC` ở **cả hai**
+   đường: `vigo-backend/src/app.module.ts:103` (`options: '-c timezone=UTC'`) và
+   `typeorm-cli.config.ts:12`. Với TZ = UTC, phép ép là đồng nhất về mặt số ⇒ app hiện **không**
+   lệch. Rủi ro thật nằm ở ba chỗ, vẫn đủ để bắt buộc ép tường minh:
+   - chạy tay bằng `psql` / BI tool từ máy `+07` → cùng câu SQL ra kết quả khác;
+   - ai đó gỡ hoặc bỏ sót cái ghim TZ ở một đường kết nối mới → hỏng im lặng, không lỗi;
+   - và quan trọng nhất: **ép SAI CHIỀU thì hỏng bất kể TZ** (xem bẫy bên dưới).
+
+   Mâu thuẫn với §8.2 nếu bỏ qua.
+
+   Bảng kiểu **thật**, đo `information_schema.columns` trên DB DEV 2026-08-17 (bản spec trước
+   chỉ liệt kê 3 trong 6 nguồn, thiếu đúng nguồn gây bẫy):
+
+   | Nguồn timeline | Cột | Kiểu thật |
+   |---|---|---|
+   | `booking_customer_call_event` | `createdAt` | **timestamptz** |
+   | `driver_customer_call_event` | `createdAt` | **timestamptz** |
+   | `driver_trip_rating` | `createdAt`, `tripCompletedAt` | timestamp (không tz) |
+   | `notification` | `createdAt` | timestamp (không tz) |
+   | `booking` | `createdAt`, `completedAt` | timestamp (không tz) |
+   | `referral` | `createdAt` | timestamp (không tz) |
+
+   **Bẫy: `AT TIME ZONE 'UTC'` không phải hàm "ép về timestamptz" — nó ĐỔI CHIỀU theo kiểu đầu vào.**
+   - `timestamp AT TIME ZONE 'UTC'` → **timestamptz** (đọc giờ trần như giờ UTC). Đúng ý ta, dùng cho **4 nguồn không-tz**.
+   - `timestamptz AT TIME ZONE 'UTC'` → **timestamp**, tức **RỚT tz**. Áp nhầm lên 2 nguồn
+     tz-aware là hạ cấp kiểu. Dưới session UTC hiện tại thì con số vẫn khớp nên **test sẽ xanh**
+     — đó mới là chỗ nguy: lỗi nằm im cho tới khi chạy dưới session `+07` (psql tay, BI, hoặc
+     một đường kết nối mới quên ghim TZ), lúc đó ra **lệch 7 giờ, không lỗi nào bắn ra**.
+
+   ⇒ Quy tắc: **chỉ bọc `AT TIME ZONE 'UTC'` cho 4 nguồn không-tz**; hai nguồn `*_call_event`
+   để nguyên. Viết test khẳng định kiểu trả về của mọi nhánh UNION là `timestamptz` trước khi tin.
+2. **Thêm index** `notification(userId, "createdAt" DESC)`. Hiện trạng còn tệ hơn bản spec cũ mô
+   tả: bảng **chỉ có PRIMARY KEY trên `id`**, FK `userId` **không** kèm index (Postgres không tự
+   tạo index cho cột FK — chỉ tự tạo cho PK/UNIQUE). Nên lọc theo khách là seq-scan trên
+   **510.397 dòng / 144 MB**; đúng khách VIP nhiều thông báo là đúng chỗ chậm nhất. Một migration
+   index thuần, không đổi shape — nhưng bảng cỡ này thì **phải `CREATE INDEX CONCURRENTLY`** kèm
+   chốt `indisvalid` theo §13.5.
 3. **Join `booking`** cho nhánh cuộc gọi, vì `booking_customer_call_event` không mang `customerId`.
 
 Ngược lại, `crm_customer_metrics` **phải** là bảng thật: lọc phân khúc mà quét `booking` mỗi lần thì không chạy nổi, và RFM cần mốc cắt cố định để hai lần chạy so sánh được với nhau.
@@ -409,11 +467,11 @@ Các giai đoạn 2–6 chỉ **thêm** bảng và endpoint mới, không sửa 
 
 ## 12. Điểm còn mở
 
-1. **Khiếu nại khách hiện đang được xử lý bằng cách nào?** (Zalo nhóm, Telegram, sổ tay) — ảnh hưởng thiết kế `crm_ticket`: có cần nhập liệu thủ công từ kênh cũ không.
-2. **Danh mục loại ticket và mức SLA** — ops chốt trước GĐ3, lưu trong `system_config` để sửa không cần deploy.
-3. **Hạn mức đền bù theo vai trò** — chốt trước GĐ3.
-4. **Công thức RFM và ngưỡng `churnRisk`** — chưa có định nghĩa: cửa sổ tính bao lâu, chia bin theo ngũ phân vị hay mốc cứng, ngưỡng nào là "nguy cơ rời bỏ". Không chốt thì hai người implement ra hai kết quả khác nhau và không viết được test §11.3. **Chốt trước GĐ4.**
-5. **Ngưỡng "quá hạn"** của tab hàng đợi (N giờ sau `completedAt`) — ops chốt trước GĐ1, để trong `system_config`.
+1. ~~Khiếu nại khách hiện xử lý bằng cách nào?~~ → **ĐÃ CHỐT 2026-08-17: qua NHÓM ZALO.** Hệ quả bắt buộc cho GĐ3, xem §14.1.
+2. ~~Danh mục loại ticket và mức SLA~~ → **ĐÃ CHỐT, xem §14.1.**
+3. ~~Hạn mức đền bù theo vai trò~~ → **ĐÃ CHỐT, xem §14.2.**
+4. ~~Công thức RFM và ngưỡng `churnRisk`~~ → **ĐÃ CHỐT, xem §14.3.**
+5. ~~Ngưỡng "quá hạn" của tab hàng đợi~~ → **ĐÃ CHỐT: 24 giờ**, key `CSKH_CALL_AFTER_OVERDUE_HOURS` trong `system_config` (GĐ1 đã seed).
 
 ---
 
@@ -467,8 +525,13 @@ vào bundle và việc tách file gần như vô nghĩa (200 → 182 kB sau khi 
 
 CIC bị huỷ giữa chừng để lại index **INVALID nhưng vẫn tồn tại**; lần chạy lại `IF NOT EXISTS`
 no-op im lặng rồi đánh dấu migration đã áp dụng ⇒ index vô dụng vĩnh viễn, không log nào báo.
-Phải kiểm `pg_index.indisvalid` và DROP trước khi tạo lại (khuôn:
-`1792800200000-ReplaceBookingTeamIndexWithPartial.ts`).
+Phải kiểm `pg_index.indisvalid` và DROP trước khi tạo lại.
+
+**Khuôn để copy:** `vigo-backend/src/database/migrations/1793200050000-AddBookingCallPhaseOwnerIndexes.ts`.
+(Bản spec trước trỏ vào `1792800200000-ReplaceBookingTeamIndexWithPartial.ts` — file đó **không
+tồn tại**; kiểm 2026-08-17 thì trong 222 migration chỉ đúng một file dùng `indisvalid`, là file
+nêu trên. Cũng lưu ý migration thật nằm ở `src/database/migrations/`, **không** phải
+`src/migrations/` — thư mục sau chỉ có 2 file và dễ nhầm.)
 
 ### 13.6 Nợ kỹ thuật chặn GĐ3
 
@@ -480,6 +543,25 @@ tài xế nhận bcrypt hash của khách và ngược lại.
 Không chặn GĐ0/GĐ1 (cả 3 role được cấp `crm-queue` đều đã có `bookings` từ trước nên mức lộ
 không đổi), nhưng **phải vá trước GĐ3**: GĐ3 đẻ ra `crm-compensate` — quyền tiền thật, và là
 lúc thật sự cần tạo role hẹp.
+
+> **TRẠNG THÁI 2026-08-17 — ĐÃ VIẾT XONG NHƯNG HOÃN VÔ THỜI HẠN (user chốt).**
+> Bản vá đã hoàn chỉnh và xanh (`npx tsc --noEmit` sạch, 217 suite / 3116 test pass): thêm
+> `select: false` cho `User.password`, thêm `findByPhoneWithPassword()` cho đúng đường đăng
+> nhập, các đường còn lại (kể cả `register`) giữ nguyên `findByPhone`. Đã merge vào `dev` rồi
+> **revert** (`git revert -m 1`) theo yêu cầu user: *"nếu phải động đến pass của user thì bỏ
+> bước đấy đi, cho vào quên lãng, sau này tính sau"*.
+>
+> - Code còn nguyên trên nhánh **`fix/user-password-select-false`** (vigo-backend) — lấy lại
+>   được, không phải viết lại.
+> - `dev` hiện **không** còn dấu vết `findByPhoneWithPassword`; đã đo lại trên DB DEV sau khi
+>   revert: 22.392 tài khoản, `password IS NULL` = **0** ở cả 4 role ⇒ revert không hỏng dữ liệu.
+> - Cảnh báo revert đã gây thiệt hại phụ: nó xoá kèm
+>   `docs/superpowers/plans/2026-08-17-reactivate-deleted-account-on-register.md` (file người
+>   khác, lọt vào commit vì `git add -A`) — đã khôi phục.
+>
+> **Hệ quả cho GĐ3:** điều kiện "vá trước GĐ3" ở trên **chưa được thoả**. Trước khi mở GĐ3
+> phải quay lại hỏi user: hoặc bật lại nhánh trên, hoặc chấp nhận rủi ro có văn bản. Đừng
+> lặng lẽ làm GĐ3 như thể mục này đã xong.
 
 ### 13.7 Những chỗ spec tự mâu thuẫn, cần chốt trước khi làm tiếp
 
@@ -493,3 +575,172 @@ lúc thật sự cần tạo role hẹp.
 - **Cửa sổ thời gian hàng đợi**: §6.1 định nghĩa tab bằng truy vấn nhưng không kẹp thời gian.
   Tab "Cần gọi sau" vì thế bao trọn mọi chuyến COMPLETED lịch sử (cột `callAfterStatus` mới
   thêm nên dữ liệu cũ đều NULL). Phải đếm dữ liệu thật rồi mới quyết.
+
+---
+
+## 14. Quyết định mở khoá GĐ3 + GĐ4 (chốt 2026-08-17)
+
+Bốn điểm mở của §12 đã được chốt. Mục này ghi lại **con số cụ thể và lý do chọn**, để hai
+người implement ra cùng một kết quả — đúng thứ §12.4 cảnh báo.
+
+> ⚠️ **Mọi ngưỡng dưới đây nằm trong `system_config`**, ops sửa không cần deploy (đúng mẫu
+> `CSKH_CALL_REASONS`). Con số ở đây là **giá trị khởi tạo**, không phải hằng số trong code.
+
+### 14.0 Số liệu nền — đo trên DB DEV ngày 2026-08-17
+
+Mọi ngưỡng bên dưới neo vào số thật, không lấy từ sách CRM:
+
+| Chỉ số | Giá trị |
+|---|---|
+| Khách (`role=USER`) | 10.486 |
+| Chuyến (mọi trạng thái) | 8.171 |
+| Chuyến **hoàn thành** | **142** |
+| Chuyến đầu tiên → gần nhất | 03/01/2026 → 10/08/2026 (~7 tháng) |
+| Giá chuyến hoàn thành | trung vị **300k** · p75 507k · p90 891k · max 1,67tr |
+| Phân bố tần suất | **105 khách đi đúng 1 chuyến** · 17 khách 2 chuyến · 1 khách 3 chuyến |
+| Độ mới | 62 khách ≤30 ngày · 53 khách 31–60 · 8 khách 61–90 |
+
+**Ba kết luận rút ra, ảnh hưởng trực tiếp tới thiết kế:**
+
+1. **Không dùng ngũ phân vị được.** §12.4 hỏi "ngũ phân vị hay mốc cứng" — dữ liệu trả lời:
+   105/123 khách có F đúng bằng 1, chia ngũ phân vị sẽ ra nhiều bin trùng giá trị và điểm số
+   nhảy loạn mỗi lần có thêm vài khách. **Dùng MỐC CỨNG.**
+2. **Cửa sổ phải ngắn.** Toàn bộ lịch sử mới 7 tháng; ngưỡng "180 ngày không đi = rời bỏ"
+   kiểu sách vở sẽ không phân loại được ai.
+3. **Bài toán số 1 của ViGo KHÔNG phải churn, mà là chuyến-thứ-hai.** 85% khách hoàn thành
+   đúng một chuyến rồi thôi. Xem §14.4 — đây là phát hiện quan trọng hơn cả bốn câu hỏi.
+
+> Cảnh báo: đây là số DEV. Trước khi bật GĐ4 trên prod phải chạy lại đúng bộ truy vấn này
+> trên prod và hiệu chỉnh ngưỡng nếu lệch lớn.
+
+### 14.1 Danh mục ticket + SLA
+
+**Nguồn khiếu nại là NHÓM ZALO** ⇒ hệ quả bắt buộc, không phải tuỳ chọn:
+- `crm_ticket.source` phải có giá trị `ZALO_GROUP` và đó là **mặc định**.
+- Phải có đường **nhập tay** đầy đủ (không có webhook Zalo group): người nhập chọn khách,
+  chuyến (tuỳ chọn), loại, mô tả. Thiếu đường này thì GĐ3 không dùng được ngày nào.
+- `slaDueAt` tính từ **thời điểm NHẬP**, không phải thời điểm khách kêu (không biết được).
+  Thêm ô tuỳ chọn "khách phản ánh lúc" để đo độ trễ của chính kênh Zalo.
+
+Danh mục cố ý **nhỏ và khớp từ vựng đã có** (`PenaltyReasonCode`, `CSKH_CALL_REASONS`) —
+đẻ bộ từ vựng thứ tư là sau này không đối chiếu được số liệu với nhau.
+
+| Mã | Nhãn | Phản hồi | Đóng | Vì sao mốc đó |
+|---|---|---|---|---|
+| `NO_SHOW_DRIVER` | Tài xế không đến / bỏ khách | **1h** | 8h | Khách đang đứng ngoài đường — khẩn nhất, mọi thứ khác chờ được |
+| `UNSAFE_DRIVING` | Chạy ẩu, mất an toàn | **1h** | 24h | An toàn: phải chặn tài xế đó nhận chuyến mới trước đã |
+| `LOST_ITEM` | Bỏ quên đồ trên xe | **2h** | 24h | Tài xế còn chạy tiếp; qua ngày là đồ đi xa hoặc mất dấu |
+| `OVERCHARGE` | Thu sai giá / thu thêm | 4h | 24h | Dính tiền, và thường kèm đền bù |
+| `DRIVER_ATTITUDE` | Thái độ tài xế | 4h | 24h | Không khẩn nhưng để lâu là mất khách |
+| `OFF_PLATFORM` | Rủ đi ngoài app | 8h | 48h | Khớp `PenaltyReasonCode.OFF_PLATFORM` — nối thẳng sang màn phạt |
+| `BOOKING_ISSUE` | Lỗi đặt chuyến / app | 8h | 48h | Thường là bug, không phải tranh chấp |
+| `OTHER` | Khác | 8h | 48h | Bắt buộc có, và phải theo dõi tỉ lệ — `OTHER` phình to nghĩa là danh mục sai |
+
+**Lưu ở `system_config`**, key `CRM_TICKET_CATEGORIES`, mỗi mục `MÃ|Nhãn|giờ phản hồi|giờ đóng`,
+ngăn bằng `;` — cùng lối `CSKH_CALL_REASONS` đang dùng.
+
+**SLA đếm theo GIỜ HÀNH CHÍNH hay giờ liên tục?** Chốt: **giờ liên tục (24/7)**, vì dịch vụ
+chạy 24/7 và khách bị bỏ lúc 22h không thể chờ tới 8h sáng. Nếu sau này ops thấy quá gắt thì
+chỉnh số giờ, đừng đổi sang giờ hành chính — đổi cách đếm làm mọi số liệu cũ hết so sánh được.
+
+### 14.2 Hạn mức đền bù
+
+Neo vào giá chuyến thật: trung vị **300k**, p90 **891k**.
+
+| Vai trò | Được làm gì | Trần / vụ | Trần / ngày |
+|---|---|---|---|
+| Có `crm-tickets` (CSKH tuyến đầu) | Tạo, xử lý, **ĐỀ XUẤT** mức đền bù | **0đ** — không tự duyệt được | — |
+| Có `crm-compensate` (giám sát) | Duyệt & thực hiện đền bù | **≤ 500.000đ** | **≤ 3.000.000đ** |
+| Super admin | Mọi mức | không trần | không trần |
+
+**Lý do các con số:**
+- **500k/vụ** ≈ p75 giá chuyến. Đủ để hoàn trọn một chuyến bình thường mà không cần ai duyệt
+  thêm — tức là xử lý xong tại chỗ đúng phần lớn ca thực tế.
+- **3tr/ngày** chặn kiểu rò rỉ nguy hiểm hơn: một người rải nhiều lần nhỏ. Trần/vụ một mình
+  không chặn được việc này.
+- **CSKH = 0đ** là theo đúng §6.4 (*"không gộp vào quyền xem ticket"*). Nhưng cho họ **đề xuất
+  mức** — nếu không, mọi ca đền bù đều phải kể lại câu chuyện cho giám sát, và giám sát sẽ
+  duyệt mù.
+
+**Bắt buộc kèm mọi lần đền bù** (không phải khuyến nghị):
+- Gắn `ticketId`, và `bookingId` nếu có.
+- Ghi vết **append-only** (mẫu `BookingCustomerCallEvent`): ai duyệt, bao nhiêu, lý do, lúc nào.
+- Vượt trần → **chặn ở BACKEND**, không chỉ ẩn nút ở FE.
+
+`system_config`: `CRM_COMPENSATE_MAX_PER_CASE=500000`, `CRM_COMPENSATE_MAX_PER_DAY=3000000`.
+
+### 14.3 Công thức RFM + ngưỡng rời bỏ
+
+**Mốc cứng, không ngũ phân vị** (§14.0 lý do 1). Cửa sổ tính **180 ngày**, khớp độ dài lịch sử
+thật. Chỉ đếm chuyến `COMPLETED`.
+
+**R — độ mới** (số ngày kể từ chuyến hoàn thành gần nhất):
+
+| Điểm | Ngưỡng |
+|---|---|
+| 5 | ≤ 14 ngày |
+| 4 | 15–30 |
+| 3 | 31–60 |
+| 2 | 61–90 |
+| 1 | > 90 ngày |
+
+**F — tần suất** (số chuyến hoàn thành trong 180 ngày): 1 → 1đ · 2 → 2đ · 3–5 → 3đ · 6–9 → 4đ ·
+≥10 → 5đ.
+
+**M — giá trị** (tổng `price` chuyến hoàn thành trong 180 ngày): <500k → 1đ · 500k–1tr → 2đ ·
+1–2tr → 3đ · 2–5tr → 4đ · ≥5tr → 5đ. *(Neo: 5tr ≈ 16 chuyến trung vị; 500k ≈ chưa tới 2 chuyến.)*
+
+**Phân khúc — suy ra từ điểm, KHÔNG lưu chuỗi tự do:**
+
+| Phân khúc | Điều kiện | Việc cần làm |
+|---|---|---|
+| `MOI_CHUA_QUAY_LAI` | F=1 **và** R≥3 | Kéo về chuyến thứ hai — nhóm lớn nhất, xem §14.4 |
+| `DANG_HOAT_DONG` | R≥4 **và** F≥3 | Giữ nguyên, đừng làm phiền |
+| `VIP` | F≥4 **và** M≥4 | Ưu tiên xử lý ticket, chăm riêng |
+| `NGUY_CO_ROI_BO` | F≥2 **và** R=2 | Win-back: từng đi đều, đang chững lại |
+| `DA_ROI_BO` | F≥2 **và** R=1 | Chiến dịch kéo lại, kỳ vọng thấp |
+| `MOT_LAN_ROI_THOI` | F=1 **và** R≤2 | Khác hẳn "rời bỏ" — xem dưới |
+
+**`churnRisk` — định nghĩa hẹp, cố ý:** chỉ tính cho khách **F≥2**. Khách mới đi 1 lần rồi
+biến mất **KHÔNG phải "rời bỏ"** — họ chưa bao giờ là khách quen để mà mất. Gộp hai nhóm này
+là hỏng cả số liệu lẫn hành động: một bên cần *win-back* (gọi lại, ưu đãi giữ chân), bên kia
+cần *onboarding* (lý do để đi lần hai). Trộn vào nhau thì mọi chiến dịch đều nhắm sai người.
+
+`churnRisk = HIGH` khi F≥2 và R≤2; `MEDIUM` khi F≥2 và R=3; còn lại `LOW`.
+
+Toàn bộ ngưỡng lưu ở `system_config` key `CRM_RFM_THRESHOLDS` (JSON), cron tính lại **03:00
+giờ VN** theo §8.2.
+
+### 14.4 Phát hiện quan trọng hơn cả 4 câu hỏi
+
+**105 trên 123 khách có chuyến hoàn thành chỉ đi đúng MỘT lần** (85%). 17 người đi 2 lần, 1
+người đi 3 lần.
+
+Nghĩa là toàn bộ khung CRM cổ điển — phân khúc VIP, cảnh báo rời bỏ, chiến dịch giữ chân —
+đang nhắm vào một tập gần như rỗng. Chỉ 18 khách có F≥2 để mà "giữ".
+
+Việc đáng tiền nhất của CRM ViGo lúc này là **chuyển khách đi-một-lần thành đi-lần-hai**, và
+nó cần đúng hai thứ, cả hai đều rẻ hơn nhiều so với GĐ4–GĐ5:
+
+1. **Biết vì sao họ không quay lại.** ⚠️ **ĐÍNH CHÍNH 2026-08-17** — bản đầu của mục này
+   viết rằng dữ liệu "đã có sẵn". Đo lại thì KHÔNG:
+
+   | Bảng | Số dòng (DEV) |
+   |---|---|
+   | `booking_customer_call_event` | 1.437 ✅ dùng được |
+   | `driver_trip_rating` | **1** ❌ gần như rỗng |
+
+   Tức là **chưa có dữ liệu CSAT để khai thác** — tính năng đánh giá chuyến gần như không ai
+   dùng. Nên việc cần làm trước không phải "đọc dữ liệu sẵn có" mà là **làm cho khách chịu
+   đánh giá** (nhắc sau chuyến, hoặc hỏi ngay trong cuộc gọi-sau của hàng đợi CSKH — GĐ1 đã
+   có sẵn ô `reason` + `note` cho việc đó).
+
+   Nguồn dùng được NGAY là `booking_customer_call_event` (1.437 dòng, có `reason` chuẩn hoá).
+   **Phải đếm lại trên PROD trước khi kết luận** — khách không đánh giá trên DEV là chuyện
+   bình thường.
+2. **Một chiến dịch duy nhất, nhắm đúng nhóm `MOI_CHUA_QUAY_LAI`.**
+
+⇒ **Đề xuất đổi thứ tự lộ trình**: cân nhắc làm GĐ7 (Insights — cohort giữ chân, CSAT) *trước*
+GĐ4/GĐ5, hoặc ít nhất tách phần "báo cáo lý do không quay lại" ra làm sớm. Xây bộ máy phân
+khúc + chiến dịch cho 18 khách là đầu tư sai chỗ. **Cần user quyết** — spec đang xếp GĐ7 là
+"tuỳ chọn", số liệu này nói ngược lại.
