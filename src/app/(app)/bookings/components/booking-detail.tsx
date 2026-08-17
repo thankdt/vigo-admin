@@ -23,6 +23,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag } from '@/lib/api';
 import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, TestTripBadge } from './booking-shared';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
+import { formatScheduleWindow } from './schedule-window';
 import type {} from '@/lib/types';
 import type { Booking, CustomerCallStatus, BookingCustomerCallEvent } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -511,6 +512,12 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
     ? booking.driver.user?.fullName || (booking.driver as any).fullName || booking.driver.name || 'N/A'
     : null;
 
+  // null = chuyến đi ngay (không có mốc hẹn nào).
+  const scheduleWindow = formatScheduleWindow(
+    booking?.scheduledFromTime ?? booking?.scheduledTime,
+    booking?.scheduledToTime,
+  );
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
@@ -647,15 +654,17 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 </Card>
               )}
 
-              {/* Scheduled pickup time — only when the customer booked ahead. */}
-              {booking.scheduledTime && (
+              {/* Scheduled pickup time — only when the customer booked ahead.
+                  Chuyến đời mới có khung [from, to]; `scheduledTime` chỉ mirror
+                  mốc đầu (client cũ) nên phải đọc from/to mới thấy đủ 2 mốc. */}
+              {scheduleWindow && (
                 <Card className="p-3 flex items-center gap-3 border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30">
                   <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
                     <Clock className="h-4 w-4 text-amber-700 dark:text-amber-300" />
                   </div>
                   <div className="flex-1 text-sm">
                     <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Hẹn giờ</div>
-                    <div className="font-semibold">{formatVnDateTime(booking.scheduledTime)}</div>
+                    <div className="font-semibold">{scheduleWindow}</div>
                   </div>
                 </Card>
               )}
