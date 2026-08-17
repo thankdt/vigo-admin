@@ -62,6 +62,7 @@ import { logCrmProfileView } from '@/lib/api';
 import { CustomerSourceCard } from './components/customer-source-card';
 import { CustomerTagsNotesCard } from './components/customer-tags-notes-card';
 import { CustomerTimelineCard } from './components/customer-timeline-card';
+import { PhoneCell } from '../components/phone-cell';
 
 const ROLE_LABEL: Record<string, string> = {
   USER: 'Khách hàng',
@@ -289,7 +290,15 @@ export default function UserDetailPage() {
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2 lg:grid-cols-3">
-            <Field label="Số điện thoại" value={user.phone} />
+            {/*
+              Ô SĐT chính của hồ sơ — chỗ DUY NHẤT trên trang này có nút mở số. Dòng phụ đề
+              ở đầu trang cố ý để nguyên chuỗi đã che: hai nút mở số trên cùng một màn là
+              thừa, và ô này mới là chỗ admin tìm khi cần gọi.
+            */}
+            <Field
+              label="Số điện thoại"
+              value={<PhoneCell userId={user.id} phone={user.phone} surface="users-detail" />}
+            />
             <Field label="Email" value={user.email ?? '—'} />
             <Field label="Mã giới thiệu" value={user.referralCode ?? '—'} />
             <Field label="Điểm tích luỹ" value={Number(user.loyaltyPoints ?? 0).toLocaleString('vi-VN')} />

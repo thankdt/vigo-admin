@@ -46,6 +46,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
+import { PhoneCell } from './phone-cell';
 
 type SortKey = keyof User;
 
@@ -356,7 +357,18 @@ export function UsersTable() {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>{user.phone}</TableCell>
+                {/*
+                  SĐT khách do BACKEND che (chỉ role USER). PhoneCell chỉ mọc nút "Hiện số"
+                  khi chuỗi đang bị che, nên dòng chủ HTX/tài xế không đổi gì.
+
+                  Các chỗ KHÁC trong file này cũng dùng `phone` nhưng KHÔNG đổi, có chủ đích:
+                  toast "Đã xoá"/"Đã khôi phục" và tiêu đề dialog Affiliate chỉ để nhận diện
+                  lại thao tác vừa làm, không phải để tra cứu — thêm nút mở số vào đó là mở
+                  rộng bề mặt mà không ai cần.
+                */}
+                <TableCell>
+                  <PhoneCell userId={user.id} phone={user.phone} surface="users-list" />
+                </TableCell>
                 <TableCell>
                   {user.role === 'TRANSPORT_COMPANY_OWNER' ? (
                     <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 hover:bg-purple-100">
