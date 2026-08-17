@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -791,6 +791,11 @@ export async function getBookings(params: {
   // true = việc ĐANG có người giữ (CLAIMED chưa ghi kết quả), của BẤT KỲ ai. Khác
   // `claimedBy` (chỉ việc của một người). Nguồn của tab "Đang giữ".
   claimed?: boolean;
+  // Cờ "chuyến test": 'exclude' = ẩn chuyến test, 'only' = chỉ chuyến test.
+  // undefined = hiện cả hai (mặc định — admin phải thấy chuyến mình đánh dấu để
+  // sửa nếu gạt nhầm). Caller truyền undefined thay vì 'all' để param không bị
+  // gửi thừa, và để an toàn khi backend chưa deploy.
+  testFilter?: TestTripFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -815,6 +820,7 @@ export async function getBookings(params: {
     ...(params.excludeStatus && { excludeStatus: params.excludeStatus }),
     ...(params.overdue && { overdue: 'true' }),
     ...(params.claimed && { claimed: 'true' }),
+    ...(params.testFilter && { testFilter: params.testFilter }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -851,6 +857,29 @@ export async function updateBookingStatus(id: string, status: BookingStatus, not
   });
   const result = await response.json();
   return result.data;
+}
+
+/**
+ * Gạt công tắc "chuyến test". Backend loại chuyến khỏi mọi số liệu tổng hợp
+ * (dashboard, tài chính, hoá đơn VAT, đối soát HTX) và ghi vết vào adminNote.
+ *
+ * Trả về payload GỌN `{ id, isTestTrip }` — CỐ Ý không phải cả Booking: response
+ * của backend không kèm quan hệ customer/driver, nên caller phải vá đúng field
+ * `isTestTrip` vào state chứ đừng thay cả object (sẽ làm trắng dialog chi tiết).
+ *
+ * Lưu ý nghiệp vụ: nếu chuyến ĐÃ hoàn thành thì tiền (ví tài xế, hoa hồng) đã
+ * chuyển rồi — cờ này chỉ giấu chuyến khỏi báo cáo, không hoàn tiền. Muốn đảo
+ * ngược thật phải dùng `voidCompletedBooking`.
+ */
+export async function setBookingTestFlag(
+  id: string,
+  isTest: boolean,
+): Promise<{ id: string; isTestTrip: boolean }> {
+  const response = await fetchWithAuth(`/bookings/admin/${id}/test-flag`, {
+    method: 'POST',
+    body: JSON.stringify({ isTest }),
+  });
+  return unwrap<{ id: string; isTestTrip: boolean }>(response);
 }
 
 // CSKH ghi nhận đã gọi check khách cho chuyến (append-only + denormalize trạng thái
@@ -895,10 +924,35 @@ export async function voidCompletedBooking(
   return result.data ?? result;
 }
 
-export async function getAvailableDrivers(lat?: number, long?: number): Promise<Driver[]> {
+/**
+ * Danh sách tài xế cho màn gán chuyến.
+ *
+ * `scheduledFrom`/`scheduledTo` (ISO) = khung giờ đón của chuyến đang tạo/đang
+ * đổi tài. Backend dùng nó để chỉ ẩn tài THẬT SỰ chồng giờ; không gửi thì backend
+ * coi như chuyến đi ngay, và tài đang giữ cam kết ở khung khác vẫn hiện.
+ */
+export async function getAvailableDrivers(opts?: {
+  lat?: number;
+  long?: number;
+  scheduledFrom?: string;
+  scheduledTo?: string;
+  /** Chuyến đang đổi tài — không tính là cam kết cản trở của tài đang giữ nó. */
+  excludeBookingId?: string;
+  /**
+   * Hiện CẢ tài đang chồng giờ (ca chiều về: khách đặt lượt về cho ĐÚNG tài đang
+   * chở lượt đi). Backend chỉ nới bước lọc chồng giờ — gate duyệt/hồ sơ/khoá giữ
+   * nguyên. Tài lọt thêm luôn mang `overlapsCandidate: true` → nhãn đỏ cảnh báo.
+   */
+  includeBusy?: boolean;
+}): Promise<Driver[]> {
   const query = new URLSearchParams();
-  if (lat) query.set('lat', String(lat));
-  if (long) query.set('long', String(long));
+  if (opts?.lat) query.set('lat', String(opts.lat));
+  if (opts?.long) query.set('long', String(opts.long));
+  if (opts?.scheduledFrom) query.set('scheduledFrom', opts.scheduledFrom);
+  if (opts?.scheduledTo) query.set('scheduledTo', opts.scheduledTo);
+  if (opts?.excludeBookingId) query.set('excludeBookingId', opts.excludeBookingId);
+  // Chỉ gửi khi BẬT: backend đọc 'true'/'1', và không gửi = hành vi cũ y nguyên.
+  if (opts?.includeBusy) query.set('includeBusy', 'true');
   const response = await fetchWithAuth(`/bookings/admin/available-drivers?${query.toString()}`);
   const result = await response.json();
   return result.data;
@@ -3257,6 +3311,56 @@ export async function patchTeamMember(
     await fetchWithAuth(`/admin/driver-team/${driverId}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
+    }),
+  );
+}
+
+/**
+ * Danh sách thành viên đội (cấp phẳng, đi thẳng từ driver_team_member). Shape trả
+ * về là {members} — cố ý KHÔNG phải {data, meta}: TransformInterceptor của backend
+ * thấy cặp data+meta sẽ dựng lại response và VỨT mọi field khác (xem getTeamRoutes
+ * ở trên, cùng bẫy). unwrap() vẫn đúng ở đây vì body chỉ có {success, data}.
+ */
+export async function getTeamMembers(params: {
+  from: string;
+  to: string;
+  stage?: string;
+  q?: string;
+  ownerId?: string;
+}): Promise<{ members: TeamMemberRow[] }> {
+  const q = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.stage) q.set('stage', params.stage);
+  if (params.q) q.set('q', params.q);
+  if (params.ownerId) q.set('ownerId', params.ownerId);
+  return unwrap<{ members: TeamMemberRow[] }>(
+    await fetchWithAuth(`/admin/driver-team/members?${q}`),
+  );
+}
+
+/** Số liệu ưu đãi (forgone commission + cash loss thực) cho khoảng ngày đang xem. */
+export async function getTeamSubsidySummary(
+  range: { from: string; to: string },
+): Promise<{ forgone: number; cashLoss: number }> {
+  const q = new URLSearchParams({ from: range.from, to: range.to });
+  return unwrap<{ forgone: number; cashLoss: number }>(
+    await fetchWithAuth(`/admin/driver-team/subsidy-summary?${q}`),
+  );
+}
+
+/**
+ * Sửa % hoa hồng riêng của một tài. Chỉ super admin gọi được — non-super nhận 403
+ * (SuperOnlyGuard ở backend). `rate` BẮT BUỘC gửi thật trong body kể cả khi là `0`
+ * hay `null`: `0` là giá trị HỢP LỆ ("miễn hoa hồng"), `null` là "gỡ mức riêng,
+ * dùng mức chung" — hai nghĩa khác nhau, TUYỆT ĐỐI không lọc bằng `||`/truthiness.
+ */
+export async function updateTeamCommissionRate(
+  driverId: string,
+  rate: number | null,
+): Promise<TeamMemberState> {
+  return unwrap<TeamMemberState>(
+    await fetchWithAuth(`/admin/driver-team/${driverId}/commission-rate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ commissionRate: rate }),
     }),
   );
 }

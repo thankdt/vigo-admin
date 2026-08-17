@@ -21,6 +21,7 @@ import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from './address-autocomplete';
 import { fmtVnd, isVoucherSelectable, voucherLabel } from './voucher-utils';
 import { validateWindow, toIso, formatLocal } from './schedule-utils';
+import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { isVehicleTypeApplicable, resolveRequestedVehicleType } from './vehicle-type-utils';
 import type { BookingDraft } from './duplicate-utils';
 
@@ -223,22 +224,76 @@ export function CreateBookingDialog({
   const [isLoadingDrivers, setIsLoadingDrivers] = React.useState(false);
   const [selectedDriverId, setSelectedDriverId] = React.useState<string | null>(null);
   const [driverSearch, setDriverSearch] = React.useState('');
+  // Ca CHIỀU VỀ: khách đặt lượt về cho ĐÚNG tài đang chở lượt đi. Mặc định TẮT —
+  // bật là hành động có chủ ý, và tài hiện thêm luôn kèm nhãn đỏ cảnh báo.
+  const [includeBusy, setIncludeBusy] = React.useState(false);
+  // Đọc lựa chọn hiện tại BÊN TRONG effect nạp danh sách mà không phải đưa
+  // `selectedDriverId` vào deps — làm vậy sẽ nạp lại danh sách mỗi lần bấm chọn.
+  const selectedDriverIdRef = React.useRef<string | null>(null);
+  React.useEffect(() => {
+    selectedDriverIdRef.current = selectedDriverId;
+  }, [selectedDriverId]);
 
+  // Khung giờ đón gửi kèm khi hỏi danh sách tài xế: backend chỉ ẩn tài CHỒNG GIỜ
+  // với chuyến này. Chuyến đi ngay → bỏ trống (backend hiểu là "bây giờ"). Ngày
+  // gõ dở trong ô datetime-local là Invalid Date → bỏ qua, đừng ném vào API.
+  const assignFromIso = React.useMemo(() => {
+    if (!isScheduled || !scheduledFrom) return undefined;
+    const d = new Date(scheduledFrom);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }, [isScheduled, scheduledFrom]);
+  const assignToIso = React.useMemo(() => {
+    if (!isScheduled || !scheduledTo) return undefined;
+    const d = new Date(scheduledTo);
+    return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+  }, [isScheduled, scheduledTo]);
+
+  // Đổi khung giờ đón = đổi tập tài xế rảnh → nạp lại danh sách.
+  //
+  // Ô `datetime-local` bắn onChange MỖI LẦN sửa một thành phần (gõ "1" rồi "5" của
+  // 15 giờ = hai lần), nên phải có cả hai lớp chống:
+  //  - debounce: một lần sửa giờ không thành 4-8 request (mỗi request là 3 query DB
+  //    trên toàn pool);
+  //  - seq guard: phản hồi của khung giờ CŨ về sau không được ghi đè danh sách của
+  //    khung giờ MỚI — admin sẽ nhìn danh sách ứng với 01:00 trong khi ô ghi 15:00
+  //    rồi gán nhầm, và tệ hơn là bị bỏ chọn oan bởi nhánh dưới.
+  const driverFetchSeqRef = React.useRef(0);
   React.useEffect(() => {
     if (!open || mode === 'agent') return; // agent can't force-assign a driver → skip the fetch
+    const seq = ++driverFetchSeqRef.current;
     const fetchDrivers = async () => {
       setIsLoadingDrivers(true);
       try {
-        const data = await getAvailableDrivers();
+        const data = await getAvailableDrivers({
+          scheduledFrom: assignFromIso,
+          scheduledTo: assignToIso,
+          includeBusy,
+        });
+        if (seq !== driverFetchSeqRef.current) return; // phản hồi cũ → vứt
         setDrivers(data);
+        // Đổi khung giờ có thể làm tài ĐANG CHỌN rơi khỏi danh sách (giờ mới chồng
+        // với cam kết của họ). Lúc đó UI hiện lại ô tìm kiếm — trông như chưa chọn
+        // ai — trong khi `selectedDriverId` vẫn còn và vẫn được gửi lúc tạo chuyến.
+        // Bỏ chọn hẳn và nói rõ, đừng gán ngầm một người admin tưởng đã bỏ.
+        const stillSelected = selectedDriverIdRef.current;
+        if (stillSelected && !data.some((d) => getDriverId(d) === stillSelected)) {
+          setSelectedDriverId(null);
+          toast({
+            title: 'Đã bỏ chọn tài xế',
+            // Rơi khỏi danh sách vì ĐỔI KHUNG GIỜ hoặc vì TẮT ô "hiện tài đang bận".
+            // Câu chữ phải đúng cho cả hai, đừng khẳng định là do đổi giờ.
+            description: 'Tài xế vừa chọn đang bận trùng khung giờ — vui lòng chọn lại.',
+          });
+        }
       } catch {
         // Ignore — driver list is optional
       } finally {
-        setIsLoadingDrivers(false);
+        if (seq === driverFetchSeqRef.current) setIsLoadingDrivers(false);
       }
     };
-    fetchDrivers();
-  }, [open]);
+    const timer = setTimeout(fetchDrivers, 350);
+    return () => clearTimeout(timer);
+  }, [open, mode, assignFromIso, assignToIso, toast, includeBusy]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -284,6 +339,7 @@ export function CreateBookingDialog({
     setNote('');
     setSelectedDriverId(null);
     setDriverSearch('');
+    setIncludeBusy(false);
     setIsScheduled(false);
     setScheduledFrom('');
     setScheduledTo('');
@@ -318,6 +374,7 @@ export function CreateBookingDialog({
     // Tài xế và giá KHÔNG chép: chuyến mới tự dispatch, giá tự tính lại.
     setSelectedDriverId(null);
     setDriverSearch('');
+    setIncludeBusy(false);
     clearEstimate();
     setSelectedPromotionId(null);
     setPendingPromotionId(initial.promotionId);
@@ -963,16 +1020,45 @@ export function CreateBookingDialog({
                   <AvatarFallback>{getDriverName(selectedDriver).charAt(0).toUpperCase()}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 text-sm">
-                  <div className="font-semibold">{getDriverName(selectedDriver)}</div>
+                  <div className="font-semibold flex items-center gap-2">
+                    {getDriverName(selectedDriver)}
+                    {/* Giữ nhãn cả sau khi chọn: cảnh báo mà biến mất lúc bấm chọn
+                        thì đúng lúc cần nhất lại không có. */}
+                    <DriverCommitmentBadge commitments={selectedDriver.activeCommitments} />
+                  </div>
                   <div className="text-muted-foreground">
                     {selectedDriver.phone}
                     {selectedDriver.fixedRoute?.name ? ` • ${selectedDriver.fixedRoute.name}` : ''}
-                    {(selectedDriver as any).availableSeats != null ? ` • còn ${(selectedDriver as any).availableSeats} ghế khách` : ''}
+                    {/* `> 0` chứ không `!= null` — cùng luật với dòng danh sách bên dưới.
+                        Tài lọt vào nhờ công tắc "hiện tài đang bận" có availableSeats = 0
+                        (accept() zero hoá cho chuyến không-ghép); in "còn 0 ghế khách" ngay
+                        trên thẻ admin nhìn TRƯỚC KHI bấm Tạo chuyến là UI tự phủ định. */}
+                    {(selectedDriver as any).availableSeats > 0 ? ` • còn ${(selectedDriver as any).availableSeats} ghế khách` : ''}
                   </div>
                 </div>
               </Card>
             ) : (
               <div className="space-y-2">
+                {/* Ca CHIỀU VỀ: khách đặt lượt về cho đúng tài đang chở lượt đi.
+                    Lệnh gán vốn đã cho phép (không có guard bận) — chỗ này chỉ mở
+                    tầng hiển thị, nên tài hiện thêm luôn kèm nhãn đỏ. */}
+                <div className="flex items-start gap-2.5 rounded-md border border-amber-500/40 bg-amber-500/5 p-2.5">
+                  <Switch
+                    id="cb-include-busy"
+                    checked={includeBusy}
+                    onCheckedChange={setIncludeBusy}
+                    className="mt-0.5"
+                  />
+                  <div className="space-y-0.5">
+                    <Label htmlFor="cb-include-busy" className="cursor-pointer text-xs font-medium">
+                      Hiện cả tài xế đang bận
+                    </Label>
+                    <p className="text-[11px] leading-snug text-muted-foreground">
+                      Cho ca khách đặt chiều về cho đúng tài đang chở. Tài hiện thêm có
+                      nhãn đỏ — hệ thống không chặn double-book.
+                    </p>
+                  </div>
+                </div>
                 <Input
                   placeholder="Tìm tài xế theo tên, SĐT..."
                   value={driverSearch}
@@ -985,7 +1071,10 @@ export function CreateBookingDialog({
                       <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                     </div>
                   ) : filteredDrivers.length === 0 ? (
-                    <p className="text-center text-sm text-muted-foreground py-4">Không tìm thấy tài xế.</p>
+                    <p className="text-center text-sm text-muted-foreground py-4">
+                      Không tìm thấy tài xế.
+                      {!includeBusy && !driverSearch && ' Tài đang bận trùng khung giờ đang bị ẩn.'}
+                    </p>
                   ) : (
                     filteredDrivers.map(driver => {
                       const name = getDriverName(driver);
@@ -1009,7 +1098,12 @@ export function CreateBookingDialog({
                             <span className="text-muted-foreground ml-2">{driver.phone}</span>
                           </div>
                           <div className="flex items-center gap-1.5">
-                            {(driver as any).availableSeats != null && (
+                            <DriverCommitmentBadge commitments={driver.activeCommitments} />
+                            {/* Ẩn khi 0: `accept()` zero hoá `availableSeats` cho chuyến
+                                không-ghép, nên tài lọt vào danh sách nhờ luật khung giờ mới
+                                gần như luôn hiện "còn 0 ghế khách" — bày ra để gán mà lại
+                                ghi 0 ghế thì UI tự mâu thuẫn. Số ghế thật nằm ở nhãn cam kết. */}
+                            {(driver as any).availableSeats > 0 && (
                               <Badge variant="outline" className="text-xs">
                                 còn {(driver as any).availableSeats} ghế khách
                               </Badge>

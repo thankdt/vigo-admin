@@ -20,8 +20,8 @@ import { Loader2, Car, User, Clock, Zap, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons } from '@/lib/api';
-import { CANCELLED_BY_ROLE_LABEL, getStatusBadge } from './booking-shared';
+import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag } from '@/lib/api';
+import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, TestTripBadge } from './booking-shared';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import type {} from '@/lib/types';
 import type { Booking, CustomerCallStatus, BookingCustomerCallEvent } from '@/lib/types';
@@ -29,6 +29,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 
 const paymentMethodMap: Record<string, string> = {
@@ -98,7 +100,13 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
     const totalReceived = Number(
       earnings.driverTotalReceived ?? cashKept + bonus,
     );
-    const hasNewSplit = htxCommission > 0 || vigoCommission > 0;
+    // Kiểm SỰ TỒN TẠI của trường, không kiểm dấu: tài 0% không thuộc HTX có
+    // htxCommission = vigoCommission = 0, và giờ vigoCommission còn có thể ÂM
+    // (Vigo bù cho HTX của tài hưởng mức riêng thấp) — kiểm `> 0` sẽ rơi nhầm
+    // vào nhánh legacy (dành cho chuyến trước migration
+    // 1782000000000-AddBookingEarningsBreakdown) và mất ô "Tổng kiểm tra".
+    const hasNewSplit =
+      earnings.htxCommission !== undefined && earnings.vigoCommission !== undefined;
 
     if (hasNewSplit) {
       // Tổng kiểm tra: TX + HTX + Vigo must reconcile to Khách trả within
@@ -122,7 +130,10 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
             </div>
             <div className="flex justify-between text-red-600">
               <span>− Phí nền tảng</span>
-              <span>-{fmtVnd(platformFee)}</span>
+              {/* platformFee = htxCommission + vigoCommission có thể ÂM (Vigo bù
+                  cho HTX của tài hưởng mức riêng thấp). fmtVnd đã tự in dấu "-"
+                  cho số âm — thêm "-" cứng ở đây sẽ ra "--40.000". */}
+              <span>{platformFee < 0 ? fmtVnd(platformFee) : `-${fmtVnd(platformFee)}`}</span>
             </div>
             {pit > 0 && (
               <div className="flex justify-between text-red-600">
@@ -345,13 +356,17 @@ export function CustomerCallBadge({ status }: { status?: CustomerCallStatus | nu
 // unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
 // test mock getBookingDetails() and assert on badges (e.g.
 // switchedToWholeCar) without mounting the whole BookingsTable.
-export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded }: {
+export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded, onTestFlagChanged }: {
   bookingId: string,
   onClose: () => void,
   // Bỏ trống (vd trong unit test) → không hiện nút "Nhân bản chuyến".
   onDuplicate?: (booking: Booking) => void,
   // CSKH gọi check khách xong → báo danh sách refetch cột "Gọi check".
   onCallRecorded?: () => void,
+  // Gạt công tắc "chuyến test" xong → báo danh sách refetch để badge TEST ngoài
+  // bảng cập nhật. Dialog có state RIÊNG, không có callback này thì hàng ngoài
+  // đứng im tới khi F5. Optional vì test render component này trần.
+  onTestFlagChanged?: () => void,
 }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -365,6 +380,12 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
   // Lý do chuẩn hoá — danh mục lấy từ backend (system_config) nên ops sửa được, không hardcode.
   const [callReason, setCallReason] = React.useState<string>('');
   const [reasonOptions, setReasonOptions] = React.useState<string[]>([]);
+
+  // Công tắc "chuyến test". `testSaving` khoá Switch trong lúc gọi API — bấm nhanh
+  // 2 lần sẽ sinh 2 request đua nhau và kết quả cuối cùng là ngẫu nhiên.
+  const [testSaving, setTestSaving] = React.useState(false);
+  // Giá trị đang chờ xác nhận (chỉ dùng cho chuyến ĐÃ hoàn thành). null = không hỏi gì.
+  const [pendingTestFlag, setPendingTestFlag] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
     // Phần phụ: lỗi thì dropdown rỗng, không chặn thao tác ghi nhận cuộc gọi.
@@ -424,6 +445,48 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
     }
   };
 
+  /**
+   * Gạt công tắc "chuyến test".
+   *
+   * Cập nhật lạc quan rồi revert về GIÁ TRỊ CŨ ĐÃ CHỤP nếu lỗi — không revert bằng
+   * `!next` như mẫu ở promotions-table: ở đó `isActive` là boolean bắt buộc, còn
+   * `isTestTrip` optional nên `!undefined === true` sẽ bịa ra một chuyến test.
+   */
+  const applyTestFlag = async (next: boolean) => {
+    if (!booking) return;
+    const previous = booking.isTestTrip;
+    setTestSaving(true);
+    setBooking((prev) => (prev ? { ...prev, isTestTrip: next } : prev));
+    try {
+      await setBookingTestFlag(booking.id, next);
+      toast({
+        title: next ? 'Đã đánh dấu chuyến test' : 'Đã bỏ đánh dấu chuyến test',
+        description: next
+          ? 'Chuyến này không còn được tính vào dashboard, tài chính, hoá đơn và đối soát HTX.'
+          : 'Chuyến này được tính lại vào các báo cáo như bình thường.',
+      });
+      onTestFlagChanged?.();
+    } catch (err: any) {
+      // Vá lại đúng object đang có, KHÔNG nuốt response của API: response chỉ có
+      // { id, isTestTrip }, gán cả object vào state sẽ làm trắng dialog.
+      setBooking((prev) => (prev ? { ...prev, isTestTrip: previous } : prev));
+      toast({ variant: 'destructive', title: 'Không lưu được', description: err.message });
+    } finally {
+      setTestSaving(false);
+    }
+  };
+
+  // Chuyến ĐÃ hoàn thành: tiền (ví tài xế, hoa hồng) đã chuyển rồi, cờ chỉ giấu chuyến
+  // khỏi báo cáo. Hỏi xác nhận trước để admin biết mình đang làm gì.
+  const handleTestToggle = (next: boolean) => {
+    if (!booking) return;
+    if (booking.status === 'COMPLETED') {
+      setPendingTestFlag(next);
+      return;
+    }
+    void applyTestFlag(next);
+  };
+
   const serviceTypeMap: Record<string, string> = {
     RIDE: '🚗 Bao xe',
     DELIVERY: '📦 Giao hàng',
@@ -467,6 +530,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   scans a single line for the booking's at-a-glance summary. */}
               <div className="flex items-center gap-2 flex-wrap">
                 {getStatusBadge(booking)}
+                {booking.isTestTrip && <TestTripBadge />}
                 {booking.serviceType && (
                   <Badge variant="outline" className="text-xs">
                     {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
@@ -494,6 +558,78 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded 
                   </Badge>
                 )}
               </div>
+
+              {/* Công tắc "chuyến test" — đặt ngay dưới hàng badge vì nó quyết định
+                  liệu MỌI con số của chuyến này có được tính hay không. */}
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="test-trip-toggle" className="text-sm font-medium">
+                    Chuyến test
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Bật để loại chuyến khỏi dashboard, tài chính, hoá đơn và đối soát HTX.
+                    {booking.status !== 'COMPLETED' &&
+                      ' Bật trước khi chuyến hoàn thành thì chuyến cũng không chuyển tiền thật.'}
+                  </p>
+                </div>
+                <Switch
+                  id="test-trip-toggle"
+                  // `=== true` chứ không phải giá trị trần: field optional, `checked={undefined}`
+                  // biến Radix Switch thành uncontrolled và công tắc kẹt cứng.
+                  checked={booking.isTestTrip === true}
+                  disabled={testSaving}
+                  onCheckedChange={handleTestToggle}
+                  aria-label="Đánh dấu chuyến test"
+                />
+              </div>
+
+              {/* Xác nhận cho chuyến ĐÃ HOÀN THÀNH — nói thẳng cái cờ này KHÔNG làm được,
+                  để admin không tưởng nó hoàn tiền.
+                  CỐ Ý là khối inline chứ không phải AlertDialog: lồng modal Radix trong
+                  Dialog này tạo hai focus scope tranh nhau, ở jsdom nó lặp focus vô hạn tới
+                  mức treo test. Khối cảnh báo tại chỗ vừa tránh hẳn vấn đề, vừa đỡ phải bắt
+                  người dùng đọc modal-trên-modal. */}
+              {pendingTestFlag !== null && (
+                <div className="rounded-md border border-destructive/50 bg-destructive/5 p-3 space-y-2">
+                  <p className="text-sm font-medium">
+                    {pendingTestFlag
+                      ? 'Đánh dấu chuyến ĐÃ HOÀN THÀNH là chuyến test?'
+                      : 'Bỏ đánh dấu chuyến test?'}
+                  </p>
+                  {pendingTestFlag ? (
+                    <div className="text-xs text-muted-foreground space-y-1">
+                      <p>
+                        Chuyến sẽ biến khỏi <b>hoá đơn VAT</b> và <b>đối soát HTX</b> — kể cả khi
+                        hoá đơn/hợp đồng đã xuất cho khách.
+                      </p>
+                      <p>
+                        Tiền <b>KHÔNG được hoàn</b>: ví tài xế và hoa hồng đã cộng vẫn giữ nguyên.
+                        Muốn đảo ngược tiền thật, dùng &ldquo;Huỷ chuyến (đã hoàn thành)&rdquo;
+                        thay vì công tắc này.
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Chuyến sẽ được tính lại vào mọi báo cáo, gồm cả hoá đơn và đối soát HTX.
+                    </p>
+                  )}
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" onClick={() => setPendingTestFlag(null)}>
+                      Huỷ
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        const next = pendingTestFlag;
+                        setPendingTestFlag(null);
+                        if (next !== null) void applyTestFlag(next);
+                      }}
+                    >
+                      Xác nhận
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               {/* Vi-now — customer used the 6-digit code flow instead of
                   going through dispatch. The journey differs enough that

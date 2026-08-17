@@ -35,11 +35,16 @@ import {
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+// Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
+// ĐÁNH RƠI khi giải xung đột merge (nhánh GĐ1 bỏ khối gọi-khách khỏi cùng dòng import),
+// và vì next.config bật ignoreBuildErrors nên build vẫn xanh — chỉ nổ ReferenceError lúc
+// admin mở dialog gán tài xế. Đừng gộp dòng này vào cụm import khác.
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail } from './booking-detail';
-import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, statusLabelMap } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -49,8 +54,9 @@ import {
 } from '@/lib/driver-presence';
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
+import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
-import type { Booking, BookingStatus, Driver} from '@/lib/types';
+import type { Booking, BookingStatus, Driver, TestTripFilter } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -87,6 +93,14 @@ type FetchArgs = {
   tripKind: TripKind;
   dateFrom: string;
   dateTo: string;
+  /**
+   * Lọc "Chuyến test". 'ALL' = hiện cả hai (mặc định).
+   *
+   * CỐ Ý bắt buộc (không `?:`): tsc phải đỏ ở CẢ HAI call-site nếu quên truyền.
+   * Mảng deps của useEffect thì không có gì chặn được, vì next.config bật
+   * ignoreDuringBuilds — nên chỗ đó phải tự soi bằng mắt.
+   */
+  testFilter: TestTripFilter | 'ALL';
 };
 
 const tabKeys: TabKey[] = [
@@ -111,25 +125,79 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
   const [isReassigning, setIsReassigning] = React.useState(false);
   const [selectedDriverId, setSelectedDriverId] = React.useState<string | null>(null);
   const [query, setQuery] = React.useState('');
+  // Ca CHIỀU VỀ: khách đặt lượt về cho ĐÚNG tài đang chở lượt đi. Mặc định TẮT —
+  // bật là hành động có chủ ý của admin, và tài hiện thêm luôn kèm nhãn đỏ.
+  const [includeBusy, setIncludeBusy] = React.useState(false);
   const { toast } = useToast();
 
+  // Khung giờ đón của CHÍNH chuyến đang đổi tài — backend chỉ ẩn tài chồng giờ với
+  // nó. Chuyến đi ngay (không có mốc hẹn) → bỏ trống, backend hiểu là "bây giờ".
+  //
+  // Chuyến ĐANG CHẠY (đổi tài để cứu chuyến kẹt): giờ đón đã trôi qua, lọc theo nó
+  // là lọc theo một cửa sổ chết. Cần tài rảnh BÂY GIỜ → bỏ hẳn khung giờ đi.
+  // (Backend cũng kẹp về `now`, đây là lớp thứ hai cho rõ ý.)
+  const rescueInProgress =
+    booking?.status === 'ARRIVED' ||
+    booking?.status === 'PICKED_UP' ||
+    booking?.status === 'DELAYED_WAITING';
+  const assignFromIso = rescueInProgress
+    ? undefined
+    : booking?.scheduledFromTime ?? booking?.scheduledTime ?? undefined;
+  const assignToIso = rescueInProgress ? undefined : booking?.scheduledToTime ?? undefined;
+  // Chính chuyến đang đổi tài không phải cam kết cản trở — nếu không, tài đang ôm nó
+  // sẽ bị cảnh báo đỏ về đúng chuyến admin đang thao tác.
+  const excludeBookingId = booking?.id;
+
+  // Reset TÁCH khỏi vòng nạp: gạt ô "hiện tài đang bận" cũng chạy lại effect nạp,
+  // mà gộp chung thì mỗi lần gạt sẽ xoá luôn ô tìm kiếm admin vừa gõ.
+  //
+  // Reset ở chiều ĐÓNG, không phải chiều MỞ. Component này luôn mounted (xem chỗ
+  // render `<ReassignDialog>`) nên state sống qua đóng/mở — nhưng reset lúc MỞ thì
+  // render đầu vẫn mang `includeBusy` cũ: effect nạp bắn 1 request thừa với giá trị
+  // cũ (mỗi request = 3 query DB trên toàn pool), và công tắc hiện BẬT một frame
+  // rồi mới lật TẮT. Reset lúc đóng ⇒ lần mở sau đã sạch từ render đầu.
   React.useEffect(() => {
+    if (open) return;
+    setQuery('');
+    setSelectedDriverId(null);
+    setIncludeBusy(false);
+  }, [open]);
+
+  // Seq guard: gạt qua gạt lại nhanh thì phản hồi của lần gạt CŨ có thể về sau và
+  // ghi đè danh sách của lần gạt MỚI — admin nhìn danh sách không khớp ô đang bật.
+  const driverFetchSeqRef = React.useRef(0);
+  React.useEffect(() => {
+    if (!open) return;
+    const seq = ++driverFetchSeqRef.current;
     const fetchDrivers = async () => {
-      if (!open) return;
       setIsLoading(true);
-      setQuery('');
-      setSelectedDriverId(null);
       try {
-        const response = await getAvailableDrivers();
+        const response = await getAvailableDrivers({
+          scheduledFrom: assignFromIso,
+          scheduledTo: assignToIso,
+          excludeBookingId,
+          includeBusy,
+        });
+        if (seq !== driverFetchSeqRef.current) return; // phản hồi cũ → vứt
         setDrivers(response);
+        // Tắt ô lại có thể làm tài ĐANG CHỌN rơi khỏi danh sách. Lúc đó UI trông
+        // như chưa chọn ai trong khi `selectedDriverId` vẫn còn và nút Xác nhận
+        // vẫn gán được — bỏ chọn hẳn và nói rõ, đừng gán ngầm người admin tưởng đã bỏ.
+        setSelectedDriverId((cur) =>
+          cur && !response.some((d) => getDriverId(d) === cur) ? null : cur,
+        );
       } catch (err: any) {
+        if (seq !== driverFetchSeqRef.current) return;
+        // Xoá danh sách cũ: giữ lại thì tắt công tắc mà request hỏng sẽ để nguyên
+        // danh sách CÓ tài bận dưới một công tắc đọc là TẮT — UI nói dối.
+        setDrivers([]);
         toast({ variant: 'destructive', title: 'Không thể tải danh sách tài xế', description: err.message });
       } finally {
-        setIsLoading(false);
+        if (seq === driverFetchSeqRef.current) setIsLoading(false);
       }
     };
     fetchDrivers();
-  }, [open, toast]);
+  }, [open, toast, assignFromIso, assignToIso, excludeBookingId, includeBusy]);
 
   const handleReassign = async () => {
     if (!booking || !selectedDriverId) return;
@@ -184,8 +252,32 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
     <DialogContent className="sm:max-w-lg" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
       <DialogHeader>
         <DialogTitle>Chuyển quốc chuyến #{booking?.id?.slice(0, 8)}...</DialogTitle>
-        <DialogDescription>Chọn tài xế mới cho chuyến này. Chỉ hiển thị tài xế đang online.</DialogDescription>
+        {/* Câu cũ ("Chỉ hiển thị tài xế đang online") SAI: backend nhận cả ONLINE
+            lẫn BUSY, chỉ ẩn tài có cam kết CHỒNG GIỜ. Ops đọc câu đó thì kết luận
+            tài đang bận vốn không được hiện, và không báo lỗi khi cần gán chiều về. */}
+        <DialogDescription>
+          Chọn tài xế mới cho chuyến này. Mặc định ẩn tài đang bận trùng khung giờ.
+        </DialogDescription>
       </DialogHeader>
+      {/* Ca CHIỀU VỀ: khách đặt lượt về cho đúng tài đang chở lượt đi. Lệnh gán vốn
+          đã cho phép (không có guard bận) — chỗ này chỉ mở tầng hiển thị. */}
+      <div className="flex items-start gap-3 rounded-md border border-amber-500/40 bg-amber-500/5 p-3">
+        <Switch
+          id="reassign-include-busy"
+          checked={includeBusy}
+          onCheckedChange={setIncludeBusy}
+          className="mt-0.5"
+        />
+        <div className="space-y-0.5">
+          <Label htmlFor="reassign-include-busy" className="cursor-pointer text-sm font-medium">
+            Hiện cả tài xế đang bận
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Dùng khi khách đặt chiều về cho đúng tài đang chở. Tài hiện thêm sẽ có nhãn
+            đỏ — kiểm giờ trước khi gán, hệ thống không chặn double-book.
+          </p>
+        </div>
+      </div>
       <div className="relative mt-1">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
@@ -200,7 +292,12 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
         ) : drivers.length === 0 ? (
-          <p className="text-center text-muted-foreground py-8">Không tìm thấy tài xế khả dụng.</p>
+          // Danh sách rỗng KHÔNG có nghĩa là hết tài: tài đang chở khách bị lọc im
+          // lặng. Nói ra, nếu không ops kết luận "hết tài" rồi thôi không tìm nữa.
+          <p className="text-center text-muted-foreground py-8">
+            Không tìm thấy tài xế khả dụng.
+            {!includeBusy && ' Tài đang bận trùng khung giờ đang bị ẩn — bật công tắc phía trên để hiện.'}
+          </p>
         ) : filteredDrivers.length === 0 ? (
           <p className="text-center text-muted-foreground py-8">Không có tài xế khớp với "{query}".</p>
         ) : (
@@ -235,6 +332,9 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                       {!route && !plate ? 'Chưa có thông tin xe' : ''}
                     </div>
                     <div className="flex items-center gap-2 justify-end">
+                      {/* Tài đang giữ cam kết ở khung giờ khác giờ VẪN hiện trong danh
+                          sách (fix 14/08/2026) — phải nói rõ họ đang giữ chuyến gì. */}
+                      <DriverCommitmentBadge commitments={driver.activeCommitments} />
                       {/* `status` chỉ là trạng thái KHAI BÁO — tài bỏ app vẫn ONLINE mãi.
                           Hiện tín hiệu thật để admin không đẩy chuyến vào một máy đã chết. */}
                       {(() => {
@@ -250,7 +350,12 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                           </Badge>
                         );
                       })()}
-                      {(driver as any).availableSeats != null && (
+                      {/* Ẩn khi 0 (cùng luật với màn Tạo chuyến): `accept()` zero hoá
+                          `availableSeats` cho chuyến không-ghép, nên tài lọt vào danh
+                          sách nhờ khung giờ — hoặc nhờ công tắc "hiện tài đang bận" —
+                          gần như luôn hiện "còn 0 ghế khách". Bày ra để gán mà lại ghi
+                          0 ghế thì UI tự mâu thuẫn. Số ghế thật nằm ở nhãn cam kết. */}
+                      {(driver as any).availableSeats > 0 && (
                         <Badge variant="outline" className="text-xs">
                           {/* "ghế KHÁCH": số này là chỗ chở khách, KHÁC "xe N chỗ" (tổng
                               ghế kể ghế lái) trong thông báo BOK_013. Ghi tắt là gây hiểu nhầm. */}
@@ -267,7 +372,9 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
       </div>
       <DialogFooter>
         <Button variant="outline" onClick={() => onOpenChange(false)}>Hủy</Button>
-        <Button onClick={handleReassign} disabled={!selectedDriverId || isReassigning}>
+        {/* Khoá cả khi đang nạp lại: tắt công tắc rồi bấm ngay trong cửa sổ fetch sẽ
+            gán đúng tài vừa bị loại — logic bỏ chọn chạy sau nên không cứu kịp. */}
+        <Button onClick={handleReassign} disabled={!selectedDriverId || isReassigning || isLoading}>
           {isReassigning && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           Xác nhận chuyển quốc
         </Button>
@@ -311,6 +418,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // Lọc khoảng ngày ĐẶT chuyến (createdAt). VN-local YYYY-MM-DD; '' = không lọc.
   const [dateFrom, setDateFrom] = React.useState('');
   const [dateTo, setDateTo] = React.useState('');
+  // Lọc "Chuyến test". Mặc định 'ALL' = hiện cả hai: đây là màn admin gạt cờ, giấu
+  // chuyến test đi thì chuyến gạt nhầm biến mất khỏi tầm mắt, không sửa lại được.
+  const [testFilter, setTestFilter] = React.useState<TestTripFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
@@ -336,7 +446,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -379,6 +489,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       if (dateFrom) params.from = dateFrom;
       if (dateTo) params.to = dateTo;
       if (agentOnly) params.agentOnly = true;
+      // Chuyến test: 'ALL' bỏ hẳn param (mặc định backend cũng là hiện cả hai) — gửi
+      // thừa không sai, nhưng bỏ hẳn thì màn này vẫn chạy cả khi backend chưa deploy.
+      if (testFilter !== 'ALL') params.testFilter = testFilter;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -399,16 +512,16 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo, testFilter]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo, testFilter]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -582,6 +695,21 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               <SelectItem value="all">Tất cả loại</SelectItem>
               <SelectItem value="regular">Chuyến thường</SelectItem>
               <SelectItem value="scheduled">Đặt lịch</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={testFilter}
+            // setCurrentPage(1) như MỌI filter khác: đang ở trang 5 mà chọn "Chỉ chuyến
+            // test" thì trang 5 của tập nhỏ hơn là rỗng, và nút phân trang khoá luôn.
+            onValueChange={(val) => { setTestFilter(val as TestTripFilter | 'ALL'); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Chuyến test" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Chuyến test: tất cả</SelectItem>
+              <SelectItem value="exclude">Chỉ chuyến thật</SelectItem>
+              <SelectItem value="only">Chỉ chuyến test</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -789,6 +917,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         {/* Trip-shape badges live under the status badge so the
                             "Trạng thái" column tells admin at a glance how
                             this trip was placed, not just where it's at. */}
+                        {/* Chuyến test đứng ĐẦU stack: nó là điều quan trọng nhất cần
+                            biết về dòng này (chuyến không tính vào bất kỳ báo cáo nào). */}
+                        {booking.isTestTrip && <TestTripBadge />}
                         {booking.isVinow && (
                           <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-100 text-[10px] px-1.5 py-0">
                             ⚡ Vi-now
@@ -971,6 +1102,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
           onClose={() => setSelectedBookingId(null)}
           onDuplicate={startDuplicate}
           onCallRecorded={reload}
+          // Gạt công tắc test → refetch để badge TEST + bộ lọc ngoài bảng khớp lại.
+          onTestFlagChanged={reload}
         />
       )}
       {/* Form Tạo chuyến ở chế độ controlled — chỉ dùng cho luồng nhân bản (không có

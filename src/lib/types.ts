@@ -139,6 +139,21 @@ export type Driver = {
   // này khi Redis lỗi. Xem `driverOnlineState`.
   presence?: DriverPresence;
   rejectionReason?: string | null;
+  /**
+   * Chuyến tài xế ĐANG giữ (đã nhận, chưa chạy xong) — chỉ có ở danh sách gán
+   * chuyến của admin. Từ 14/08/2026 danh sách đó không còn ẩn tài chỉ vì họ giữ
+   * một cam kết ở khung giờ KHÁC, nên admin phải nhìn thấy cam kết đó trước khi
+   * bấm gán. `overlapsCandidate` = cam kết này chồng giờ với chuyến đang tạo.
+   */
+  activeCommitments?: Array<{
+    bookingId: string;
+    serviceType?: string | null;
+    status?: string | null;
+    scheduledFrom?: string | null;
+    scheduledTo?: string | null;
+    confirmedPickupTime?: string | null;
+    overlapsCandidate?: boolean;
+  }>;
   // CSKH: loại mốc "lịch sử làm việc" gần nhất (trạng thái cuối) + thời điểm — hiện badge ở danh sách.
   csLastCallType?: string | null;
   csLastCallAt?: string | null;
@@ -262,6 +277,12 @@ export type DriverEarnings = {
   htxCommissionRate?: number;
   htxShareRate?: number;
   vigoShareRate?: number;
+  // % hoa hồng CHUẨN áp dụng chuyến này (trước khi trừ mức riêng của tài, nếu
+  // có) + phần hoa hồng VIGO "nhường" cho tài khi tài có mức riêng thấp hơn
+  // chuẩn (âm nếu mức riêng CAO hơn chuẩn). Optional — chuyến trước tính năng
+  // % hoa hồng riêng theo tài team không có 2 field này.
+  standardCommissionRate?: number;
+  forgoneCommission?: number;
 };
 
 export type Booking = {
@@ -366,6 +387,14 @@ export type Booking = {
   // glance because the customer journey + UI flow differ from a normal
   // dispatched booking.
   isVinow?: boolean;
+  // Chuyến admin chạy thử. Backend loại nó khỏi mọi số liệu tổng hợp (dashboard,
+  // tài chính, hoá đơn VAT, đối soát HTX) — nhưng chuyến vẫn HIỆN ở danh sách này
+  // kèm badge TEST, để admin sửa được nếu gạt nhầm.
+  //
+  // Optional vì backend cũ chưa trả field. Luôn so sánh dạng `=== true` /
+  // `booking.isTestTrip &&` — KHÔNG dùng `=== false`: `undefined` và `false` phải
+  // cùng nghĩa "chuyến thật", nếu không mọi chuyến cũ sẽ hiện sai.
+  isTestTrip?: boolean;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.
@@ -414,6 +443,10 @@ export type CustomerCallStatus = 'CLAIMED' | 'CALLED' | 'UNREACHED';
 
 /** Giá trị filter cột "Gọi check" ngoài danh sách. */
 export type CustomerCallFilter = 'claimed' | 'called' | 'unreached' | 'uncalled';
+
+/** Giá trị filter "Chuyến test" ngoài danh sách chuyến đi. Không có 'all' — bộ lọc
+ *  tắt được biểu diễn bằng `undefined`, để param không bị gửi thừa lên API. */
+export type TestTripFilter = 'exclude' | 'only';
 
 /** Một dòng lịch sử gọi check của 1 chuyến (append-only, mới nhất trước). */
 export type BookingCustomerCallEvent = {
@@ -790,6 +823,8 @@ export type TeamMemberState = {
   nextFollowUpAt: string | null;
   note: string | null;
   stageChangedAt: string | null;
+  /** null = chưa set (dùng mức chung); 0 là giá trị HỢP LỆ nghĩa "miễn hoa hồng". */
+  commissionRate?: number | null;
 };
 
 /** Một dòng cấp 1. routeId null = hàng gộp "Không gắn tuyến". */
@@ -872,3 +907,27 @@ export type DriverTeamDetail = {
 };
 
 export type TeamOwner = { id: string; fullName: string | null; phone: string | null };
+
+/**
+ * Dòng danh sách thành viên đội — trả về từ GET /admin/driver-team/members, đi
+ * thẳng từ driver_team_member (KHÔNG từ booking). commissionRate: null = chưa
+ * set (dùng mức chung); 0 là giá trị HỢP LỆ nghĩa "miễn hoa hồng" — khác nhau,
+ * đừng gộp bằng `||`.
+ */
+export type TeamMemberRow = {
+  driverId: string;
+  fullName: string | null;
+  phone: string | null;
+  stage: DriverTeamStage;
+  commissionRate: number | null;
+  ownerAdminUserId: string | null;
+  ownerName: string | null;
+  assignedRouteIds: number[];
+  /** Cùng độ dài + cùng thứ tự với assignedRouteIds. Tuyến xoá mềm → "Tuyến đã xoá (#id)". */
+  assignedRouteNames: string[];
+  nextFollowUpAt: string | null;
+  stageChangedAt: string | null;
+  createdAt: string;
+  completedTripsInRange: number;
+  lastCompletedAt: string | null;
+};

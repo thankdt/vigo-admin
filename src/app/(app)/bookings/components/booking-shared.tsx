@@ -76,3 +76,19 @@ export function getStatusBadge(booking: Pick<Booking, 'status' | 'adminClaimedAt
       return <Badge>{label}</Badge>;
   }
 };
+
+/**
+ * Nhãn "chuyến test" — dùng CHUNG cho hàng danh sách (`BookingsTable`) và header dialog
+ * chi tiết (`BookingDetail`), để hai nơi không trôi dạt về màu/chữ.
+ *
+ * Tím đặc: cố ý KHÔNG trùng bảng màu trạng thái (xanh/đỏ/hổ phách) vì đây không phải một
+ * trạng thái chuyến, mà là "đừng tin số của chuyến này" — nó đã bị loại khỏi dashboard,
+ * tài chính, hoá đơn và đối soát HTX.
+ */
+export function TestTripBadge() {
+  return (
+    <Badge className="bg-purple-600 text-white hover:bg-purple-600 text-[10px] px-1.5 py-0">
+      🧪 TEST
+    </Badge>
+  );
+}
