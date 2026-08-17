@@ -3,10 +3,12 @@
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { ExternalLink, Loader2, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SystemConfig } from '@/lib/types';
 import { MAP_STYLE_KEY_RE, normalizeConfigValue, validateConfigValue } from './config-value-validate';
+import { boolToConfigValue, isBooleanConfigValue, parseBooleanConfigValue } from './config-boolean';
 
 // URL bản đồ được trả qua endpoint PUBLIC `GET /master-data/app/config`, nên khoá
 // nhúng trong query string coi như đã công khai. Cảnh báo để người vận hành không
@@ -42,6 +44,13 @@ export function ConfigFieldRow({
   // Chỉ key *_MAP_STYLE_URL mới có validate/hint/mở-thử. Mọi row khác giữ nguyên
   // hành vi cũ — `isMapStyle` false ⇒ không render thêm gì, layout không đổi.
   const isMapStyle = MAP_STYLE_KEY_RE.test(config.key);
+  // Cờ bật/tắt ⇒ nút gạt thay ô gõ (gõ "true"/"false" bằng bàn phím tiếng Việt rất
+  // dễ ra chuỗi sai mà backend đọc thành TẮT). Nhận diện theo `config.value` —
+  // snapshot SERVER, không phải `value` đang sửa — để ô không nhảy qua lại giữa
+  // nút gạt và ô text trong lúc thao tác. `!isMapStyle` chỉ là chốt phòng thân:
+  // URL bản đồ giữ nguyên ô text kể cả khi ai đó lỡ ghi "false" vào.
+  const isBoolean = !isMapStyle && isBooleanConfigValue(config.value);
+  const checked = parseBooleanConfigValue(value);
   const error = isMapStyle ? validateConfigValue(config.key, value) : null;
   const isEmpty = isMapStyle && value.trim() === '';
   const canOpen = isMapStyle && !error && !isEmpty;
@@ -76,20 +85,42 @@ export function ConfigFieldRow({
 
       {/* Giá trị — always full width so the value is visible on every screen size */}
       <div className="min-w-0">
-        {/* aria-invalid dùng undefined (không phải false) để ~150 row config khác
-            giữ nguyên DOM như trước thay đổi này. */}
-        <Input
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          disabled={saving}
-          className={cn(
-            'h-8 w-full',
-            error && 'border-destructive focus-visible:ring-destructive',
-          )}
-          aria-label={`Giá trị ${config.key}`}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
-        />
+        {isBoolean ? (
+          // Gạt CHỈ ghi vào state `edits` — vẫn phải bấm Lưu (nút của row hoặc
+          // "Lưu tất cả") mới gọi API, y hệt khi gõ text.
+          <div className="flex h-8 items-center gap-2">
+            <Switch
+              checked={checked}
+              onCheckedChange={(on) => onChange(boolToConfigValue(on))}
+              disabled={saving}
+              aria-label={`Bật/tắt ${config.key}`}
+            />
+            {/* Nhãn chữ để đọc trạng thái không phải đoán theo màu. */}
+            <span
+              className={cn(
+                'text-sm font-medium',
+                checked ? 'text-foreground' : 'text-muted-foreground',
+              )}
+            >
+              {checked ? 'Bật' : 'Tắt'}
+            </span>
+          </div>
+        ) : (
+          // aria-invalid dùng undefined (không phải false) để ~150 row config khác
+          // giữ nguyên DOM như trước thay đổi này.
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            disabled={saving}
+            className={cn(
+              'h-8 w-full',
+              error && 'border-destructive focus-visible:ring-destructive',
+            )}
+            aria-label={`Giá trị ${config.key}`}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+          />
+        )}
         {error && (
           // Không dùng role="alert": message đổi theo TỪNG phím gõ, screen reader
           // sẽ đọc liên tục. aria-describedby ở trên đã đủ để đọc khi focus vào ô.
