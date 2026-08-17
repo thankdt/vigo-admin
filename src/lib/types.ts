@@ -387,6 +387,14 @@ export type Booking = {
   // glance because the customer journey + UI flow differ from a normal
   // dispatched booking.
   isVinow?: boolean;
+  // Chuyến admin chạy thử. Backend loại nó khỏi mọi số liệu tổng hợp (dashboard,
+  // tài chính, hoá đơn VAT, đối soát HTX) — nhưng chuyến vẫn HIỆN ở danh sách này
+  // kèm badge TEST, để admin sửa được nếu gạt nhầm.
+  //
+  // Optional vì backend cũ chưa trả field. Luôn so sánh dạng `=== true` /
+  // `booking.isTestTrip &&` — KHÔNG dùng `=== false`: `undefined` và `false` phải
+  // cùng nghĩa "chuyến thật", nếu không mọi chuyến cũ sẽ hiện sai.
+  isTestTrip?: boolean;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.
@@ -435,6 +443,10 @@ export type CustomerCallStatus = 'CLAIMED' | 'CALLED' | 'UNREACHED';
 
 /** Giá trị filter cột "Gọi check" ngoài danh sách. */
 export type CustomerCallFilter = 'claimed' | 'called' | 'unreached' | 'uncalled';
+
+/** Giá trị filter "Chuyến test" ngoài danh sách chuyến đi. Không có 'all' — bộ lọc
+ *  tắt được biểu diễn bằng `undefined`, để param không bị gửi thừa lên API. */
+export type TestTripFilter = 'exclude' | 'only';
 
 /** Một dòng lịch sử gọi check của 1 chuyến (append-only, mới nhất trước). */
 export type BookingCustomerCallEvent = {
