@@ -640,9 +640,22 @@ Nghĩa là toàn bộ khung CRM cổ điển — phân khúc VIP, cảnh báo r�
 Việc đáng tiền nhất của CRM ViGo lúc này là **chuyển khách đi-một-lần thành đi-lần-hai**, và
 nó cần đúng hai thứ, cả hai đều rẻ hơn nhiều so với GĐ4–GĐ5:
 
-1. **Biết vì sao họ không quay lại.** Dữ liệu này *đã có sẵn* mà chưa ai đọc:
-   `driver_trip_rating` (sao + bình luận + tag theo khách) và `booking_customer_call_event`
-   (lý do gọi). Chỉ cần một báo cáo, không cần bảng mới.
+1. **Biết vì sao họ không quay lại.** ⚠️ **ĐÍNH CHÍNH 2026-08-17** — bản đầu của mục này
+   viết rằng dữ liệu "đã có sẵn". Đo lại thì KHÔNG:
+
+   | Bảng | Số dòng (DEV) |
+   |---|---|
+   | `booking_customer_call_event` | 1.437 ✅ dùng được |
+   | `driver_trip_rating` | **1** ❌ gần như rỗng |
+
+   Tức là **chưa có dữ liệu CSAT để khai thác** — tính năng đánh giá chuyến gần như không ai
+   dùng. Nên việc cần làm trước không phải "đọc dữ liệu sẵn có" mà là **làm cho khách chịu
+   đánh giá** (nhắc sau chuyến, hoặc hỏi ngay trong cuộc gọi-sau của hàng đợi CSKH — GĐ1 đã
+   có sẵn ô `reason` + `note` cho việc đó).
+
+   Nguồn dùng được NGAY là `booking_customer_call_event` (1.437 dòng, có `reason` chuẩn hoá).
+   **Phải đếm lại trên PROD trước khi kết luận** — khách không đánh giá trên DEV là chuyện
+   bình thường.
 2. **Một chiến dịch duy nhất, nhắm đúng nhóm `MOI_CHUA_QUAY_LAI`.**
 
 ⇒ **Đề xuất đổi thứ tự lộ trình**: cân nhắc làm GĐ7 (Insights — cohort giữ chân, CSAT) *trước*
