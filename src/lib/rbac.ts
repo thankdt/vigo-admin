@@ -87,7 +87,8 @@ export const SETTINGS_GROUP_FUNCTIONS = [
   'settings.agent',
   'settings.pricing',
   'settings.dispatch',
-  // 18/08: nhóm riêng cho luồng "khách chọn tài xế".
+  // 18/08: nhóm riêng cho luồng "khách chọn tài xế" — công tắc, hạn mức chống quấy
+  // rối và hạn mức tra SĐT trước đó nằm rải ở dispatch/driver, mỗi lần chỉnh phải đi tìm.
   'settings.pick-driver',
   'settings.driver',
   'settings.growth',

@@ -119,26 +119,24 @@ describe('groupIdFor — CARPOOL seat discount keys', () => {
   });
 });
 
-describe('công tắc đợt "khách chọn tài xế" (18/08)', () => {
-  // Màn Cài đặt liệt kê MỌI row system_config rồi xếp nhóm; rơi vào catch-all `misc`
-  // thì vẫn hiện nhưng lẫn với đống tích hợp, và RBAC đòi quyền settings.misc.
-  // 18/08 chiều: gom cả họ về MỘT nhóm 'pick-driver' — chủ dự án: "gom hết config
-  // liên quan phần này vào 1 group riêng, đỡ phải tìm". Mirror BE PICK_DRIVER_KEYS.
-  it('công tắc luồng nằm ở nhóm Khách chọn tài xế', () => {
+// 18/08: gom cả họ "khách chọn tài xế" về MỘT nhóm — chủ dự án: "gom hết config liên
+// quan phần này vào 1 group riêng, đỡ phải tìm". Mirror BE `PICK_DRIVER_KEYS`.
+describe('nhóm Khách chọn tài xế', () => {
+  it('công tắc + TTL mã + sheet gợi ý về nhóm pick-driver', () => {
     expect(groupIdFor('DIRECT_ASSIGN_ENABLED')).toBe('pick-driver');
     expect(groupIdFor('VINOW_CODE_ENABLED')).toBe('pick-driver');
     expect(groupIdFor('VINOW_CODE_TTL_MINUTES')).toBe('pick-driver');
     expect(groupIdFor('DISPATCH_CUSTOMER_FALLBACK_ENABLED')).toBe('pick-driver');
   });
 
-  it('hạn mức chống quấy rối cùng nhóm, không nằm lẫn ở Điều phối / Tài xế', () => {
+  it('hạn mức chống quấy rối cùng nhóm, không lẫn ở Điều phối / Tài xế', () => {
     expect(groupIdFor('DIRECT_ASSIGN_PAIR_MAX')).toBe('pick-driver');
     expect(groupIdFor('DIRECT_ASSIGN_PAIR_WINDOW_SEC')).toBe('pick-driver');
     expect(groupIdFor('DRIVER_LOOKUP_MAX')).toBe('pick-driver');
     expect(groupIdFor('DRIVER_LOOKUP_WINDOW_SEC')).toBe('pick-driver');
   });
 
-  it('key điều phối KHÁC vẫn ở nhóm cũ (không kéo nhầm cả DISPATCH_*)', () => {
+  it('key khác vẫn ở nhóm cũ — không kéo nhầm cả DISPATCH_* / DRIVER_*', () => {
     expect(groupIdFor('DISPATCH_MAX_ATTEMPTS')).toBe('dispatch');
     expect(groupIdFor('DRIVER_MIN_DEPOSIT')).toBe('driver');
   });

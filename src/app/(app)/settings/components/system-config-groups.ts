@@ -1,6 +1,6 @@
 import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, PhoneOff, Megaphone, Briefcase, UserSearch, type LucideIcon } from 'lucide-react';
 
-// Mọi config của luồng "khách chọn tài xế" — mirror BE `rbac.constants.ts`.
+// Mọi config của luồng "khách chọn tài xế" — mirror BE `rbac.constants.ts PICK_DRIVER_KEYS`.
 // Trước 18/08 chúng nằm rải: công tắc + hạn mức cặp ở dispatch, hạn mức tra SĐT ở
 // driver. Chỉnh một luồng phải mở hai ba nhóm và đọc lướt hàng chục key không liên quan.
 const PICK_DRIVER_KEYS = [
@@ -38,7 +38,7 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
   },
   // ĐẶT TRƯỚC dispatch/driver: DRIVER_LOOKUP_* bắt đầu bằng DRIVER_ và
   // DISPATCH_CUSTOMER_FALLBACK_ENABLED bắt đầu bằng DISPATCH_ — để sau là chúng rơi
-  // về nhóm cũ và nhóm này rỗng. Mirror BE `rbac.constants.ts PICK_DRIVER_KEYS`.
+  // về nhóm cũ và nhóm này rỗng.
   {
     id: 'pick-driver', label: 'Khách chọn tài xế', icon: UserSearch, danger: true,
     match: (k) => PICK_DRIVER_KEYS.includes(k),
