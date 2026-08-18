@@ -65,12 +65,19 @@ const mkBooking = (over: Partial<Booking> = {}): Booking =>
     ...over,
   }) as unknown as Booking;
 
+/**
+ * 🚨 `totalPages` tính GIỐNG BACKEND (`Math.ceil(total / limit)`), KHÔNG ép cứng 1.
+ *
+ * Bản trước ép `totalPages: 1` kể cả khi `data` rỗng, nên bộ test không bao giờ chạm được
+ * đường `totalPages = 0` — đúng đường mà backend thực sự trả khi tab HẾT VIỆC, và là chỗ
+ * bảng giữ nguyên dòng cũ kèm nút bấm còn sống.
+ */
 const page = (data: Booking[], over: Record<string, unknown> = {}) => ({
   data,
   total: data.length,
   page: 1,
   limit: 20,
-  totalPages: 1,
+  totalPages: Math.ceil(data.length / 20),
   ...over,
 });
 
@@ -178,6 +185,45 @@ describe('CrmQueuePage — trạng thái rỗng', () => {
     await userEvent.click(screen.getByRole('button', { name: /^sau$/i }));
     await waitFor(() => expect(getBookings.mock.calls.at(-1)![0]).toMatchObject({ page: 1 }));
   });
+
+  /**
+   * 🚨 CA CHỊU LỰC. Backend trả `totalPages = 0` khi tab HẾT VIỆC (`Math.ceil(0/20)`), và
+   * `api.ts` chỉ chặn `undefined` bằng `??` nên số 0 đi thẳng vào trang.
+   *
+   * Bản cũ so `page > res.totalPages` → ở trang 1 thì `1 > 0` đúng → `setPage(Math.max(1,0))`
+   * = setPage(1) = ĐÚNG giá trị đang có → React bail-out → effect không chạy lại → `return`
+   * xảy ra TRƯỚC `setRows` → bảng GIỮ NGUYÊN dòng vừa xử lý, kèm nút ghi kết quả CÒN SỐNG.
+   * Bấm lại là gọi khách lần hai và đẻ thêm một dòng sự kiện (recordCustomerCall không
+   * idempotent). Đây là trạng thái kết thúc BÌNH THƯỜNG hằng ngày, không phải ca hiếm.
+   */
+  it('xử lý nốt việc CUỐI: bảng phải RỖNG, không giữ lại dòng vừa xử lý', async () => {
+    getBookings.mockResolvedValue(page([mkBooking({ id: 'bk-1' })]));
+    render(<CrmQueuePage />);
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^nhận gọi$/i })).toBeInTheDocument(),
+    );
+
+    // Xử lý xong -> tab hết việc -> backend trả totalPages = 0 (KHÔNG phải 1).
+    getBookings.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    await userEvent.click(screen.getByRole('button', { name: /^nhận gọi$/i }));
+
+    await waitFor(() => expect(screen.queryByText('Khách A')).not.toBeInTheDocument());
+    // Nút hành động phải chết theo dòng — còn sống nghĩa là bấm được lần hai.
+    expect(screen.queryByRole('button', { name: /^nhận gọi$/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/không còn việc nào/i)).toBeInTheDocument();
+  });
+
+  /** Cùng cơ chế: 20 dòng của tab CŨ không được nằm dưới header tab MỚI. */
+  it('đổi sang tab RỖNG: không mang theo dòng của tab cũ', async () => {
+    getBookings.mockResolvedValue(page([mkBooking({ id: 'bk-1' })]));
+    render(<CrmQueuePage />);
+    await screen.findByText('Khách A');
+
+    getBookings.mockResolvedValue({ data: [], total: 0, page: 1, limit: 20, totalPages: 0 });
+    await goToTab(/quá hạn/i);
+
+    await waitFor(() => expect(screen.queryByText('Khách A')).not.toBeInTheDocument());
+  });
 });
 
 describe('CrmQueuePage — ranh giới quyền', () => {
@@ -254,5 +300,45 @@ describe('CrmQueuePage — ghi kết quả từ dialog chi tiết', () => {
       expect(getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 1).length).toBeGreaterThan(countsBefore),
     );
     expect(getBookings.mock.calls.filter((c: any[]) => c[0]?.limit === 20).length).toBeGreaterThan(listBefore);
+  });
+});
+
+/**
+ * 🚨 Backend chốt "nhận việc" bằng update CÓ ĐIỀU KIỆN và trả 409 (RES_004) cho người
+ * thua. Nếu FE hiện nó như lỗi hệ thống thì người thua không hiểu chuyện gì, và tệ hơn:
+ * bảng vẫn hiện dòng "chưa ai nhận" đã cũ nên họ bấm lại và lại thua.
+ */
+describe('CrmQueuePage — thua cuộc giành việc', () => {
+  it('409 báo "người khác đã nhận" và NẠP LẠI bảng, không báo lỗi hệ thống', async () => {
+    getBookings.mockResolvedValue(page([mkBooking({ id: 'bk-1' })]));
+    render(<CrmQueuePage />);
+    const nut = await screen.findByRole('button', { name: /^nhận gọi$/i });
+
+    recordBookingCustomerCall.mockRejectedValueOnce({
+      errorCode: 'RES_004',
+      message: 'Việc này vừa được Admin Hai nhận.',
+    });
+    const truoc = getBookings.mock.calls.length;
+    await userEvent.click(nut);
+
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const arg = toast.mock.calls.at(-1)![0];
+    expect(`${arg.title} ${arg.description ?? ''}`).toMatch(/Admin Hai|người khác/i);
+    // Nạp lại: người thua phải thấy trạng thái mới, không đứng trên dòng cũ.
+    await waitFor(() => expect(getBookings.mock.calls.length).toBeGreaterThan(truoc));
+  });
+
+  /** Lỗi thường KHÔNG được mượn câu "người khác đã nhận" — hai chuyện khác hẳn nhau. */
+  it('lỗi KHÁC 409 không báo nhầm thành tranh chấp', async () => {
+    getBookings.mockResolvedValue(page([mkBooking({ id: 'bk-1' })]));
+    render(<CrmQueuePage />);
+    const nut = await screen.findByRole('button', { name: /^nhận gọi$/i });
+
+    recordBookingCustomerCall.mockRejectedValueOnce(new Error('mạng hỏng'));
+    await userEvent.click(nut);
+
+    await waitFor(() => expect(recordBookingCustomerCall).toHaveBeenCalled());
+    const titles = toast.mock.calls.map((c: any[]) => String(c[0]?.title ?? ''));
+    expect(titles.some((t: string) => /người khác nhận/i.test(t))).toBe(false);
   });
 });

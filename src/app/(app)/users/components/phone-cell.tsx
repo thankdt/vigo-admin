@@ -65,7 +65,19 @@ export function PhoneCell({
           aria-label="Hiện số"
           title="Hiện số đầy đủ (có ghi vết)"
           disabled={busy}
-          onClick={handleReveal}
+          /**
+           * 🚨 `stopPropagation` BẮT BUỘC: nút này nằm trong <TableCell> của một
+           * <TableRow onClick={...openUserDetail}>. Không chặn thì bấm "Hiện số" sẽ nổi
+           * bọt lên hàng -> điều hướng sang trang chi tiết -> component huỷ TRƯỚC khi số
+           * kịp hiện. Request `reveal-phone` vẫn bay đi và backend vẫn ghi một dòng
+           * REVEAL_PHONE. Kết quả: người dùng KHÔNG thấy số, tưởng nút hỏng, bấm lại ở
+           * trang chi tiết -> 2 dòng audit cho 1 lần thật sự cần số, làm nhiễu đúng cái
+           * nhật ký dựng ra để truy vết ai đã xem SĐT khách.
+           */
+          onClick={(e) => {
+            e.stopPropagation();
+            void handleReveal();
+          }}
           className="text-muted-foreground hover:text-foreground disabled:opacity-50"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}

@@ -100,15 +100,33 @@ export default function CrmQueuePage() {
     try {
       const res = await getBookings({ page, limit: PAGE_SIZE, ...paramsForTab(tab, me.id) });
       if (reqId !== reqIdRef.current) return;
-      // Xử lý nốt dòng cuối của trang cuối làm tổng trang co lại. Không kẹp thì `page` treo
-      // ở số cũ, request sau trả rỗng -> bảng báo "hết việc" (sai) MÀ khối phân trang bị ẩn
-      // vì totalPages===1 -> không còn nút Trước để quay lại. Chỉ thoát được bằng F5.
-      if (page > res.totalPages) {
-        setPage(Math.max(1, res.totalPages));
+      /**
+       * Xử lý nốt dòng cuối của trang cuối làm tổng trang co lại. Không kẹp thì `page` treo
+       * ở số cũ, request sau trả rỗng -> bảng báo "hết việc" (sai) MÀ khối phân trang bị ẩn
+       * vì totalPages===1 -> không còn nút Trước để quay lại. Chỉ thoát được bằng F5.
+       *
+       * 🚨 KẸP SÀN TRƯỚC rồi mới so sánh (sửa 2026-08-18). Bản trước so thẳng
+       * `page > res.totalPages`, mà backend trả `totalPages = 0` khi tab HẾT VIỆC
+       * (`Math.ceil(0/20)`) và `api.ts` chỉ chặn `undefined` bằng `??` nên số 0 đi thẳng
+       * vào đây. Ở trang 1: `1 > 0` đúng -> `setPage(Math.max(1,0))` = setPage(1) = ĐÚNG
+       * GIÁ TRỊ ĐANG CÓ -> React bail-out, `load` không đổi identity, effect KHÔNG chạy
+       * lại -> `return` xảy ra TRƯỚC `setRows` nên bảng GIỮ NGUYÊN dòng cũ.
+       *
+       * Hậu quả không phải chuyện hiển thị: việc CSKH vừa ghi kết quả vẫn nằm đó kèm nút
+       * "Đã gọi được"/"Không liên lạc được" còn sống. Bấm lại là gọi khách lần hai và đẻ
+       * thêm một dòng `booking_customer_call_event` (`recordCustomerCall` không idempotent).
+       * Và đổi sang một tab rỗng thì 20 dòng của tab CŨ nằm dưới header tab MỚI — đúng thứ
+       * mà nhánh `catch` bên dưới cố ý chặn.
+       *
+       * Đây là trạng thái KẾT THÚC BÌNH THƯỜNG hằng ngày của hàng đợi, không phải ca hiếm.
+       */
+      const totalPages = Math.max(1, res.totalPages);
+      if (page > totalPages) {
+        setPage(totalPages);
         return; // effect chạy lại với page đã kẹp
       }
       setRows(res.data);
-      setTotalPages(res.totalPages);
+      setTotalPages(totalPages);
       setTotal(res.total);
       setNowMs(Date.now());
     } catch (err) {
@@ -183,7 +201,23 @@ export default function CrmQueuePage() {
       // Việc vừa chuyển từ tab này sang tab khác -> con số của CẢ HAI tab đều sai.
       void loadCounts();
     } catch (err) {
-      toastApiError(err, 'Không ghi được cuộc gọi');
+      /**
+       * 🚨 409 = THUA CUỘC GIÀNH VIỆC, không phải lỗi hệ thống. Backend chốt "nhận việc"
+       * bằng update có điều kiện và trả `RES_004` kèm TÊN người đang giữ.
+       *
+       * Phải nạp lại bảng: người thua đang nhìn một dòng "chưa ai nhận" đã cũ, nếu để
+       * nguyên thì họ bấm lại và lại thua, không hiểu vì sao.
+       */
+      if ((err as { errorCode?: string })?.errorCode === 'RES_004') {
+        toast({
+          title: 'Việc này vừa có người khác nhận',
+          description: (err as { message?: string })?.message,
+        });
+        await load();
+        void loadCounts();
+      } else {
+        toastApiError(err, 'Không ghi được cuộc gọi');
+      }
     } finally {
       setBusyId(null);
     }

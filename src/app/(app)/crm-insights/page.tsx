@@ -14,6 +14,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toastApiError } from '@/hooks/use-api-error-toast';
+import { BOOKING_CALL_STATUS_LABEL } from '@/lib/cskh-call-labels';
+import type { CustomerCallStatus } from '@/lib/types';
 import {
   getCrmCallReasons,
   getCrmCsat,
@@ -227,7 +229,15 @@ export default function CrmInsightsPage() {
             <ul className="space-y-1 text-xs" data-testid="crm-reasons">
               {reasons.map((r, i) => (
                 <li key={i}>
-                  {r.reason} · {r.outcome}: <b>{r.n}</b>
+                  {r.reason} ·{' '}
+                  {/*
+                    Nhãn tiếng Việt dùng CHUNG với /cskh-activity. Bản đầu in mã trần nên
+                    dòng đọc ra nửa Việt nửa mã ("Khách đổi ý · UNREACHED"), và cùng một
+                    giá trị hiện hai kiểu ở hai màn cạnh nhau. Fallback về mã để giá trị
+                    enum mới (nếu backend thêm) không thành ô trống.
+                  */}
+                  {BOOKING_CALL_STATUS_LABEL[r.outcome as CustomerCallStatus] ?? r.outcome}:{' '}
+                  <b>{r.n}</b>
                 </li>
               ))}
             </ul>

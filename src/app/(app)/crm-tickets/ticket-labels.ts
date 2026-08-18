@@ -85,6 +85,45 @@ export function slaStateOf(ticket: Pick<CrmTicket, 'status' | 'slaResolveDueAt' 
   return { remainingMs, overdue: false, tone, text: `Còn ${humanizeMs(remainingMs)}` };
 }
 
+/**
+ * SLA PHẢN HỒI — mốc thứ hai, tách hẳn khỏi SLA đóng.
+ *
+ * 🚨 Vì sao phải có (thêm 2026-08-18): danh mục cấu hình HAI mốc (`respondHours` và
+ * `resolveHours`), backend tính và lưu cả `slaRespondDueAt` lẫn `firstRespondedAt`, và ô
+ * tạo ticket HỨA THẲNG với người dùng "phản hồi {respondHours}h / đóng {resolveHours}h" —
+ * nhưng không màn hình nào hiện mốc phản hồi. Ticket NO_SHOW_DRIVER phải phản hồi trong 1h
+ * và đóng trong 8h: suốt 7 giờ 59 phút dòng đó vẫn XANH theo đồng hồ 8h, trong khi hạn
+ * phản hồi đã vỡ từ 7 tiếng trước và không ai nhìn thấy. Đó là cái nửa SLA mà khách cảm
+ * nhận được ngay.
+ *
+ * Đã phản hồi thì mốc này ĐÓNG BĂNG (tone 'done') — không đếm ngược tiếp, cùng lý do với
+ * ticket đã kết thúc: biển đỏ vô nghĩa thì người ta ngừng nhìn màu.
+ */
+export function slaRespondStateOf(
+  ticket: Pick<CrmTicket, 'status' | 'slaRespondDueAt' | 'firstRespondedAt' | 'createdAt'>,
+  nowMs: number,
+): SlaState {
+  if (ticket.firstRespondedAt) {
+    return { remainingMs: 0, overdue: false, tone: 'done', text: 'Đã phản hồi' };
+  }
+  if (!TICKET_OPEN_STATUSES.includes(ticket.status)) {
+    // Đóng mà chưa từng phản hồi: không đếm ngược nữa, nhưng cũng đừng khoe "đã phản hồi".
+    return { remainingMs: 0, overdue: false, tone: 'done', text: '—' };
+  }
+
+  const due = new Date(ticket.slaRespondDueAt).getTime();
+  if (Number.isNaN(due)) return { remainingMs: 0, overdue: false, tone: 'ok', text: '—' };
+
+  const remainingMs = due - nowMs;
+  if (remainingMs < 0) {
+    return { remainingMs, overdue: true, tone: 'danger', text: `Trễ ${humanizeMs(-remainingMs)}` };
+  }
+  const created = new Date(ticket.createdAt).getTime();
+  const total = Number.isNaN(created) ? 0 : due - created;
+  const tone: SlaState['tone'] = total > 0 && remainingMs < total * 0.25 ? 'warn' : 'ok';
+  return { remainingMs, overdue: false, tone, text: `Còn ${humanizeMs(remainingMs)}` };
+}
+
 /** "2 ngày 3 giờ" / "5 giờ" / "12 phút" — đủ để quyết định, không cần giây. */
 export function humanizeMs(ms: number): string {
   const totalMinutes = Math.floor(ms / 60000);

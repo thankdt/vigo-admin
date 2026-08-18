@@ -36,6 +36,7 @@ import {
 import { formatVnDateTime } from '../leakage-review/leakage-labels';
 import {
   TICKET_STATUS_LABEL,
+  slaRespondStateOf,
   slaStateOf,
   type SlaState,
 } from './ticket-labels';
@@ -189,7 +190,8 @@ export default function CrmTicketsPage() {
                   <TableHead>Tiêu đề</TableHead>
                   <TableHead>Loại</TableHead>
                   <TableHead>Trạng thái</TableHead>
-                  <TableHead>SLA</TableHead>
+                  <TableHead>SLA phản hồi</TableHead>
+                  <TableHead>SLA đóng</TableHead>
                   <TableHead>Đền bù</TableHead>
                   <TableHead>Tạo lúc</TableHead>
                 </TableRow>
@@ -198,6 +200,8 @@ export default function CrmTicketsPage() {
                 {rows.map((t) => {
                   // 🚨 SLA suy từ CHÍNH DÒNG (§13.2), không từ bộ lọc đang chọn.
                   const sla = slaStateOf(t, now);
+                  // Mốc PHẢN HỒI tách hẳn: SLA đóng còn xanh không có nghĩa là chưa vỡ gì.
+                  const slaRespond = slaRespondStateOf(t, now);
                   return (
                     <TableRow
                       key={t.id}
@@ -212,7 +216,12 @@ export default function CrmTicketsPage() {
                         <Badge variant="secondary">{TICKET_STATUS_LABEL[t.status]}</Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge className={TONE_CLASS[sla.tone]}>{sla.text}</Badge>
+                        <Badge className={TONE_CLASS[slaRespond.tone]} data-testid="sla-respond">
+                          {slaRespond.text}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge className={TONE_CLASS[sla.tone]} data-testid="sla-resolve">{sla.text}</Badge>
                       </TableCell>
                       <TableCell className="text-sm">
                         {Number(t.compensationAmount) > 0
