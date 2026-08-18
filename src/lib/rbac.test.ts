@@ -19,9 +19,9 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 32 menu functions (navItems minus /settings)', () => {
-    // 2026-08-12: +crm-queue · 2026-08-18: +crm-tickets, +crm-segments
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(32);
+  it('has exactly 33 menu functions (navItems minus /settings)', () => {
+    // 2026-08-12: +crm-queue · 2026-08-18: +crm-tickets, +crm-segments, +crm-campaigns
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(33);
   });
 
   // Ranh giới riêng tư của màn "Đội tài chuyên nghiệp": ghi chú tuyển team KHÔNG
@@ -102,11 +102,12 @@ describe('rbac catalog mirror', () => {
       '/users',
       '/crm-tickets',
       '/crm-segments',
+      '/crm-campaigns',
       '/cskh-activity',
       '/acquisition',
     ];
 
-    it('nhóm tồn tại và gồm đúng 6 mục, ĐÚNG THỨ TỰ', () => {
+    it('nhóm tồn tại và gồm đúng 7 mục, ĐÚNG THỨ TỰ', () => {
       const crm = navGroups.find((g) => g.label === 'Khách hàng (CRM)');
       expect(crm).toBeDefined();
       expect(crm!.items.map((i) => i.href)).toEqual(CRM_HREFS);

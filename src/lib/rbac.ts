@@ -51,6 +51,9 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   // 2026-08-18 (CRM GĐ4). Quyền RIÊNG cho marketing: dựng TỆP từ dữ liệu tổng hợp,
   // KHÔNG cần xem hồ sơ/SĐT từng khách — nên cố ý không dùng chung 'users'.
   '/crm-segments': 'crm-segments',
+  // 2026-08-18 (CRM GĐ5). Quyền TÁCH khỏi 'crm-segments': dựng tệp sai thì sửa được,
+  // bấm gửi sai thì tin đã ra ngoài cho khách thật.
+  '/crm-campaigns': 'crm-campaigns',
 };
 
 /**

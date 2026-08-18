@@ -3994,3 +3994,90 @@ export async function getCrmCustomerMetrics(userId: string): Promise<CrmCustomer
   const response = await fetchWithAuth(`/admin/crm/customers/${userId}/metrics`);
   return unwrap<CrmCustomerMetrics | null>(response);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ5 — Chiến dịch chăm sóc (GỬI RA NGOÀI cho khách thật)
+//
+// Quyền `crm-campaigns`, TÁCH khỏi `crm-segments`: dựng tệp sai thì sửa được,
+// bấm gửi sai thì tin đã ra ngoài.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmCampaignChannel = 'ZNS' | 'PUSH';
+export type CrmCampaignStatus = 'DRAFT' | 'SENDING' | 'SENT' | 'CANCELLED';
+
+export type CrmCampaign = {
+  id: string;
+  name: string;
+  segmentId: string;
+  channel: CrmCampaignChannel;
+  znsTemplateId: string | null;
+  pushTitle: string | null;
+  pushBody: string | null;
+  status: CrmCampaignStatus;
+  attributionDays: number;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+};
+
+export type CrmCampaignStats = {
+  campaign: CrmCampaign;
+  /** Gộp theo (deliveryStatus, skipReason) — lý do bỏ qua hiện ra, không im lặng. */
+  breakdown: Array<{ deliveryStatus: string; skipReason: string | null; n: number }>;
+  attributedCustomers: number;
+  attributedRevenue: number;
+};
+
+export async function getCrmCampaigns(): Promise<CrmCampaign[]> {
+  const response = await fetchWithAuth('/admin/crm/campaigns');
+  return unwrap<CrmCampaign[]>(response);
+}
+
+export async function createCrmCampaign(body: {
+  name: string;
+  segmentId: string;
+  channel: CrmCampaignChannel;
+  znsTemplateId?: string;
+  pushTitle?: string;
+  pushBody?: string;
+  attributionDays?: number;
+}): Promise<CrmCampaign> {
+  const response = await fetchWithAuth('/admin/crm/campaigns', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmCampaign>(response);
+}
+
+/** BẤM GỬI — không hoàn tác được. BE tự áp hai chốt chặn §6.6 cho từng người nhận. */
+export async function sendCrmCampaign(id: string): Promise<{
+  total: number;
+  sent: number;
+  failed: number;
+  skipped: number;
+}> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/${id}/send`, { method: 'POST' });
+  return unwrap<{ total: number; sent: number; failed: number; skipped: number }>(response);
+}
+
+export async function getCrmCampaignStats(id: string): Promise<CrmCampaignStats> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/${id}/stats`);
+  return unwrap<CrmCampaignStats>(response);
+}
+
+/** Danh sách chặn — khách yêu cầu ngừng nhận tin chăm sóc (§6.6). */
+export async function setCrmOptout(userId: string, reason?: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(reason && { reason }) }),
+  });
+  return unwrap<{ ok: true }>(response);
+}
+
+export async function removeCrmOptout(userId: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`, {
+    method: 'DELETE',
+  });
+  return unwrap<{ ok: true }>(response);
+}

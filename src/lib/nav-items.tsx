@@ -28,6 +28,7 @@ import {
   Headset,
   LifeBuoy,
   Layers,
+  Send,
   PhoneCall,
   Star,
   Handshake,
@@ -93,6 +94,8 @@ export const navGroups: NavGroup[] = [
       { href: '/crm-tickets', label: 'Ticket khách hàng', icon: LifeBuoy },
       // 2026-08-18 (CRM GĐ4): dựng tệp khách từ chỉ số tính sẵn.
       { href: '/crm-segments', label: 'Phân khúc', icon: Layers },
+      // 2026-08-18 (CRM GĐ5): gửi ZNS/push cho một phân khúc — ra ngoài, khách thật.
+      { href: '/crm-campaigns', label: 'Chiến dịch chăm sóc', icon: Send },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
     ],
