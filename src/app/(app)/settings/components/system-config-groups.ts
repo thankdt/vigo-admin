@@ -30,7 +30,11 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
       ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED', 'VINOW_CODE_TTL_MINUTES',
        // 18/08: hai công tắc của đợt "khách chọn tài xế" — cùng nhóm điều phối vì cả
        // hai đổi ĐƯỜNG ĐI của chuyến, không phải giá. Mirror ở BE `rbac.constants.ts`.
-       'VINOW_CODE_ENABLED', 'DIRECT_ASSIGN_ENABLED'].includes(k),
+       'VINOW_CODE_ENABLED', 'DIRECT_ASSIGN_ENABLED',
+       // Hạn mức chống quấy rối theo cặp (khách, tài xế). Trước 18/08 là số CỨNG
+       // trong code backend — ops muốn nới là phải deploy, mà lúc bị chặn thì
+       // người duy nhất biết là khách đang cố đặt chuyến.
+       'DIRECT_ASSIGN_PAIR_MAX', 'DIRECT_ASSIGN_PAIR_WINDOW_SEC'].includes(k),
   },
   { id: 'driver', label: 'Tài xế', icon: Car, match: (k) => k.startsWith('DRIVER_') },
   {
