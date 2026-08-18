@@ -47,6 +47,22 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/crm-queue': 'crm-queue',
 };
 
+/**
+ * Function KHÔNG gắn với mục menu nào — mirror `SPECIAL_FUNCTIONS` của backend.
+ *
+ * 🚨 Vì sao phải khai riêng ở FE: `buildFunctionCatalog()` dựng danh sách tick ở `/roles`
+ * HOÀN TOÀN từ `navItems`. Không có danh sách này thì `crm-compensate` không xuất hiện ở
+ * `/roles` ⇒ **không cấp được cho ai**, dù backend đã chấp nhận key đó (spec §7.1).
+ *
+ * Nhãn ở đây là thứ người tick ĐỌC để quyết định — nên nói thẳng nó cấp quyền gì.
+ */
+export const SPECIAL_FUNCTIONS: { key: string; label: string }[] = [
+  {
+    key: 'crm-compensate',
+    label: 'Duyệt đền bù khách hàng (CẤP TIỀN THẬT)',
+  },
+];
+
 // 10 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
 // 2026-07-23: thêm settings.kol + settings.agent (tách KOL_*/BOOKING_AGENT_* khỏi misc).
 export const SETTINGS_GROUP_FUNCTIONS = [
