@@ -847,3 +847,133 @@ riêng response `getAdminUserDetail`, không đụng luồng auth; (c) chấp nh
 - Finding GÓP Ý cố ý bỏ qua: UNIQUE `(userId, tag)` phân biệt HOA/thường. Sửa đúng cách cần
   unique trên `lower("tag")`, mà TypeORM không diễn đạt được index biểu thức nên `@Index` ở
   entity sẽ lệch DB và `migration:generate` đẻ diff giả. FE dùng dropdown nên đường vào hẹp.
+
+---
+
+## 16. Kết quả GĐ3 → GĐ7 + bài học — viết SAU khi ship, đọc TRƯỚC khi test DEV
+
+### 16.0 Đã ship những gì (code xong, CHƯA ai test tay trên DEV)
+
+| GĐ | Backend | Admin |
+|---|---|---|
+| 3 | ticket khiếu nại + SLA + đền bù ví (`crm-tickets`, `crm-compensate`) | `/crm-tickets` + khối Ticket trên hồ sơ 360 |
+| 4 | `crm_customer_metrics` + cron RFM 03:00 VN + phân khúc theo rule (`crm-segments`) | `/crm-segments` + hàng chỉ số trên hồ sơ 360 |
+| 5 | chiến dịch ZNS/PUSH + 2 chốt chặn §6.6 (`crm-campaigns`) | `/crm-campaigns` + khối "Tin chăm sóc" trên hồ sơ 360 |
+| 6 | khách doanh nghiệp + pipeline B2B (`crm-accounts`) | `/crm-accounts` |
+| 7 | insights: cohort giữ chân, lý do không quay lại, CSAT (`crm-insights`) | `/crm-insights` |
+
+RBAC: 5 function menu mới + 1 function KHÔNG-MENU (`crm-compensate`). Nhóm `SPECIAL_FUNCTIONS`
+sinh ra vì danh mục tick ở `/roles` dựng hoàn toàn từ `navItems` — một key không có href thì
+**không cấp được cho ai**, và người implement sẽ bị dồn vào chỗ gộp nó vào function có menu,
+đúng thứ §6.4 cấm.
+
+### 16.1 Cửa sổ tính KHÔNG phải là toàn bộ lịch sử — và nhầm chỗ này thì gửi nhầm người
+
+`segmentOf` ban đầu viết `if (f <= 0) return 'CHUA_DI_CHUYEN'`, trong khi `f` chỉ đếm chuyến
+trong **cửa sổ 180 ngày**. Khách từng đi 40 chuyến nhưng nghỉ 7 tháng có `f = 0` ⇒ bị dán nhãn
+"chưa đi chuyến nào" ⇒ rơi vào tệp nhận tin **onboarding** ⇒ nhận "chào mừng bạn đến với ViGo".
+
+Đây không phải lỗi số liệu xấu mà là lỗi HÀNH ĐỘNG: nhóm đáng gọi win-back nhất bị đối xử như
+người lạ. Sửa bằng cách tách `lifetimeF` (toàn thời gian) khỏi `f` (trong cửa sổ).
+
+⇒ Mỗi lần một chỉ số có cửa sổ, phải hỏi: *"giá trị 0 ở đây nghĩa là CHƯA TỪNG, hay là KHÔNG
+TRONG KHOẢNG NÀY?"* — hai câu trả lời dẫn tới hai hành động ngược nhau.
+
+### 16.2 Bộ đếm chống spam đếm SAI NGUỒN thì chốt chặn chỉ là trang trí
+
+Bộ đếm tần suất đọc `zns_send_log`, kèm docblock tuyên bố đã phủ cả đường gửi cũ. Sự thật:
+`/notifications` đẩy `broadcast_promotion` vào BullMQ rồi gửi **PUSH**, KHÔNG hề gọi `sendZns`
+⇒ bảng đó không có một dòng nào của đường bắn tay ⇒ chốt chặn bỏ lọt hoàn toàn thứ nó sinh ra
+để chặn. Toàn repo chỉ có 3 call-site `sendZns`, kiểm 30 giây là ra.
+
+⇒ Khi viết "đã phủ cả X", phải **liệt kê call-site thật của X** rồi mới viết câu đó. Docblock
+tự tin là thứ khiến người sau không kiểm lại.
+
+Bài học song sinh (§15.4 cho việc che dữ liệu) lặp lại nguyên si ở đây: **liệt kê mọi đường,
+rồi mới tuyên bố**.
+
+### 16.3 Chốt chặn không có ĐƯỜNG VÀO = chốt chặn không tồn tại
+
+Bảng `crm_message_optout` + nhánh bỏ qua `OPTED_OUT` + hàm `setCrmOptout` bên admin: đủ cả.
+Thiếu đúng một thứ — **không màn hình nào gọi hàm đó**. Bảng rỗng vĩnh viễn, nhánh không bao
+giờ chạy, và khách nhắn "đừng gửi nữa" vẫn nhận tin.
+
+⇒ Với mọi chốt chặn dạng danh sách, câu hỏi nghiệm thu KHÔNG phải "đã có bảng chưa" mà là
+**"ai bấm vào đâu để một dòng xuất hiện trong bảng này?"**. Nếu không trả lời được bằng một
+đường dẫn màn hình cụ thể thì tính năng chưa xong.
+
+Kèm theo: quyền BẬT chặn phải rộng bằng quyền của **người thật sự nhận yêu cầu** (CSKH tuyến
+đầu, chỉ có `users`). Bắt phải có `crm-campaigns` mới bật được nghĩa là yêu cầu của khách phải
+đi qua người khác — và trong thực tế nó không đi tới đâu. Quyền BỎ chặn thì giữ hẹp: tôn trọng
+khách phải dễ, cho phép gửi lại phải khó.
+
+### 16.4 "Gửi xong" trong một request HTTP là lời hứa không giữ được
+
+Vòng lặp gửi đồng bộ cho tệp vài nghìn người × 1 lượt gọi Zalo mỗi người vượt xa hạn cắt kết
+nối 60s của ALB. Admin nhận "lỗi mạng" **giữa lúc tin đang ra ngoài thật**, rồi bấm lại.
+
+Tệ hơn là trạng thái sau đó: chiến dịch chỉ nhận `DRAFT` nên một lượt bị giết giữa chừng
+(deploy, rollout) kẹt vĩnh viễn ở `SENDING`. Lối thoát duy nhất là tạo chiến dịch MỚI — mà
+`campaignId` mới thì `UNIQUE(campaignId, userId)` **không chặn**, nên 800 người đã nhận sẽ
+nhận lần hai.
+
+⇒ Việc gửi ra ngoài dài hơn vài giây phải nằm ở worker. Và mọi trạng thái "đang chạy" phải có
+**đường vào lại** — chống trùng bằng dữ liệu đã ghi (ai có dòng recipient thì bỏ qua), không
+bằng cách cấm bấm.
+
+### 16.5 Hàm nuốt lỗi thì tầng trên KHÔNG được coi là đã gửi
+
+`sendPushToUser` không ném và không trả gì khi khách không có thiết bị — chỉ `console.warn`
+rồi `return`. Vòng lặp chiến dịch vì thế ghi `SENT` cho **mọi** người nhận PUSH: báo cáo hiện
+"gửi 3000/3000" trong khi phần lớn chưa từng rời máy chủ, và bộ đếm tần suất đếm luôn những
+lượt ma đó để chặn các chiến dịch sau.
+
+⇒ Trước khi ghi "đã gửi", phải hỏi hàm được gọi có **cách nào báo thất bại** không. Nếu không
+có, tự kiểm điều kiện gửi được (ở đây: thiết bị của app KHÁCH) và ghi `NO_DEVICE`.
+
+Bẫy đi kèm: thiếu `appId` thì `pickPushTargets` rơi về "thiết bị mới nhất bất kỳ" — có thể bắn
+tin khuyến mãi cho khách vào **máy app TÀI XẾ**.
+
+### 16.6 Tra whitelist bằng index là lỗ thủng, không phải tra whitelist
+
+`SEGMENT_FIELDS[c.field]` trả về member **kế thừa từ `Object.prototype`**: `field:"constructor"`
+(hay `toString`, `valueOf`) cho ra giá trị truthy và lọt qua `if (!type)`. Không phải SQL
+injection — hai mảnh nội suy vẫn chỉ lấy từ whitelist — nhưng nó dựng SQL rác ⇒ lỗi Postgres
+chưa bắt ⇒ **500 kèm thông điệp DB** trên một endpoint nhận body tự do.
+
+⇒ Whitelist tra bằng `Object.prototype.hasOwnProperty.call(...)`. Test cho lỗ này phải được
+**chứng minh là ĐỎ khi gỡ bản vá** — 10/22 ca đỏ khi thử gỡ, nếu không nó chỉ là test xanh vô nghĩa.
+
+### 16.7 Hai đường vào cùng một việc tính lại = hai kết quả trộn vào nhau
+
+`recomputeAll` có cron 03:00 **và** nút "Tính lại" trên `/crm-segments`. Chạy chồng thì mỗi
+lượt có mốc `now` riêng, và lô UPSERT của lượt CŨ ghi đè kết quả của lượt MỚI: bảng chỉ số kết
+thúc ở trạng thái trộn hai thời điểm, mà `computedAt` chỉ ghi được một — nên **không ai nhìn
+ra là nó đã trộn**. Sửa bằng `pg_try_advisory_lock` (không chờ, lượt sau bỏ qua) + `ORDER BY`.
+
+### 16.8 Test giờ mà để đồng hồ thật chạy = test đỏ lúc không ai ngồi xem
+
+Chốt "Zalo không nhận ZNS trong 22h–6h giờ VN" đọc `Date.now()`. Bộ test viết xong xanh —
+vì đang là ban ngày. Nó sẽ **đỏ khi CI chạy ban đêm**. Sửa: `jest.useFakeTimers()` ghim 10h VN
+cho cả file, và ca kiểm khung đêm tự đặt lại đồng hồ.
+
+Cùng họ với §15.5 (test giờ VN trên máy giờ VN là xanh giả): **cả hai đều là test đang kiểm môi
+trường chạy nó, không phải kiểm code**.
+
+### 16.9 Nợ CHƯA thoả, phải đọc trước khi mở PR → main
+
+- **Chưa phase nào (GĐ0→GĐ7) được test tay trên DEV.** 8 giai đoạn đang xếp chồng. Đây là cổng
+  bắt buộc của CLAUDE.md, chưa qua.
+- **Va chạm timestamp migration với `dev`**: `dev` đã có `AddBookingAssignSource`,
+  `SeedVinowCodeDisabled`, `SeedDriverLookupQuotaConfig`, `SeedDirectAssignDisabled`,
+  `AutoVoucherCampaign` trùng số với 4 migration CRM. Phải đánh số lại khối CRM chưa merge
+  lên trên `1794200000000` trước khi merge dev (đúng cách team đã làm ở `d61a55c`).
+  Riêng cặp `1793700000000` (`AddBookingAssignSource` ↔ `CreateCrmCustomerTagNote`) **đã nằm
+  sẵn trên dev và đã chạy** — đổi tên bây giờ là bắt DEV chạy lại, nên để nguyên và ghi nhận.
+- **`User.password` thiếu `select: false`** (§13.6, §15.6): vẫn hoãn vô thời hạn theo quyết
+  định user. GĐ3 chỉ làm bản vá HẸP — loại field `password` khỏi riêng response
+  `getAdminUserDetail`. Luồng auth không đụng.
+- **GÓP Ý cố ý bỏ qua** (từ §15.7): UNIQUE `(userId, tag)` phân biệt HOA/thường.
+- **`dev` có tính năng "chiến dịch voucher tự tặng"** (`AutoVoucherCampaign`) do người khác
+  làm, khái niệm gần với "chiến dịch chăm sóc" của GĐ5 nhưng khác bảng, khác đường gửi. Cần
+  một lượt đối chiếu để hai thứ không đá nhau trên cùng một khách.
