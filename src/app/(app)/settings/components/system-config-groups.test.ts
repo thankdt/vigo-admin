@@ -71,7 +71,6 @@ describe('buildConfigGroups (settings RBAC gate)', () => {
     expect(byId['dispatch']).toEqual([
       'SCHEDULED_REFIRE_LEAD_MS',
       'SCHEDULE_MIN_LEAD_MINUTES',
-      'VINOW_CODE_TTL_MINUTES',
     ]);
     expect(byId['app']).toEqual(['HOTLINE', 'HOTLINE_DRIVER']);
     expect(byId['misc']).toEqual(['ZALO_TOKEN_EXPIRES_AT']);
@@ -123,13 +122,24 @@ describe('groupIdFor — CARPOOL seat discount keys', () => {
 describe('công tắc đợt "khách chọn tài xế" (18/08)', () => {
   // Màn Cài đặt liệt kê MỌI row system_config rồi xếp nhóm; rơi vào catch-all `misc`
   // thì vẫn hiện nhưng lẫn với đống tích hợp, và RBAC đòi quyền settings.misc.
-  it('hai công tắc luồng nằm ở nhóm điều phối', () => {
-    expect(groupIdFor('DIRECT_ASSIGN_ENABLED')).toBe('dispatch');
-    expect(groupIdFor('VINOW_CODE_ENABLED')).toBe('dispatch');
+  // 18/08 chiều: gom cả họ về MỘT nhóm 'pick-driver' — chủ dự án: "gom hết config
+  // liên quan phần này vào 1 group riêng, đỡ phải tìm". Mirror BE PICK_DRIVER_KEYS.
+  it('công tắc luồng nằm ở nhóm Khách chọn tài xế', () => {
+    expect(groupIdFor('DIRECT_ASSIGN_ENABLED')).toBe('pick-driver');
+    expect(groupIdFor('VINOW_CODE_ENABLED')).toBe('pick-driver');
+    expect(groupIdFor('VINOW_CODE_TTL_MINUTES')).toBe('pick-driver');
+    expect(groupIdFor('DISPATCH_CUSTOMER_FALLBACK_ENABLED')).toBe('pick-driver');
   });
 
-  it('hạn mức tra tài xế nằm ở nhóm tài xế', () => {
-    expect(groupIdFor('DRIVER_LOOKUP_MAX')).toBe('driver');
-    expect(groupIdFor('DRIVER_LOOKUP_WINDOW_SEC')).toBe('driver');
+  it('hạn mức chống quấy rối cùng nhóm, không nằm lẫn ở Điều phối / Tài xế', () => {
+    expect(groupIdFor('DIRECT_ASSIGN_PAIR_MAX')).toBe('pick-driver');
+    expect(groupIdFor('DIRECT_ASSIGN_PAIR_WINDOW_SEC')).toBe('pick-driver');
+    expect(groupIdFor('DRIVER_LOOKUP_MAX')).toBe('pick-driver');
+    expect(groupIdFor('DRIVER_LOOKUP_WINDOW_SEC')).toBe('pick-driver');
+  });
+
+  it('key điều phối KHÁC vẫn ở nhóm cũ (không kéo nhầm cả DISPATCH_*)', () => {
+    expect(groupIdFor('DISPATCH_MAX_ATTEMPTS')).toBe('dispatch');
+    expect(groupIdFor('DRIVER_MIN_DEPOSIT')).toBe('driver');
   });
 });

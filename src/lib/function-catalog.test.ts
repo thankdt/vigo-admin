@@ -28,12 +28,13 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 35 menu + 10 settings + 1 đặc biệt = 46 unique keys', () => {
+  it('allFunctionKeys = 35 menu + 11 settings + 1 đặc biệt = 47 unique keys', () => {
     const keys = allFunctionKeys();
     // 2026-08-18 (CRM GĐ3-7): +crm-tickets, +crm-segments, +crm-campaigns, +crm-accounts,
     // +crm-insights (menu) và +crm-compensate (đặc biệt).
-    expect(keys).toHaveLength(46);
-    expect(new Set(keys).size).toBe(46);
+    // 2026-08-18 (chọn tài xế): +settings.pick-driver.
+    expect(keys).toHaveLength(47);
+    expect(new Set(keys).size).toBe(47);
   });
 
   /**
