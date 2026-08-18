@@ -27,7 +27,10 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     match: (k) =>
       k.startsWith('DISPATCH_') || k.startsWith('ROUTE_') || k.startsWith('CHAIN_') ||
       k.startsWith('SCHEDULED_') || k.startsWith('SCHEDULE_') ||
-      ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED', 'VINOW_CODE_TTL_MINUTES'].includes(k),
+      ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED', 'VINOW_CODE_TTL_MINUTES',
+       // 18/08: hai công tắc của đợt "khách chọn tài xế" — cùng nhóm điều phối vì cả
+       // hai đổi ĐƯỜNG ĐI của chuyến, không phải giá. Mirror ở BE `rbac.constants.ts`.
+       'VINOW_CODE_ENABLED', 'DIRECT_ASSIGN_ENABLED'].includes(k),
   },
   { id: 'driver', label: 'Tài xế', icon: Car, match: (k) => k.startsWith('DRIVER_') },
   {

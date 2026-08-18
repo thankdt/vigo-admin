@@ -119,3 +119,17 @@ describe('groupIdFor — CARPOOL seat discount keys', () => {
     expect(groupIdFor('CARPOOL_SEAT_DISCOUNT_2')).not.toBe('misc');
   });
 });
+
+describe('công tắc đợt "khách chọn tài xế" (18/08)', () => {
+  // Màn Cài đặt liệt kê MỌI row system_config rồi xếp nhóm; rơi vào catch-all `misc`
+  // thì vẫn hiện nhưng lẫn với đống tích hợp, và RBAC đòi quyền settings.misc.
+  it('hai công tắc luồng nằm ở nhóm điều phối', () => {
+    expect(groupIdFor('DIRECT_ASSIGN_ENABLED')).toBe('dispatch');
+    expect(groupIdFor('VINOW_CODE_ENABLED')).toBe('dispatch');
+  });
+
+  it('hạn mức tra tài xế nằm ở nhóm tài xế', () => {
+    expect(groupIdFor('DRIVER_LOOKUP_MAX')).toBe('driver');
+    expect(groupIdFor('DRIVER_LOOKUP_WINDOW_SEC')).toBe('driver');
+  });
+});
