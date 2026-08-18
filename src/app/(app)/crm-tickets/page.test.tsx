@@ -1,6 +1,14 @@
 import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import userEventLib from '@testing-library/user-event';
+
+/**
+ * Radix (Dialog/AlertDialog) đặt `pointer-events: none` lên `document.body` khi modal mở và
+ * KHÔNG dọn sạch giữa các test trong jsdom — test sau đó ăn lỗi
+ * "Unable to perform pointer interaction". Tắt phép kiểm con trỏ của user-event: nó kiểm
+ * CSS, mà CSS ở đây là rác của môi trường test chứ không phải hành vi sản phẩm.
+ */
+const userEvent = userEventLib.setup({ pointerEventsCheck: 0 });
 import CrmTicketsPage from './page';
 
 /**
@@ -18,6 +26,7 @@ const addCrmTicketNote = vi.fn();
 const proposeCrmCompensation = vi.fn();
 const approveCrmCompensation = vi.fn();
 const getCrmCompensationLimits = vi.fn();
+const getAdminUserDetail = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -32,6 +41,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     proposeCrmCompensation: (...a: any[]) => proposeCrmCompensation(...a),
     approveCrmCompensation: (...a: any[]) => approveCrmCompensation(...a),
     getCrmCompensationLimits: (...a: any[]) => getCrmCompensationLimits(...a),
+    getAdminUserDetail: (...a: any[]) => getAdminUserDetail(...a),
   };
 });
 
@@ -89,6 +99,8 @@ beforeAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Dọn rác Radix để lại từ test trước (xem chú thích ở đầu file).
+  document.body.style.pointerEvents = '';
   authFunctions.current = ['crm-tickets'];
   getCrmTickets.mockResolvedValue({
     data: [mkTicket()],
@@ -97,6 +109,7 @@ beforeEach(() => {
   getCrmTicketCategories.mockResolvedValue(CATS);
   getCrmTicket.mockResolvedValue({ ticket: mkTicket(), events: [] });
   getCrmCompensationLimits.mockResolvedValue({ maxPerCase: 500000, maxPerDay: 3000000 });
+  getAdminUserDetail.mockResolvedValue({ id: 'c-1', fullName: 'Khách A', phone: '0911111111' });
 });
 
 describe('/crm-tickets — danh sách', () => {
@@ -223,12 +236,52 @@ describe('/crm-tickets — chi tiết & ĐỀN BÙ (ranh giới quyền)', () =>
     expect(approveCrmCompensation).not.toHaveBeenCalled();
   });
 
-  it('duyệt gọi đúng đường duyệt', async () => {
+  it('duyệt phải qua bước XÁC NHẬN rồi mới gọi API', async () => {
     authFunctions.current = ['crm-tickets', 'crm-compensate'];
     await openDetail();
     await userEvent.type(screen.getByPlaceholderText(/Số tiền/), '300000');
     await userEvent.click(screen.getByRole('button', { name: /DUYỆT/ }));
+
+    // Chưa gọi API — mới chỉ mở hộp xác nhận.
+    expect(approveCrmCompensation).not.toHaveBeenCalled();
+    expect(await screen.findByText(/KHÔNG hoàn tác được/)).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cấp tiền' }));
     await waitFor(() => expect(approveCrmCompensation).toHaveBeenCalledWith('tk-1', 300000, undefined));
+  });
+
+  it('huỷ ở hộp xác nhận thì KHÔNG cấp tiền', async () => {
+    authFunctions.current = ['crm-tickets', 'crm-compensate'];
+    await openDetail();
+    await userEvent.type(screen.getByPlaceholderText(/Số tiền/), '300000');
+    await userEvent.click(screen.getByRole('button', { name: /DUYỆT/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Huỷ' }));
+    expect(approveCrmCompensation).not.toHaveBeenCalled();
+  });
+
+  /**
+   * 🚨 Ca chống lỗi trả THIẾU im lặng: người duyệt đọc dòng "Trần: 500.000đ/vụ" ngay trên
+   * màn rồi gõ đúng định dạng đó. `Number("500.000")` = 500 → khách đáng 500k nhận 500đ,
+   * không cảnh báo nào.
+   */
+  it('gõ "500.000" gửi đi 500000, KHÔNG phải 500', async () => {
+    authFunctions.current = ['crm-tickets', 'crm-compensate'];
+    await openDetail();
+    await userEvent.type(screen.getByPlaceholderText(/Số tiền/), '500.000');
+    expect(screen.getByTestId('crm-parsed-amount')).toHaveTextContent('500.000đ');
+    await userEvent.click(screen.getByRole('button', { name: /DUYỆT/ }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Cấp tiền' }));
+    await waitFor(() => expect(approveCrmCompensation).toHaveBeenCalledWith('tk-1', 500000, undefined));
+  });
+
+  /** Người duyệt phải THẤY tiền đi cho ai trước khi bấm — UUID dán nhầm là ca thật. */
+  it('hiện tên + SĐT người nhận tiền', async () => {
+    authFunctions.current = ['crm-tickets', 'crm-compensate'];
+    await openDetail();
+    await waitFor(() =>
+      expect(screen.getByTestId('crm-compensate-recipient')).toHaveTextContent('Khách A'),
+    );
+    expect(screen.getByTestId('crm-compensate-recipient')).toHaveTextContent('0911111111');
   });
 
   /**

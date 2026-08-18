@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth-context';
 import {
   getAdminUserDetail,
   deleteAdminUser,
@@ -110,6 +111,7 @@ export default function UserDetailPage() {
   const params = useSearchParams();
   const id = params.get('id');
   const { toast } = useToast();
+  const { can } = useAuth();
 
   const [user, setUser] = React.useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -409,7 +411,13 @@ export default function UserDetailPage() {
         <div key={user.id} className="space-y-6">
           <CustomerSourceCard userId={user.id} />
           <CustomerTagsNotesCard userId={user.id} />
-          <CustomerTicketsCard userId={user.id} />
+          {/*
+            Gate `crm-tickets`: endpoint danh sách ticket gate bằng key đó, nên admin chỉ
+            có `users` sẽ nhận 403 -> card đỏ "Không tải được" + toast lỗi MỖI LẦN mở MỖI
+            hồ sơ. Chữ đó nói "hỏng" trong khi sự thật là "bạn không có quyền", và người
+            dùng sẽ đi báo lỗi hệ thống.
+          */}
+          {can('crm-tickets') && <CustomerTicketsCard userId={user.id} />}
           <CustomerTimelineCard userId={user.id} />
         </div>
       )}

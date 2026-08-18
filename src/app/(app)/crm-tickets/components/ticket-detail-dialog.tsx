@@ -26,8 +26,11 @@ import {
   type CrmTicket,
   type CrmTicketEvent,
   type CrmTicketStatus,
+  getAdminUserDetail,
+  type AdminUserDetail,
 } from '@/lib/api';
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
+import { parseVndInput } from '../parse-amount';
 import {
   TICKET_ALLOWED_TRANSITIONS,
   TICKET_EVENT_LABEL,
@@ -62,6 +65,13 @@ export function TicketDetailDialog({
   const [note, setNote] = React.useState('');
   const [amount, setAmount] = React.useState('');
   const [reloadKey, setReloadKey] = React.useState(0);
+  const [confirmApprove, setConfirmApprove] = React.useState(false);
+  /** Người NHẬN tiền — phải hiện ra trước khi ai đó bấm duyệt (xem chú thích dưới). */
+  const [customer, setCustomer] = React.useState<AdminUserDetail | null>(null);
+
+  // Số tiền ĐÃ HIỂU, hiện lại cho người dùng đối chiếu. `Number('500.000')` = 500 nên
+  // không bao giờ dùng thẳng giá trị thô của ô nhập.
+  const parsedAmount = parseVndInput(amount);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -82,6 +92,26 @@ export function TicketDetailDialog({
       cancelled = true;
     };
   }, [ticketId, reloadKey]);
+
+  /**
+   * Nạp thông tin KHÁCH NHẬN TIỀN.
+   *
+   * 🚨 Không có bước này thì người bấm "DUYỆT & cấp tiền" không nhìn thấy tiền đi cho ai.
+   * Ghép với form tạo ticket (gõ tay `customerUserId`), một UUID dán nhầm sẽ đi trọn
+   * đường: ticket trông bình thường, người duyệt đọc mô tả thấy hợp lý, bấm duyệt — và
+   * tiền vào ví một khách không liên quan. UUID không tồn tại thì FK chặn, nhưng UUID của
+   * một khách THẬT khác thì không có gì chặn.
+   */
+  React.useEffect(() => {
+    if (!ticket?.customerUserId) return;
+    let cancelled = false;
+    getAdminUserDetail(ticket.customerUserId)
+      .then((u) => !cancelled && setCustomer(u))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [ticket?.customerUserId]);
 
   // Trần chỉ để HIỆN cho người duyệt biết trước — không dùng để tự chặn ở FE.
   React.useEffect(() => {
@@ -208,10 +238,10 @@ export function TicketDetailDialog({
                 <Button
                   size="sm"
                   variant="outline"
-                  disabled={busy || !amount.trim()}
+                  disabled={busy || !parsedAmount}
                   onClick={() =>
                     run(async () => {
-                      await proposeCrmCompensation(ticket.id, Number(amount), note.trim() || undefined);
+                      await proposeCrmCompensation(ticket.id, parsedAmount!, note.trim() || undefined);
                       setAmount('');
                     }, 'Không đề xuất được')
                   }
@@ -222,23 +252,79 @@ export function TicketDetailDialog({
                 {canCompensate ? (
                   <Button
                     size="sm"
-                    disabled={busy || !amount.trim()}
-                    onClick={() =>
-                      run(async () => {
-                        await approveCrmCompensation(
-                          ticket.id,
-                          Number(amount),
-                          note.trim() || undefined,
-                        );
-                        setAmount('');
-                      }, 'Không duyệt được đền bù')
-                    }
+                    disabled={busy || !parsedAmount}
+                    onClick={() => setConfirmApprove(true)}
                   >
                     {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     DUYỆT &amp; cấp tiền
                   </Button>
                 ) : null}
               </div>
+
+              {/* Hiện lại con số ĐÃ HIỂU: gõ "500.000" mà không có dòng này thì không ai
+                  biết hệ thống đọc ra 500 hay 500.000. */}
+              {amount.trim() ? (
+                <p className="text-xs" data-testid="crm-parsed-amount">
+                  {parsedAmount
+                    ? `Sẽ cấp: ${parsedAmount.toLocaleString('vi-VN')}đ`
+                    : 'Số tiền không hợp lệ'}
+                </p>
+              ) : null}
+
+              {/* Người NHẬN tiền — đặt ngay cạnh ô số tiền, không bắt người duyệt đi tìm. */}
+              <p className="text-xs text-muted-foreground" data-testid="crm-compensate-recipient">
+                Người nhận:{' '}
+                {customer
+                  ? `${customer.fullName ?? 'Không rõ tên'} · ${customer.phone ?? '—'}`
+                  : 'đang tải…'}
+              </p>
+              {/*
+                Bước xác nhận NGAY TRONG dialog, không dùng modal lồng modal.
+                Radix đánh dấu mọi thứ NGOÀI Dialog modal là inert, nên một AlertDialog đặt
+                cạnh Dialog sẽ hiện ra mà bấm KHÔNG ăn — còn lồng nó vào trong thì jsdom
+                crash (repo đã dính đúng họ lỗi này với Dialog+Select). Khối inline cho cùng
+                hiệu quả: người duyệt vẫn phải đọc lại số tiền + tên người nhận rồi bấm lần hai.
+              */}
+              {confirmApprove ? (
+                <div
+                  data-testid="crm-approve-confirm"
+                  className="space-y-2 rounded-md border border-destructive/50 bg-destructive/5 p-3"
+                >
+                  <p className="text-sm">
+                    Cấp <b>{(parsedAmount ?? 0).toLocaleString('vi-VN')}đ</b> vào ví của{' '}
+                    <b>{customer?.fullName ?? 'khách này'}</b>
+                    {customer?.phone ? ` (${customer.phone})` : ''} cho ticket {ticket.code}.
+                    Thao tác này KHÔNG hoàn tác được.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busy || !parsedAmount}
+                      onClick={() => {
+                        setConfirmApprove(false);
+                        void run(async () => {
+                          await approveCrmCompensation(
+                            ticket.id,
+                            parsedAmount!,
+                            note.trim() || undefined,
+                          );
+                          setAmount('');
+                        }, 'Không duyệt được đền bù');
+                      }}
+                    >
+                      Cấp tiền
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => setConfirmApprove(false)}
+                    >
+                      Huỷ
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
               {canCompensate && limits ? (
                 <p className="text-xs text-muted-foreground">
                   Trần: {limits.maxPerCase.toLocaleString('vi-VN')}đ/vụ ·{' '}
@@ -275,6 +361,7 @@ export function TicketDetailDialog({
             </div>
           </div>
         )}
+
       </DialogContent>
     </Dialog>
   );
