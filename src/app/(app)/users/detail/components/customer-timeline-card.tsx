@@ -94,7 +94,13 @@ export function CustomerTimelineCard({ userId }: { userId: string }) {
   return (
     <Card>
       <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-        <CardTitle className="text-base">Lịch sử tương tác</CardTitle>
+        {/*
+          🚨 NÓI RA cửa sổ 90 ngày. Backend mặc định `DEFAULT_DAYS = 90` và FE không bao
+          giờ gửi `days`, nên mọi nhánh đều bị cắt ở mốc đó. Không in ra thì khách im lặng
+          4 tháng hiện y hệt khách CHƯA TỪNG tương tác, và nút "Xem thêm" biến mất ở mốc 90
+          ngày làm người dùng tưởng đã xem hết đời khách.
+        */}
+        <CardTitle className="text-base">Lịch sử tương tác (90 ngày gần nhất)</CardTitle>
         <div className="flex items-center gap-2">
           <Switch
             id="crm-timeline-notifications"
@@ -113,7 +119,8 @@ export function CustomerTimelineCard({ userId }: { userId: string }) {
           <p className="text-destructive">Không tải được lịch sử tương tác.</p>
         ) : items.length === 0 ? (
           // Rỗng ≠ lỗi: hai chữ khác nhau, nếu không admin không biết nên chờ hay nên báo.
-          <p className="text-muted-foreground">Chưa có hoạt động nào.</p>
+          // Và "trong 90 ngày qua" ≠ "chưa từng": khách cũ nghỉ lâu vẫn có đầy dữ liệu.
+          <p className="text-muted-foreground">Không có hoạt động nào trong 90 ngày qua.</p>
         ) : (
           <>
             <ol className="relative space-y-3 border-l-2 border-muted pl-4">

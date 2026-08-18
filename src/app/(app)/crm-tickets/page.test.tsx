@@ -131,8 +131,48 @@ describe('/crm-tickets — danh sách', () => {
     });
     render(<CrmTicketsPage />);
     const rows = await screen.findAllByTestId('crm-ticket-row');
-    expect(within(rows[0]).getByText(/Quá hạn/)).toBeInTheDocument();
-    expect(within(rows[1]).getByText(/^Còn /)).toBeInTheDocument();
+    expect(within(rows[0]).getByTestId('sla-resolve')).toHaveTextContent(/Quá hạn/);
+    expect(within(rows[1]).getByTestId('sla-resolve')).toHaveTextContent(/^Còn /);
+  });
+
+  /**
+   * 🚨 HAI mốc SLA, và mốc PHẢN HỒI là cái khách cảm nhận được ngay. Ticket
+   * NO_SHOW_DRIVER phải phản hồi trong 1h và đóng trong 8h: nếu chỉ hiện đồng hồ 8h thì
+   * suốt 7 giờ 59 phút dòng đó vẫn XANH trong khi hạn phản hồi đã vỡ từ 7 tiếng trước.
+   */
+  it('SLA phản hồi vỡ nhưng SLA đóng còn hạn: cột phản hồi phải BÁO TRỄ', async () => {
+    getCrmTickets.mockResolvedValue({
+      data: [
+        mkTicket({
+          id: 'a',
+          slaRespondDueAt: '2020-01-01T00:00:00Z',
+          slaResolveDueAt: '2999-01-01T00:00:00Z',
+          firstRespondedAt: null,
+        }),
+      ],
+      meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    });
+    render(<CrmTicketsPage />);
+    const rows = await screen.findAllByTestId('crm-ticket-row');
+    expect(within(rows[0]).getByTestId('sla-respond')).toHaveTextContent(/Trễ/);
+    // Đúng thứ bản cũ che mất: đồng hồ đóng vẫn xanh.
+    expect(within(rows[0]).getByTestId('sla-resolve')).toHaveTextContent(/^Còn /);
+  });
+
+  it('đã phản hồi thì mốc phản hồi ĐÓNG BĂNG, không đếm ngược tiếp', async () => {
+    getCrmTickets.mockResolvedValue({
+      data: [
+        mkTicket({
+          id: 'a',
+          slaRespondDueAt: '2020-01-01T00:00:00Z',
+          firstRespondedAt: '2019-12-31T00:00:00Z',
+        }),
+      ],
+      meta: { page: 1, limit: 50, total: 1, totalPages: 1 },
+    });
+    render(<CrmTicketsPage />);
+    const rows = await screen.findAllByTestId('crm-ticket-row');
+    expect(within(rows[0]).getByTestId('sla-respond')).toHaveTextContent('Đã phản hồi');
   });
 
   it('ticket đã đóng KHÔNG hiện đỏ quá hạn', async () => {

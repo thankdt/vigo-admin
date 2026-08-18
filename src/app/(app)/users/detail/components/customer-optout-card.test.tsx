@@ -89,6 +89,18 @@ describe('CustomerOptoutCard — đang bị chặn', () => {
     expect(screen.getByText(/chuyến đi KHÔNG bị ảnh hưởng/i)).toBeInTheDocument();
   });
 
+  /**
+   * 🚨 Câu chữ phải nói ĐÚNG phạm vi. Trên hệ thống có HAI thứ cùng tên "chiến dịch", và
+   * cái kia (tự tặng voucher) KHÔNG đọc bảng chặn này. Hứa quá thì CSKH nói với khách "đã
+   * tắt rồi", khách vẫn nhận tin, và lần sau họ không tin gì nữa.
+   */
+  it('nói rõ chỉ áp cho Chiến dịch chăm sóc, và cảnh báo tin voucher chưa theo', async () => {
+    render(<CustomerOptoutCard userId={USER} />);
+    await screen.findByTestId('crm-optout-on');
+    expect(screen.getByText(/Chiến dịch chăm sóc/)).toBeInTheDocument();
+    expect(screen.getByText(/tự tặng voucher/)).toBeInTheDocument();
+  });
+
   it('không còn nút ngừng gửi (đã chặn rồi)', async () => {
     render(<CustomerOptoutCard userId={USER} />);
     await screen.findByTestId('crm-optout-on');

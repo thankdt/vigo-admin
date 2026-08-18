@@ -435,10 +435,21 @@ describe('/users/detail — khối Timeline (GĐ2)', () => {
     expect(screen.queryByRole('button', { name: /Xem thêm/ })).toBeNull();
   });
 
-  // Rỗng ≠ lỗi: hai chữ khác nhau, nếu không admin không biết nên chờ hay nên báo.
-  it('rỗng hiện "Chưa có hoạt động nào", lỗi hiện "Không tải được"', async () => {
+  /**
+   * Rỗng ≠ lỗi: hai chữ khác nhau, nếu không admin không biết nên chờ hay nên báo.
+   *
+   * 🚨 Và câu rỗng phải nói ra CỬA SỔ 90 NGÀY. Backend mặc định cắt ở 90 ngày, nên
+   * "chưa có hoạt động nào" là NÓI SAI với một khách cũ nghỉ 4 tháng — người đó có đầy
+   * dữ liệu trong DB, chỉ là ngoài cửa sổ.
+   */
+  it('rỗng nói rõ là "trong 90 ngày qua", không phải "chưa từng có"', async () => {
     render(<UserDetailPage />);
-    expect(await screen.findByText(/Chưa có hoạt động nào/)).toBeInTheDocument();
+    expect(await screen.findByText(/Không có hoạt động nào trong 90 ngày qua/)).toBeInTheDocument();
+  });
+
+  it('tiêu đề khối nói ra cửa sổ 90 ngày', async () => {
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Lịch sử tương tác \(90 ngày gần nhất\)/)).toBeInTheDocument();
   });
 
   it('lỗi API hiện chữ lỗi riêng, không nhầm với rỗng', async () => {

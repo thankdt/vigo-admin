@@ -31,6 +31,8 @@ import { Card } from '@/components/ui/card';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+// Dùng CHUNG hàm suy pha với hàng đợi CSKH — hai màn lệch nhau là bỏ qua bước nhận việc.
+import { rowIsBeforePhase } from '../../crm-queue/queue-tabs';
 import { Label } from '@/components/ui/label';
 
 
@@ -837,10 +839,22 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   className="text-sm"
                   disabled={!!callSaving}
                 />
-                {/* Chưa gọi → chỉ nút "Nhận gọi". Sau khi có người nhận (hoặc đã resolve)
-                    → hiện 2 nút kết quả (đổi lại được nếu bấm nhầm — event append-only). */}
+                {/*
+                  Chưa gọi → chỉ nút "Nhận gọi". Sau khi có người nhận (hoặc đã resolve)
+                  → hiện 2 nút kết quả (đổi lại được nếu bấm nhầm — event append-only).
+
+                  🚨 Suy pha theo DÒNG bằng `rowIsBeforePhase`, dùng CHUNG hàm với hàng đợi
+                  (sửa 2026-08-18). Bản trước đọc `booking.customerCallStatus` — cột "lần
+                  gọi mới nhất" DÙNG CHUNG cho cả hai pha. Chuyến đã gọi TRƯỚC xong
+                  (customerCallStatus='CALLED') rồi hoàn thành, giờ cần gọi SAU với
+                  callAfterStatus = null: dialog nhảy thẳng sang 2 nút kết quả, tức là đi
+                  đường dialog thì BỎ QUA hẳn bước nhận việc. Hệ quả: không có bản ghi
+                  CLAIMED nên tab "Đang có người giữ" không bao giờ thấy việc này, và trong
+                  lúc người đó đang gọi thì nó vẫn nằm ở tab "Cần gọi sau" của mọi người
+                  khác → người thứ hai nhận và gọi lại đúng khách đó.
+                */}
                 <div className="flex flex-wrap gap-2">
-                  {!booking.customerCallStatus ? (
+                  {!(rowIsBeforePhase(booking) ? booking.callBeforeStatus : booking.callAfterStatus) ? (
                     <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CLAIMED')}>
                       {callSaving === 'CLAIMED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
                       Nhận gọi
