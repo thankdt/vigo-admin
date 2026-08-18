@@ -48,7 +48,11 @@ export default function CrmInsightsPage() {
   const [to, setTo] = React.useState(todayVn());
   const [retention, setRetention] = React.useState<CrmRetentionRow[]>([]);
   const [reasons, setReasons] = React.useState<Array<{ reason: string; outcome: string; n: number }>>([]);
-  const [csat, setCsat] = React.useState<{ total: number; average: number | null } | null>(null);
+  const [csat, setCsat] = React.useState<{
+    rows?: Array<{ stars: number; n: number }>;
+    total: number;
+    average: number | null;
+  } | null>(null);
   const [freq, setFreq] = React.useState<Array<{ bucket: string; customers: number }>>([]);
   const [loading, setLoading] = React.useState(true);
   const [failed, setFailed] = React.useState(false);
@@ -251,9 +255,36 @@ export default function CrmInsightsPage() {
               hoặc hỏi ngay trong cuộc gọi sau của hàng đợi CSKH.
             </p>
           ) : (
-            <p data-testid="crm-csat">
-              Trung bình <b>{csat.average?.toFixed(2)}</b> sao trên {csat.total} lượt đánh giá.
-            </p>
+            <div className="space-y-2">
+              <p data-testid="crm-csat">
+                Trung bình <b>{csat.average?.toFixed(2)}</b> sao trên {csat.total} lượt đánh giá.
+              </p>
+              {/*
+                PHÂN BỐ mới là thứ nói được điều trung bình che mất: 3.0 sao có thể là "ai
+                cũng chấm 3" hoặc "một nửa chấm 5, một nửa chấm 1" — hai tình huống đòi hai
+                việc khác hẳn nhau. Backend đã trả `rows` từ đầu mà màn hình bỏ không dùng.
+              */}
+              <ul className="space-y-1" data-testid="crm-csat-dist">
+                {[5, 4, 3, 2, 1].map((star) => {
+                  const n = csat.rows?.find((r) => Number(r.stars) === star)?.n ?? 0;
+                  const pct = csat.total > 0 ? Math.round((n / csat.total) * 100) : 0;
+                  return (
+                    <li key={star} className="flex items-center gap-2 text-xs">
+                      <span className="w-10 shrink-0">{star} sao</span>
+                      <span className="h-2 max-w-[220px] flex-1 rounded bg-muted">
+                        <span
+                          className="block h-2 rounded bg-primary"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </span>
+                      <span className="w-20 shrink-0 text-muted-foreground">
+                        {n} ({pct}%)
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           )}
         </CardContent>
       </Card>

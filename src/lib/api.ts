@@ -4154,10 +4154,16 @@ export type CrmAccountEventRow = {
   createdAt: string;
 };
 
-export async function getCrmAccounts(stage?: string): Promise<CrmAccount[]> {
+/**
+ * Danh sách công ty. `total` là TỔNG thật, `rows` bị chặn ở 200 — FE phải nói ra khi bị
+ * cắt, nếu không màn hình trông y hệt như thể 200 dòng đó là tất cả.
+ */
+export async function getCrmAccounts(
+  stage?: string,
+): Promise<{ rows: CrmAccount[]; total: number }> {
   const qs = stage ? `?stage=${encodeURIComponent(stage)}` : '';
   const response = await fetchWithAuth(`/admin/crm/accounts${qs}`);
-  return unwrap<CrmAccount[]>(response);
+  return unwrap<{ rows: CrmAccount[]; total: number }>(response);
 }
 
 export async function createCrmAccount(body: {

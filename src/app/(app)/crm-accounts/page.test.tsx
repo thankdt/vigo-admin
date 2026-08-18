@@ -49,7 +49,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   document.body.style.pointerEvents = '';
-  getCrmAccounts.mockResolvedValue([mkAcc()]);
+  getCrmAccounts.mockResolvedValue({ rows: [mkAcc()], total: 1 });
   getCrmAccount.mockResolvedValue({
     account: mkAcc(),
     members: [
@@ -82,7 +82,7 @@ describe('/crm-accounts', () => {
    */
   it('LEAD không có nút nhảy thẳng sang "Đang hoạt động"', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Chi tiết / }));
     await screen.findByTestId('crm-account-detail');
     expect(screen.getByRole('button', { name: 'Đang đàm phán' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Đang hoạt động' })).toBeNull();
@@ -96,20 +96,20 @@ describe('/crm-accounts', () => {
       events: [],
     });
     render(<CrmAccountsPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Chi tiết / }));
     expect(await screen.findByRole('button', { name: 'Đang hoạt động' })).toBeInTheDocument();
   });
 
   it('hiện nhân viên đặt xe và lịch sử', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Chi tiết / }));
     expect(await screen.findByTestId('crm-account-member')).toHaveTextContent('Nhân viên A');
     expect(screen.getByTestId('crm-account-event')).toHaveTextContent('Tạo hồ sơ');
   });
 
   it('gán nhân viên gọi đúng API', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Chi tiết / }));
     await userEvent.type(await screen.findByLabelText('ID nhân viên'), 'u-9');
     await userEvent.click(screen.getByRole('button', { name: 'Gán nhân viên' }));
     await waitFor(() => expect(addCrmAccountMember).toHaveBeenCalledWith('a1', 'u-9'));
@@ -117,7 +117,7 @@ describe('/crm-accounts', () => {
 
   it('xem chuyến 30 ngày hiện số chuyến và doanh thu', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Chi tiết' }));
+    await userEvent.click(await screen.findByRole('button', { name: /^Chi tiết / }));
     await userEvent.click(await screen.findByRole('button', { name: 'Xem chuyến 30 ngày' }));
     expect(await screen.findByTestId('crm-account-usage')).toHaveTextContent('3.600.000đ');
   });
@@ -138,7 +138,7 @@ describe('/crm-accounts — hỏng thì NÓI hỏng, đừng quay mãi', () => {
   it('lỗi tải hồ sơ -> hiện chữ lỗi, KHÔNG kẹt ở "Đang tải…"', async () => {
     getCrmAccount.mockRejectedValue(new Error('toang'));
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     expect(await screen.findByTestId('crm-account-detail-failed')).toBeInTheDocument();
     expect(screen.queryByText('Đang tải…')).toBeNull();
   });
@@ -146,7 +146,7 @@ describe('/crm-accounts — hỏng thì NÓI hỏng, đừng quay mãi', () => {
   it('403 cũng nói được là vấn đề quyền', async () => {
     getCrmAccount.mockRejectedValue({ errorCode: 'AUTH_003' });
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     expect(await screen.findByTestId('crm-account-detail-failed')).toHaveTextContent(/quyền/);
   });
 });
@@ -159,7 +159,7 @@ describe('/crm-accounts — gỡ nhân viên gán nhầm', () => {
    */
   it('mỗi nhân viên có nút Gỡ, bấm thì gọi đúng API', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     await screen.findByTestId('crm-account-member');
     await userEvent.click(screen.getByRole('button', { name: /Gỡ Nhân viên A/ }));
     await waitFor(() => expect(removeCrmAccountMember).toHaveBeenCalledWith('a1', 'm1'));
@@ -175,7 +175,7 @@ describe('/crm-accounts — gỡ nhân viên gán nhầm', () => {
       events: [],
     });
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     expect(await screen.findByTestId('crm-account-member')).toHaveTextContent('đã gỡ');
     expect(screen.queryByRole('button', { name: /^Gỡ / })).toBeNull();
   });
@@ -190,13 +190,13 @@ describe('/crm-accounts — điều khoản giá không được trông như ô 
       events: [],
     });
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     expect(await screen.findByTestId('crm-account-discount-now')).toHaveTextContent('15.00%');
   });
 
   it('chưa đặt chiết khấu thì nói "chưa đặt", không để trống', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     expect(await screen.findByTestId('crm-account-discount-now')).toHaveTextContent('chưa đặt');
   });
 });
@@ -209,10 +209,39 @@ describe('/crm-accounts — số tiền phải nói rõ là tiền gì', () => {
    */
   it('nhãn nói rõ "tiền khách trả (gồm VAT)"', async () => {
     render(<CrmAccountsPage />);
-    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click((await screen.findAllByRole('button', { name: /^Chi tiết / }))[0]);
     await userEvent.click(await screen.findByRole('button', { name: /Xem chuyến 30 ngày/ }));
     expect(await screen.findByTestId('crm-account-usage')).toHaveTextContent(
       /tiền khách trả \(gồm VAT\)/,
     );
+  });
+});
+
+describe('/crm-accounts — không cắt dữ liệu trong im lặng', () => {
+  /** 200 dòng mà không nói tổng thì màn hình trông y hệt như thể đó là TẤT CẢ. */
+  it('bị cắt ở 200 -> nói rõ đang hiện bao nhiêu trên tổng bao nhiêu', async () => {
+    getCrmAccounts.mockResolvedValue({
+      rows: Array.from({ length: 200 }, (_, i) => mkAcc({ id: `a${i}`, name: `Cty ${i}` })),
+      total: 247,
+    });
+    render(<CrmAccountsPage />);
+    expect(await screen.findByTestId('crm-account-truncated')).toHaveTextContent('200/247');
+  });
+
+  it('không bị cắt thì KHÔNG hiện câu đó', async () => {
+    render(<CrmAccountsPage />);
+    await screen.findAllByTestId('crm-account-row');
+    expect(screen.queryByTestId('crm-account-truncated')).toBeNull();
+  });
+
+  /** Mọi dòng đều có nút chữ "Chi tiết" giống hệt — bàn phím/trình đọc màn hình không phân biệt được. */
+  it('nút Chi tiết mang tên công ty trong aria-label', async () => {
+    getCrmAccounts.mockResolvedValue({
+      rows: [mkAcc({ id: 'a1', name: 'Cty A' }), mkAcc({ id: 'a2', name: 'Cty B' })],
+      total: 2,
+    });
+    render(<CrmAccountsPage />);
+    expect(await screen.findByRole('button', { name: 'Chi tiết Cty A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Chi tiết Cty B' })).toBeInTheDocument();
   });
 });

@@ -28,6 +28,7 @@ import { ACCOUNT_ALLOWED_STAGE, ACCOUNT_EVENT_LABEL, STAGE_LABEL } from './accou
 export default function CrmAccountsPage() {
   const { toast } = useToast();
   const [rows, setRows] = React.useState<CrmAccount[]>([]);
+  const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [failed, setFailed] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
@@ -42,7 +43,9 @@ export default function CrmAccountsPage() {
       setFailed(false);
       try {
         const list = await getCrmAccounts();
-        if (!cancelled) setRows(list);
+        if (cancelled) return;
+        setRows(list.rows);
+        setTotal(list.total);
       } catch (e) {
         if (cancelled) return;
         setFailed(true);
@@ -123,7 +126,16 @@ export default function CrmAccountsPage() {
                         cập nhật {formatVnDateTime(a.updatedAt)}
                       </p>
                     </div>
-                    <Button variant="outline" size="sm" onClick={() => setOpenId(openId === a.id ? null : a.id)}>
+                    {/*
+                      `aria-label` mang TÊN CÔNG TY: mọi dòng đều có nút chữ "Chi tiết" giống
+                      hệt nhau, nên với bàn phím / trình đọc màn hình chúng không phân biệt được.
+                    */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      aria-label={`Chi tiết ${a.name}`}
+                      onClick={() => setOpenId(openId === a.id ? null : a.id)}
+                    >
                       Chi tiết
                     </Button>
                   </div>
@@ -134,6 +146,15 @@ export default function CrmAccountsPage() {
               ))}
             </ul>
           )}
+          {/*
+            Danh sách chặn ở 200 dòng. Không nói ra thì màn hình trông y hệt như thể đó là
+            TẤT CẢ — công ty thứ 201 biến mất mà không ai biết.
+          */}
+          {!loading && !failed && total > rows.length ? (
+            <p className="mt-2 text-xs text-muted-foreground" data-testid="crm-account-truncated">
+              Đang hiện {rows.length}/{total} công ty. Lọc theo giai đoạn để thu hẹp.
+            </p>
+          ) : null}
         </CardContent>
       </Card>
     </div>

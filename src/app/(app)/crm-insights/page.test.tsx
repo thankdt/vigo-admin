@@ -126,3 +126,30 @@ describe('/crm-insights — bảng cohort không được nói dối', () => {
     expect(screen.getByRole('columnheader', { name: /Quay lại.*toàn thời gian/ })).toBeInTheDocument();
   });
 });
+
+describe('/crm-insights — CSAT hiện PHÂN BỐ, không chỉ trung bình', () => {
+  /**
+   * Trung bình che mất điều quan trọng nhất: 3.0 sao có thể là "ai cũng chấm 3" hoặc "một
+   * nửa chấm 5, một nửa chấm 1" — hai tình huống đòi hai việc khác hẳn. Backend trả `rows`
+   * từ đầu mà màn hình bỏ không dùng.
+   */
+  it('hiện số lượt theo từng mức sao', async () => {
+    getCrmCsat.mockResolvedValue({
+      rows: [{ stars: 1, n: 5 }, { stars: 5, n: 5 }],
+      total: 10,
+      average: 3,
+    });
+    render(<CrmInsightsPage />);
+    const dist = await screen.findByTestId('crm-csat-dist');
+    expect(dist).toHaveTextContent('5 sao');
+    expect(dist).toHaveTextContent('5 (50%)');
+    expect(dist).toHaveTextContent('1 sao');
+  });
+
+  it('mức sao không ai chấm vẫn hiện 0, không biến mất', async () => {
+    getCrmCsat.mockResolvedValue({ rows: [{ stars: 5, n: 2 }], total: 2, average: 5 });
+    render(<CrmInsightsPage />);
+    const dist = await screen.findByTestId('crm-csat-dist');
+    expect(dist).toHaveTextContent('0 (0%)');
+  });
+});
