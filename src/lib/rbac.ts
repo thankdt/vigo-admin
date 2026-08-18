@@ -54,6 +54,13 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   // 2026-08-18 (CRM GĐ5). Quyền TÁCH khỏi 'crm-segments': dựng tệp sai thì sửa được,
   // bấm gửi sai thì tin đã ra ngoài cho khách thật.
   '/crm-campaigns': 'crm-campaigns',
+  // 2026-08-18 (CRM GĐ6). Quyền RIÊNG vì điều khoản giá đã thoả thuận là dữ liệu nhạy
+  // cảm (§7): người xem được danh bạ khách không được đọc chiết khấu từng công ty.
+  '/crm-accounts': 'crm-accounts',
+  // 2026-08-18 (CRM GĐ7). Function RIÊNG: repo có bất biến "function key của mục menu =
+  // href bỏ dấu /" (spec §2.1) và test đồng bộ khoá nó — dùng chung 'crm-segments' là nới
+  // một bất biến chịu lực để tiết kiệm một key, đánh đổi sai.
+  '/crm-insights': 'crm-insights',
 };
 
 /**

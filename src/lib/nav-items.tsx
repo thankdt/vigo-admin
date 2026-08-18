@@ -29,6 +29,8 @@ import {
   LifeBuoy,
   Layers,
   Send,
+  Briefcase,
+  LineChart,
   PhoneCall,
   Star,
   Handshake,
@@ -96,6 +98,10 @@ export const navGroups: NavGroup[] = [
       { href: '/crm-segments', label: 'Phân khúc', icon: Layers },
       // 2026-08-18 (CRM GĐ5): gửi ZNS/push cho một phân khúc — ra ngoài, khách thật.
       { href: '/crm-campaigns', label: 'Chiến dịch chăm sóc', icon: Send },
+      // 2026-08-18 (CRM GĐ6): hồ sơ công ty + pipeline B2B.
+      { href: '/crm-accounts', label: 'Khách doanh nghiệp', icon: Briefcase },
+      // 2026-08-18 (CRM GĐ7): cohort giữ chân — đo bài toán số 1 (§14.4).
+      { href: '/crm-insights', label: 'Insights khách hàng', icon: LineChart },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
     ],

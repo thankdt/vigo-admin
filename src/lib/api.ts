@@ -4081,3 +4081,170 @@ export async function removeCrmOptout(userId: string): Promise<{ ok: true }> {
   });
   return unwrap<{ ok: true }>(response);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ6 — Khách doanh nghiệp (pipeline B2B) · GĐ7 — Insights
+//
+// GĐ6 gate `crm-accounts` (điều khoản giá là dữ liệu nhạy cảm, §7).
+// GĐ7 gate `crm-segments` — cùng nhóm người, cùng tính chất số liệu tổng hợp.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmAccountStage = 'LEAD' | 'NEGOTIATING' | 'SIGNED' | 'ACTIVE' | 'CHURNED';
+
+export type CrmAccount = {
+  id: string;
+  name: string;
+  taxCode: string | null;
+  stage: CrmAccountStage;
+  ownerAdminId: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  /** `numeric` về JSON là CHUỖI. */
+  discountPercent: string | null;
+  paymentTermDays: number | null;
+  contractNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CrmAccountMemberRow = {
+  id: string;
+  userId: string;
+  note: string | null;
+  fullName: string | null;
+  phone: string | null;
+};
+
+export type CrmAccountEventRow = {
+  id: string;
+  type: string;
+  fromStage: string | null;
+  toStage: string | null;
+  note: string | null;
+  createdAt: string;
+};
+
+export async function getCrmAccounts(stage?: string): Promise<CrmAccount[]> {
+  const qs = stage ? `?stage=${encodeURIComponent(stage)}` : '';
+  const response = await fetchWithAuth(`/admin/crm/accounts${qs}`);
+  return unwrap<CrmAccount[]>(response);
+}
+
+export async function createCrmAccount(body: {
+  name: string;
+  taxCode?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+}): Promise<CrmAccount> {
+  const response = await fetchWithAuth('/admin/crm/accounts', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmAccount>(response);
+}
+
+export async function getCrmAccount(id: string): Promise<{
+  account: CrmAccount;
+  members: CrmAccountMemberRow[];
+  events: CrmAccountEventRow[];
+}> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}`);
+  return unwrap<{
+    account: CrmAccount;
+    members: CrmAccountMemberRow[];
+    events: CrmAccountEventRow[];
+  }>(response);
+}
+
+export async function changeCrmAccountStage(
+  id: string,
+  stage: CrmAccountStage,
+  note?: string,
+): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/stage`, {
+    method: 'POST',
+    body: JSON.stringify({ stage, ...(note && { note }) }),
+  });
+  return unwrap<unknown>(response);
+}
+
+export async function updateCrmAccountTerms(
+  id: string,
+  body: { discountPercent?: number; paymentTermDays?: number; contractNote?: string },
+): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/terms`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return unwrap<unknown>(response);
+}
+
+export async function addCrmAccountMember(
+  id: string,
+  userId: string,
+  note?: string,
+): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, ...(note && { note }) }),
+  });
+  return unwrap<unknown>(response);
+}
+
+export async function removeCrmAccountMember(id: string, memberId: string): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/members/${memberId}`, {
+    method: 'DELETE',
+  });
+  return unwrap<unknown>(response);
+}
+
+/** Chuyến + doanh thu theo kỳ. `from`/`to` là VN-local YYYY-MM-DD. */
+export async function getCrmAccountUsage(
+  id: string,
+  from: string,
+  to: string,
+): Promise<{ trips: number; revenue: number; from: string; to: string }> {
+  const response = await fetchWithAuth(
+    `/admin/crm/accounts/${id}/usage?from=${from}&to=${to}`,
+  );
+  return unwrap<{ trips: number; revenue: number; from: string; to: string }>(response);
+}
+
+// ── GĐ7 — Insights ───────────────────────────────────────────────────
+
+export type CrmRetentionRow = {
+  cohortMonth: string;
+  customers: number;
+  returned: number;
+  returned3Plus: number;
+};
+
+export async function getCrmRetention(from: string, to: string): Promise<CrmRetentionRow[]> {
+  const response = await fetchWithAuth(`/admin/crm/insights/retention?from=${from}&to=${to}`);
+  return unwrap<CrmRetentionRow[]>(response);
+}
+
+export async function getCrmCallReasons(
+  from: string,
+  to: string,
+): Promise<Array<{ reason: string; outcome: string; n: number }>> {
+  const response = await fetchWithAuth(`/admin/crm/insights/call-reasons?from=${from}&to=${to}`);
+  return unwrap<Array<{ reason: string; outcome: string; n: number }>>(response);
+}
+
+export async function getCrmCsat(
+  from: string,
+  to: string,
+): Promise<{ rows: Array<{ stars: number; n: number }>; total: number; average: number | null }> {
+  const response = await fetchWithAuth(`/admin/crm/insights/csat?from=${from}&to=${to}`);
+  return unwrap<{ rows: Array<{ stars: number; n: number }>; total: number; average: number | null }>(
+    response,
+  );
+}
+
+export async function getCrmTripFrequency(): Promise<Array<{ bucket: string; customers: number }>> {
+  const response = await fetchWithAuth('/admin/crm/insights/trip-frequency');
+  return unwrap<Array<{ bucket: string; customers: number }>>(response);
+}
