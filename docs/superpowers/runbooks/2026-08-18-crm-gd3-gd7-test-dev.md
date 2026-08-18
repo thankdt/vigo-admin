@@ -193,3 +193,13 @@ Tạo một role hẹp rồi bật/tắt từng function, kiểm menu VÀ kiểm
   hẹp ở riêng response `getAdminUserDetail`.
 - 3 cặp migration trùng timestamp trên `dev` (không cặp nào của CRM) — xem
   `migration-runner-safety.spec.ts`, chủ sở hữu từng feature nên dọn trước khi promote.
+- **"Chiến dịch voucher tự tặng" nằm NGOÀI hai chốt chặn của GĐ5 — user đã CHẤP NHẬN
+  (2026-08-18), KHÔNG phải bỏ sót.** Cụ thể, đã kiểm chứng bằng code:
+  - toàn bộ `src/promotions` không đọc `crm_message_optout` ⇒ khách đã bấm "Ngừng gửi tin
+    chăm sóc" vẫn nhận popup + push *"Vigo tặng bạn ưu đãi!"* khi đặt chuyến;
+  - push voucher đi với `type: 'voucher'`, còn bộ đếm tần suất của CRM chỉ tính
+    `'promotion'` ⇒ tin voucher không vào trần "2 tin/tuần".
+
+  Vì đã chốt là chấp nhận, khối "Tin chăm sóc" trên hồ sơ 360 **cố ý** ghi rõ phạm vi thật
+  và cảnh báo tin voucher chưa theo — câu chữ đó là ĐÚNG với hành vi hiện tại, đừng "sửa
+  cho gọn". Muốn đổi hành vi thì phải đổi cả câu chữ cùng lúc.
