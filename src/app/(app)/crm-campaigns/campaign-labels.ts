@@ -19,6 +19,8 @@ export const SKIP_REASON_LABEL: Record<string, string> = {
   RATE_LIMITED: 'Đã nhận đủ số tin cho phép trong tuần',
   NO_PHONE: 'Không có số điện thoại',
   DELETED_USER: 'Tài khoản đã xoá',
+  // PUSH mà khách không có thiết bị nào của app khách — gửi cũng không tới đâu.
+  NO_DEVICE: 'Khách chưa cài app / không có thiết bị nhận',
 };
 
 export const DELIVERY_STATUS_LABEL: Record<string, string> = {

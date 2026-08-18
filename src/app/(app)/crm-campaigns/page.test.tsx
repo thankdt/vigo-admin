@@ -10,7 +10,7 @@ const getCrmSegments = vi.fn();
 const createCrmCampaign = vi.fn();
 const sendCrmCampaign = vi.fn();
 const getCrmCampaignStats = vi.fn();
-const previewCrmSegment = vi.fn();
+const getCrmSegmentSize = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -21,7 +21,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     createCrmCampaign: (...a: any[]) => createCrmCampaign(...a),
     sendCrmCampaign: (...a: any[]) => sendCrmCampaign(...a),
     getCrmCampaignStats: (...a: any[]) => getCrmCampaignStats(...a),
-    previewCrmSegment: (...a: any[]) => previewCrmSegment(...a),
+    getCrmSegmentSize: (...a: any[]) => getCrmSegmentSize(...a),
   };
 });
 
@@ -59,9 +59,9 @@ beforeEach(() => {
   getCrmSegments.mockResolvedValue([
     { id: 's1', name: 'Khách mới chưa quay lại', description: null, ruleJson: { all: [] }, isBuiltin: true, createdAt: '2026-08-18T02:00:00Z' },
   ]);
-  previewCrmSegment.mockResolvedValue({ total: 120, sample: [] });
+  getCrmSegmentSize.mockResolvedValue({ total: 120 });
   createCrmCampaign.mockResolvedValue(mkCampaign());
-  sendCrmCampaign.mockResolvedValue({ total: 120, sent: 80, failed: 2, skipped: 38 });
+  sendCrmCampaign.mockResolvedValue({ queued: true, total: 120 });
   getCrmCampaignStats.mockResolvedValue({
     campaign: mkCampaign({ status: 'SENT' }),
     breakdown: [
@@ -115,6 +115,33 @@ describe('/crm-campaigns — gửi ra ngoài', () => {
     render(<CrmCampaignsPage />);
     await screen.findAllByTestId('crm-campaign-row');
     expect(screen.queryByRole('button', { name: 'Gửi' })).toBeNull();
+  });
+
+  /**
+   * 🚨 Lượt gửi bị đứt (deploy, mất kết nối) để chiến dịch kẹt ở ĐANG GỬI. Ẩn nút ở trạng
+   * thái đó thì chiến dịch dở dang KHÔNG có đường nào chạy tiếp, và lối thoát duy nhất là
+   * tạo chiến dịch mới — mà chiến dịch mới thì chốt chống-gửi-trùng của DB không đỡ được,
+   * nên những người đã nhận sẽ nhận lần hai.
+   */
+  it('chiến dịch ĐANG GỬI vẫn còn nút Gửi (chạy tiếp lượt đứt)', async () => {
+    getCrmCampaigns.mockResolvedValue([mkCampaign({ status: 'SENDING' })]);
+    render(<CrmCampaignsPage />);
+    await screen.findAllByTestId('crm-campaign-row');
+    expect(screen.getByRole('button', { name: 'Gửi' })).toBeInTheDocument();
+  });
+
+  /**
+   * Backend chỉ NHẬN VIỆC rồi trả ngay; số thực nhận đến sau. Báo "đã gửi 120" ngay lúc này
+   * là nói dối — và người vận hành sẽ không quay lại xem kết quả thật.
+   */
+  it('gửi xong báo ĐANG GỬI TRONG NỀN và mở khối kết quả, không báo số đã gửi', async () => {
+    render(<CrmCampaignsPage />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Gửi' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Xác nhận gửi' }));
+    await waitFor(() => expect(toast).toHaveBeenCalled());
+    const arg = toast.mock.calls.at(-1)![0];
+    expect(`${arg.title} ${arg.description}`).toMatch(/nền/i);
+    expect(await screen.findByTestId('crm-campaign-stats')).toBeInTheDocument();
   });
 });
 

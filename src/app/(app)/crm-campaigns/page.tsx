@@ -21,8 +21,8 @@ import {
   createCrmCampaign,
   getCrmCampaignStats,
   getCrmCampaigns,
+  getCrmSegmentSize,
   getCrmSegments,
-  previewCrmSegment,
   sendCrmCampaign,
   type CrmCampaign,
   type CrmCampaignStats,
@@ -124,14 +124,23 @@ export default function CrmCampaignsPage() {
                       <Button variant="outline" size="sm" onClick={() => setOpenStats(c.id)}>
                         Kết quả
                       </Button>
-                      {c.status === 'DRAFT' ? (
+                      {/*
+                        `SENDING` VẪN cho bấm gửi: một lượt gửi bị đứt giữa chừng (deploy,
+                        mất kết nối) để chiến dịch kẹt ở trạng thái đó, và backend chạy lại
+                        an toàn — ai đã nhận thì bỏ qua. Ẩn nút ở đây nghĩa là chiến dịch
+                        dở dang không có đường nào chạy tiếp.
+                      */}
+                      {c.status === 'DRAFT' || c.status === 'SENDING' ? (
                         <SendButton
                           campaign={c}
                           onSent={(r) => {
                             toast({
-                              title: 'Đã chạy chiến dịch',
-                              description: `Gửi ${r.sent}, lỗi ${r.failed}, bỏ qua ${r.skipped}.`,
+                              title: 'Đã nhận lệnh gửi',
+                              description:
+                                `Đang gửi cho tối đa ${r.total} khách trong nền. ` +
+                                'Bấm "Kết quả" sau ít phút để xem số thực nhận.',
                             });
+                            setOpenStats(c.id);
                             setReloadKey((k) => k + 1);
                           }}
                         />
@@ -160,7 +169,7 @@ function SendButton({
   onSent,
 }: {
   campaign: CrmCampaign;
-  onSent: (r: { total: number; sent: number; failed: number; skipped: number }) => void;
+  onSent: (r: { queued: true; total: number }) => void;
 }) {
   const [confirm, setConfirm] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -267,7 +276,7 @@ function CampaignBuilder({
     if (!seg) return;
     setBusy(true);
     try {
-      const res = await previewCrmSegment(seg.ruleJson);
+      const res = await getCrmSegmentSize(seg.id);
       setAudience(res.total);
     } catch (e) {
       toastApiError(e, 'Không đếm được tệp');

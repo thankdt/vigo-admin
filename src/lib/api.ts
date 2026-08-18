@@ -3952,6 +3952,18 @@ export async function getCrmSegments(): Promise<CrmSegmentDef[]> {
   return unwrap<CrmSegmentDef[]>(response);
 }
 
+/**
+ * Số khách của MỘT tệp ĐÃ LƯU.
+ *
+ * Dùng ở trang chiến dịch thay cho `previewCrmSegment`: endpoint này mở cho cả
+ * `crm-campaigns`, còn `preview` (chạy rule tuỳ ý) chỉ dành cho `crm-segments`. Người chỉ
+ * được bấm gửi vẫn phải biết tin sẽ đi tới bao nhiêu người.
+ */
+export async function getCrmSegmentSize(id: string): Promise<{ total: number }> {
+  const response = await fetchWithAuth(`/admin/crm/segments/${id}/size`);
+  return unwrap<{ total: number }>(response);
+}
+
 /** Xem trước TRƯỚC khi lưu — cổng chặn "gửi nhầm tệp" của GĐ5. */
 export async function previewCrmSegment(ruleJson: CrmSegmentRule): Promise<{
   total: number;
@@ -4051,14 +4063,15 @@ export async function createCrmCampaign(body: {
 }
 
 /** BẤM GỬI — không hoàn tác được. BE tự áp hai chốt chặn §6.6 cho từng người nhận. */
-export async function sendCrmCampaign(id: string): Promise<{
-  total: number;
-  sent: number;
-  failed: number;
-  skipped: number;
-}> {
+/**
+ * BẤM GỬI — backend chỉ NHẬN VIỆC rồi trả ngay; worker gửi sau.
+ *
+ * 🚨 KHÔNG còn trả `sent/failed/skipped` (đổi 2026-08-18): một tệp vài nghìn người gửi
+ * hàng phút, quá hạn cắt kết nối của ALB. Kết quả phải đọc từ `getCrmCampaignStats`.
+ */
+export async function sendCrmCampaign(id: string): Promise<{ queued: true; total: number }> {
   const response = await fetchWithAuth(`/admin/crm/campaigns/${id}/send`, { method: 'POST' });
-  return unwrap<{ total: number; sent: number; failed: number; skipped: number }>(response);
+  return unwrap<{ queued: true; total: number }>(response);
 }
 
 export async function getCrmCampaignStats(id: string): Promise<CrmCampaignStats> {
@@ -4067,6 +4080,16 @@ export async function getCrmCampaignStats(id: string): Promise<CrmCampaignStats>
 }
 
 /** Danh sách chặn — khách yêu cầu ngừng nhận tin chăm sóc (§6.6). */
+/** Trạng thái chặn của một khách — nuôi công tắc trên hồ sơ 360. */
+export async function getCrmOptoutStatus(userId: string): Promise<{
+  optedOut: boolean;
+  reason: string | null;
+  since: string | null;
+}> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`);
+  return unwrap<{ optedOut: boolean; reason: string | null; since: string | null }>(response);
+}
+
 export async function setCrmOptout(userId: string, reason?: string): Promise<{ ok: true }> {
   const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`, {
     method: 'POST',
