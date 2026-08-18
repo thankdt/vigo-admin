@@ -45,6 +45,9 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   // được đổi trạng thái/điều tài/tạo chuyến. URL PHẲNG (không phải /crm/queue) vì
   // isRouteAllowed gate theo segment cấp 1: /crm/* sẽ gộp mọi trang CRM một function.
   '/crm-queue': 'crm-queue',
+  // 2026-08-18 (CRM GĐ3). URL PHẲNG cùng lý do với /crm-queue: isRouteAllowed gate theo
+  // segment cấp 1, nên /crm/* sẽ gộp mọi trang CRM về MỘT function.
+  '/crm-tickets': 'crm-tickets',
 };
 
 /**

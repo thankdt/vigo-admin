@@ -28,13 +28,11 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 30 menu + 10 settings + 1 đặc biệt = 41 unique keys', () => {
+  it('allFunctionKeys = 31 menu + 10 settings + 1 đặc biệt = 42 unique keys', () => {
     const keys = allFunctionKeys();
-    // 2026-08-12: +crm-queue · 2026-08-18: +crm-compensate (nhóm đặc biệt, không menu).
-    // `crm-tickets` sẽ +1 nữa khi màn /crm-tickets ra đời — cố ý CHƯA thêm ở đây để menu
-    // không trỏ vào một trang chưa tồn tại.
-    expect(keys).toHaveLength(41);
-    expect(new Set(keys).size).toBe(41);
+    // 2026-08-12: +crm-queue · 2026-08-18: +crm-tickets (menu) +crm-compensate (đặc biệt)
+    expect(keys).toHaveLength(42);
+    expect(new Set(keys).size).toBe(42);
   });
 
   /**

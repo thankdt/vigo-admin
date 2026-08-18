@@ -3710,3 +3710,187 @@ export async function revealCrmCustomerPhone(
   });
   return unwrap<{ phone: string | null }>(response);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ3 — Ticket khiếu nại khách + đền bù
+//
+// Hai nhóm quyền TÁCH BẠCH ở backend: đọc/xử lý ticket = `crm-tickets`;
+// DUYỆT đền bù = `crm-compensate` (controller riêng). FE phản ánh ranh giới
+// đó bằng `can('crm-compensate')`, nhưng BE mới là chốt cuối.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'REJECTED';
+export type CrmTicketSeverity = 'LOW' | 'NORMAL' | 'HIGH';
+
+export type CrmTicketCategoryDef = {
+  code: string;
+  label: string;
+  respondHours: number;
+  resolveHours: number;
+};
+
+export type CrmTicket = {
+  id: string;
+  code: string;
+  customerUserId: string;
+  bookingId: string | null;
+  driverId: string | null;
+  category: string;
+  severity: CrmTicketSeverity;
+  status: CrmTicketStatus;
+  title: string;
+  description: string | null;
+  assigneeAdminId: string | null;
+  source: string;
+  reportedAt: string | null;
+  /** ISO có offset. Đếm ngược là HIỆU hai mốc nên không dính múi giờ; MỐC hiển thị thì có. */
+  slaRespondDueAt: string;
+  slaResolveDueAt: string;
+  firstRespondedAt: string | null;
+  resolvedAt: string | null;
+  resolution: string | null;
+  /** `numeric` của Postgres về JSON là CHUỖI — luôn Number() trước khi tính. */
+  compensationAmount: string;
+  createdByAdminId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CrmTicketEventType =
+  | 'CREATED'
+  | 'STATUS_CHANGE'
+  | 'ASSIGN'
+  | 'NOTE'
+  | 'COMPENSATION_PROPOSED'
+  | 'COMPENSATION_APPROVED'
+  | 'COMPENSATION_REJECTED';
+
+export type CrmTicketEvent = {
+  id: string;
+  ticketId: string;
+  type: CrmTicketEventType;
+  fromStatus: CrmTicketStatus | null;
+  toStatus: CrmTicketStatus | null;
+  note: string | null;
+  amount: string | null;
+  byAdminUserId: string;
+  createdAt: string;
+};
+
+export async function getCrmTicketCategories(): Promise<CrmTicketCategoryDef[]> {
+  const response = await fetchWithAuth('/admin/crm/tickets/categories');
+  return unwrap<CrmTicketCategoryDef[]>(response);
+}
+
+export async function getCrmTickets(p: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  category?: string;
+  assigneeAdminId?: string;
+  customerUserId?: string;
+  overdue?: boolean;
+} = {}): Promise<{
+  data: CrmTicket[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}> {
+  const query = new URLSearchParams({
+    ...(p.page !== undefined && { page: String(p.page) }),
+    ...(p.limit !== undefined && { limit: String(p.limit) }),
+    ...(p.status && { status: p.status }),
+    ...(p.category && { category: p.category }),
+    ...(p.assigneeAdminId && { assigneeAdminId: p.assigneeAdminId }),
+    ...(p.customerUserId && { customerUserId: p.customerUserId }),
+    // Chỉ gửi khi BẬT: gửi 'false' vẫn là một giá trị và BE phải đoán ý.
+    ...(p.overdue && { overdue: 'true' }),
+  });
+  const qs = query.toString();
+  const response = await fetchWithAuth(`/admin/crm/tickets${qs ? `?${qs}` : ''}`);
+  return unwrap<{
+    data: CrmTicket[];
+    meta: { page: number; limit: number; total: number; totalPages: number };
+  }>(response);
+}
+
+export async function getCrmTicket(
+  id: string,
+): Promise<{ ticket: CrmTicket; events: CrmTicketEvent[] }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}`);
+  return unwrap<{ ticket: CrmTicket; events: CrmTicketEvent[] }>(response);
+}
+
+export async function createCrmTicket(body: {
+  customerUserId: string;
+  category: string;
+  title: string;
+  description?: string;
+  bookingId?: string;
+  driverId?: string;
+  severity?: CrmTicketSeverity;
+  source?: string;
+  reportedAt?: string;
+}): Promise<CrmTicket> {
+  const response = await fetchWithAuth('/admin/crm/tickets', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmTicket>(response);
+}
+
+export async function changeCrmTicketStatus(
+  id: string,
+  status: CrmTicketStatus,
+  note?: string,
+): Promise<{ ticket: CrmTicket; events: CrmTicketEvent[] }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status, ...(note && { note }) }),
+  });
+  return unwrap<{ ticket: CrmTicket; events: CrmTicketEvent[] }>(response);
+}
+
+export async function addCrmTicketNote(
+  id: string,
+  note: string,
+): Promise<{ ticket: CrmTicket; events: CrmTicketEvent[] }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/note`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+  return unwrap<{ ticket: CrmTicket; events: CrmTicketEvent[] }>(response);
+}
+
+/** Trần đền bù hiện hành — để HIỆN cho người duyệt biết trước. BE mới là chốt chặn. */
+export async function getCrmCompensationLimits(): Promise<{
+  maxPerCase: number;
+  maxPerDay: number;
+}> {
+  const response = await fetchWithAuth('/admin/crm/tickets/compensation/limits');
+  return unwrap<{ maxPerCase: number; maxPerDay: number }>(response);
+}
+
+/** CSKH ĐỀ XUẤT mức — KHÔNG đụng ví. Gate any-of nên người có `crm-tickets` gọi được. */
+export async function proposeCrmCompensation(
+  id: string,
+  amount: number,
+  note?: string,
+): Promise<{ ok: true; proposed: number }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/compensation/propose`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, ...(note && { note }) }),
+  });
+  return unwrap<{ ok: true; proposed: number }>(response);
+}
+
+/** DUYỆT + cấp tiền thật. Chỉ người có `crm-compensate` gọi được (BE chặn). */
+export async function approveCrmCompensation(
+  id: string,
+  amount: number,
+  note?: string,
+): Promise<{ ok: true; amount: number; customerBalance: number }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/compensation/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, ...(note && { note }) }),
+  });
+  return unwrap<{ ok: true; amount: number; customerBalance: number }>(response);
+}

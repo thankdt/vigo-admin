@@ -36,6 +36,7 @@ const getCrmCustomerNotes = vi.fn();
 const addCrmCustomerNote = vi.fn();
 const removeCrmCustomerNote = vi.fn();
 const getCrmCustomerTimeline = vi.fn();
+const getCrmTickets = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -54,6 +55,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     addCrmCustomerNote: (...a: any[]) => addCrmCustomerNote(...a),
     removeCrmCustomerNote: (...a: any[]) => removeCrmCustomerNote(...a),
     getCrmCustomerTimeline: (...a: any[]) => getCrmCustomerTimeline(...a),
+    getCrmTickets: (...a: any[]) => getCrmTickets(...a),
   };
 });
 
@@ -123,6 +125,7 @@ beforeEach(() => {
   addCrmCustomerNote.mockResolvedValue({});
   removeCrmCustomerNote.mockResolvedValue(undefined);
   getCrmCustomerTimeline.mockResolvedValue({ data: [], nextCursor: null });
+  getCrmTickets.mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
 });
 
 describe('/users/detail — lưới an toàn', () => {
@@ -468,6 +471,44 @@ describe('/users/detail — khối Timeline (GĐ2)', () => {
     await screen.findByText('Khách A');
     expect(screen.queryByText(/Lịch sử tương tác/)).toBeNull();
     expect(getCrmCustomerTimeline).not.toHaveBeenCalled();
+  });
+});
+
+describe('/users/detail — khối Ticket (GĐ3)', () => {
+  it('khách chưa khiếu nại -> hiện trạng thái rỗng, lọc đúng khách', async () => {
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Khách chưa có khiếu nại nào/)).toBeInTheDocument();
+    expect(getCrmTickets).toHaveBeenCalledWith(expect.objectContaining({ customerUserId: 'u-1' }));
+  });
+
+  it('có ticket -> hiện mã, tiêu đề, trạng thái', async () => {
+    getCrmTickets.mockResolvedValue({
+      data: [
+        {
+          id: 'tk-1', code: 'TK-1000', customerUserId: 'u-1', bookingId: null, driverId: null,
+          category: 'LOST_ITEM', severity: 'NORMAL', status: 'OPEN', title: 'Quên ví',
+          description: null, assigneeAdminId: null, source: 'ZALO_GROUP', reportedAt: null,
+          slaRespondDueAt: '2999-01-01T00:00:00Z', slaResolveDueAt: '2999-01-01T00:00:00Z',
+          firstRespondedAt: null, resolvedAt: null, resolution: null,
+          compensationAmount: '150000', createdByAdminId: 'a', createdAt: '2026-08-18T02:00:00Z',
+          updatedAt: '2026-08-18T02:00:00Z',
+        },
+      ],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+    render(<UserDetailPage />);
+    const items = await screen.findAllByTestId('crm-customer-ticket');
+    expect(items[0]).toHaveTextContent('TK-1000');
+    expect(items[0]).toHaveTextContent('Quên ví');
+    expect(items[0]).toHaveTextContent('150.000');
+  });
+
+  it('role=DRIVER: không có khối Ticket, không gọi API', async () => {
+    getAdminUserDetail.mockResolvedValue(mkUser({ role: 'DRIVER' }));
+    render(<UserDetailPage />);
+    await screen.findByText('Khách A');
+    expect(screen.queryByText(/Ticket khiếu nại/)).toBeNull();
+    expect(getCrmTickets).not.toHaveBeenCalled();
   });
 });
 

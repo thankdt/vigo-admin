@@ -26,6 +26,7 @@ import {
   TrendingDown,
   PieChart,
   Headset,
+  LifeBuoy,
   PhoneCall,
   Star,
   Handshake,
@@ -87,6 +88,8 @@ export const navGroups: NavGroup[] = [
       // sau đăng nhập cho người chỉ có quyền CSKH.
       { href: '/crm-queue', label: 'Hàng đợi CSKH', icon: PhoneCall },
       { href: '/users', label: 'Khách hàng', icon: Users },
+      // 2026-08-18 (CRM GĐ3): khiếu nại của khách, nhập tay từ nhóm Zalo.
+      { href: '/crm-tickets', label: 'Ticket khách hàng', icon: LifeBuoy },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
     ],
