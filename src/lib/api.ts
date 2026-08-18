@@ -3894,3 +3894,103 @@ export async function approveCrmCompensation(
   });
   return unwrap<{ ok: true; amount: number; customerBalance: number }>(response);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ4 — Chỉ số khách (RFM) + Phân khúc
+//
+// Gate `crm-segments` — quyền RIÊNG cho marketing: dựng TỆP từ dữ liệu tổng
+// hợp, không cần xem hồ sơ/SĐT từng khách.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmSegmentCode =
+  | 'MOI_CHUA_QUAY_LAI'
+  | 'DANG_HOAT_DONG'
+  | 'VIP'
+  | 'NGUY_CO_ROI_BO'
+  | 'DA_ROI_BO'
+  | 'MOT_LAN_ROI_THOI'
+  | 'CHUA_DI_CHUYEN';
+
+export type CrmChurnRisk = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export type CrmCustomerMetrics = {
+  userId: string;
+  firstTripAt: string | null;
+  lastTripAt: string | null;
+  tripsCompleted: number;
+  tripsCancelled: number;
+  /** `numeric` về JSON là CHUỖI. */
+  gmv: string;
+  avgStarsGiven: string | null;
+  rScore: number;
+  fScore: number;
+  mScore: number;
+  segment: CrmSegmentCode;
+  churnRisk: CrmChurnRisk;
+  /** Cron chạy lúc nào ra dòng này — hiện ra để không ai tưởng số là realtime. */
+  computedAt: string;
+};
+
+export type CrmSegmentCondition = {
+  field: string;
+  op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte';
+  value: string | number;
+};
+export type CrmSegmentRule = { all?: CrmSegmentCondition[]; any?: CrmSegmentCondition[] };
+
+export type CrmSegmentDef = {
+  id: string;
+  name: string;
+  description: string | null;
+  ruleJson: CrmSegmentRule;
+  isBuiltin: boolean;
+  createdAt: string;
+};
+
+export async function getCrmSegments(): Promise<CrmSegmentDef[]> {
+  const response = await fetchWithAuth('/admin/crm/segments');
+  return unwrap<CrmSegmentDef[]>(response);
+}
+
+/** Xem trước TRƯỚC khi lưu — cổng chặn "gửi nhầm tệp" của GĐ5. */
+export async function previewCrmSegment(ruleJson: CrmSegmentRule): Promise<{
+  total: number;
+  sample: Array<{ userId: string; fullName: string | null; segment: string; lastTripAt: string | null }>;
+}> {
+  const response = await fetchWithAuth('/admin/crm/segments/preview', {
+    method: 'POST',
+    body: JSON.stringify({ ruleJson }),
+  });
+  return unwrap<{
+    total: number;
+    sample: Array<{ userId: string; fullName: string | null; segment: string; lastTripAt: string | null }>;
+  }>(response);
+}
+
+export async function createCrmSegment(body: {
+  name: string;
+  description?: string;
+  ruleJson: CrmSegmentRule;
+}): Promise<CrmSegmentDef> {
+  const response = await fetchWithAuth('/admin/crm/segments', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmSegmentDef>(response);
+}
+
+export async function deleteCrmSegment(id: string): Promise<void> {
+  await fetchWithAuth(`/admin/crm/segments/${id}`, { method: 'DELETE' });
+}
+
+/** Chạy lại cron tính chỉ số NGAY — cần cho ngày đầu bật, khi bảng metrics còn rỗng. */
+export async function recomputeCrmMetrics(): Promise<{ processed: number }> {
+  const response = await fetchWithAuth('/admin/crm/segments/recompute', { method: 'POST' });
+  return unwrap<{ processed: number }>(response);
+}
+
+/** Chỉ số của MỘT khách (hồ sơ 360). `null` = cron chưa chạy tới khách này. */
+export async function getCrmCustomerMetrics(userId: string): Promise<CrmCustomerMetrics | null> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/metrics`);
+  return unwrap<CrmCustomerMetrics | null>(response);
+}

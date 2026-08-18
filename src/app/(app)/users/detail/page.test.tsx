@@ -37,6 +37,7 @@ const addCrmCustomerNote = vi.fn();
 const removeCrmCustomerNote = vi.fn();
 const getCrmCustomerTimeline = vi.fn();
 const getCrmTickets = vi.fn();
+const getCrmCustomerMetrics = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -56,6 +57,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     removeCrmCustomerNote: (...a: any[]) => removeCrmCustomerNote(...a),
     getCrmCustomerTimeline: (...a: any[]) => getCrmCustomerTimeline(...a),
     getCrmTickets: (...a: any[]) => getCrmTickets(...a),
+    getCrmCustomerMetrics: (...a: any[]) => getCrmCustomerMetrics(...a),
   };
 });
 
@@ -126,6 +128,7 @@ beforeEach(() => {
   removeCrmCustomerNote.mockResolvedValue(undefined);
   getCrmCustomerTimeline.mockResolvedValue({ data: [], nextCursor: null });
   getCrmTickets.mockResolvedValue({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 1 } });
+  getCrmCustomerMetrics.mockResolvedValue(null);
 });
 
 describe('/users/detail — lưới an toàn', () => {
@@ -509,6 +512,69 @@ describe('/users/detail — khối Ticket (GĐ3)', () => {
     await screen.findByText('Khách A');
     expect(screen.queryByText(/Ticket khiếu nại/)).toBeNull();
     expect(getCrmTickets).not.toHaveBeenCalled();
+  });
+});
+
+describe('/users/detail — khối Chỉ số & phân khúc (GĐ4)', () => {
+  const mkMetrics = (over: Record<string, unknown> = {}) => ({
+    userId: 'u-1',
+    firstTripAt: '2026-06-01T02:00:00Z',
+    lastTripAt: '2026-08-14T02:00:00Z',
+    tripsCompleted: 5,
+    tripsCancelled: 1,
+    gmv: '2500000',
+    avgStarsGiven: '4.60',
+    rScore: 5,
+    fScore: 3,
+    mScore: 4,
+    segment: 'DANG_HOAT_DONG',
+    churnRisk: 'LOW',
+    computedAt: '2026-08-18T20:00:00Z',
+    ...over,
+  });
+
+  /**
+   * "Cron chưa chạy tới khách này" KHÁC "khách chưa đi chuyến nào" — hai câu chữ khác nhau,
+   * nếu không admin không biết nên chờ hay nên báo lỗi.
+   */
+  it('chưa có chỉ số -> nói rõ cron chạy 03:00, KHÔNG hiện số 0', async () => {
+    getCrmCustomerMetrics.mockResolvedValue(null);
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/cron tính chỉ số chạy 03:00/i)).toBeInTheDocument();
+  });
+
+  it('có chỉ số -> hiện phân khúc, số chuyến, chi tiêu, điểm RFM', async () => {
+    getCrmCustomerMetrics.mockResolvedValue(mkMetrics());
+    render(<UserDetailPage />);
+    expect(await screen.findByText('Đang hoạt động')).toBeInTheDocument();
+    expect(screen.getByText('2.500.000đ')).toBeInTheDocument();
+    expect(screen.getByText('5/3/4')).toBeInTheDocument();
+  });
+
+  /**
+   * 🚨 Số là ẢNH CHỤP của cron, không realtime. Thiếu mốc này thì admin thấy "0 chuyến" cho
+   * khách vừa đi hôm qua rồi kết luận hệ thống sai.
+   */
+  it('luôn in mốc tính, nói rõ không phải thời gian thực', async () => {
+    getCrmCustomerMetrics.mockResolvedValue(mkMetrics());
+    render(<UserDetailPage />);
+    const line = await screen.findByTestId('crm-metrics-computed-at');
+    expect(line).toHaveTextContent(/không phải thời gian thực/i);
+    expect(line).toHaveTextContent('03:00'); // 20:00Z = 03:00 VN hôm sau
+  });
+
+  it('nguy cơ rời bỏ CAO thì hiện badge cảnh báo', async () => {
+    getCrmCustomerMetrics.mockResolvedValue(mkMetrics({ churnRisk: 'HIGH', segment: 'DA_ROI_BO' }));
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Nguy cơ rời bỏ: Cao/)).toBeInTheDocument();
+  });
+
+  it('role=DRIVER: không có khối chỉ số, không gọi API', async () => {
+    getAdminUserDetail.mockResolvedValue(mkUser({ role: 'DRIVER' }));
+    render(<UserDetailPage />);
+    await screen.findByText('Khách A');
+    expect(screen.queryByText(/Chỉ số & phân khúc/)).toBeNull();
+    expect(getCrmCustomerMetrics).not.toHaveBeenCalled();
   });
 });
 

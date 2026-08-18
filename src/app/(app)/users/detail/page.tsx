@@ -60,6 +60,7 @@ import { getImageUrl } from '@/lib/utils';
 // Dời helper về `src/lib/` là refactor RIÊNG (đụng 5 file), không nhét vào GĐ2.
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { logCrmProfileView } from '@/lib/api';
+import { CustomerMetricsCard } from './components/customer-metrics-card';
 import { CustomerSourceCard } from './components/customer-source-card';
 import { CustomerTagsNotesCard } from './components/customer-tags-notes-card';
 import { CustomerTicketsCard } from './components/customer-tickets-card';
@@ -409,6 +410,7 @@ export default function UserDetailPage() {
       */}
       {user.role === 'USER' && (
         <div key={user.id} className="space-y-6">
+          <CustomerMetricsCard userId={user.id} />
           <CustomerSourceCard userId={user.id} />
           <CustomerTagsNotesCard userId={user.id} />
           {/*

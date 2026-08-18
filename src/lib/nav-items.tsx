@@ -27,6 +27,7 @@ import {
   PieChart,
   Headset,
   LifeBuoy,
+  Layers,
   PhoneCall,
   Star,
   Handshake,
@@ -90,6 +91,8 @@ export const navGroups: NavGroup[] = [
       { href: '/users', label: 'Khách hàng', icon: Users },
       // 2026-08-18 (CRM GĐ3): khiếu nại của khách, nhập tay từ nhóm Zalo.
       { href: '/crm-tickets', label: 'Ticket khách hàng', icon: LifeBuoy },
+      // 2026-08-18 (CRM GĐ4): dựng tệp khách từ chỉ số tính sẵn.
+      { href: '/crm-segments', label: 'Phân khúc', icon: Layers },
       { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
     ],
