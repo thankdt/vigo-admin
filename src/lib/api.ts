@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -967,11 +967,23 @@ export async function reassignBooking(bookingId: string, driverId: string): Prom
   return result.data;
 }
 
-// Look up a customer by exact phone (create-booking form "Kiểm tra" button).
-export async function lookupCustomerByPhone(phone: string): Promise<{ exists: boolean; fullName: string | null }> {
+// Look up a customer by exact phone (create-booking form "Kiểm tra" button, và ô
+// chọn khách khi gán voucher TARGETED ở trang khuyến mãi).
+//
+// `id` là field MỚI của backend. Giữ `?? null` thay vì coi là bắt buộc để bản BE cũ
+// (chưa deploy xong) không làm vỡ form tạo chuyến — lúc đó chỉ phần gán voucher là
+// chưa dùng được, và UI báo rõ chứ không im lặng gán nhầm.
+export async function lookupCustomerByPhone(
+  phone: string,
+): Promise<{ exists: boolean; id: string | null; fullName: string | null }> {
   const response = await fetchWithAuth(`/users/admin/by-phone?phone=${encodeURIComponent(phone)}`);
   const result = await response.json();
-  return result.data ?? { exists: false, fullName: null };
+  const data = result.data ?? {};
+  return {
+    exists: !!data.exists,
+    id: data.id ?? null,
+    fullName: data.fullName ?? null,
+  };
 }
 
 // Price estimate for the create-booking form "Tính giá" button.
@@ -1233,13 +1245,24 @@ export async function updateSystemConfig(key: string, value: string, description
 }
 
 // Promotions API
-export async function getVouchers(): Promise<Promotion[]> {
-  const response = await fetchWithAuth('/promotions/management');
+// Endpoint này KHÔNG phân trang. Backend mặc định loại voucher do chiến dịch tự
+// sinh (`campaignId IS NOT NULL`) — nếu không, sau vài tuần chạy chiến dịch trang
+// admin sẽ ngập hàng chục nghìn mã dùng-một-lần mà chẳng mã nào sửa bằng tay.
+// `includeCampaign` chỉ dùng khi cần soi một mã tự sinh cụ thể.
+export async function getVouchers(includeCampaign = false): Promise<Promotion[]> {
+  const response = await fetchWithAuth(
+    `/promotions/management${includeCampaign ? '?includeCampaign=true' : ''}`,
+  );
   const result = await response.json();
   return result.data;
 }
 
-export async function createVoucher(data: Omit<Promotion, 'id' | 'usageCount'>): Promise<Promotion> {
+// `assignUserIds` KHÔNG phải cột của promotion — nó là tham số request để backend
+// tạo voucher và gán khách trong CÙNG một lần gọi. Tách thành hai request thì
+// request thứ hai hỏng sẽ để lại một voucher TARGETED không ai nhìn thấy.
+export async function createVoucher(
+  data: Omit<Promotion, 'id' | 'usageCount'> & { assignUserIds?: string[] },
+): Promise<Promotion> {
   const response = await fetchWithAuth('/promotions', {
     method: 'POST',
     body: JSON.stringify({
@@ -1267,6 +1290,69 @@ export async function updateVoucher(
     method: 'PUT',
     body: JSON.stringify(body),
   });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+// ── Gán voucher TARGETED cho khách cụ thể ───────────────────────────────────────
+// Voucher TARGETED chỉ tới tay khách qua bảng `user_promotion`; ba hàm dưới là
+// đường duy nhất để admin tạo/xem/gỡ liên kết đó. Thiếu chúng thì chọn TARGETED ở
+// form là tạo ra một mã không ai nhìn thấy.
+
+export async function assignPromotionToUsers(
+  promotionId: number,
+  userIds: string[],
+): Promise<{ assigned: number; skipped: number }> {
+  const response = await fetchWithAuth(`/promotions/${promotionId}/assign`, {
+    method: 'POST',
+    body: JSON.stringify({ userIds }),
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+export async function getPromotionAssignees(
+  promotionId: number,
+): Promise<PromotionAssignee[]> {
+  const response = await fetchWithAuth(`/promotions/${promotionId}/assignees`);
+  const result = await response.json();
+  return result.data ?? [];
+}
+
+export async function revokePromotionFromUser(
+  promotionId: number,
+  userId: string,
+): Promise<{ revoked: number }> {
+  const response = await fetchWithAuth(`/promotions/${promotionId}/assign/${userId}`, {
+    method: 'DELETE',
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+// ── Chiến dịch "tặng mã giữ khách" ──────────────────────────────────────────────
+// Bảng chỉ có MỘT dòng nên API không kèm id. Gác bằng đúng function `promotions`
+// như trang khuyến mãi cũ — không phát sinh quyền mới cần cấp phát lại.
+
+export async function getVoucherCampaign(): Promise<VoucherCampaign> {
+  const response = await fetchWithAuth('/voucher-campaign');
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+export async function updateVoucherCampaign(
+  data: Partial<Omit<VoucherCampaign, 'id'>>,
+): Promise<VoucherCampaign> {
+  const response = await fetchWithAuth('/voucher-campaign', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data ?? result;
+}
+
+export async function getVoucherCampaignStats(): Promise<VoucherCampaignStats> {
+  const response = await fetchWithAuth('/voucher-campaign/stats');
   const result = await response.json();
   return result.data ?? result;
 }
