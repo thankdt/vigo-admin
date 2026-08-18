@@ -45,7 +45,39 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   // được đổi trạng thái/điều tài/tạo chuyến. URL PHẲNG (không phải /crm/queue) vì
   // isRouteAllowed gate theo segment cấp 1: /crm/* sẽ gộp mọi trang CRM một function.
   '/crm-queue': 'crm-queue',
+  // 2026-08-18 (CRM GĐ3). URL PHẲNG cùng lý do với /crm-queue: isRouteAllowed gate theo
+  // segment cấp 1, nên /crm/* sẽ gộp mọi trang CRM về MỘT function.
+  '/crm-tickets': 'crm-tickets',
+  // 2026-08-18 (CRM GĐ4). Quyền RIÊNG cho marketing: dựng TỆP từ dữ liệu tổng hợp,
+  // KHÔNG cần xem hồ sơ/SĐT từng khách — nên cố ý không dùng chung 'users'.
+  '/crm-segments': 'crm-segments',
+  // 2026-08-18 (CRM GĐ5). Quyền TÁCH khỏi 'crm-segments': dựng tệp sai thì sửa được,
+  // bấm gửi sai thì tin đã ra ngoài cho khách thật.
+  '/crm-campaigns': 'crm-campaigns',
+  // 2026-08-18 (CRM GĐ6). Quyền RIÊNG vì điều khoản giá đã thoả thuận là dữ liệu nhạy
+  // cảm (§7): người xem được danh bạ khách không được đọc chiết khấu từng công ty.
+  '/crm-accounts': 'crm-accounts',
+  // 2026-08-18 (CRM GĐ7). Function RIÊNG: repo có bất biến "function key của mục menu =
+  // href bỏ dấu /" (spec §2.1) và test đồng bộ khoá nó — dùng chung 'crm-segments' là nới
+  // một bất biến chịu lực để tiết kiệm một key, đánh đổi sai.
+  '/crm-insights': 'crm-insights',
 };
+
+/**
+ * Function KHÔNG gắn với mục menu nào — mirror `SPECIAL_FUNCTIONS` của backend.
+ *
+ * 🚨 Vì sao phải khai riêng ở FE: `buildFunctionCatalog()` dựng danh sách tick ở `/roles`
+ * HOÀN TOÀN từ `navItems`. Không có danh sách này thì `crm-compensate` không xuất hiện ở
+ * `/roles` ⇒ **không cấp được cho ai**, dù backend đã chấp nhận key đó (spec §7.1).
+ *
+ * Nhãn ở đây là thứ người tick ĐỌC để quyết định — nên nói thẳng nó cấp quyền gì.
+ */
+export const SPECIAL_FUNCTIONS: { key: string; label: string }[] = [
+  {
+    key: 'crm-compensate',
+    label: 'Duyệt đền bù khách hàng (CẤP TIỀN THẬT)',
+  },
+];
 
 // 10 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
 // 2026-07-23: thêm settings.kol + settings.agent (tách KOL_*/BOOKING_AGENT_* khỏi misc).

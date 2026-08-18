@@ -3796,3 +3796,576 @@ export async function revealCrmCustomerPhone(
   });
   return unwrap<{ phone: string | null }>(response);
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ3 — Ticket khiếu nại khách + đền bù
+//
+// Hai nhóm quyền TÁCH BẠCH ở backend: đọc/xử lý ticket = `crm-tickets`;
+// DUYỆT đền bù = `crm-compensate` (controller riêng). FE phản ánh ranh giới
+// đó bằng `can('crm-compensate')`, nhưng BE mới là chốt cuối.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmTicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED' | 'REJECTED';
+export type CrmTicketSeverity = 'LOW' | 'NORMAL' | 'HIGH';
+
+export type CrmTicketCategoryDef = {
+  code: string;
+  label: string;
+  respondHours: number;
+  resolveHours: number;
+};
+
+export type CrmTicket = {
+  id: string;
+  code: string;
+  customerUserId: string;
+  bookingId: string | null;
+  driverId: string | null;
+  category: string;
+  severity: CrmTicketSeverity;
+  status: CrmTicketStatus;
+  title: string;
+  description: string | null;
+  assigneeAdminId: string | null;
+  source: string;
+  reportedAt: string | null;
+  /** ISO có offset. Đếm ngược là HIỆU hai mốc nên không dính múi giờ; MỐC hiển thị thì có. */
+  slaRespondDueAt: string;
+  slaResolveDueAt: string;
+  firstRespondedAt: string | null;
+  resolvedAt: string | null;
+  resolution: string | null;
+  /** `numeric` của Postgres về JSON là CHUỖI — luôn Number() trước khi tính. */
+  compensationAmount: string;
+  createdByAdminId: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CrmTicketEventType =
+  | 'CREATED'
+  | 'STATUS_CHANGE'
+  | 'ASSIGN'
+  | 'NOTE'
+  | 'COMPENSATION_PROPOSED'
+  | 'COMPENSATION_APPROVED'
+  | 'COMPENSATION_REJECTED';
+
+export type CrmTicketEvent = {
+  id: string;
+  ticketId: string;
+  type: CrmTicketEventType;
+  fromStatus: CrmTicketStatus | null;
+  toStatus: CrmTicketStatus | null;
+  note: string | null;
+  amount: string | null;
+  byAdminUserId: string;
+  createdAt: string;
+};
+
+export async function getCrmTicketCategories(): Promise<CrmTicketCategoryDef[]> {
+  const response = await fetchWithAuth('/admin/crm/tickets/categories');
+  return unwrap<CrmTicketCategoryDef[]>(response);
+}
+
+export async function getCrmTickets(p: {
+  page?: number;
+  limit?: number;
+  status?: string;
+  category?: string;
+  assigneeAdminId?: string;
+  customerUserId?: string;
+  overdue?: boolean;
+} = {}): Promise<{
+  data: CrmTicket[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}> {
+  const query = new URLSearchParams({
+    ...(p.page !== undefined && { page: String(p.page) }),
+    ...(p.limit !== undefined && { limit: String(p.limit) }),
+    ...(p.status && { status: p.status }),
+    ...(p.category && { category: p.category }),
+    ...(p.assigneeAdminId && { assigneeAdminId: p.assigneeAdminId }),
+    ...(p.customerUserId && { customerUserId: p.customerUserId }),
+    // Chỉ gửi khi BẬT: gửi 'false' vẫn là một giá trị và BE phải đoán ý.
+    ...(p.overdue && { overdue: 'true' }),
+  });
+  const qs = query.toString();
+  const response = await fetchWithAuth(`/admin/crm/tickets${qs ? `?${qs}` : ''}`);
+  return unwrap<{
+    data: CrmTicket[];
+    meta: { page: number; limit: number; total: number; totalPages: number };
+  }>(response);
+}
+
+export async function getCrmTicket(
+  id: string,
+): Promise<{ ticket: CrmTicket; events: CrmTicketEvent[] }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}`);
+  return unwrap<{ ticket: CrmTicket; events: CrmTicketEvent[] }>(response);
+}
+
+export async function createCrmTicket(body: {
+  customerUserId: string;
+  category: string;
+  title: string;
+  description?: string;
+  bookingId?: string;
+  driverId?: string;
+  severity?: CrmTicketSeverity;
+  source?: string;
+  reportedAt?: string;
+}): Promise<CrmTicket> {
+  const response = await fetchWithAuth('/admin/crm/tickets', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmTicket>(response);
+}
+
+export async function changeCrmTicketStatus(
+  id: string,
+  status: CrmTicketStatus,
+  note?: string,
+): Promise<{ ticket: CrmTicket; events: CrmTicketEvent[] }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/status`, {
+    method: 'POST',
+    body: JSON.stringify({ status, ...(note && { note }) }),
+  });
+  return unwrap<{ ticket: CrmTicket; events: CrmTicketEvent[] }>(response);
+}
+
+export async function addCrmTicketNote(
+  id: string,
+  note: string,
+): Promise<{ ticket: CrmTicket; events: CrmTicketEvent[] }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/note`, {
+    method: 'POST',
+    body: JSON.stringify({ note }),
+  });
+  return unwrap<{ ticket: CrmTicket; events: CrmTicketEvent[] }>(response);
+}
+
+/** Trần đền bù hiện hành — để HIỆN cho người duyệt biết trước. BE mới là chốt chặn. */
+export async function getCrmCompensationLimits(): Promise<{
+  maxPerCase: number;
+  maxPerDay: number;
+}> {
+  const response = await fetchWithAuth('/admin/crm/tickets/compensation/limits');
+  return unwrap<{ maxPerCase: number; maxPerDay: number }>(response);
+}
+
+/** CSKH ĐỀ XUẤT mức — KHÔNG đụng ví. Gate any-of nên người có `crm-tickets` gọi được. */
+export async function proposeCrmCompensation(
+  id: string,
+  amount: number,
+  note?: string,
+): Promise<{ ok: true; proposed: number }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/compensation/propose`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, ...(note && { note }) }),
+  });
+  return unwrap<{ ok: true; proposed: number }>(response);
+}
+
+/** DUYỆT + cấp tiền thật. Chỉ người có `crm-compensate` gọi được (BE chặn). */
+export async function approveCrmCompensation(
+  id: string,
+  amount: number,
+  note?: string,
+): Promise<{ ok: true; amount: number; customerBalance: number }> {
+  const response = await fetchWithAuth(`/admin/crm/tickets/${id}/compensation/approve`, {
+    method: 'POST',
+    body: JSON.stringify({ amount, ...(note && { note }) }),
+  });
+  return unwrap<{ ok: true; amount: number; customerBalance: number }>(response);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ4 — Chỉ số khách (RFM) + Phân khúc
+//
+// Gate `crm-segments` — quyền RIÊNG cho marketing: dựng TỆP từ dữ liệu tổng
+// hợp, không cần xem hồ sơ/SĐT từng khách.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmSegmentCode =
+  | 'MOI_CHUA_QUAY_LAI'
+  | 'DANG_HOAT_DONG'
+  | 'VIP'
+  | 'NGUY_CO_ROI_BO'
+  | 'DA_ROI_BO'
+  | 'MOT_LAN_ROI_THOI'
+  | 'CHUA_DI_CHUYEN';
+
+export type CrmChurnRisk = 'LOW' | 'MEDIUM' | 'HIGH';
+
+export type CrmCustomerMetrics = {
+  userId: string;
+  firstTripAt: string | null;
+  lastTripAt: string | null;
+  tripsCompleted: number;
+  tripsCancelled: number;
+  /** `numeric` về JSON là CHUỖI. */
+  gmv: string;
+  avgStarsGiven: string | null;
+  rScore: number;
+  fScore: number;
+  mScore: number;
+  segment: CrmSegmentCode;
+  churnRisk: CrmChurnRisk;
+  /** Cron chạy lúc nào ra dòng này — hiện ra để không ai tưởng số là realtime. */
+  computedAt: string;
+};
+
+export type CrmSegmentCondition = {
+  field: string;
+  op: 'eq' | 'ne' | 'gt' | 'gte' | 'lt' | 'lte';
+  value: string | number;
+};
+export type CrmSegmentRule = { all?: CrmSegmentCondition[]; any?: CrmSegmentCondition[] };
+
+export type CrmSegmentDef = {
+  id: string;
+  name: string;
+  description: string | null;
+  ruleJson: CrmSegmentRule;
+  isBuiltin: boolean;
+  createdAt: string;
+};
+
+export async function getCrmSegments(): Promise<CrmSegmentDef[]> {
+  const response = await fetchWithAuth('/admin/crm/segments');
+  return unwrap<CrmSegmentDef[]>(response);
+}
+
+/**
+ * Số khách của MỘT tệp ĐÃ LƯU.
+ *
+ * Dùng ở trang chiến dịch thay cho `previewCrmSegment`: endpoint này mở cho cả
+ * `crm-campaigns`, còn `preview` (chạy rule tuỳ ý) chỉ dành cho `crm-segments`. Người chỉ
+ * được bấm gửi vẫn phải biết tin sẽ đi tới bao nhiêu người.
+ */
+export async function getCrmSegmentSize(id: string): Promise<{ total: number }> {
+  const response = await fetchWithAuth(`/admin/crm/segments/${id}/size`);
+  return unwrap<{ total: number }>(response);
+}
+
+/** Xem trước TRƯỚC khi lưu — cổng chặn "gửi nhầm tệp" của GĐ5. */
+export async function previewCrmSegment(ruleJson: CrmSegmentRule): Promise<{
+  total: number;
+  sample: Array<{ userId: string; fullName: string | null; segment: string; lastTripAt: string | null }>;
+}> {
+  const response = await fetchWithAuth('/admin/crm/segments/preview', {
+    method: 'POST',
+    body: JSON.stringify({ ruleJson }),
+  });
+  return unwrap<{
+    total: number;
+    sample: Array<{ userId: string; fullName: string | null; segment: string; lastTripAt: string | null }>;
+  }>(response);
+}
+
+export async function createCrmSegment(body: {
+  name: string;
+  description?: string;
+  ruleJson: CrmSegmentRule;
+}): Promise<CrmSegmentDef> {
+  const response = await fetchWithAuth('/admin/crm/segments', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmSegmentDef>(response);
+}
+
+export async function deleteCrmSegment(id: string): Promise<void> {
+  await fetchWithAuth(`/admin/crm/segments/${id}`, { method: 'DELETE' });
+}
+
+/** Chạy lại cron tính chỉ số NGAY — cần cho ngày đầu bật, khi bảng metrics còn rỗng. */
+export async function recomputeCrmMetrics(): Promise<{ processed: number }> {
+  const response = await fetchWithAuth('/admin/crm/segments/recompute', { method: 'POST' });
+  return unwrap<{ processed: number }>(response);
+}
+
+/** Chỉ số của MỘT khách (hồ sơ 360). `null` = cron chưa chạy tới khách này. */
+export async function getCrmCustomerMetrics(userId: string): Promise<CrmCustomerMetrics | null> {
+  const response = await fetchWithAuth(`/admin/crm/customers/${userId}/metrics`);
+  return unwrap<CrmCustomerMetrics | null>(response);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ5 — Chiến dịch chăm sóc (GỬI RA NGOÀI cho khách thật)
+//
+// Quyền `crm-campaigns`, TÁCH khỏi `crm-segments`: dựng tệp sai thì sửa được,
+// bấm gửi sai thì tin đã ra ngoài.
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmCampaignChannel = 'ZNS' | 'PUSH';
+export type CrmCampaignStatus = 'DRAFT' | 'SENDING' | 'SENT' | 'CANCELLED';
+
+export type CrmCampaign = {
+  id: string;
+  name: string;
+  segmentId: string;
+  channel: CrmCampaignChannel;
+  znsTemplateId: string | null;
+  pushTitle: string | null;
+  pushBody: string | null;
+  status: CrmCampaignStatus;
+  attributionDays: number;
+  scheduledAt: string | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  createdAt: string;
+};
+
+export type CrmCampaignStats = {
+  campaign: CrmCampaign;
+  /** Gộp theo (deliveryStatus, skipReason) — lý do bỏ qua hiện ra, không im lặng. */
+  breakdown: Array<{ deliveryStatus: string; skipReason: string | null; n: number }>;
+  attributedCustomers: number;
+  attributedRevenue: number;
+};
+
+export async function getCrmCampaigns(): Promise<CrmCampaign[]> {
+  const response = await fetchWithAuth('/admin/crm/campaigns');
+  return unwrap<CrmCampaign[]>(response);
+}
+
+export async function createCrmCampaign(body: {
+  name: string;
+  segmentId: string;
+  channel: CrmCampaignChannel;
+  znsTemplateId?: string;
+  pushTitle?: string;
+  pushBody?: string;
+  attributionDays?: number;
+}): Promise<CrmCampaign> {
+  const response = await fetchWithAuth('/admin/crm/campaigns', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmCampaign>(response);
+}
+
+/** BẤM GỬI — không hoàn tác được. BE tự áp hai chốt chặn §6.6 cho từng người nhận. */
+/**
+ * BẤM GỬI — backend chỉ NHẬN VIỆC rồi trả ngay; worker gửi sau.
+ *
+ * 🚨 KHÔNG còn trả `sent/failed/skipped` (đổi 2026-08-18): một tệp vài nghìn người gửi
+ * hàng phút, quá hạn cắt kết nối của ALB. Kết quả phải đọc từ `getCrmCampaignStats`.
+ */
+export async function sendCrmCampaign(id: string): Promise<{ queued: true; total: number }> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/${id}/send`, { method: 'POST' });
+  return unwrap<{ queued: true; total: number }>(response);
+}
+
+export async function getCrmCampaignStats(id: string): Promise<CrmCampaignStats> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/${id}/stats`);
+  return unwrap<CrmCampaignStats>(response);
+}
+
+/** Danh sách chặn — khách yêu cầu ngừng nhận tin chăm sóc (§6.6). */
+/** Trạng thái chặn của một khách — nuôi công tắc trên hồ sơ 360. */
+export async function getCrmOptoutStatus(userId: string): Promise<{
+  optedOut: boolean;
+  reason: string | null;
+  since: string | null;
+}> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`);
+  return unwrap<{ optedOut: boolean; reason: string | null; since: string | null }>(response);
+}
+
+export async function setCrmOptout(userId: string, reason?: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`, {
+    method: 'POST',
+    body: JSON.stringify({ ...(reason && { reason }) }),
+  });
+  return unwrap<{ ok: true }>(response);
+}
+
+export async function removeCrmOptout(userId: string): Promise<{ ok: true }> {
+  const response = await fetchWithAuth(`/admin/crm/campaigns/optout/${userId}`, {
+    method: 'DELETE',
+  });
+  return unwrap<{ ok: true }>(response);
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// CRM GĐ6 — Khách doanh nghiệp (pipeline B2B) · GĐ7 — Insights
+//
+// GĐ6 gate `crm-accounts` (điều khoản giá là dữ liệu nhạy cảm, §7).
+// GĐ7 gate `crm-insights` — function RIÊNG. KHÔNG dùng chung `crm-segments`: repo có bất
+// biến "function key của mục menu = href bỏ dấu /" (§2.1) và test đồng bộ FE khoá nó.
+// (Sửa 2026-08-18: dòng này từng ghi `crm-segments`, sót lại từ trước khi tách function.
+//  Ai đọc phải câu cũ sẽ đi cấp nhầm quyền — hoặc tệ hơn, nới `crm-segments` cho cả nhóm.)
+// ─────────────────────────────────────────────────────────────────────
+
+export type CrmAccountStage = 'LEAD' | 'NEGOTIATING' | 'SIGNED' | 'ACTIVE' | 'CHURNED';
+
+export type CrmAccount = {
+  id: string;
+  name: string;
+  taxCode: string | null;
+  stage: CrmAccountStage;
+  ownerAdminId: string | null;
+  contactName: string | null;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  /** `numeric` về JSON là CHUỖI. */
+  discountPercent: string | null;
+  paymentTermDays: number | null;
+  contractNote: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type CrmAccountMemberRow = {
+  id: string;
+  userId: string;
+  note: string | null;
+  fullName: string | null;
+  /** ĐÃ CHE ở backend. Muốn số đầy đủ thì đi qua `reveal-phone` và để lại dấu vết (GĐ2). */
+  phone: string | null;
+  /** Có giá trị = đã gỡ khỏi công ty. Dòng vẫn hiện để báo cáo kỳ cũ giải thích được. */
+  removedAt: string | null;
+};
+
+export type CrmAccountEventRow = {
+  id: string;
+  type: string;
+  fromStage: string | null;
+  toStage: string | null;
+  note: string | null;
+  createdAt: string;
+};
+
+/**
+ * Danh sách công ty. `total` là TỔNG thật, `rows` bị chặn ở 200 — FE phải nói ra khi bị
+ * cắt, nếu không màn hình trông y hệt như thể 200 dòng đó là tất cả.
+ */
+export async function getCrmAccounts(
+  stage?: string,
+): Promise<{ rows: CrmAccount[]; total: number }> {
+  const qs = stage ? `?stage=${encodeURIComponent(stage)}` : '';
+  const response = await fetchWithAuth(`/admin/crm/accounts${qs}`);
+  return unwrap<{ rows: CrmAccount[]; total: number }>(response);
+}
+
+export async function createCrmAccount(body: {
+  name: string;
+  taxCode?: string;
+  contactName?: string;
+  contactPhone?: string;
+  contactEmail?: string;
+}): Promise<CrmAccount> {
+  const response = await fetchWithAuth('/admin/crm/accounts', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<CrmAccount>(response);
+}
+
+export async function getCrmAccount(id: string): Promise<{
+  account: CrmAccount;
+  members: CrmAccountMemberRow[];
+  events: CrmAccountEventRow[];
+}> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}`);
+  return unwrap<{
+    account: CrmAccount;
+    members: CrmAccountMemberRow[];
+    events: CrmAccountEventRow[];
+  }>(response);
+}
+
+export async function changeCrmAccountStage(
+  id: string,
+  stage: CrmAccountStage,
+  note?: string,
+): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/stage`, {
+    method: 'POST',
+    body: JSON.stringify({ stage, ...(note && { note }) }),
+  });
+  return unwrap<unknown>(response);
+}
+
+export async function updateCrmAccountTerms(
+  id: string,
+  body: { discountPercent?: number; paymentTermDays?: number; contractNote?: string },
+): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/terms`, {
+    method: 'PUT',
+    body: JSON.stringify(body),
+  });
+  return unwrap<unknown>(response);
+}
+
+export async function addCrmAccountMember(
+  id: string,
+  userId: string,
+  note?: string,
+): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/members`, {
+    method: 'POST',
+    body: JSON.stringify({ userId, ...(note && { note }) }),
+  });
+  return unwrap<unknown>(response);
+}
+
+export async function removeCrmAccountMember(id: string, memberId: string): Promise<unknown> {
+  const response = await fetchWithAuth(`/admin/crm/accounts/${id}/members/${memberId}`, {
+    method: 'DELETE',
+  });
+  return unwrap<unknown>(response);
+}
+
+/** Chuyến + doanh thu theo kỳ. `from`/`to` là VN-local YYYY-MM-DD. */
+export async function getCrmAccountUsage(
+  id: string,
+  from: string,
+  to: string,
+): Promise<{ trips: number; revenue: number; from: string; to: string }> {
+  const response = await fetchWithAuth(
+    `/admin/crm/accounts/${id}/usage?from=${from}&to=${to}`,
+  );
+  return unwrap<{ trips: number; revenue: number; from: string; to: string }>(response);
+}
+
+// ── GĐ7 — Insights ───────────────────────────────────────────────────
+
+export type CrmRetentionRow = {
+  cohortMonth: string;
+  customers: number;
+  returned: number;
+  returned3Plus: number;
+};
+
+export async function getCrmRetention(from: string, to: string): Promise<CrmRetentionRow[]> {
+  const response = await fetchWithAuth(`/admin/crm/insights/retention?from=${from}&to=${to}`);
+  return unwrap<CrmRetentionRow[]>(response);
+}
+
+export async function getCrmCallReasons(
+  from: string,
+  to: string,
+): Promise<Array<{ reason: string; outcome: string; n: number }>> {
+  const response = await fetchWithAuth(`/admin/crm/insights/call-reasons?from=${from}&to=${to}`);
+  return unwrap<Array<{ reason: string; outcome: string; n: number }>>(response);
+}
+
+export async function getCrmCsat(
+  from: string,
+  to: string,
+): Promise<{ rows: Array<{ stars: number; n: number }>; total: number; average: number | null }> {
+  const response = await fetchWithAuth(`/admin/crm/insights/csat?from=${from}&to=${to}`);
+  return unwrap<{ rows: Array<{ stars: number; n: number }>; total: number; average: number | null }>(
+    response,
+  );
+}
+
+export async function getCrmTripFrequency(): Promise<Array<{ bucket: string; customers: number }>> {
+  const response = await fetchWithAuth('/admin/crm/insights/trip-frequency');
+  return unwrap<Array<{ bucket: string; customers: number }>>(response);
+}

@@ -39,6 +39,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/lib/auth-context';
 import {
   getAdminUserDetail,
   deleteAdminUser,
@@ -59,8 +60,11 @@ import { getImageUrl } from '@/lib/utils';
 // Dời helper về `src/lib/` là refactor RIÊNG (đụng 5 file), không nhét vào GĐ2.
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { logCrmProfileView } from '@/lib/api';
+import { CustomerMetricsCard } from './components/customer-metrics-card';
+import { CustomerOptoutCard } from './components/customer-optout-card';
 import { CustomerSourceCard } from './components/customer-source-card';
 import { CustomerTagsNotesCard } from './components/customer-tags-notes-card';
+import { CustomerTicketsCard } from './components/customer-tickets-card';
 import { CustomerTimelineCard } from './components/customer-timeline-card';
 import { PhoneCell } from '../components/phone-cell';
 
@@ -109,6 +113,7 @@ export default function UserDetailPage() {
   const params = useSearchParams();
   const id = params.get('id');
   const { toast } = useToast();
+  const { can } = useAuth();
 
   const [user, setUser] = React.useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -406,8 +411,23 @@ export default function UserDetailPage() {
       */}
       {user.role === 'USER' && (
         <div key={user.id} className="space-y-6">
+          <CustomerMetricsCard userId={user.id} />
           <CustomerSourceCard userId={user.id} />
           <CustomerTagsNotesCard userId={user.id} />
+          {/*
+            KHÔNG gate `crm-campaigns`: endpoint đọc/bật chặn mở cho cả `users` có chủ đích
+            — người nhận yêu cầu "đừng gửi nữa" của khách là CSKH tuyến đầu. Bắt phải có
+            `crm-campaigns` thì yêu cầu của khách phải đi qua người khác, và thực tế là
+            không đi tới đâu.
+          */}
+          <CustomerOptoutCard userId={user.id} />
+          {/*
+            Gate `crm-tickets`: endpoint danh sách ticket gate bằng key đó, nên admin chỉ
+            có `users` sẽ nhận 403 -> card đỏ "Không tải được" + toast lỗi MỖI LẦN mở MỖI
+            hồ sơ. Chữ đó nói "hỏng" trong khi sự thật là "bạn không có quyền", và người
+            dùng sẽ đi báo lỗi hệ thống.
+          */}
+          {can('crm-tickets') && <CustomerTicketsCard userId={user.id} />}
           <CustomerTimelineCard userId={user.id} />
         </div>
       )}

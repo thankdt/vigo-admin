@@ -19,8 +19,10 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 30 menu functions (navItems minus /settings)', () => {
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(30); // 2026-08-12: +crm-queue
+  it('has exactly 35 menu functions (navItems minus /settings)', () => {
+    // 2026-08-12: +crm-queue · 2026-08-18: +crm-tickets, +crm-segments, +crm-campaigns,
+    // +crm-accounts, +crm-insights.
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(35);
   });
 
   // Ranh giới riêng tư của màn "Đội tài chuyên nghiệp": ghi chú tuyển team KHÔNG
@@ -94,9 +96,21 @@ describe('rbac catalog mirror', () => {
    * (app/page.tsx -> firstAllowedRoute(navItems)). Khoá lại bằng test.
    */
   describe('nhóm Khách hàng (CRM)', () => {
-    const CRM_HREFS = ['/crm-queue', '/users', '/cskh-activity', '/acquisition'];
+    // 2026-08-18 (CRM GĐ3): +/crm-tickets sau /users. /crm-queue phải giữ vị trí ĐẦU vì
+    // nó là trang đích sau đăng nhập của người chỉ có quyền CSKH.
+    const CRM_HREFS = [
+      '/crm-queue',
+      '/users',
+      '/crm-tickets',
+      '/crm-segments',
+      '/crm-campaigns',
+      '/crm-accounts',
+      '/crm-insights',
+      '/cskh-activity',
+      '/acquisition',
+    ];
 
-    it('nhóm tồn tại và gồm đúng 4 mục, ĐÚNG THỨ TỰ', () => {
+    it('nhóm tồn tại và gồm đúng 9 mục, ĐÚNG THỨ TỰ', () => {
       const crm = navGroups.find((g) => g.label === 'Khách hàng (CRM)');
       expect(crm).toBeDefined();
       expect(crm!.items.map((i) => i.href)).toEqual(CRM_HREFS);
