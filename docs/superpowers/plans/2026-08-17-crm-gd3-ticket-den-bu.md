@@ -1,6 +1,24 @@
 # CRM GĐ3 — Ticket khiếu nại + SLA + Đền bù — Implementation Plan
 
-**Ngày:** 2026-08-17 · **Trạng thái:** CHỜ USER DUYỆT, chưa code một dòng nào.
+**Ngày:** 2026-08-17 · **Cập nhật:** 2026-08-18.
+
+**Trạng thái:** bước **1–3 ĐÃ CODE XONG** (nhánh `feat/crm-queue-api` + `feat/crm-queue`,
+đã push, **chưa merge `dev`**). Bước **4 (đền bù — tiền thật) DỪNG LẠI CHỜ USER CHỐT** 4 câu
+ở §9. Bước 5–6 chưa làm.
+
+| Bước | Trạng thái |
+|---|---|
+| 1. Hạ tầng function không-menu | ✅ BE `SPECIAL_FUNCTIONS` + FE nhóm thứ ba ở `/roles` + migration cấp quyền + test khoá ranh giới |
+| 2. 2 bảng + seed danh mục/SLA/hạn mức | ✅ + verify áp THẬT trên Postgres thật (9 ca) |
+| 3. Service ticket + SLA + endpoint đọc/ghi | ✅ 7 route, gate `crm-tickets` |
+| 4. Đền bù | ⛔ CHỜ CHỐT — xem §9 |
+| 5. Nhánh `TICKET` vào timeline 360 | ⬜ |
+| 6. Admin `/crm-tickets` | ⬜ (mục menu CỐ Ý chưa thêm để không có link chết) |
+
+**Quyết định đã tự chốt trong lúc code** (§14 không nói, ghi lại để khỏi hỏi lại): **người
+XỬ LÝ tự đóng ticket được**, không bắt giám sát duyệt — đóng ticket không đụng tiền; thứ
+đụng tiền là đền bù và nó đã có quyền riêng `crm-compensate`. Bắt duyệt thêm một tầng chỉ
+làm ticket tồn đọng.
 
 **Mức rủi ro: CAO** (CLAUDE.md 0.5.b) — đụng **tiền thật** (đền bù vào ví khách) và **vùng
 quyền** (đẻ 2 function RBAC mới, trong đó một cái không thuộc menu). Bắt buộc reviewer độc
