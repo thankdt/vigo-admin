@@ -1025,8 +1025,18 @@ biến một lỗi rõ ràng thành một màn hình treo vô hạn.
   `getAdminUserDetail`. Luồng auth không đụng.
 - **GÓP Ý cố ý bỏ qua** (từ §15.7): UNIQUE `(userId, tag)` phân biệt HOA/thường.
 - **`dev` có tính năng "chiến dịch voucher tự tặng"** (`AutoVoucherCampaign`) do người khác
-  làm, khái niệm gần với "chiến dịch chăm sóc" của GĐ5 nhưng khác bảng, khác đường gửi. Cần
-  một lượt đối chiếu để hai thứ không đá nhau trên cùng một khách.
+  làm, khái niệm gần với "chiến dịch chăm sóc" của GĐ5 nhưng khác bảng, khác đường gửi.
+  Đã đối chiếu (2026-08-18) — KHÔNG tranh tài nguyên kỹ thuật nào (khác hàng đợi, khác khoá
+  Redis, khác bảng, khác config), nhưng chạm CÙNG một khách theo hai cách:
+  1. `src/promotions` không đọc `crm_message_optout` ⇒ khách đã yêu cầu ngừng nhận vẫn nhận
+     popup + push voucher;
+  2. push voucher đi `type: 'voucher'` còn bộ đếm CRM chỉ tính `'promotion'` ⇒ tin voucher
+     lọt trần "2 tin/tuần".
+
+  **User đã chốt CHẤP NHẬN cả hai (2026-08-18)** — đây là rủi ro đã cân nhắc, không phải nợ
+  kỹ thuật cần dọn. Hệ quả bắt buộc giữ: khối "Tin chăm sóc" trên hồ sơ 360 ghi rõ phạm vi
+  thật ("áp dụng cho Chiến dịch chăm sóc") và cảnh báo tin voucher chưa theo. Câu chữ đó
+  ĐÚNG với hành vi hiện tại — đổi hành vi thì phải đổi câu chữ cùng lúc.
 - **GÓP Ý của review GĐ6 cố ý BỎ QUA** (không phải quên):
   - `contactName/Phone/Email` chỉ set được lúc tạo, không có đường sửa và FE không hiện;
     `paymentTermDays` + `contractNote` có API sửa nhưng FE chỉ gửi `discountPercent`. Tức
