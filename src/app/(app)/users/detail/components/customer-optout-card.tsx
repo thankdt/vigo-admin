@@ -106,8 +106,24 @@ export function CustomerOptoutCard({ userId }: { userId: string }) {
             {status.reason ? (
               <p className="text-xs text-muted-foreground">Lý do: {status.reason}</p>
             ) : null}
+            {/*
+              🚨 PHẠM VI THẬT, không hứa quá (sửa 2026-08-18). Bản đầu viết "Chiến dịch sẽ
+              tự bỏ qua khách này" — SAI, vì trên hệ thống có HAI thứ cùng tên "chiến dịch"
+              do hai nhóm làm: "Chiến dịch chăm sóc" (/crm-campaigns, đọc bảng chặn này) và
+              "tự tặng voucher" (/promotions) — cái sau bắn popup + push "Vigo tặng bạn ưu
+              đãi!" mỗi khi khách đặt chuyến và KHÔNG hề đọc bảng chặn (đã kiểm: toàn bộ
+              src/promotions không có một chữ nào về optout).
+
+              Hứa sai ở đây tệ hơn không hứa: CSKH nói với khách "đã tắt rồi" rồi khách vẫn
+              nhận tin, và lần sau họ không tin gì nữa.
+            */}
             <p className="text-xs text-muted-foreground">
-              Chiến dịch sẽ tự bỏ qua khách này. Thông báo về chuyến đi KHÔNG bị ảnh hưởng.
+              Áp dụng cho <b>Chiến dịch chăm sóc</b> (/crm-campaigns). Thông báo về chuyến đi
+              KHÔNG bị ảnh hưởng.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Lưu ý: tin <b>tự tặng voucher</b> khi khách đặt chuyến hiện <b>chưa</b> đọc danh
+              sách này — khách vẫn có thể nhận loại tin đó.
             </p>
             {canUnblock ? (
               <Button
