@@ -2,23 +2,30 @@
 
 **Ngày:** 2026-08-17 · **Cập nhật:** 2026-08-18.
 
-**Trạng thái:** bước **1–3 ĐÃ CODE XONG** (nhánh `feat/crm-queue-api` + `feat/crm-queue`,
-đã push, **chưa merge `dev`**). Bước **4 (đền bù — tiền thật) DỪNG LẠI CHỜ USER CHỐT** 4 câu
-ở §9. Bước 5–6 chưa làm.
+**Trạng thái:** **TOÀN BỘ 6 BƯỚC ĐÃ CODE XONG** (nhánh `feat/crm-queue-api` +
+`feat/crm-queue`, đã push). **Chưa merge `dev`** — chờ reviewer độc lập + chờ GĐ0/1/2 được
+người thật test trên DEV.
 
 | Bước | Trạng thái |
 |---|---|
 | 1. Hạ tầng function không-menu | ✅ BE `SPECIAL_FUNCTIONS` + FE nhóm thứ ba ở `/roles` + migration cấp quyền + test khoá ranh giới |
 | 2. 2 bảng + seed danh mục/SLA/hạn mức | ✅ + verify áp THẬT trên Postgres thật (9 ca) |
-| 3. Service ticket + SLA + endpoint đọc/ghi | ✅ 7 route, gate `crm-tickets` |
-| 4. Đền bù | ⛔ CHỜ CHỐT — xem §9 |
-| 5. Nhánh `TICKET` vào timeline 360 | ⬜ |
-| 6. Admin `/crm-tickets` | ⬜ (mục menu CỐ Ý chưa thêm để không có link chết) |
+| 3. Service ticket + SLA + endpoint | ✅ 7 route, gate `crm-tickets` |
+| 4. Đền bù (TIỀN THẬT) | ✅ `creditUserCompensation` (ví USER ← SYSTEM_EXTERNAL, ledger REFUND) + trần/vụ + trần/ngày VN + 1 transaction + ghi vết |
+| 5. Nhánh `TICKET` vào timeline 360 | ✅ để nguyên timestamptz, có ca integration ép session +07 |
+| 6. Admin `/crm-tickets` + khối trên hồ sơ 360 | ✅ 33 ca test cấp trang |
 
-**Quyết định đã tự chốt trong lúc code** (§14 không nói, ghi lại để khỏi hỏi lại): **người
-XỬ LÝ tự đóng ticket được**, không bắt giám sát duyệt — đóng ticket không đụng tiền; thứ
-đụng tiền là đền bù và nó đã có quyền riêng `crm-compensate`. Bắt duyệt thêm một tầng chỉ
-làm ticket tồn đọng.
+**Kiểm:** backend `tsc` sạch · 232 suite / 3293 test · 11 suite integration / 133 test.
+Admin `tsc` sạch · 84 file test / 900 test · `next build` xanh · `/crm-tickets` 170 kB.
+
+### Bốn câu §9 — đã chốt
+
+| Câu | Chốt | Lý do |
+|---|---|---|
+| Mật khẩu cấp 2 khi duyệt? | **KHÔNG**, nhưng vượt trần **CHẶN CỨNG** | Giống `driver-penalty`: thao tác thường xuyên, thêm một lớp là người ta né việc đền bù. Không có đường gõ mật khẩu để vượt trần. |
+| Ví nào? | **`USER`** | `USER_REFERRAL` là tiền hoa hồng; trộn vào là hỏng đối soát affiliate, không tách ra được về sau |
+| Khách chưa có ví? | **Tạo ví số dư 0 rồi cấp** (`ensureWallet`) | Khách đi 1 chuyến tiền mặt thường chưa có ví, mà đó lại đúng nhóm hay khiếu nại nhất |
+| Ai đóng ticket? | **Người xử lý tự đóng** | Đóng ticket không đụng tiền; thứ đụng tiền là đền bù và nó đã có quyền riêng |
 
 **Mức rủi ro: CAO** (CLAUDE.md 0.5.b) — đụng **tiền thật** (đền bù vào ví khách) và **vùng
 quyền** (đẻ 2 function RBAC mới, trong đó một cái không thuộc menu). Bắt buộc reviewer độc
