@@ -960,16 +960,66 @@ cho cả file, và ca kiểm khung đêm tự đặt lại đồng hồ.
 Cùng họ với §15.5 (test giờ VN trên máy giờ VN là xanh giả): **cả hai đều là test đang kiểm môi
 trường chạy nó, không phải kiểm code**.
 
-### 16.9 Nợ CHƯA thoả, phải đọc trước khi mở PR → main
+### 16.9 "Doanh thu" của công ty B2B từng là con số SAI để đi đòi tiền
+
+`usage()` cộng `SUM(b.price)` rồi gọi đó là doanh thu. Trong repo này `price` là subtotal
+**trước khuyến mại và trước VAT**; canon cho tiền-khách-trả là `finalPrice`
+(`finance.service.ts:511`, `htx.service.ts:513`). Màn hồ sơ công ty nối thẳng sang
+`/invoices` để đối soát công nợ, nên kế toán đọc "doanh thu 30 ngày · 3.600.000đ" rồi đi
+đòi theo con số đó: thừa ở mọi chuyến có khuyến mại, và lệch với hoá đơn xuất ra mà không ai
+giải thích được vì sao hai màn ra hai số. Sai lệch tích luỹ theo hợp đồng THÁNG.
+
+⇒ Với mỗi con số tiền hiển thị, phải trả lời được **"đây là tiền gì"** bằng cách chỉ vào một
+định nghĩa đã có trong repo, không phải bằng cách chọn cột nào trông hợp lý. Và nhãn trên
+màn hình phải nói ra ("tiền khách trả (gồm VAT)"), nếu không người đọc vẫn phải đoán.
+
+### 16.10 Xoá cứng làm SỐ LIỆU QUÁ KHỨ đổi ngược
+
+`usage()` gộp chuyến theo danh sách nhân viên **hiện tại**, còn gỡ nhân viên là `DELETE`.
+Gỡ một người hôm nay ⇒ mọi chuyến họ đã đi tháng 6, tháng 7 biến mất khỏi báo cáo kỳ đó.
+Xuất số tháng 7 hôm nay và xuất lại tuần sau ra hai con số khác nhau — trên đúng màn hình
+dùng để đối soát công nợ.
+
+⇒ Bảng nào được JOIN vào một truy vấn CÓ KHOẢNG THỜI GIAN thì việc xoá dòng khỏi nó là sửa
+lại quá khứ. Xoá mềm + lọc theo mốc gỡ. Kèm hệ quả: UNIQUE phải thành PARTIAL, nếu không gán
+nhầm một lần là khoá vĩnh viễn user đó.
+
+### 16.11 Ba lỗi "một dòng SQL" làm hai màn cãi nhau
+
+Ba chỗ trong Insights, cùng một họ:
+- `csat` không lọc `isCounted = true` ⇒ đếm cả đánh giá tự-chấm/test. Bảng này trên DEV có
+  ĐÚNG 1 dòng, nên nếu dòng đó là self-agent thì màn hiện "5.00 sao trên 1 lượt" — một con
+  số bịa, và tệ hơn cái rỗng vì cái rỗng đã có câu giải thích tử tế.
+- `callReasons` không loại `CLAIMED` (nhận việc, **chưa gọi**) ⇒ mỗi cuộc gọi thật đẻ 2 dòng
+  và nhóm "(không ghi lý do)" luôn đứng đầu bảng, lấn hết lý do thật.
+- `retentionCohort` / `tripFrequency` không lọc `role = 'USER'` trong khi `crm-metrics` thì
+  có ⇒ `/crm-insights` và `/crm-segments` ra hai con số cho cùng một sự thật, và cuộc tranh
+  luận chuyển từ "làm gì với khách đi-một-lần" sang "số nào đúng".
+
+⇒ Mỗi truy vấn báo cáo phải nêu rõ **tập hợp nó đang đếm**, và tập đó phải khớp định nghĩa
+đã có ở nơi khác trong repo. Đây không phải chuyện làm đẹp số: hai màn cãi nhau là mất niềm
+tin vào CẢ HAI.
+
+### 16.12 Trạng thái lỗi bị nuốt vào trạng thái "đang tải"
+
+`if (loading || !account) return <p>Đang tải…</p>` — API hỏng thì `loading=false` nhưng
+`account` vẫn `null`, nên điều kiện vẫn đúng và khối đứng ở "Đang tải…" **mãi mãi**. Toast
+thì `TOAST_LIMIT = 1` và tự tắt. Admin quay 30 giây rồi đi báo "hệ thống treo". Ca 403 (bị
+rút quyền giữa chừng) cũng ra đúng cái spinner đó, nên người dùng không bao giờ biết đó là
+vấn đề quyền. Danh sách ở cấp trên đã có state `failed` riêng — khối con thì quên.
+
+⇒ `loading` / `failed` / `empty` là BA trạng thái, không phải hai. Gộp lỗi vào loading là
+biến một lỗi rõ ràng thành một màn hình treo vô hạn.
+
+### 16.13 Nợ CHƯA thoả, phải đọc trước khi mở PR → main
 
 - **Chưa phase nào (GĐ0→GĐ7) được test tay trên DEV.** 8 giai đoạn đang xếp chồng. Đây là cổng
-  bắt buộc của CLAUDE.md, chưa qua.
-- **Va chạm timestamp migration với `dev`**: `dev` đã có `AddBookingAssignSource`,
-  `SeedVinowCodeDisabled`, `SeedDriverLookupQuotaConfig`, `SeedDirectAssignDisabled`,
-  `AutoVoucherCampaign` trùng số với 4 migration CRM. Phải đánh số lại khối CRM chưa merge
-  lên trên `1794200000000` trước khi merge dev (đúng cách team đã làm ở `d61a55c`).
-  Riêng cặp `1793700000000` (`AddBookingAssignSource` ↔ `CreateCrmCustomerTagNote`) **đã nằm
-  sẵn trên dev và đã chạy** — đổi tên bây giờ là bắt DEV chạy lại, nên để nguyên và ghi nhận.
+  bắt buộc của CLAUDE.md, chưa qua. **Đây là việc còn lại lớn nhất.**
+- ~~Va chạm timestamp migration với `dev`~~ — ĐÃ XỬ LÝ: 9 migration CRM chưa merge dời lên
+  `1794300000000+`, và thêm lưới bánh cóc trong `migration-runner-safety.spec.ts` (13 cặp
+  trùng có từ trước được đóng băng, cặp MỚI thì đỏ). Cặp `1793700000000`
+  (`AddBookingAssignSource` ↔ `CreateCrmCustomerTagNote`) **để nguyên** vì đã nằm trên dev và
+  đã chạy — đổi tên là bắt DEV chạy lại.
 - **`User.password` thiếu `select: false`** (§13.6, §15.6): vẫn hoãn vô thời hạn theo quyết
   định user. GĐ3 chỉ làm bản vá HẸP — loại field `password` khỏi riêng response
   `getAdminUserDetail`. Luồng auth không đụng.
@@ -977,3 +1027,27 @@ trường chạy nó, không phải kiểm code**.
 - **`dev` có tính năng "chiến dịch voucher tự tặng"** (`AutoVoucherCampaign`) do người khác
   làm, khái niệm gần với "chiến dịch chăm sóc" của GĐ5 nhưng khác bảng, khác đường gửi. Cần
   một lượt đối chiếu để hai thứ không đá nhau trên cùng một khách.
+- **GÓP Ý của review GĐ6 cố ý BỎ QUA** (không phải quên):
+  - `contactName/Phone/Email` chỉ set được lúc tạo, không có đường sửa và FE không hiện;
+    `paymentTermDays` + `contractNote` có API sửa nhưng FE chỉ gửi `discountPercent`. Tức
+    trang "Hồ sơ công ty" hiện **chưa hiện được hồ sơ**. Đây là THÊM TÍNH NĂNG, không phải
+    vá lỗi — để user quyết có làm không.
+  - Ô gán nhân viên vẫn bắt dán UUID, chưa có ô tìm khách theo tên/SĐT. Đã đỡ bằng khoá
+    ngoại (UUID ma bị chặn) + nút "Gỡ" (gán nhầm không còn kẹt vĩnh viễn), nhưng người chỉ
+    có `crm-accounts` mà không có `users` thì vẫn không có chỗ nào lấy được UUID.
+  - Hai lối so khoảng thời gian cùng tồn tại trong `crm-insights.service.ts`: `csat` bọc
+    `AT TIME ZONE 'UTC'`, còn `retentionCohort`/`usage` so cột naive với tham số `Date`. Cả
+    hai đều ĐÚNG (container ghim `ENV TZ=UTC`, jest chặn chạy ngoài UTC), nhưng ai đó "sửa
+    cho giống nhau" theo chiều sai sẽ lệch 7h âm thầm. Ghi ở đây thay vì churn SQL.
+
+### 16.14 Số liệu kiểm tính tới thời điểm này
+
+| | Backend | Admin |
+|---|---|---|
+| Kiểm tĩnh | `tsc --noEmit` sạch | `tsc --noEmit` sạch, `npx next build` sạch |
+| Unit | 3450 (237 suite) | 975 (90 file) |
+| Integration (Postgres thật, testcontainers) | 153 (13 suite) | — |
+
+Hai lượt review độc lập đã chạy và đã vá xong: GĐ4/GĐ5 (2 CHẶN + 8 đáng sửa) và GĐ6/GĐ7
+(1 CHẶN + 11 đáng sửa + 4 góp ý). Cap "1 lượt review cho cả thay đổi" của CLAUDE.md đã dùng
+hết cho từng khối — không mở thêm lượt.
