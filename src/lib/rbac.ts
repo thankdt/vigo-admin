@@ -42,7 +42,7 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/cskh-activity': 'cskh-activity',
 };
 
-// 10 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
+// 11 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
 // 2026-07-23: thêm settings.kol + settings.agent (tách KOL_*/BOOKING_AGENT_* khỏi misc).
 export const SETTINGS_GROUP_FUNCTIONS = [
   'settings.app',
@@ -50,6 +50,9 @@ export const SETTINGS_GROUP_FUNCTIONS = [
   'settings.agent',
   'settings.pricing',
   'settings.dispatch',
+  // 18/08: nhóm riêng cho luồng "khách chọn tài xế" — công tắc, hạn mức chống quấy
+  // rối và hạn mức tra SĐT trước đó nằm rải ở dispatch/driver, mỗi lần chỉnh phải đi tìm.
+  'settings.pick-driver',
   'settings.driver',
   'settings.growth',
   'settings.cancel',

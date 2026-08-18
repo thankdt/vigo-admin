@@ -22,10 +22,10 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 29 menu + 10 settings = 39 unique keys', () => {
+  it('allFunctionKeys = 29 menu + 11 settings = 40 unique keys', () => {
     const keys = allFunctionKeys();
-    expect(keys).toHaveLength(39); // 2026-08-11: +driver-penalties
-    expect(new Set(keys).size).toBe(39);
+    expect(keys).toHaveLength(40); // 18/08: +settings.pick-driver // 2026-08-11: +driver-penalties
+    expect(new Set(keys).size).toBe(40);
   });
 });
 
