@@ -67,10 +67,17 @@ describe('/crm-insights', () => {
     expect(await screen.findByTestId('crm-csat')).toHaveTextContent('4.50');
   });
 
-  it('lỗi API hiện chữ lỗi', async () => {
+  /**
+   * 🚨 MỘT endpoint hỏng KHÔNG được xoá trắng ba khối còn lại: bốn khối là bốn câu hỏi độc
+   * lập. `Promise.all` biến một lỗi cục bộ thành "cả màn hình hỏng" và người dùng mất luôn
+   * số liệu đang chạy tốt.
+   */
+  it('một endpoint hỏng: báo lỗi NHƯNG các khối khác vẫn hiện', async () => {
     getCrmRetention.mockRejectedValueOnce(new Error('toang'));
     render(<CrmInsightsPage />);
-    expect(await screen.findByText(/Không tải được số liệu/)).toBeInTheDocument();
+    expect(await screen.findByText(/Một phần số liệu không tải được/)).toBeInTheDocument();
+    // Khối "khách quay lại" nuôi bằng getCrmTripFrequency — endpoint đó vẫn tốt.
+    expect(await screen.findByTestId('crm-freq')).toBeInTheDocument();
   });
 
   /** Khoảng ngày mặc định phải là NGÀY VN, độc lập múi giờ máy admin (CLAUDE.md). */
@@ -85,5 +92,37 @@ describe('/crm-insights', () => {
     } finally {
       process.env.TZ = old;
     }
+  });
+});
+
+describe('/crm-insights — bảng cohort không được nói dối', () => {
+  /**
+   * 🚨 Tháng đang chạy dở LUÔN bị cắt cụt: khách đi chuyến đầu ngày 17 thì gần như chắc chắn
+   * chưa kịp quay lại vào ngày 18 ⇒ tỉ lệ ~0–3%. Không đánh dấu thì người đọc kết luận "giữ
+   * chân sập" và đi ra quyết định (đổ tiền khuyến mại, đổi chiến dịch) trên artefact của lịch.
+   */
+  it('đánh dấu tháng VN hiện tại là "chưa đủ kỳ quan sát"', async () => {
+    const thisMonthVn = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 7);
+    getCrmRetention.mockResolvedValue([
+      { cohortMonth: '2026-07', customers: 100, returned: 15, returned3Plus: 3 },
+      { cohortMonth: thisMonthVn, customers: 40, returned: 1, returned3Plus: 0 },
+    ]);
+    render(<CrmInsightsPage />);
+    const rows = await screen.findAllByTestId('crm-retention-row');
+    expect(rows).toHaveLength(2);
+    expect(rows[1]).toHaveTextContent('chưa đủ kỳ quan sát');
+    // Tháng đã đóng thì KHÔNG được dán nhãn — dán tất là nhãn mất nghĩa.
+    expect(rows[0]).not.toHaveTextContent('chưa đủ kỳ quan sát');
+  });
+
+  /**
+   * Khoảng ngày CHỌN cohort, còn cột "quay lại" đếm TOÀN THỜI GIAN. Card ngay trên có chữ
+   * "(toàn thời gian)" còn card này thì không — tương phản đó khiến người đọc tin là trong-kỳ.
+   */
+  it('nói rõ cột quay lại là toàn thời gian, không phải trong kỳ', async () => {
+    render(<CrmInsightsPage />);
+    await screen.findAllByTestId('crm-retention-row');
+    expect(screen.getByText(/mọi thời điểm/)).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Quay lại.*toàn thời gian/ })).toBeInTheDocument();
   });
 });

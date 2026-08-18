@@ -32,6 +32,8 @@ import {
 const todayVn = (): string => new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
 const daysAgoVn = (n: number): string =>
   new Date(Date.now() + 7 * 3600_000 - n * 86400_000).toISOString().slice(0, 10);
+/** Tháng VN hiện tại dạng `YYYY-MM` — khớp `cohortMonth` mà backend gom theo giờ VN. */
+const monthVn = (): string => todayVn().slice(0, 7);
 
 /**
  * Insights CRM (GĐ7).
@@ -41,6 +43,7 @@ const daysAgoVn = (n: number): string =>
  * thành đi-lần-hai — bài toán số 1, và rẻ hơn nhiều so với bộ máy phân khúc + chiến dịch.
  */
 export default function CrmInsightsPage() {
+  const currentMonthVn = monthVn();
   const [from, setFrom] = React.useState(daysAgoVn(180));
   const [to, setTo] = React.useState(todayVn());
   const [retention, setRetention] = React.useState<CrmRetentionRow[]>([]);
@@ -57,17 +60,28 @@ export default function CrmInsightsPage() {
       setLoading(true);
       setFailed(false);
       try {
-        const [r, c, s, f] = await Promise.all([
+        /**
+         * `allSettled` chứ KHÔNG phải `all`: bốn khối là bốn câu hỏi độc lập, một cái 500
+         * (vd bảng đánh giá rỗng bất thường) không được xoá trắng ba cái còn lại. `all` biến
+         * một lỗi cục bộ thành "cả màn hình hỏng", và người dùng mất luôn số liệu đang chạy tốt.
+         */
+        const [r, c, s, f] = await Promise.allSettled([
           getCrmRetention(from, to),
           getCrmCallReasons(from, to),
           getCrmCsat(from, to),
           getCrmTripFrequency(),
         ]);
         if (cancelled) return;
-        setRetention(r);
-        setReasons(c);
-        setCsat(s);
-        setFreq(f);
+        setRetention(r.status === 'fulfilled' ? r.value : []);
+        setReasons(c.status === 'fulfilled' ? c.value : []);
+        setCsat(s.status === 'fulfilled' ? s.value : null);
+        setFreq(f.status === 'fulfilled' ? f.value : []);
+
+        const firstError = [r, c, s, f].find((x) => x.status === 'rejected');
+        if (firstError && firstError.status === 'rejected') {
+          setFailed(true);
+          toastApiError(firstError.reason, 'Một phần số liệu không tải được');
+        }
       } catch (e) {
         if (cancelled) return;
         setFailed(true);
@@ -105,7 +119,11 @@ export default function CrmInsightsPage() {
         </CardContent>
       </Card>
 
-      {failed ? <p className="text-sm text-destructive">Không tải được số liệu.</p> : null}
+      {failed ? (
+        <p className="text-sm text-destructive">
+          Một phần số liệu không tải được — các khối bên dưới có thể thiếu.
+        </p>
+      ) : null}
 
       <Card>
         <CardHeader className="pb-3">
@@ -144,15 +162,31 @@ export default function CrmInsightsPage() {
                 <TableRow>
                   <TableHead>Tháng</TableHead>
                   <TableHead>Khách mới</TableHead>
-                  <TableHead>Quay lại (≥2)</TableHead>
+                  <TableHead>Quay lại (≥2, toàn thời gian)</TableHead>
                   <TableHead>Tỉ lệ quay lại</TableHead>
-                  <TableHead>Đi ≥3 lần</TableHead>
+                  <TableHead>Đi ≥3 lần (toàn thời gian)</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {retention.map((r) => (
                   <TableRow key={r.cohortMonth} data-testid="crm-retention-row">
-                    <TableCell>{r.cohortMonth}</TableCell>
+                    <TableCell>
+                      {r.cohortMonth}
+                      {/*
+                        🚨 Tháng đang chạy dở LUÔN bị cắt cụt: khách đi chuyến đầu ngày 17
+                        thì gần như chắc chắn chưa kịp quay lại vào ngày 18 ⇒ tỉ lệ ~0–3%.
+                        Không nói ra thì người đọc kết luận "giữ chân sập" và đi ra quyết
+                        định (đổ tiền khuyến mại, đổi chiến dịch) trên một artefact của lịch.
+                      */}
+                      {r.cohortMonth === currentMonthVn ? (
+                        <span
+                          className="ml-2 text-xs text-muted-foreground"
+                          data-testid="crm-cohort-immature"
+                        >
+                          (chưa đủ kỳ quan sát)
+                        </span>
+                      ) : null}
+                    </TableCell>
                     <TableCell>{r.customers}</TableCell>
                     <TableCell>{r.returned}</TableCell>
                     <TableCell>
@@ -164,6 +198,15 @@ export default function CrmInsightsPage() {
               </TableBody>
             </Table>
           )}
+          {/*
+            Khoảng ngày CHỌN COHORT (ai đi chuyến đầu trong kỳ), còn cột "quay lại" đếm chuyến
+            TOÀN THỜI GIAN. Card ngay trên có chữ "(toàn thời gian)" còn card này thì không —
+            tương phản đó khiến người đọc tin đây là số trong-kỳ.
+          */}
+          <p className="mt-2 text-xs text-muted-foreground">
+            Khoảng ngày ở trên chọn <b>tháng đi chuyến đầu</b>. Cột "quay lại" đếm chuyến của
+            khách đó ở <b>mọi thời điểm</b>, không giới hạn trong kỳ.
+          </p>
         </CardContent>
       </Card>
 

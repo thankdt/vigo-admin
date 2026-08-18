@@ -10,6 +10,7 @@ import { toastApiError } from '@/hooks/use-api-error-toast';
 import { useToast } from '@/hooks/use-toast';
 import {
   addCrmAccountMember,
+  removeCrmAccountMember,
   changeCrmAccountStage,
   createCrmAccount,
   getCrmAccount,
@@ -144,6 +145,7 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
   const [members, setMembers] = React.useState<CrmAccountMemberRow[]>([]);
   const [events, setEvents] = React.useState<CrmAccountEventRow[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const [failed, setFailed] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
   const [memberId, setMemberId] = React.useState('');
@@ -152,6 +154,7 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
 
   React.useEffect(() => {
     let cancelled = false;
+    setFailed(false);
     getCrmAccount(accountId)
       .then((d) => {
         if (cancelled) return;
@@ -159,7 +162,11 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
         setMembers(d.members);
         setEvents(d.events);
       })
-      .catch((e) => !cancelled && toastApiError(e, 'Không tải được hồ sơ công ty'))
+      .catch((e) => {
+        if (cancelled) return;
+        setFailed(true);
+        toastApiError(e, 'Không tải được hồ sơ công ty');
+      })
       .finally(() => !cancelled && setLoading(false));
     return () => {
       cancelled = true;
@@ -179,7 +186,23 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
     }
   };
 
-  if (loading || !account) return <p className="mt-2 text-xs text-muted-foreground">Đang tải…</p>;
+  if (loading) return <p className="mt-2 text-xs text-muted-foreground">Đang tải…</p>;
+  /**
+   * 🚨 Nhánh lỗi RIÊNG, không gộp vào "Đang tải…".
+   *
+   * Bản đầu là `if (loading || !account)`: khi API hỏng thì `loading=false` nhưng `account`
+   * vẫn null ⇒ điều kiện vẫn đúng ⇒ khối này đứng ở "Đang tải…" MÃI MÃI. Toast thì
+   * `TOAST_LIMIT = 1` và tự tắt. Admin bấm "Chi tiết", quay 30 giây, đi báo "hệ thống treo".
+   * Trường hợp 403 (bị rút quyền giữa chừng) cũng ra đúng cái spinner đó — người dùng không
+   * bao giờ biết đó là vấn đề quyền. Danh sách ở cấp trên đã có state `failed`; khối con quên.
+   */
+  if (failed || !account) {
+    return (
+      <p className="mt-2 text-xs text-destructive" data-testid="crm-account-detail-failed">
+        Không tải được hồ sơ công ty. Có thể do mất quyền truy cập — thử tải lại trang.
+      </p>
+    );
+  }
 
   // Nút giai đoạn suy từ stage của CHÍNH hồ sơ này (mirror bảng BE), không từ bộ lọc.
   const next = ACCOUNT_ALLOWED_STAGE[account.stage] ?? [];
@@ -206,6 +229,15 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
       <div className="flex flex-wrap items-end gap-2">
         <div className="space-y-1">
           <Label htmlFor={`disc-${account.id}`}>Chiết khấu (%)</Label>
+          {/*
+            In giá trị hiện hành thành CHỮ RIÊNG, không chỉ để ở placeholder: placeholder
+            trông y hệt ô rỗng, nên người dùng tưởng "chưa set chiết khấu" và gõ đè lên một
+            điều khoản đã đàm phán.
+          */}
+          <p className="text-xs text-muted-foreground" data-testid="crm-account-discount-now">
+            Hiện tại:{' '}
+            <b>{account.discountPercent ? `${account.discountPercent}%` : 'chưa đặt'}</b>
+          </p>
           <Input
             id={`disc-${account.id}`}
             className="w-[120px]"
@@ -236,8 +268,34 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
             <li className="text-muted-foreground">Chưa gán nhân viên nào.</li>
           ) : (
             members.map((m) => (
-              <li key={m.id} data-testid="crm-account-member">
-                {m.fullName ?? 'Không rõ tên'} · {m.phone ?? '—'}
+              <li key={m.id} data-testid="crm-account-member" className="flex items-center gap-2">
+                <span className={m.removedAt ? 'text-muted-foreground line-through' : ''}>
+                  {m.fullName ?? 'Không rõ tên'} · {m.phone ?? '—'}
+                </span>
+                {m.removedAt ? (
+                  <span className="text-muted-foreground">(đã gỡ)</span>
+                ) : (
+                  /*
+                    🚨 Không có nút này thì gán nhầm là KẸT VĨNH VIỄN: user bị UNIQUE khoá vào
+                    công ty sai, gán sang công ty đúng thì API trả "đã thuộc công ty khác", mà
+                    đường gỡ chỉ có ở API. Lối thoát duy nhất là gọi API tay hoặc sửa DB.
+                  */
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-6 px-2 text-xs"
+                    disabled={busy}
+                    aria-label={`Gỡ ${m.fullName ?? m.userId}`}
+                    onClick={() =>
+                      run(
+                        () => removeCrmAccountMember(account.id, m.id),
+                        'Không gỡ được nhân viên',
+                      )
+                    }
+                  >
+                    Gỡ
+                  </Button>
+                )}
               </li>
             ))
           )}
@@ -288,7 +346,8 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
         </Button>
         {usage ? (
           <p className="text-xs" data-testid="crm-account-usage">
-            {usage.trips} chuyến · {Number(usage.revenue).toLocaleString('vi-VN')}đ
+            {usage.trips} chuyến ·{' '}
+            <b>{Number(usage.revenue).toLocaleString('vi-VN')}đ</b> tiền khách trả (gồm VAT)
           </p>
         ) : null}
       </div>

@@ -12,6 +12,7 @@ const changeCrmAccountStage = vi.fn();
 const updateCrmAccountTerms = vi.fn();
 const addCrmAccountMember = vi.fn();
 const getCrmAccountUsage = vi.fn();
+const removeCrmAccountMember = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -24,6 +25,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     updateCrmAccountTerms: (...a: any[]) => updateCrmAccountTerms(...a),
     addCrmAccountMember: (...a: any[]) => addCrmAccountMember(...a),
     getCrmAccountUsage: (...a: any[]) => getCrmAccountUsage(...a),
+    removeCrmAccountMember: (...a: any[]) => removeCrmAccountMember(...a),
   };
 });
 
@@ -50,10 +52,13 @@ beforeEach(() => {
   getCrmAccounts.mockResolvedValue([mkAcc()]);
   getCrmAccount.mockResolvedValue({
     account: mkAcc(),
-    members: [{ id: 'm1', userId: 'u1', note: null, fullName: 'Nhân viên A', phone: '0911' }],
+    members: [
+      { id: 'm1', userId: 'u1', note: null, fullName: 'Nhân viên A', phone: '09*****78', removedAt: null },
+    ],
     events: [{ id: 'e1', type: 'CREATED', fromStage: null, toStage: 'LEAD', note: null, createdAt: '2026-08-18T02:00:00Z' }],
   });
   getCrmAccountUsage.mockResolvedValue({ trips: 12, revenue: 3600000, from: 'x', to: 'y' });
+  removeCrmAccountMember.mockResolvedValue({});
 });
 
 describe('/crm-accounts', () => {
@@ -121,5 +126,93 @@ describe('/crm-accounts', () => {
     getCrmAccounts.mockRejectedValueOnce(new Error('toang'));
     render(<CrmAccountsPage />);
     expect(await screen.findByText(/Không tải được danh sách công ty/)).toBeInTheDocument();
+  });
+});
+
+describe('/crm-accounts — hỏng thì NÓI hỏng, đừng quay mãi', () => {
+  /**
+   * 🚨 Bản đầu là `if (loading || !account)`: API hỏng thì `loading=false` nhưng `account`
+   * vẫn null ⇒ khối chi tiết đứng ở "Đang tải…" MÃI MÃI, toast thì tự tắt. Admin quay 30
+   * giây rồi đi báo "hệ thống treo". Ca 403 (bị rút quyền) cũng ra đúng cái spinner đó.
+   */
+  it('lỗi tải hồ sơ -> hiện chữ lỗi, KHÔNG kẹt ở "Đang tải…"', async () => {
+    getCrmAccount.mockRejectedValue(new Error('toang'));
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    expect(await screen.findByTestId('crm-account-detail-failed')).toBeInTheDocument();
+    expect(screen.queryByText('Đang tải…')).toBeNull();
+  });
+
+  it('403 cũng nói được là vấn đề quyền', async () => {
+    getCrmAccount.mockRejectedValue({ errorCode: 'AUTH_003' });
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    expect(await screen.findByTestId('crm-account-detail-failed')).toHaveTextContent(/quyền/);
+  });
+});
+
+describe('/crm-accounts — gỡ nhân viên gán nhầm', () => {
+  /**
+   * 🚨 Không có nút này thì gán nhầm UUID là KẸT VĨNH VIỄN: user bị UNIQUE khoá vào công ty
+   * sai, gán sang công ty đúng thì API trả "đã thuộc công ty khác", mà đường gỡ chỉ có ở
+   * API. Lối thoát duy nhất là gọi API tay hoặc sửa DB.
+   */
+  it('mỗi nhân viên có nút Gỡ, bấm thì gọi đúng API', async () => {
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await screen.findByTestId('crm-account-member');
+    await userEvent.click(screen.getByRole('button', { name: /Gỡ Nhân viên A/ }));
+    await waitFor(() => expect(removeCrmAccountMember).toHaveBeenCalledWith('a1', 'm1'));
+  });
+
+  /** Người đã gỡ vẫn HIỆN (xoá mềm) — để báo cáo kỳ cũ giải thích được, nhưng không gỡ lại. */
+  it('người đã gỡ hiện gạch ngang và KHÔNG còn nút Gỡ', async () => {
+    getCrmAccount.mockResolvedValue({
+      account: mkAcc(),
+      members: [
+        { id: 'm1', userId: 'u1', note: null, fullName: 'Nhân viên A', phone: '09*****78', removedAt: '2026-08-18T02:00:00Z' },
+      ],
+      events: [],
+    });
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    expect(await screen.findByTestId('crm-account-member')).toHaveTextContent('đã gỡ');
+    expect(screen.queryByRole('button', { name: /^Gỡ / })).toBeNull();
+  });
+});
+
+describe('/crm-accounts — điều khoản giá không được trông như ô rỗng', () => {
+  /** Placeholder trông y hệt ô rỗng ⇒ người dùng tưởng "chưa set" và gõ đè điều khoản đã đàm phán. */
+  it('in chiết khấu hiện hành thành CHỮ, không chỉ để ở placeholder', async () => {
+    getCrmAccount.mockResolvedValue({
+      account: mkAcc({ discountPercent: '15.00' }),
+      members: [],
+      events: [],
+    });
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    expect(await screen.findByTestId('crm-account-discount-now')).toHaveTextContent('15.00%');
+  });
+
+  it('chưa đặt chiết khấu thì nói "chưa đặt", không để trống', async () => {
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    expect(await screen.findByTestId('crm-account-discount-now')).toHaveTextContent('chưa đặt');
+  });
+});
+
+describe('/crm-accounts — số tiền phải nói rõ là tiền gì', () => {
+  /**
+   * Backend đổi sang `SUM(finalPrice)` (tiền khách trả, gồm VAT) thay vì `SUM(price)`
+   * (subtotal trước khuyến mại/VAT). Con số này đi thẳng vào đối soát công nợ nên nhãn phải
+   * nói rõ, nếu không kế toán vẫn phải đoán nó là số nào.
+   */
+  it('nhãn nói rõ "tiền khách trả (gồm VAT)"', async () => {
+    render(<CrmAccountsPage />);
+    await userEvent.click((await screen.findAllByRole('button', { name: 'Chi tiết' }))[0]);
+    await userEvent.click(await screen.findByRole('button', { name: /Xem chuyến 30 ngày/ }));
+    expect(await screen.findByTestId('crm-account-usage')).toHaveTextContent(
+      /tiền khách trả \(gồm VAT\)/,
+    );
   });
 });

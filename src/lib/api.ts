@@ -4109,7 +4109,10 @@ export async function removeCrmOptout(userId: string): Promise<{ ok: true }> {
 // CRM GĐ6 — Khách doanh nghiệp (pipeline B2B) · GĐ7 — Insights
 //
 // GĐ6 gate `crm-accounts` (điều khoản giá là dữ liệu nhạy cảm, §7).
-// GĐ7 gate `crm-segments` — cùng nhóm người, cùng tính chất số liệu tổng hợp.
+// GĐ7 gate `crm-insights` — function RIÊNG. KHÔNG dùng chung `crm-segments`: repo có bất
+// biến "function key của mục menu = href bỏ dấu /" (§2.1) và test đồng bộ FE khoá nó.
+// (Sửa 2026-08-18: dòng này từng ghi `crm-segments`, sót lại từ trước khi tách function.
+//  Ai đọc phải câu cũ sẽ đi cấp nhầm quyền — hoặc tệ hơn, nới `crm-segments` cho cả nhóm.)
 // ─────────────────────────────────────────────────────────────────────
 
 export type CrmAccountStage = 'LEAD' | 'NEGOTIATING' | 'SIGNED' | 'ACTIVE' | 'CHURNED';
@@ -4136,7 +4139,10 @@ export type CrmAccountMemberRow = {
   userId: string;
   note: string | null;
   fullName: string | null;
+  /** ĐÃ CHE ở backend. Muốn số đầy đủ thì đi qua `reveal-phone` và để lại dấu vết (GĐ2). */
   phone: string | null;
+  /** Có giá trị = đã gỡ khỏi công ty. Dòng vẫn hiện để báo cáo kỳ cũ giải thích được. */
+  removedAt: string | null;
 };
 
 export type CrmAccountEventRow = {
