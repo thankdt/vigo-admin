@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
 // ĐÁNH RƠI khi giải xung đột merge (nhánh GĐ1 bỏ khối gọi-khách khỏi cùng dòng import),
@@ -101,6 +101,11 @@ type FetchArgs = {
    * ignoreDuringBuilds — nên chỗ đó phải tự soi bằng mắt.
    */
   testFilter: TestTripFilter | 'ALL';
+  /**
+   * Ô "Tìm theo địa chỉ": chuỗi NGUYÊN VĂN admin gõ. '' = không lọc.
+   * Bắt buộc (không `?:`) vì cùng lý do với `testFilter` ngay trên.
+   */
+  address: string;
 };
 
 const tabKeys: TabKey[] = [
@@ -404,6 +409,10 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [searchTerm, setSearchTerm] = React.useState('');
   // Tìm theo ID chuyến — BE prefix-match nên admin paste full UUID hay 8 ký tự đầu đều ra.
   const [bookingIdTerm, setBookingIdTerm] = React.useState('');
+  // Tìm theo ĐỊA CHỈ điểm đón HOẶC điểm trả. BE bỏ dấu và tách token theo khoảng trắng
+  // (mọi token phải khớp cùng một điểm), nên gõ "da nang" ra "Đà Nẵng" và
+  // "nguyen van cu da nang" ra "Nguyễn Văn Cừ, Đà Nẵng".
+  const [addressTerm, setAddressTerm] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
   // Outer trip-type tab. Default 'all' = same landing view as before (no scheduled filter).
   const [tripKind, setTripKind] = React.useState<TripKind>('all');
@@ -446,7 +455,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -463,7 +472,10 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
         processingState = 'claimed';
       }
 
-      const params: any = {
+      // KHÔNG dùng `any` ở đây: `any` làm tsc thôi kiểm tên field, nên một typo kiểu
+      // `params.adress` sẽ compile sạch, `getBookings` bỏ qua field lạ, và ô lọc im lặng
+      // không lọc gì. Buộc kiểu theo đúng tham số của getBookings để typo là lỗi biên dịch.
+      const params: NonNullable<Parameters<typeof getBookings>[0]> = {
         page, limit, status, processingState,
         // Sắp xếp ở server → áp cho toàn bộ dữ liệu của tab, không chỉ trang đang xem.
         sortBy: sort.key,
@@ -492,6 +504,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       // Chuyến test: 'ALL' bỏ hẳn param (mặc định backend cũng là hiện cả hai) — gửi
       // thừa không sai, nhưng bỏ hẳn thì màn này vẫn chạy cả khi backend chưa deploy.
       if (testFilter !== 'ALL') params.testFilter = testFilter;
+      // Địa chỉ: gửi nguyên văn, BE lo bỏ dấu. Rỗng → bỏ hẳn param.
+      if (address) params.address = address;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -511,17 +525,23 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
 
   // Reload with the CURRENT filter/sort/trip-kind state — used by every imperative refetch
   // (status update, claim, reassign, void, create). Keeps all 5 in sync with the outer tab.
+  //
+  // ⚠️ MỌI state lọc phải có trong deps dưới đây. Thiếu một cái (vd `addressTerm`) thì
+  // `reload` đóng băng giá trị cũ: admin đang lọc "Đà Nẵng", đổi trạng thái 1 chuyến →
+  // reload bắn request KHÔNG có bộ lọc đó → bảng nhảy về danh sách đầy đủ. Trông y hệt
+  // "bộ lọc tự tắt", không lỗi, không log. eslint exhaustive-deps KHÔNG chặn được vì
+  // next.config bật ignoreDuringBuilds.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo, testFilter]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind,  dateFrom, dateTo, testFilter]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -574,6 +594,11 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const handleBookingIdChange = (value: string) => {
     setBookingIdTerm(value);
     setCurrentPage(1);
+  }
+
+  const handleAddressChange = (value: string) => {
+    setAddressTerm(value);
+    setCurrentPage(1); // như mọi filter khác: trang 5 của tập nhỏ hơn là bảng trắng.
   }
 
   const openDetails = (bookingId: string) => {
@@ -742,6 +767,17 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               placeholder="Tìm ID chuyến (8 ký tự đầu OK)"
               value={bookingIdTerm}
               onChange={(e) => handleBookingIdChange(e.target.value)}
+              className="w-[240px] pl-8"
+            />
+          </div>
+          {/* Tìm theo địa chỉ ĐÓN hoặc TRẢ. BE bỏ dấu nên gõ không dấu vẫn ra; tách token
+              theo khoảng trắng và mọi token phải khớp CÙNG một điểm (đón hoặc trả). */}
+          <div className='relative'>
+            <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Tìm địa chỉ đón/trả (không dấu OK)"
+              value={addressTerm}
+              onChange={(e) => handleAddressChange(e.target.value)}
               className="w-[240px] pl-8"
             />
           </div>
