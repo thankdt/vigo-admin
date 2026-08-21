@@ -784,6 +784,11 @@ export async function getBookings(params: {
   // sửa nếu gạt nhầm). Caller truyền undefined thay vì 'all' để param không bị
   // gửi thừa, và để an toàn khi backend chưa deploy.
   testFilter?: TestTripFilter;
+  // Ô "Tìm theo địa chỉ" của danh sách chuyến: BE khớp điểm ĐÓN hoặc điểm TRẢ, BỎ DẤU
+  // (gõ "da nang" ra "Đà Nẵng"). Gửi NGUYÊN VĂN chuỗi admin gõ — việc bỏ dấu/tách token
+  // do BE làm, để hai vế so khớp dùng chung một bảng map. BE dùng POSITION nên `%`/`_`
+  // là ký tự thường, không phải wildcard. undefined/rỗng = không lọc.
+  address?: string;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -805,6 +810,7 @@ export async function getBookings(params: {
     ...(params.callBefore && { callBefore: params.callBefore }),
     ...(params.callAfter && { callAfter: params.callAfter }),
     ...(params.testFilter && { testFilter: params.testFilter }),
+    ...(params.address && { address: params.address }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
