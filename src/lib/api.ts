@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -801,6 +801,10 @@ export async function getBookings(params: {
   // do BE làm, để hai vế so khớp dùng chung một bảng map. BE dùng POSITION nên `%`/`_`
   // là ký tự thường, không phải wildcard. undefined/rỗng = không lọc.
   address?: string;
+  // Cờ "chuyến trùng": 'exclude' = ẩn chuyến trùng, 'only' = chỉ chuyến trùng.
+  // undefined = hiện cả hai (mặc định — cùng lý do với `testFilter`: admin phải thấy
+  // chuyến mình đánh dấu để sửa nếu gạt nhầm), và để an toàn khi backend chưa deploy.
+  duplicateFilter?: DuplicateTripFilter;
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -827,6 +831,7 @@ export async function getBookings(params: {
     ...(params.claimed && { claimed: 'true' }),
     ...(params.testFilter && { testFilter: params.testFilter }),
     ...(params.address && { address: params.address }),
+    ...(params.duplicateFilter && { duplicateFilter: params.duplicateFilter }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
@@ -889,7 +894,43 @@ export async function setBookingTestFlag(
 }
 
 /**
- * Ghi ĐÈ memo vận hành của admin cho một chuyến (ô nhập ở cột "Ghi chú" danh sách chuyến).
+ * Gạt công tắc "chuyến trùng" — nhãn vận hành cho chuyến khách đặt lặp, CSKH khỏi gọi lại.
+ *
+ * ⚠️ KHÔNG cùng hệ quả với `setBookingTestFlag` dù cơ chế giống hệt. Cờ này KHÔNG đụng
+ * tiền, KHÔNG loại chuyến khỏi báo cáo/hoá đơn/đối soát, KHÔNG đụng hàng đợi CSKH — chuyến
+ * trùng vẫn nằm trong /crm-queue. Backend chỉ ghi cột + để lại vết trong adminNote.
+ *
+ * Trả về payload GỌN `{ id, isDuplicateTrip }` — CỐ Ý không phải cả Booking (giống
+ * `setBookingTestFlag`): response không kèm quan hệ customer/driver, caller phải vá đúng
+ * field vào state chứ đừng thay cả object (sẽ làm trắng dialog chi tiết).
+ *
+ * Quyền: endpoint yêu cầu function `bookings`. User CSKH tuyến đầu (chỉ có `crm-queue`) mở
+ * dialog từ /crm-queue sẽ nhận 403 — ĐÃ BIẾT và chấp nhận, y hệt công tắc chuyến test.
+ */
+export async function setBookingDuplicateFlag(
+  id: string,
+  isDuplicate: boolean,
+): Promise<{ id: string; isDuplicateTrip: boolean }> {
+  const response = await fetchWithAuth(`/bookings/admin/${id}/duplicate-flag`, {
+    method: 'POST',
+    body: JSON.stringify({ isDuplicate }),
+  });
+  return unwrap<{ id: string; isDuplicateTrip: boolean }>(response);
+}
+
+/**
+ * [DISABLED 2026-08-24] KHÔNG CÒN CALLER. Cột "Ghi chú" (ô nhập `adminMemo`) đã bị gỡ khỏi
+ * danh sách chuyến ngay trong ngày nó lên prod — vận hành thấy nó chiếm chỗ của cột
+ * "Gọi trước HT" quan trọng hơn.
+ *
+ * GIỮ LẠI hàm này (và cột DB + endpoint `PUT /bookings/admin/:id/memo`) chứ không xoá:
+ * dữ liệu admin đã gõ trong ngày vẫn nằm nguyên trong `booking.adminMemo`, và nếu dựng
+ * lại ô nhập ở đâu đó thì chỉ cần gọi lại. Xoá hàm là mất luôn tài liệu về contract.
+ *
+ * ⚠️ Muốn dùng lại thì phải dựng lại CẢ chỗ hiển thị — hiện KHÔNG có UI nào đọc
+ * `booking.adminMemo`, nên gọi hàm này sẽ ghi vào một cột không ai nhìn thấy.
+ *
+ * Ghi ĐÈ memo vận hành của admin cho một chuyến.
  *
  * `memo` là chuỗi BẮT BUỘC — backend cố ý không nhận `null`/thiếu field: endpoint này ghi
  * đè, nên một request `{}` do lỗi client sẽ xoá trắng ghi chú người khác vừa gõ. Muốn xoá

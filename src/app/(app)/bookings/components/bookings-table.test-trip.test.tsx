@@ -16,6 +16,7 @@ vi.mock('@/lib/api', () => ({
   getBookingCustomerCallHistory: vi.fn(async () => []),
   recordBookingCustomerCall: vi.fn(),
   setBookingTestFlag: vi.fn(),
+  setBookingDuplicateFlag: vi.fn(),
 }));
 
 const baseBooking: Booking = {

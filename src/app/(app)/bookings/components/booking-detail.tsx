@@ -20,8 +20,8 @@ import { Loader2, Car, User, Clock, Zap, CopyPlus, Store } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag } from '@/lib/api';
-import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, TestTripBadge } from './booking-shared';
+import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag } from '@/lib/api';
+import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import type {} from '@/lib/types';
 import { formatScheduleWindow } from './schedule-window';
@@ -359,7 +359,7 @@ export function CustomerCallBadge({ status }: { status?: CustomerCallStatus | nu
 // unit-tested standalone, same pattern as PriceBreakdownCard above: lets a
 // test mock getBookingDetails() and assert on badges (e.g.
 // switchedToWholeCar) without mounting the whole BookingsTable.
-export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded, onTestFlagChanged }: {
+export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded, onTestFlagChanged, onDuplicateFlagChanged }: {
   bookingId: string,
   onClose: () => void,
   // Bỏ trống (vd trong unit test) → không hiện nút "Nhân bản chuyến".
@@ -370,6 +370,9 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
   // bảng cập nhật. Dialog có state RIÊNG, không có callback này thì hàng ngoài
   // đứng im tới khi F5. Optional vì test render component này trần.
   onTestFlagChanged?: () => void,
+  // Gạt công tắc "chuyến trùng" xong → báo danh sách refetch (badge TRÙNG + bộ lọc ngoài
+  // bảng). Cùng lý do với onTestFlagChanged: dialog có state RIÊNG.
+  onDuplicateFlagChanged?: () => void,
 }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
@@ -389,6 +392,13 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
   const [testSaving, setTestSaving] = React.useState(false);
   // Giá trị đang chờ xác nhận (chỉ dùng cho chuyến ĐÃ hoàn thành). null = không hỏi gì.
   const [pendingTestFlag, setPendingTestFlag] = React.useState<boolean | null>(null);
+
+  // Công tắc "chuyến trùng". State RIÊNG chứ không dùng chung `testSaving`: dùng chung thì
+  // gạt một cờ sẽ khoá luôn cờ kia, và nếu một request treo thì cả hai công tắc chết.
+  //
+  // KHÔNG có `pendingDuplicateFlag`: cờ này không đụng tiền lẫn báo cáo nên chuyến đã
+  // COMPLETED cũng không cần hỏi xác nhận — gạt sai chỉ sai một cái nhãn, gạt lại là xong.
+  const [duplicateSaving, setDuplicateSaving] = React.useState(false);
 
   React.useEffect(() => {
     // Phần phụ: lỗi thì dropdown rỗng, không chặn thao tác ghi nhận cuộc gọi.
@@ -479,6 +489,37 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
     }
   };
 
+  /**
+   * Gạt công tắc "chuyến trùng". Cùng khuôn lạc quan + revert với `applyTestFlag`, kể cả
+   * chi tiết dễ sai: revert về GIÁ TRỊ CŨ ĐÃ CHỤP chứ không `!next` (field optional, nên
+   * `!undefined === true` sẽ bịa ra một chuyến trùng).
+   *
+   * Không hỏi xác nhận ở bất kỳ trạng thái nào — xem ghi chú ở `duplicateSaving`.
+   */
+  const handleDuplicateToggle = async (next: boolean) => {
+    if (!booking) return;
+    const previous = booking.isDuplicateTrip;
+    setDuplicateSaving(true);
+    setBooking((prev) => (prev ? { ...prev, isDuplicateTrip: next } : prev));
+    try {
+      await setBookingDuplicateFlag(booking.id, next);
+      toast({
+        title: next ? 'Đã đánh dấu chuyến trùng' : 'Đã bỏ đánh dấu chuyến trùng',
+        description: next
+          ? 'CSKH không cần gọi lại chuyến này. Doanh thu và báo cáo KHÔNG đổi.'
+          : 'Chuyến trở lại bình thường.',
+      });
+      onDuplicateFlagChanged?.();
+    } catch (err: any) {
+      // Vá lại đúng object đang có, KHÔNG nuốt response của API: response chỉ có
+      // { id, isDuplicateTrip }, gán cả object vào state sẽ làm trắng dialog.
+      setBooking((prev) => (prev ? { ...prev, isDuplicateTrip: previous } : prev));
+      toast({ variant: 'destructive', title: 'Không lưu được', description: err.message });
+    } finally {
+      setDuplicateSaving(false);
+    }
+  };
+
   // Chuyến ĐÃ hoàn thành: tiền (ví tài xế, hoa hồng) đã chuyển rồi, cờ chỉ giấu chuyến
   // khỏi báo cáo. Hỏi xác nhận trước để admin biết mình đang làm gì.
   const handleTestToggle = (next: boolean) => {
@@ -540,6 +581,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
               <div className="flex items-center gap-2 flex-wrap">
                 {getStatusBadge(booking)}
                 {booking.isTestTrip && <TestTripBadge />}
+                {booking.isDuplicateTrip && <DuplicateTripBadge />}
                 {booking.serviceType && (
                   <Badge variant="outline" className="text-xs">
                     {serviceTypeMap[booking.serviceType] ?? booking.serviceType}
@@ -639,6 +681,35 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   </div>
                 </div>
               )}
+
+              {/* Công tắc "chuyến trùng" — nhãn VẬN HÀNH, khác hẳn công tắc "chuyến test".
+                  Thao tác giống nhau nên phần mô tả phải nói RÕ cái này KHÔNG làm gì: admin
+                  đọc lướt rất dễ tưởng nó cũng loại chuyến khỏi báo cáo.
+
+                  CỐ Ý nằm DƯỚI khối xác nhận `pendingTestFlag` chứ không kẹp vào giữa: khối
+                  đó là cảnh báo TIỀN của công tắc test, phải dính liền công tắc vừa bấm. Chen
+                  card này vào giữa thì cảnh báo "tiền KHÔNG được hoàn" trôi xuống dưới một
+                  card khác và đọc như thể là cảnh báo của "chuyến trùng" — cờ chẳng đụng tiền. */}
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="duplicate-trip-toggle" className="text-sm font-medium">
+                    Chuyến trùng
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Bật khi khách đặt lặp cùng một chuyến — CSKH khỏi gọi lại. Doanh thu, báo
+                    cáo và hoá đơn KHÔNG đổi; chuyến vẫn nằm trong hàng đợi gọi.
+                  </p>
+                </div>
+                <Switch
+                  id="duplicate-trip-toggle"
+                  // `=== true`: field optional, `checked={undefined}` biến Radix Switch thành
+                  // uncontrolled và công tắc kẹt cứng.
+                  checked={booking.isDuplicateTrip === true}
+                  disabled={duplicateSaving}
+                  onCheckedChange={(next) => void handleDuplicateToggle(next)}
+                  aria-label="Đánh dấu chuyến trùng"
+                />
+              </div>
 
               {/* Vi-now — customer used the 6-digit code flow instead of
                   going through dispatch. The journey differs enough that
@@ -781,18 +852,6 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 <Card className="p-3 space-y-1">
                   <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ghi chú của khách</div>
                   <p className="text-sm whitespace-pre-wrap">{booking.note}</p>
-                </Card>
-              )}
-
-              {/* Memo admin TỰ GÕ ở cột "Ghi chú" của danh sách chuyến (`adminMemo`). Chỉ ĐỌC
-                  ở đây — chỗ sửa là ô nhập ngoài bảng, để dialog không thành đường ghi thứ hai
-                  vào cùng một cột. Khác khối "Ghi chú nội bộ" ngay dưới: đó là log máy ghi. */}
-              {booking.adminMemo && (
-                <Card className="p-3 space-y-1 border-sky-300/60 bg-sky-50/50 dark:border-sky-900/50 dark:bg-sky-950/20">
-                  <div className="text-xs font-semibold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
-                    Ghi chú của admin · không lộ cho tài/khách
-                  </div>
-                  <p className="text-sm whitespace-pre-wrap">{booking.adminMemo}</p>
                 </Card>
               )}
 

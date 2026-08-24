@@ -92,3 +92,53 @@ export function TestTripBadge() {
     </Badge>
   );
 }
+
+/**
+ * Nhãn "chuyến trùng" — dùng CHUNG cho hàng danh sách (`BookingsTable`) và header dialog
+ * chi tiết (`BookingDetail`), để hai nơi không trôi dạt về màu/chữ.
+ *
+ * Xám đá (slate), cố ý KHÔNG trùng:
+ *  - bảng màu trạng thái (xanh/đỏ/hổ phách) — đây không phải một trạng thái chuyến;
+ *  - tím của {@link TestTripBadge} — hai cờ có hệ quả HOÀN TOÀN khác nhau và người đọc
+ *    bảng phải phân biệt được trong nửa giây. Chuyến TEST = "đừng tin số của chuyến này"
+ *    (đã bị loại khỏi mọi báo cáo). Chuyến TRÙNG = "số vẫn tính, chỉ là khỏi gọi lại".
+ *
+ * Chữ "TRÙNG" chứ không "NHÂN BẢN": menu dòng đã có "Nhân bản chuyến" (tạo chuyến mới từ
+ * chuyến cũ) — nghĩa gần như ngược lại.
+ */
+export function DuplicateTripBadge() {
+  return (
+    <Badge className="bg-slate-600 text-white hover:bg-slate-600 text-[10px] px-1.5 py-0">
+      ⧉ TRÙNG
+    </Badge>
+  );
+}
+
+/**
+ * Mốc thời gian NGẮN `dd/MM HH:mm` cho các ô trong bảng chuyến, LUÔN giờ VN (UTC+7)
+ * bất kể múi giờ máy admin — luật bắt buộc của repo.
+ *
+ * Ghép từ `formatToParts` chứ không `format()`: dữ liệu locale quyết định dấu phân
+ * cách (ICU của Node cho `vi-VN` ra `14-08`, trình duyệt ra `14/08`) nên chuỗi sẽ
+ * khác nhau giữa máy admin và test. Cùng cách làm với `formatVn` trong
+ * driver-commitment-badge.tsx, chỉ khác thứ tự (ngày trước, giờ sau) cho khớp
+ * convention của các cột trong bảng.
+ *
+ * Ngày rác từ API → `null` chứ không "Invalid Date": một dòng dữ liệu hỏng không
+ * được phép làm vỡ cả bảng.
+ */
+export function formatVnShort(value?: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const at = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${at('day')}/${at('month')} ${at('hour')}:${at('minute')}`;
+}

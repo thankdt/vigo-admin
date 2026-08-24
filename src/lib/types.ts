@@ -324,10 +324,14 @@ export type Booking = {
   // `adminNote` = LOG máy ghi, append-only (đổi trạng thái kèm note, gạt cờ chuyến
   // test, void). Chỉ ĐỌC, hiện ở dialog chi tiết chuyến.
   adminNote?: string | null;
-  // `adminMemo` = memo admin TỰ GÕ ở cột "Ghi chú" của danh sách chuyến, GHI ĐÈ được
-  // (PUT /bookings/admin/:id/memo). Cũng select:false ở backend. Đừng lẫn với
-  // `adminNote` phía trên và đừng ghi memo vào `note` (note đi ra app tài xế).
+  // `adminMemo` = memo admin TỰ GÕ, GHI ĐÈ được (PUT /bookings/admin/:id/memo). Cũng
+  // select:false ở backend. Đừng lẫn với `adminNote` phía trên và đừng ghi memo vào
+  // `note` (note đi ra app tài xế).
   // `undefined` = backend chưa deploy cột này; `null` = chưa/đã xoá memo.
+  //
+  // [DISABLED 2026-08-24] KHÔNG còn UI nào đọc/ghi field này — ô nhập ở cột "Ghi chú"
+  // của danh sách chuyến đã bị gỡ (nhường chỗ cho cột "Gọi trước HT"). Cột DB, endpoint
+  // và `updateBookingAdminMemo` vẫn còn; dữ liệu đã gõ không mất.
   adminMemo?: string | null;
   // Tên hành khách, index 0 = khách chính (khớp quy ước app khách + hợp đồng).
   // null cho rows cũ trước khi có cột.
@@ -403,6 +407,18 @@ export type Booking = {
   // `booking.isTestTrip &&` — KHÔNG dùng `=== false`: `undefined` và `false` phải
   // cùng nghĩa "chuyến thật", nếu không mọi chuyến cũ sẽ hiện sai.
   isTestTrip?: boolean;
+  // Chuyến bị khách ĐẶT LẶP — admin gạt công tắc ở dialog chi tiết để CSKH khỏi gọi lại.
+  //
+  // ⚠️ ĐỪNG suy ngữ nghĩa từ `isTestTrip` ngay trên. Đây là NHÃN VẬN HÀNH thuần: KHÔNG
+  // đụng tiền, KHÔNG loại chuyến khỏi báo cáo/hoá đơn/đối soát, KHÔNG đụng hàng đợi CSKH
+  // (/crm-queue vẫn liệt kê chuyến trùng như cũ). Chỉ đổi hiển thị + cho lọc ở bảng chuyến.
+  //
+  // Cũng đừng lẫn với nút "Nhân bản chuyến" ở menu dòng — nút đó TẠO chuyến mới từ chuyến
+  // cũ, nghĩa gần như ngược lại.
+  //
+  // Optional vì backend cũ chưa trả field. Luôn so `=== true` / `booking.isDuplicateTrip &&`
+  // — KHÔNG `=== false`: `undefined` và `false` phải cùng nghĩa "không trùng".
+  isDuplicateTrip?: boolean;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.
@@ -455,6 +471,10 @@ export type CustomerCallFilter = 'claimed' | 'called' | 'unreached' | 'uncalled'
 /** Giá trị filter "Chuyến test" ngoài danh sách chuyến đi. Không có 'all' — bộ lọc
  *  tắt được biểu diễn bằng `undefined`, để param không bị gửi thừa lên API. */
 export type TestTripFilter = 'exclude' | 'only';
+
+/** Giá trị filter "Chuyến trùng" ngoài danh sách chuyến đi. Không có 'all' — cùng quy ước
+ *  với {@link TestTripFilter}: bộ lọc tắt là `undefined` để param không bị gửi thừa. */
+export type DuplicateTripFilter = 'exclude' | 'only';
 
 /** Một dòng lịch sử gọi check của 1 chuyến (append-only, mới nhất trước). */
 export type BookingCustomerCallEvent = {

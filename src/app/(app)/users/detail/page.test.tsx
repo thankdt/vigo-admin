@@ -558,8 +558,12 @@ describe('/users/detail — khối Chỉ số & phân khúc (GĐ4)', () => {
     getCrmCustomerMetrics.mockResolvedValue(mkMetrics());
     render(<UserDetailPage />);
     expect(await screen.findByText('Đang hoạt động')).toBeInTheDocument();
-    expect(screen.getByText('2.500.000đ')).toBeInTheDocument();
-    expect(screen.getByText('5/3/4')).toBeInTheDocument();
+    // `findBy` cho CẢ BA chứ không `getBy` cho hai cái sau: thẻ chỉ số render dần, mốc đầu
+    // xuất hiện KHÔNG bảo đảm hai mốc kia đã có. Chạy riêng thì luôn kịp, nhưng khi cả bộ
+    // test nặng lên (đo được: đỏ ngẫu nhiên đúng ở dòng này sau khi thêm test bảng chuyến)
+    // thì `getBy` đồng bộ thua — đỏ ở đây là lỗi của cách chờ, không phải của trang.
+    expect(await screen.findByText('2.500.000đ')).toBeInTheDocument();
+    expect(await screen.findByText('5/3/4')).toBeInTheDocument();
   });
 
   /**
