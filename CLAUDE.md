@@ -136,3 +136,22 @@ Khuyến nghị khi thấy session đã kéo dài:
   trong `docs/` hoặc scratchpad) — đừng để thông tin sống duy nhất trong hội thoại.
 - Việc tra cứu / quét rộng → đẩy sang sub-agent, chỉ mang kết luận về session
   chính (cùng lý do với 0.5.g).
+
+Chốt cứng (làm 1 lần trên MỖI máy):
+- `/autocompact 250k` — cap context mỗi lượt ở 250k. Đo 08-2026: **68.6% hoá đơn
+  token là cache read** (gửi lại lịch sử), có session chạy trung bình 808k/lượt.
+  Cap này cắt riêng session đó ~3×. Setting nằm ở `~/.claude/settings.json`
+  (user-level, KHÔNG theo repo) nên mỗi người phải tự gõ một lần.
+
+Thói quen khi làm việc:
+- **1 việc = 1 session, xong thì `/clear`.** Đo được 223 lượt/181 phút chạy một
+  mạch — số lượt nhân context lên tuyến tính, không phải cộng.
+- **Chọn model theo phân loại 0.5.b**: nhóm CAO → Opus; cơ học/nhỏ (rename, sửa
+  copy, chạy test, đọc log, bump version) → Sonnet (`/model`). Mặc định mở session
+  bằng Sonnet, nâng lên Opus khi chạm vùng CAO.
+- **Không đổ file to vào context**: đọc bằng `sed -n 'a,bp'` / `grep -n`, đừng
+  `cat` cả file, đừng đọc full report. File handoff của sub-agent (0.5.g) phải
+  ≤ ~150 dòng và session chính chỉ đọc phần KẾT LUẬN. (Đo được 1 lần đọc file
+  review = 76.2k token — bằng 1/3 context của cả một lượt.)
+- **Lỗi build/test: đọc lỗi rồi mới vá**, đừng thử biến thể cùng một giả thuyết.
+  Vòng sửa-lỗi-thử-lại là kiểu đốt token âm thầm nhất.

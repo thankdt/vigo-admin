@@ -33,6 +33,7 @@ import {
   KeyRound,
   CheckCircle2,
   Download,
+  UserRound,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -46,6 +47,8 @@ import {
   type CompanyStats,
   type HtxDashboardRange,
 } from '@/lib/api';
+import Link from 'next/link';
+import { useAuth } from '@/lib/auth-context';
 import type { TransportCompany, Driver } from '@/lib/types';
 import { downloadXlsx } from '@/lib/csv';
 import { DRIVER_EXPORT_HEADER, driverExportRows } from './driver-export';
@@ -111,6 +114,9 @@ function StatCell({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 export function TransportCompaniesTable() {
+  // /users/detail gate bằng function `users` (isRouteAllowed -> topSegment '/users').
+  // Không có quyền mà vẫn hiện link thì bấm vào chỉ bị guard đá về /no-access — ẩn hẳn.
+  const { can } = useAuth();
   const [companies, setCompanies] = React.useState<TransportCompany[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -533,6 +539,16 @@ export function TransportCompaniesTable() {
                           {company.ownerUserId ? 'Đặt lại tài khoản chủ' : 'Gán chủ HTX'}
                           {company.ownerUserId && <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-green-600" />}
                         </DropdownMenuItem>
+                        {/* Chủ HTX rời khỏi mặc định của danh bạ khách (/users lọc role=USER)
+                            nên cần đường vào hồ sơ tài khoản từ đúng nhà của họ. */}
+                        {company.ownerUserId && can('users') && (
+                          <DropdownMenuItem asChild>
+                            <Link href={`/users/detail?id=${company.ownerUserId}`}>
+                              <UserRound className="mr-2 h-4 w-4" />
+                              Xem hồ sơ tài khoản chủ
+                            </Link>
+                          </DropdownMenuItem>
+                        )}
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
                           onSelect={() => setTimeout(() => setDeleteTarget(company), 0)}

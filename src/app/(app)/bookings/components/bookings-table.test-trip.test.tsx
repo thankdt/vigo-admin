@@ -1,7 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BookingDetail } from './bookings-table';
+// GĐ1 (CRM) đã tách BookingDetail + PriceBreakdownCard ra file riêng để /crm-queue dùng lại
+// mà không kéo nguyên module bookings-table (~1900 dòng) vào bundle. Import cũ
+// './bookings-table' chỉ còn re-export gián tiếp, nên trỏ thẳng vào file mới.
+import { BookingDetail } from './booking-detail';
 import { getBookingDetails, setBookingTestFlag } from '@/lib/api';
 import type { Booking } from '@/lib/types';
 

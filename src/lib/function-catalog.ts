@@ -1,5 +1,5 @@
 import { navItems } from './nav-items';
-import { functionForHref, SETTINGS_GROUP_FUNCTIONS } from './rbac';
+import { functionForHref, SETTINGS_GROUP_FUNCTIONS, SPECIAL_FUNCTIONS } from './rbac';
 import { CONFIG_GROUPS } from '@/app/(app)/settings/components/system-config-groups';
 
 // Danh mục function cho UI tick (role editor). Dựng từ FE mirror (nav-items +
@@ -19,6 +19,10 @@ export function buildFunctionCatalog(): FunctionGroup[] {
   return [
     { group: 'Chức năng (menu)', items: menu },
     { group: 'Cài đặt hệ thống', items: settings },
+    // 2026-08-18 (CRM GĐ3): nhóm thứ ba cho function KHÔNG gắn menu. Hai nhóm trên dựng từ
+    // navItems/CONFIG_GROUPS nên một function không có href sẽ không lọt vào đâu cả — và
+    // hệ quả thực tế là KHÔNG CẤP ĐƯỢC CHO AI (spec §7.1).
+    { group: 'Chức năng đặc biệt (không thuộc menu)', items: SPECIAL_FUNCTIONS },
   ];
 }
 
