@@ -4,6 +4,7 @@ import * as React from 'react';
 import { Loader2, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
+  getBookings,
   getCskhActivityFeed,
   getCskhActivitySummary,
   getCskhActivityStaff,
@@ -84,6 +85,7 @@ function StatCard({ title, value, hint }: { title: string; value: React.ReactNod
  * chứ không tra được đúng người. Dán SĐT vào ô tìm kiếm bên đó là cách dùng thật.
  */
 function TargetCell({ row }: { row: CskhCallRow }) {
+
   return (
     <div className="min-w-0">
       <div className="font-medium">
@@ -205,6 +207,34 @@ export default function CskhActivityPage() {
 
   const t = summary?.totals;
 
+
+  /**
+   * Chuyến bị SÓT GỌI TRƯỚC — chuyến đã hoàn thành mà chưa ai gọi xác nhận trước đó.
+   *
+   * Chỉ số này là ĐIỀU KIỆN của một quyết định thiết kế, không phải trang trí: hàng đợi
+   * CSKH cố ý LOẠI những chuyến này khỏi tab "Cần gọi trước hoàn thành" (cơ hội gọi trước
+   * đã qua, giữ lại thì hàng đợi không bao giờ vơi). Spec §6.1 cho phép loại VỚI ĐIỀU KIỆN
+   * đếm được ở đây — thiếu ô này thì chúng biến mất khỏi mọi tầm nhìn.
+   *
+   * Không phụ thuộc bộ lọc ngày của trang: đây là TỒN KHO tại thời điểm hiện tại, không
+   * phải số phát sinh trong kỳ. `limit: 1` vì chỉ cần `total`.
+   */
+  const [missedBefore, setMissedBefore] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    // PHẢI cộng CẢ HAI lớp, không chỉ 'uncalled':
+    //  - uncalled = chưa ai đụng vào (callBeforeStatus IS NULL)
+    //  - claimed  = có người NHẬN việc gọi trước rồi chuyến chạy xong trước khi họ ghi
+    //               kết quả. Lớp này cũng rơi khỏi CẢ 5 tab hàng đợi (tab "Cần gọi trước"
+    //               lọc IS NULL; tab "Đang có người giữ" và "Việc của tôi" đều đòi
+    //               completedAt IS NULL) — bỏ sót nó là ô này nói dối đúng chỗ nó hứa.
+    Promise.all([
+      getBookings({ callBefore: 'uncalled', status: 'COMPLETED', limit: 1 }),
+      getBookings({ callBefore: 'claimed', status: 'COMPLETED', limit: 1 }),
+    ])
+      .then(([a, b]) => setMissedBefore(a.total + b.total))
+      // Hỏng thì để null -> ô hiện '—'. Không chặn cả trang vì một chỉ số phụ.
+      .catch(() => setMissedBefore(null));
+  }, []);
   return (
     <div className="space-y-6">
       <div>
@@ -306,6 +336,16 @@ export default function CskhActivityPage() {
               hint="Đếm theo người, gọi 1 người nhiều lần chỉ tính 1"
             />
           </div>
+
+          {/* CỐ Ý tách khỏi lưới 4 ô phía trên: 4 ô kia đếm theo KHOẢNG NGÀY đang chọn
+              (mặc định "Hôm nay"), còn ô này là TỒN KHO toàn thời gian — chỉ tăng, gồm cả
+              thời kỳ chưa có tính năng. Đặt lẫn vào lưới là mời người đọc hiểu nhầm thành
+              "sót trong kỳ". */}
+          <StatCard
+            title="Sót gọi trước hoàn thành — toàn thời gian"
+            value={missedBefore === null ? '—' : fmt(missedBefore)}
+            hint="KHÔNG theo khoảng ngày đang chọn. Chuyến đã đi xong mà việc gọi xác nhận trước đó chưa bao giờ được ghi kết quả (chưa ai nhận, hoặc nhận rồi bỏ dở). Những chuyến này không còn vào hàng đợi được nữa."
+          />
 
           <Card>
             <CardHeader>

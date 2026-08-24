@@ -26,6 +26,12 @@ import {
   TrendingDown,
   PieChart,
   Headset,
+  LifeBuoy,
+  Layers,
+  Send,
+  Briefcase,
+  LineChart,
+  PhoneCall,
   Star,
   Handshake,
   type LucideIcon,
@@ -45,7 +51,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { href: '/dashboard', label: 'Tổng quan', icon: LayoutDashboard },
       { href: '/reports', label: 'Báo cáo', icon: Bot },
-      { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
     ],
   },
   {
@@ -59,7 +64,6 @@ export const navGroups: NavGroup[] = [
       // Cùng cụm "chất lượng tài xế". Quyền RIÊNG driver-team — ops/CSKH không thấy.
       { href: '/driver-team', label: 'Đội tài chuyên nghiệp', icon: Handshake },
       { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
-      { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
       { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
     ],
   },
@@ -76,9 +80,35 @@ export const navGroups: NavGroup[] = [
     ],
   },
   {
+    // 2026-08-12 (CRM GĐ0): gom các màn XOAY QUANH KHÁCH về một chỗ. Trước đây
+    // /acquisition ở "Tổng quan", /cskh-activity ở "Vận hành", /users ở "Người dùng
+    // & Đối tác" — CSKH phải nhảy 3 nhóm để làm một việc. Nhóm chỉ là TRÌNH BÀY,
+    // href và function giữ nguyên nên KHÔNG ai bị cắt quyền.
+    // Affiliate/KOL CỐ Ý không nằm ở đây: đối tượng của chúng là NGƯỜI GIỚI THIỆU
+    // (ví, hoa hồng, công nợ), không phải khách đi xe — xem spec §3.4.
+    label: 'Khách hàng (CRM)',
+    items: [
+      // Đầu nhóm là CỐ Ý: màn CSKH mở nhiều nhất trong ngày, và nó thành trang đích
+      // sau đăng nhập cho người chỉ có quyền CSKH.
+      { href: '/crm-queue', label: 'Hàng đợi CSKH', icon: PhoneCall },
+      { href: '/users', label: 'Khách hàng', icon: Users },
+      // 2026-08-18 (CRM GĐ3): khiếu nại của khách, nhập tay từ nhóm Zalo.
+      { href: '/crm-tickets', label: 'Ticket khách hàng', icon: LifeBuoy },
+      // 2026-08-18 (CRM GĐ4): dựng tệp khách từ chỉ số tính sẵn.
+      { href: '/crm-segments', label: 'Phân khúc', icon: Layers },
+      // 2026-08-18 (CRM GĐ5): gửi ZNS/push cho một phân khúc — ra ngoài, khách thật.
+      { href: '/crm-campaigns', label: 'Chiến dịch chăm sóc', icon: Send },
+      // 2026-08-18 (CRM GĐ6): hồ sơ công ty + pipeline B2B.
+      { href: '/crm-accounts', label: 'Khách doanh nghiệp', icon: Briefcase },
+      // 2026-08-18 (CRM GĐ7): cohort giữ chân — đo bài toán số 1 (§14.4).
+      { href: '/crm-insights', label: 'Insights khách hàng', icon: LineChart },
+      { href: '/cskh-activity', label: 'Hoạt động CSKH', icon: Headset },
+      { href: '/acquisition', label: 'Nguồn khách', icon: PieChart },
+    ],
+  },
+  {
     label: 'Người dùng & Đối tác',
     items: [
-      { href: '/users', label: 'Người dùng', icon: Users },
       { href: '/transport-companies', label: 'Đơn vị vận tải', icon: Building2 },
       { href: '/agent', label: 'Đại lý đặt hộ', icon: Store },
       { href: '/kol', label: 'KOL/KOC', icon: Crown },
