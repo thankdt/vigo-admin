@@ -634,30 +634,6 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 />
               </div>
 
-              {/* Công tắc "chuyến trùng" — nhãn VẬN HÀNH, khác hẳn công tắc ngay trên.
-                  Đứng cạnh nhau vì thao tác giống nhau, nên phần mô tả phải nói RÕ cái này
-                  KHÔNG làm gì: admin đọc lướt rất dễ tưởng nó cũng loại chuyến khỏi báo cáo. */}
-              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
-                <div className="space-y-0.5">
-                  <Label htmlFor="duplicate-trip-toggle" className="text-sm font-medium">
-                    Chuyến trùng
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    Bật khi khách đặt lặp cùng một chuyến — CSKH khỏi gọi lại. Doanh thu, báo
-                    cáo và hoá đơn KHÔNG đổi; chuyến vẫn nằm trong hàng đợi gọi.
-                  </p>
-                </div>
-                <Switch
-                  id="duplicate-trip-toggle"
-                  // `=== true`: field optional, `checked={undefined}` biến Radix Switch thành
-                  // uncontrolled và công tắc kẹt cứng.
-                  checked={booking.isDuplicateTrip === true}
-                  disabled={duplicateSaving}
-                  onCheckedChange={(next) => void handleDuplicateToggle(next)}
-                  aria-label="Đánh dấu chuyến trùng"
-                />
-              </div>
-
               {/* Xác nhận cho chuyến ĐÃ HOÀN THÀNH — nói thẳng cái cờ này KHÔNG làm được,
                   để admin không tưởng nó hoàn tiền.
                   CỐ Ý là khối inline chứ không phải AlertDialog: lồng modal Radix trong
@@ -705,6 +681,35 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   </div>
                 </div>
               )}
+
+              {/* Công tắc "chuyến trùng" — nhãn VẬN HÀNH, khác hẳn công tắc "chuyến test".
+                  Thao tác giống nhau nên phần mô tả phải nói RÕ cái này KHÔNG làm gì: admin
+                  đọc lướt rất dễ tưởng nó cũng loại chuyến khỏi báo cáo.
+
+                  CỐ Ý nằm DƯỚI khối xác nhận `pendingTestFlag` chứ không kẹp vào giữa: khối
+                  đó là cảnh báo TIỀN của công tắc test, phải dính liền công tắc vừa bấm. Chen
+                  card này vào giữa thì cảnh báo "tiền KHÔNG được hoàn" trôi xuống dưới một
+                  card khác và đọc như thể là cảnh báo của "chuyến trùng" — cờ chẳng đụng tiền. */}
+              <div className="flex items-start justify-between gap-3 rounded-md border p-3">
+                <div className="space-y-0.5">
+                  <Label htmlFor="duplicate-trip-toggle" className="text-sm font-medium">
+                    Chuyến trùng
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Bật khi khách đặt lặp cùng một chuyến — CSKH khỏi gọi lại. Doanh thu, báo
+                    cáo và hoá đơn KHÔNG đổi; chuyến vẫn nằm trong hàng đợi gọi.
+                  </p>
+                </div>
+                <Switch
+                  id="duplicate-trip-toggle"
+                  // `=== true`: field optional, `checked={undefined}` biến Radix Switch thành
+                  // uncontrolled và công tắc kẹt cứng.
+                  checked={booking.isDuplicateTrip === true}
+                  disabled={duplicateSaving}
+                  onCheckedChange={(next) => void handleDuplicateToggle(next)}
+                  aria-label="Đánh dấu chuyến trùng"
+                />
+              </div>
 
               {/* Vi-now — customer used the 6-digit code flow instead of
                   going through dispatch. The journey differs enough that
