@@ -1,4 +1,18 @@
-import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, PhoneOff, Megaphone, Briefcase, type LucideIcon } from 'lucide-react';
+import { DollarSign, Navigation, Car, Smartphone, Gift, Plug, ShieldAlert, PhoneOff, Megaphone, Briefcase, UserSearch, type LucideIcon } from 'lucide-react';
+
+// Mọi config của luồng "khách chọn tài xế" — mirror BE `rbac.constants.ts PICK_DRIVER_KEYS`.
+// Trước 18/08 chúng nằm rải: công tắc + hạn mức cặp ở dispatch, hạn mức tra SĐT ở
+// driver. Chỉnh một luồng phải mở hai ba nhóm và đọc lướt hàng chục key không liên quan.
+const PICK_DRIVER_KEYS = [
+  'DIRECT_ASSIGN_ENABLED',
+  'VINOW_CODE_ENABLED',
+  'VINOW_CODE_TTL_MINUTES',
+  'DISPATCH_CUSTOMER_FALLBACK_ENABLED',
+  'DIRECT_ASSIGN_PAIR_MAX',
+  'DIRECT_ASSIGN_PAIR_WINDOW_SEC',
+  'DRIVER_LOOKUP_MAX',
+  'DRIVER_LOOKUP_WINDOW_SEC',
+];
 
 // Group the flat system_config list by key prefix so the page stays scannable.
 // Order matters: keys are tested top-to-bottom and land in the FIRST match — so
@@ -22,12 +36,19 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     id: 'pricing', label: 'Giá & Hoa hồng', icon: DollarSign,
     match: (k) => k.startsWith('PRICING_') || k.endsWith('COMMISSION_RATE') || k.startsWith('CARPOOL_SEAT_DISCOUNT'),
   },
+  // ĐẶT TRƯỚC dispatch/driver: DRIVER_LOOKUP_* bắt đầu bằng DRIVER_ và
+  // DISPATCH_CUSTOMER_FALLBACK_ENABLED bắt đầu bằng DISPATCH_ — để sau là chúng rơi
+  // về nhóm cũ và nhóm này rỗng.
+  {
+    id: 'pick-driver', label: 'Khách chọn tài xế', icon: UserSearch, danger: true,
+    match: (k) => PICK_DRIVER_KEYS.includes(k),
+  },
   {
     id: 'dispatch', label: 'Điều phối & Tuyến', icon: Navigation, danger: true,
     match: (k) =>
       k.startsWith('DISPATCH_') || k.startsWith('ROUTE_') || k.startsWith('CHAIN_') ||
       k.startsWith('SCHEDULED_') || k.startsWith('SCHEDULE_') ||
-      ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED', 'VINOW_CODE_TTL_MINUTES'].includes(k),
+      ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED'].includes(k),
   },
   { id: 'driver', label: 'Tài xế', icon: Car, match: (k) => k.startsWith('DRIVER_') },
   {
