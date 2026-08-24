@@ -141,3 +141,21 @@ describe('nhóm Khách chọn tài xế', () => {
     expect(groupIdFor('DRIVER_MIN_DEPOSIT')).toBe('driver');
   });
 });
+
+// Cờ kênh đánh thức (bắn "Có cuốc mới" cho tài đang OFFLINE) được seed lần đầu ở BE
+// migration 1794800000000. Trước đó không có row nên key vô hình trong màn này —
+// admin không tắt được kênh. Nhóm phải KHỚP mirror BE `settingsGroupForKey`: lệch là
+// người sửa được nhóm ở UI lại bị BE chặn ghi (AUTH_003), không rõ vì sao.
+describe('groupIdFor — cờ kênh đánh thức WAKE_*', () => {
+  it('WAKE_PUSH_ENABLED / WAKE_UNACTIVATED_ENABLED vào nhóm dispatch, không rơi misc', () => {
+    expect(groupIdFor('WAKE_PUSH_ENABLED')).toBe('dispatch');
+    expect(groupIdFor('WAKE_UNACTIVATED_ENABLED')).toBe('dispatch');
+  });
+
+  it('người có quyền settings.dispatch nhìn thấy và sửa được', () => {
+    const configs = [{ key: 'WAKE_PUSH_ENABLED', value: 'true', description: 'Kênh đánh thức' }];
+    const groups = buildConfigGroups(configs, '', canFor(mkMe({ functions: ['settings.dispatch'] })));
+    expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);
+    expect(groups[0].items.map((c) => c.key)).toEqual(['WAKE_PUSH_ENABLED']);
+  });
+});

@@ -44,10 +44,13 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
     match: (k) => PICK_DRIVER_KEYS.includes(k),
   },
   {
+    // WAKE_*: cờ của KÊNH ĐÁNH THỨC (bắn "Có cuốc mới" cho tài đang OFFLINE) — một
+    // nhánh của vòng bắn chuyến nên xếp cùng nhóm này. Dùng nhóm ĐANG CÓ, không mở
+    // nhóm mới: nhóm mới cần migration grant ở BE mới có người sửa được.
     id: 'dispatch', label: 'Điều phối & Tuyến', icon: Navigation, danger: true,
     match: (k) =>
       k.startsWith('DISPATCH_') || k.startsWith('ROUTE_') || k.startsWith('CHAIN_') ||
-      k.startsWith('SCHEDULED_') || k.startsWith('SCHEDULE_') ||
+      k.startsWith('SCHEDULED_') || k.startsWith('SCHEDULE_') || k.startsWith('WAKE_') ||
       ['RIDE_ALLOW_OFF_ROUTE', 'STRICT_ROUTE_MATCH', 'ROUTE_MATCH_SHADOW', 'DEFAULT_SEARCH_RADIUS', 'ARRIVED_GEOFENCE_RADIUS_M', 'SEARCHING_STALE_THRESHOLD_MS', 'STATUS_EVENT_LOGGING_ENABLED'].includes(k),
   },
   { id: 'driver', label: 'Tài xế', icon: Car, match: (k) => k.startsWith('DRIVER_') },
