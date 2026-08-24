@@ -55,6 +55,7 @@ import {
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
+import { AdminMemoCell } from './admin-memo-cell';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
 import type { Booking, BookingStatus, Driver, TestTripFilter } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
@@ -607,6 +608,13 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
     setSelectedBookingId(bookingId);
   }
 
+  // Lưu memo xong chỉ VÁ ĐÚNG MỘT DÒNG trong state, KHÔNG `reload()` cả bảng: reload thay
+  // toàn bộ mảng `bookings`, và mọi ô ghi chú khác đang gõ giữa câu sẽ bị đồng bộ về giá
+  // trị server (xem AdminMemoCell) — trông y như app tự xoá chữ.
+  const patchBookingMemo = React.useCallback((id: string, memo: string | null) => {
+    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, adminMemo: memo } : b)));
+  }, []);
+
   // Nhân bản: đóng chi tiết (nếu đang mở) rồi mở form Tạo chuyến đã điền sẵn.
   const startDuplicate = (booking: Booking) => {
     setSelectedBookingId(null);
@@ -860,10 +868,11 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                {/* Ghi chú NỘI BỘ (adminNote) — KHÔNG phải "Ghi chú của khách" (booking.note,
-                    thứ tài xế đọc được trên app). Cột đứng CỐ ĐỊNH ngay sau Trạng thái ở MỌI
-                    tab: tab Đã huỷ chèn 3 cột huỷ ngay phía sau, để cột này sau cụm đó thì nó
-                    nhảy chỗ mỗi lần admin đổi tab. */}
+                {/* Ô nhập ghi chú NỘI BỘ (`adminMemo`) — KHÔNG phải "Ghi chú của khách"
+                    (`booking.note`, thứ tài xế đọc được trên app), cũng không phải log máy ghi
+                    (`adminNote`, append-only, chỉ đọc, xem ở dialog chi tiết). Cột đứng CỐ ĐỊNH
+                    ngay sau Trạng thái ở MỌI tab: tab Đã huỷ chèn 3 cột huỷ ngay phía sau, để
+                    cột này sau cụm đó thì nó nhảy chỗ mỗi lần admin đổi tab. */}
                 <TableHead>Ghi chú</TableHead>
                 {/* CANCELLED tab gets 3 extra columns so admin can read who
                     cancelled and why without opening each detail dialog. Other
@@ -983,14 +992,18 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         )}
                       </div>
                     </TableCell>
-                    {/* adminNote về từ chính /bookings/admin/list (backend addSelect tường
-                        minh vì cột để select:false). Hiện NGUYÊN VĂN, giữ cả tiền tố
-                        "[Admin: …]" backend tự gắn — tiền tố cho biết ghi chú sinh ra từ
-                        thao tác nào (đổi trạng thái, gạt cờ chuyến test…). */}
-                    <TableCell className="max-w-[220px] text-xs">
-                      {booking.adminNote
-                        ? <span className="line-clamp-2" title={booking.adminNote}>{booking.adminNote}</span>
-                        : <span className="text-muted-foreground">—</span>}
+                    {/* ⚠️ stopPropagation: cả <TableRow> có onClick mở dialog chi tiết. Thiếu
+                        chặn thì bấm vào ô nhập là bung dialog và mất chỗ đang gõ — cột "Thao
+                        tác" phía dưới chặn đúng kiểu này.
+                        Không cần `key` riêng ở đây: <TableRow> đã có key={booking.id} nên đổi
+                        trang/đổi bộ lọc là React thay cả dòng, ô nhập không mang giá trị của
+                        chuyến cũ sang. */}
+                    <TableCell className="w-[220px] max-w-[220px]" onClick={(e) => e.stopPropagation()}>
+                      <AdminMemoCell
+                        bookingId={booking.id}
+                        value={booking.adminMemo}
+                        onSaved={(memo) => patchBookingMemo(booking.id, memo)}
+                      />
                     </TableCell>
                     {activeTab === 'CANCELLED' && (
                       <>

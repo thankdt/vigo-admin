@@ -784,6 +784,18 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 </Card>
               )}
 
+              {/* Memo admin TỰ GÕ ở cột "Ghi chú" của danh sách chuyến (`adminMemo`). Chỉ ĐỌC
+                  ở đây — chỗ sửa là ô nhập ngoài bảng, để dialog không thành đường ghi thứ hai
+                  vào cùng một cột. Khác khối "Ghi chú nội bộ" ngay dưới: đó là log máy ghi. */}
+              {booking.adminMemo && (
+                <Card className="p-3 space-y-1 border-sky-300/60 bg-sky-50/50 dark:border-sky-900/50 dark:bg-sky-950/20">
+                  <div className="text-xs font-semibold text-sky-700 dark:text-sky-400 uppercase tracking-wider">
+                    Ghi chú của admin · không lộ cho tài/khách
+                  </div>
+                  <p className="text-sm whitespace-pre-wrap">{booking.adminMemo}</p>
+                </Card>
+              )}
+
               {/* Ghi chú vận hành NỘI BỘ (admin đổi trạng thái kèm ghi chú).
                   Trước đây phần này bị nối vào "Ghi chú của khách" nên mọi tài xế
                   được chào chuyến đọc được. Nay tách cột riêng, chỉ hiện ở đây. */}
