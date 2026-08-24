@@ -43,8 +43,8 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
-import { BookingDetail } from './booking-detail';
-import { CANCELLED_BY_ROLE_LABEL, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
+import { BookingDetail, CustomerCallBadge } from './booking-detail';
+import { CANCELLED_BY_ROLE_LABEL, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -55,9 +55,8 @@ import {
 import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
-import { AdminMemoCell } from './admin-memo-cell';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
-import type { Booking, BookingStatus, Driver, TestTripFilter } from '@/lib/types';
+import type { Booking, BookingStatus, CustomerCallFilter, Driver, TestTripFilter } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -107,6 +106,14 @@ type FetchArgs = {
    * Bắt buộc (không `?:`) vì cùng lý do với `testFilter` ngay trên.
    */
   address: string;
+  /**
+   * Lọc pha gọi TRƯỚC khi chuyến hoàn thành. 'ALL' = không lọc.
+   *
+   * CHỈ pha "trước" — pha "sau hoàn thành" cố ý ở lại /crm-queue (CRM GĐ1). Bảng này
+   * dùng để điều hành chuyến đang chạy, không phải hậu mãi.
+   * Bắt buộc (không `?:`) vì cùng lý do với `testFilter`.
+   */
+  callBefore: CustomerCallFilter | 'ALL';
 };
 
 const tabKeys: TabKey[] = [
@@ -431,6 +438,10 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // Lọc "Chuyến test". Mặc định 'ALL' = hiện cả hai: đây là màn admin gạt cờ, giấu
   // chuyến test đi thì chuyến gạt nhầm biến mất khỏi tầm mắt, không sửa lại được.
   const [testFilter, setTestFilter] = React.useState<TestTripFilter | 'ALL'>('ALL');
+  // Lọc pha gọi TRƯỚC hoàn thành: 'ALL' = không lọc. Chỉ pha "trước" — pha "sau" ở
+  // /crm-queue. Cột + dropdown này từng bị gỡ đi ở GĐ1 rồi thêm lại theo yêu cầu vận
+  // hành: điều phối cần thấy chuyến nào CHƯA được gọi xác nhận ngay trên bảng chính.
+  const [callBeforeFilter, setCallBeforeFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
@@ -456,7 +467,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address, callBefore }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -507,6 +518,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       if (testFilter !== 'ALL') params.testFilter = testFilter;
       // Địa chỉ: gửi nguyên văn, BE lo bỏ dấu. Rỗng → bỏ hẳn param.
       if (address) params.address = address;
+      // Gọi trước HT: 'ALL' bỏ hẳn param (BE mặc định cũng là không lọc).
+      if (callBefore !== 'ALL') params.callBefore = callBefore;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -533,18 +546,18 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // "bộ lọc tự tắt", không lỗi, không log. eslint exhaustive-deps KHÔNG chặn được vì
   // next.config bật ignoreDuringBuilds.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
     // ⚠️ testFilter PHẢI có trong deps: đây (không phải reload) mới là chỗ fetch khi
     // bộ lọc đổi. Thiếu nó thì chọn filter xong bảng đứng im, không lỗi, không log.
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -607,13 +620,6 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const openDetails = (bookingId: string) => {
     setSelectedBookingId(bookingId);
   }
-
-  // Lưu memo xong chỉ VÁ ĐÚNG MỘT DÒNG trong state, KHÔNG `reload()` cả bảng: reload thay
-  // toàn bộ mảng `bookings`, và mọi ô ghi chú khác đang gõ giữa câu sẽ bị đồng bộ về giá
-  // trị server (xem AdminMemoCell) — trông y như app tự xoá chữ.
-  const patchBookingMemo = React.useCallback((id: string, memo: string | null) => {
-    setBookings((prev) => prev.map((b) => (b.id === id ? { ...b, adminMemo: memo } : b)));
-  }, []);
 
   // Nhân bản: đóng chi tiết (nếu đang mở) rồi mở form Tạo chuyến đã điền sẵn.
   const startDuplicate = (booking: Booking) => {
@@ -699,9 +705,11 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // base 8, +1 for COMPLETED (Ngày hoàn thành), +3 for CANCELLED (huỷ cols),
   // +1 for the scheduled column — these stack.
   // 2026-08-12: 2 cột gọi khách đã chuyển sang /crm-queue (CRM GĐ1) -> 9 xuống 7.
-  // 2026-08-24: thêm cột "Ghi chú" (adminNote) -> 7 lên 8. Lệch số này không ném lỗi,
-  // chỉ làm dòng "Không tìm thấy chuyến nào" co lệch bảng, nên đã khoá bằng test
-  // (bookings-table.note-column.test.tsx: colSpan phải bằng số <th> thật).
+  // 2026-08-24: thêm cột "Ghi chú" (adminMemo) -> 7 lên 8.
+  // 2026-08-24 (đợt sau): BỎ cột "Ghi chú" và thêm lại cột "Gọi trước HT" -> VẪN 8.
+  // Số không đổi nhưng thành phần thì đổi — đừng suy ra "không cần đếm lại". Lệch số
+  // này không ném lỗi, chỉ làm dòng "Không tìm thấy chuyến nào" co lệch bảng, nên đã
+  // khoá bằng test (bookings-table.colspan.test.tsx: colSpan phải bằng số <th> thật).
   const showScheduledCol = tripKind === 'scheduled';
   const colSpan =
     8 +
@@ -748,6 +756,24 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               <SelectItem value="ALL">Chuyến test: tất cả</SelectItem>
               <SelectItem value="exclude">Chỉ chuyến thật</SelectItem>
               <SelectItem value="only">Chỉ chuyến test</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Lọc pha gọi TRƯỚC hoàn thành. Chỉ pha "trước" — dropdown "Gọi sau HT" cố ý
+              ở lại /crm-queue, bảng này lo chuyến đang chạy chứ không lo hậu mãi. */}
+          <Select
+            value={callBeforeFilter}
+            // setCurrentPage(1) như MỌI filter khác: trang 5 của tập nhỏ hơn là bảng trắng.
+            onValueChange={(val) => { setCallBeforeFilter(val as CustomerCallFilter | 'ALL'); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Gọi trước HT" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Gọi trước HT: tất cả</SelectItem>
+              <SelectItem value="uncalled">Chưa gọi</SelectItem>
+              <SelectItem value="claimed">Đã nhận gọi</SelectItem>
+              <SelectItem value="called">Đã gọi được</SelectItem>
+              <SelectItem value="unreached">Không liên lạc được</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -868,12 +894,12 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
-                {/* Ô nhập ghi chú NỘI BỘ (`adminMemo`) — KHÔNG phải "Ghi chú của khách"
-                    (`booking.note`, thứ tài xế đọc được trên app), cũng không phải log máy ghi
-                    (`adminNote`, append-only, chỉ đọc, xem ở dialog chi tiết). Cột đứng CỐ ĐỊNH
-                    ngay sau Trạng thái ở MỌI tab: tab Đã huỷ chèn 3 cột huỷ ngay phía sau, để
-                    cột này sau cụm đó thì nó nhảy chỗ mỗi lần admin đổi tab. */}
-                <TableHead>Ghi chú</TableHead>
+                {/* Trạng thái CSKH đã gọi xác nhận khách TRƯỚC khi chuyến hoàn thành.
+                    Chỉ pha "trước" — cột "Gọi sau HT" ở lại /crm-queue (CRM GĐ1).
+                    Cột đứng CỐ ĐỊNH ngay sau Trạng thái ở MỌI tab: tab Đã huỷ chèn 3 cột
+                    huỷ ngay phía sau, để cột này sau cụm đó thì nó nhảy chỗ mỗi lần admin
+                    đổi tab. Ghi nhận cuộc gọi vẫn ở dialog chi tiết — bấm vào dòng. */}
+                <TableHead>Gọi trước HT</TableHead>
                 {/* CANCELLED tab gets 3 extra columns so admin can read who
                     cancelled and why without opening each detail dialog. Other
                     tabs keep the base 8-column layout. */}
@@ -992,18 +1018,20 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         )}
                       </div>
                     </TableCell>
-                    {/* ⚠️ stopPropagation: cả <TableRow> có onClick mở dialog chi tiết. Thiếu
-                        chặn thì bấm vào ô nhập là bung dialog và mất chỗ đang gõ — cột "Thao
-                        tác" phía dưới chặn đúng kiểu này.
-                        Không cần `key` riêng ở đây: <TableRow> đã có key={booking.id} nên đổi
-                        trang/đổi bộ lọc là React thay cả dòng, ô nhập không mang giá trị của
-                        chuyến cũ sang. */}
-                    <TableCell className="w-[220px] max-w-[220px]" onClick={(e) => e.stopPropagation()}>
-                      <AdminMemoCell
-                        bookingId={booking.id}
-                        value={booking.adminMemo}
-                        onSaved={(memo) => patchBookingMemo(booking.id, memo)}
-                      />
+                    {/* KHÔNG stopPropagation ở ô này (khác ô "Ghi chú" trước đây): đây là ô
+                        chỉ-đọc, và bấm vào là mở dialog chi tiết — đúng chỗ ghi nhận cuộc gọi. */}
+                    <TableCell>
+                      <div className="flex flex-col gap-0.5 items-start">
+                        <CustomerCallBadge status={booking.callBeforeStatus} />
+                        {/* formatVnShort chứ KHÔNG format(new Date(...)): mốc admin đọc phải là
+                            giờ VN, không phải giờ máy. Ngày rác → null, ô để trống thay vì
+                            "Invalid Date". */}
+                        {formatVnShort(booking.callBeforeAt) && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {formatVnShort(booking.callBeforeAt)}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     {activeTab === 'CANCELLED' && (
                       <>

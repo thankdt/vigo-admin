@@ -889,7 +889,18 @@ export async function setBookingTestFlag(
 }
 
 /**
- * Ghi ĐÈ memo vận hành của admin cho một chuyến (ô nhập ở cột "Ghi chú" danh sách chuyến).
+ * [DISABLED 2026-08-24] KHÔNG CÒN CALLER. Cột "Ghi chú" (ô nhập `adminMemo`) đã bị gỡ khỏi
+ * danh sách chuyến ngay trong ngày nó lên prod — vận hành thấy nó chiếm chỗ của cột
+ * "Gọi trước HT" quan trọng hơn.
+ *
+ * GIỮ LẠI hàm này (và cột DB + endpoint `PUT /bookings/admin/:id/memo`) chứ không xoá:
+ * dữ liệu admin đã gõ trong ngày vẫn nằm nguyên trong `booking.adminMemo`, và nếu dựng
+ * lại ô nhập ở đâu đó thì chỉ cần gọi lại. Xoá hàm là mất luôn tài liệu về contract.
+ *
+ * ⚠️ Muốn dùng lại thì phải dựng lại CẢ chỗ hiển thị — hiện KHÔNG có UI nào đọc
+ * `booking.adminMemo`, nên gọi hàm này sẽ ghi vào một cột không ai nhìn thấy.
+ *
+ * Ghi ĐÈ memo vận hành của admin cho một chuyến.
  *
  * `memo` là chuỗi BẮT BUỘC — backend cố ý không nhận `null`/thiếu field: endpoint này ghi
  * đè, nên một request `{}` do lỗi client sẽ xoá trắng ghi chú người khác vừa gõ. Muốn xoá

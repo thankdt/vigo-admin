@@ -324,10 +324,14 @@ export type Booking = {
   // `adminNote` = LOG máy ghi, append-only (đổi trạng thái kèm note, gạt cờ chuyến
   // test, void). Chỉ ĐỌC, hiện ở dialog chi tiết chuyến.
   adminNote?: string | null;
-  // `adminMemo` = memo admin TỰ GÕ ở cột "Ghi chú" của danh sách chuyến, GHI ĐÈ được
-  // (PUT /bookings/admin/:id/memo). Cũng select:false ở backend. Đừng lẫn với
-  // `adminNote` phía trên và đừng ghi memo vào `note` (note đi ra app tài xế).
+  // `adminMemo` = memo admin TỰ GÕ, GHI ĐÈ được (PUT /bookings/admin/:id/memo). Cũng
+  // select:false ở backend. Đừng lẫn với `adminNote` phía trên và đừng ghi memo vào
+  // `note` (note đi ra app tài xế).
   // `undefined` = backend chưa deploy cột này; `null` = chưa/đã xoá memo.
+  //
+  // [DISABLED 2026-08-24] KHÔNG còn UI nào đọc/ghi field này — ô nhập ở cột "Ghi chú"
+  // của danh sách chuyến đã bị gỡ (nhường chỗ cho cột "Gọi trước HT"). Cột DB, endpoint
+  // và `updateBookingAdminMemo` vẫn còn; dữ liệu đã gõ không mất.
   adminMemo?: string | null;
   // Tên hành khách, index 0 = khách chính (khớp quy ước app khách + hợp đồng).
   // null cho rows cũ trước khi có cột.

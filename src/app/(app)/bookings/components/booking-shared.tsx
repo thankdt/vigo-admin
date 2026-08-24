@@ -92,3 +92,32 @@ export function TestTripBadge() {
     </Badge>
   );
 }
+
+/**
+ * Mốc thời gian NGẮN `dd/MM HH:mm` cho các ô trong bảng chuyến, LUÔN giờ VN (UTC+7)
+ * bất kể múi giờ máy admin — luật bắt buộc của repo.
+ *
+ * Ghép từ `formatToParts` chứ không `format()`: dữ liệu locale quyết định dấu phân
+ * cách (ICU của Node cho `vi-VN` ra `14-08`, trình duyệt ra `14/08`) nên chuỗi sẽ
+ * khác nhau giữa máy admin và test. Cùng cách làm với `formatVn` trong
+ * driver-commitment-badge.tsx, chỉ khác thứ tự (ngày trước, giờ sau) cho khớp
+ * convention của các cột trong bảng.
+ *
+ * Ngày rác từ API → `null` chứ không "Invalid Date": một dòng dữ liệu hỏng không
+ * được phép làm vỡ cả bảng.
+ */
+export function formatVnShort(value?: string | null): string | null {
+  if (!value) return null;
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const at = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+  return `${at('day')}/${at('month')} ${at('hour')}:${at('minute')}`;
+}
