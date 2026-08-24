@@ -320,7 +320,15 @@ export type Booking = {
   note?: string | null;
   // Ghi chú vận hành NỘI BỘ. Backend để select:false nên chỉ endpoint admin trả
   // về; không bao giờ ra app tài/khách.
+  //
+  // `adminNote` = LOG máy ghi, append-only (đổi trạng thái kèm note, gạt cờ chuyến
+  // test, void). Chỉ ĐỌC, hiện ở dialog chi tiết chuyến.
   adminNote?: string | null;
+  // `adminMemo` = memo admin TỰ GÕ ở cột "Ghi chú" của danh sách chuyến, GHI ĐÈ được
+  // (PUT /bookings/admin/:id/memo). Cũng select:false ở backend. Đừng lẫn với
+  // `adminNote` phía trên và đừng ghi memo vào `note` (note đi ra app tài xế).
+  // `undefined` = backend chưa deploy cột này; `null` = chưa/đã xoá memo.
+  adminMemo?: string | null;
   // Tên hành khách, index 0 = khách chính (khớp quy ước app khách + hợp đồng).
   // null cho rows cũ trước khi có cột.
   passengerNames?: string[] | null;

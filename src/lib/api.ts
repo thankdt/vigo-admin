@@ -888,6 +888,28 @@ export async function setBookingTestFlag(
   return unwrap<{ id: string; isTestTrip: boolean }>(response);
 }
 
+/**
+ * Ghi ĐÈ memo vận hành của admin cho một chuyến (ô nhập ở cột "Ghi chú" danh sách chuyến).
+ *
+ * `memo` là chuỗi BẮT BUỘC — backend cố ý không nhận `null`/thiếu field: endpoint này ghi
+ * đè, nên một request `{}` do lỗi client sẽ xoá trắng ghi chú người khác vừa gõ. Muốn xoá
+ * thì gửi chuỗi rỗng, backend trim rồi ghi NULL.
+ *
+ * Trả về payload GỌN `{ id, adminMemo }` — CỐ Ý không phải cả Booking (giống
+ * `setBookingTestFlag`): response không kèm quan hệ customer/driver, nên caller phải vá
+ * đúng field `adminMemo` vào state chứ đừng thay cả object (sẽ làm trắng dòng/dialog).
+ */
+export async function updateBookingAdminMemo(
+  id: string,
+  memo: string,
+): Promise<{ id: string; adminMemo: string | null }> {
+  const response = await fetchWithAuth(`/bookings/admin/${id}/memo`, {
+    method: 'PUT',
+    body: JSON.stringify({ memo }),
+  });
+  return unwrap<{ id: string; adminMemo: string | null }>(response);
+}
+
 // CSKH ghi nhận đã gọi check khách cho chuyến (append-only + denormalize trạng thái
 // mới nhất lên booking). note nội bộ, tách khỏi booking.note (không lộ cho tài/khách).
 export async function recordBookingCustomerCall(
