@@ -44,7 +44,7 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
-import { CANCELLED_BY_ROLE_LABEL, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -56,7 +56,7 @@ import { getImageUrl } from '@/lib/utils';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
-import type { Booking, BookingStatus, CustomerCallFilter, Driver, TestTripFilter } from '@/lib/types';
+import type { Booking, BookingStatus, CustomerCallFilter, DuplicateTripFilter, Driver, TestTripFilter } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -114,6 +114,11 @@ type FetchArgs = {
    * Bắt buộc (không `?:`) vì cùng lý do với `testFilter`.
    */
   callBefore: CustomerCallFilter | 'ALL';
+  /**
+   * Lọc cờ "chuyến trùng". 'ALL' = hiện cả hai (mặc định).
+   * Bắt buộc (không `?:`) vì cùng lý do với `testFilter`.
+   */
+  duplicateFilter: DuplicateTripFilter | 'ALL';
 };
 
 const tabKeys: TabKey[] = [
@@ -442,6 +447,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // /crm-queue. Cột + dropdown này từng bị gỡ đi ở GĐ1 rồi thêm lại theo yêu cầu vận
   // hành: điều phối cần thấy chuyến nào CHƯA được gọi xác nhận ngay trên bảng chính.
   const [callBeforeFilter, setCallBeforeFilter] = React.useState<CustomerCallFilter | 'ALL'>('ALL');
+  // Lọc "Chuyến trùng". Mặc định 'ALL' = hiện cả hai, cùng lý do với chuyến test: đây là
+  // màn admin gạt cờ, giấu đi thì chuyến gạt nhầm biến mất khỏi tầm mắt.
+  const [duplicateFilter, setDuplicateFilter] = React.useState<DuplicateTripFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
   // Pagination state
@@ -467,7 +475,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address, callBefore }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address, callBefore, duplicateFilter }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -520,6 +528,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       if (address) params.address = address;
       // Gọi trước HT: 'ALL' bỏ hẳn param (BE mặc định cũng là không lọc).
       if (callBefore !== 'ALL') params.callBefore = callBefore;
+      // Chuyến trùng: 'ALL' bỏ hẳn param — cùng lý do với testFilter, màn này vẫn chạy
+      // được cả khi backend chưa deploy cột/bộ lọc mới.
+      if (duplicateFilter !== 'ALL') params.duplicateFilter = duplicateFilter;
 
       const response = await getBookings(params);
       setBookings(response.data);
@@ -546,18 +557,18 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // "bộ lọc tự tắt", không lỗi, không log. eslint exhaustive-deps KHÔNG chặn được vì
   // next.config bật ignoreDuringBuilds.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter, duplicateFilter });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter, duplicateFilter });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
     // ⚠️ testFilter PHẢI có trong deps: đây (không phải reload) mới là chỗ fetch khi
     // bộ lọc đổi. Thiếu nó thì chọn filter xong bảng đứng im, không lỗi, không log.
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
 
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
@@ -756,6 +767,21 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               <SelectItem value="ALL">Chuyến test: tất cả</SelectItem>
               <SelectItem value="exclude">Chỉ chuyến thật</SelectItem>
               <SelectItem value="only">Chỉ chuyến test</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* Lọc cờ "chuyến trùng". Đứng cạnh bộ lọc chuyến test vì cùng dạng cờ admin
+              gạt tay — nhưng hệ quả khác hẳn: chuyến trùng VẪN tính doanh thu. */}
+          <Select
+            value={duplicateFilter}
+            onValueChange={(val) => { setDuplicateFilter(val as DuplicateTripFilter | 'ALL'); setCurrentPage(1); }}
+          >
+            <SelectTrigger className="w-[180px]">
+              <SelectValue placeholder="Chuyến trùng" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Chuyến trùng: tất cả</SelectItem>
+              <SelectItem value="exclude">Ẩn chuyến trùng</SelectItem>
+              <SelectItem value="only">Chỉ chuyến trùng</SelectItem>
             </SelectContent>
           </Select>
           {/* Lọc pha gọi TRƯỚC hoàn thành. Chỉ pha "trước" — dropdown "Gọi sau HT" cố ý
@@ -1001,6 +1027,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         {/* Chuyến test đứng ĐẦU stack: nó là điều quan trọng nhất cần
                             biết về dòng này (chuyến không tính vào bất kỳ báo cáo nào). */}
                         {booking.isTestTrip && <TestTripBadge />}
+                        {/* Ngay sau TEST: hai cờ admin gạt tay đứng liền nhau, đọc một
+                            lượt là biết dòng này có gì bất thường. */}
+                        {booking.isDuplicateTrip && <DuplicateTripBadge />}
                         {booking.isVinow && (
                           <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300 hover:bg-orange-100 text-[10px] px-1.5 py-0">
                             ⚡ Vi-now
@@ -1200,6 +1229,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
           onCallRecorded={reload}
           // Gạt công tắc test → refetch để badge TEST + bộ lọc ngoài bảng khớp lại.
           onTestFlagChanged={reload}
+          onDuplicateFlagChanged={reload}
         />
       )}
       {/* Form Tạo chuyến ở chế độ controlled — chỉ dùng cho luồng nhân bản (không có

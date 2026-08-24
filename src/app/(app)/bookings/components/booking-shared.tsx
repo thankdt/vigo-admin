@@ -94,6 +94,27 @@ export function TestTripBadge() {
 }
 
 /**
+ * Nhãn "chuyến trùng" — dùng CHUNG cho hàng danh sách (`BookingsTable`) và header dialog
+ * chi tiết (`BookingDetail`), để hai nơi không trôi dạt về màu/chữ.
+ *
+ * Xám đá (slate), cố ý KHÔNG trùng:
+ *  - bảng màu trạng thái (xanh/đỏ/hổ phách) — đây không phải một trạng thái chuyến;
+ *  - tím của {@link TestTripBadge} — hai cờ có hệ quả HOÀN TOÀN khác nhau và người đọc
+ *    bảng phải phân biệt được trong nửa giây. Chuyến TEST = "đừng tin số của chuyến này"
+ *    (đã bị loại khỏi mọi báo cáo). Chuyến TRÙNG = "số vẫn tính, chỉ là khỏi gọi lại".
+ *
+ * Chữ "TRÙNG" chứ không "NHÂN BẢN": menu dòng đã có "Nhân bản chuyến" (tạo chuyến mới từ
+ * chuyến cũ) — nghĩa gần như ngược lại.
+ */
+export function DuplicateTripBadge() {
+  return (
+    <Badge className="bg-slate-600 text-white hover:bg-slate-600 text-[10px] px-1.5 py-0">
+      ⧉ TRÙNG
+    </Badge>
+  );
+}
+
+/**
  * Mốc thời gian NGẮN `dd/MM HH:mm` cho các ô trong bảng chuyến, LUÔN giờ VN (UTC+7)
  * bất kể múi giờ máy admin — luật bắt buộc của repo.
  *

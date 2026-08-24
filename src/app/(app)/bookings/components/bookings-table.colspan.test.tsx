@@ -29,6 +29,7 @@ vi.mock('@/lib/api', () => ({
   getBookingCustomerCallHistory: vi.fn(async () => []),
   recordBookingCustomerCall: vi.fn(),
   setBookingTestFlag: vi.fn(),
+  setBookingDuplicateFlag: vi.fn(),
   voidCompletedBooking: vi.fn(),
   createAdminBooking: vi.fn(),
   createAgentBooking: vi.fn(),
