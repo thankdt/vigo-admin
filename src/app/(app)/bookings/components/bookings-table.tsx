@@ -688,12 +688,15 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const visibleTabKeys = tripKind === 'regular' ? tabKeys.filter((k) => k !== 'SCHEDULED') : tabKeys;
 
   // The "Đặt lịch" tab adds a "Giờ hẹn đón" column. Column count for the loading/empty/error rows:
-  // base 7, +1 for COMPLETED (Ngày hoàn thành), +3 for CANCELLED (huỷ cols),
+  // base 8, +1 for COMPLETED (Ngày hoàn thành), +3 for CANCELLED (huỷ cols),
   // +1 for the scheduled column — these stack.
   // 2026-08-12: 2 cột gọi khách đã chuyển sang /crm-queue (CRM GĐ1) -> 9 xuống 7.
+  // 2026-08-24: thêm cột "Ghi chú" (adminNote) -> 7 lên 8. Lệch số này không ném lỗi,
+  // chỉ làm dòng "Không tìm thấy chuyến nào" co lệch bảng, nên đã khoá bằng test
+  // (bookings-table.note-column.test.tsx: colSpan phải bằng số <th> thật).
   const showScheduledCol = tripKind === 'scheduled';
   const colSpan =
-    7 +
+    8 +
     (activeTab === 'COMPLETED' ? 1 : 0) +
     (activeTab === 'CANCELLED' ? 3 : 0) +
     (showScheduledCol ? 1 : 0);
@@ -857,9 +860,14 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     <ArrowUpDown className="ml-2 h-4 w-4" />
                   </Button>
                 </TableHead>
+                {/* Ghi chú NỘI BỘ (adminNote) — KHÔNG phải "Ghi chú của khách" (booking.note,
+                    thứ tài xế đọc được trên app). Cột đứng CỐ ĐỊNH ngay sau Trạng thái ở MỌI
+                    tab: tab Đã huỷ chèn 3 cột huỷ ngay phía sau, để cột này sau cụm đó thì nó
+                    nhảy chỗ mỗi lần admin đổi tab. */}
+                <TableHead>Ghi chú</TableHead>
                 {/* CANCELLED tab gets 3 extra columns so admin can read who
                     cancelled and why without opening each detail dialog. Other
-                    tabs keep the original 7-column layout. */}
+                    tabs keep the base 8-column layout. */}
                 {activeTab === 'CANCELLED' && (
                   <>
                     <TableHead>Thời gian huỷ</TableHead>
@@ -974,6 +982,15 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                           </span>
                         )}
                       </div>
+                    </TableCell>
+                    {/* adminNote về từ chính /bookings/admin/list (backend addSelect tường
+                        minh vì cột để select:false). Hiện NGUYÊN VĂN, giữ cả tiền tố
+                        "[Admin: …]" backend tự gắn — tiền tố cho biết ghi chú sinh ra từ
+                        thao tác nào (đổi trạng thái, gạt cờ chuyến test…). */}
+                    <TableCell className="max-w-[220px] text-xs">
+                      {booking.adminNote
+                        ? <span className="line-clamp-2" title={booking.adminNote}>{booking.adminNote}</span>
+                        : <span className="text-muted-foreground">—</span>}
                     </TableCell>
                     {activeTab === 'CANCELLED' && (
                       <>
