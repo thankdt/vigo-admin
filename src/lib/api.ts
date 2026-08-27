@@ -2010,6 +2010,91 @@ export async function adminListReferrals(params: { page?: number; limit?: number
   return unwrap<AdminReferralListResponse>(response);
 }
 
+// ── Sổ hoa hồng theo CHUYẾN của một người giới thiệu (đối soát) ──────────
+// Gộp cả BA nguồn tiền, đã net thu hồi, mỗi (nguồn, đơn hàng) một dòng. Backend phải
+// deploy TRƯỚC admin: BE cũ chưa có route này sẽ trả 404 và UI hiện banner "chưa hỗ trợ"
+// thay vì toast lỗi đỏ.
+export type ReferrerTripSource = 'TRIP' | 'AGENT' | 'KOL_OVERRIDE';
+
+export type AdminReferrerTripRow = {
+  /** `${source}:${orderKey}` — cùng một chuyến có thể ra 2 dòng hợp lệ (khác nguồn). */
+  key: string;
+  source: ReferrerTripSource;
+  orderId: string | null;
+  /** MULTI_STOP = đơn bao xe (đặt hộ), UNKNOWN = không khớp bảng nào / dòng chưa gắn chuyến. */
+  orderKind: 'BOOKING' | 'MULTI_STOP' | 'UNKNOWN';
+  /** Chỉ có khi chuyến TỒN TẠI trong bảng booking ⇒ chỉ dòng này mới mở được chi tiết. */
+  bookingId: string | null;
+  /** Đã net thu hồi — có thể 0, hoặc ÂM với dòng cũ bị thu hồi trùng. */
+  amount: number;
+  /** Số ghi có ban đầu, trước thu hồi. */
+  grossAmount: number;
+  clawedBack: boolean;
+  /** DRIVER_MAIN = hoa hồng đặt hộ trả vào ví TÀI XẾ, không nằm trong lũy kế affiliate. */
+  walletType: string | null;
+  creditedAt: string;
+  clawedBackAt: string | null;
+  yearMonthVn: string | null;
+  /** Snapshot gốc lúc tính hoa hồng — mỗi nguồn một nghĩa, xem BE. */
+  base: number | null;
+  percent: number | null;
+  /** Người được mời (TRIP) / KOL tuyến dưới (KOL_OVERRIDE) / khách của chuyến (AGENT). */
+  counterparty: { id: string; fullName: string | null; phone: string | null } | null;
+  booking: {
+    status: string;
+    price: number;
+    createdAt: string;
+    completedAt: string | null;
+    scheduledFromTime: string | null;
+    isTestTrip: boolean;
+    pickupAddress: string | null;
+    dropoffAddress: string | null;
+  } | null;
+};
+
+export type AdminReferrerTripsResponse = {
+  data: AdminReferrerTripRow[];
+  meta: {
+    page: number; limit: number; total: number; totalPages: number;
+    hasNext: boolean; hasPrevious: boolean;
+    totals: {
+      trip: number;
+      agent: number;
+      kolOverride: number;
+      /** trip + agent + kolOverride — so được với `lifetimeTotal` (ví USER_REFERRAL). */
+      affiliate: number;
+      /** Đặt hộ trả vào ví tài xế — CỐ Ý tách, không cộng vào affiliate. */
+      agentDriverWallet: number;
+    };
+  };
+};
+
+export async function adminListReferrerTrips(
+  referrerId: string,
+  params: {
+    page?: number;
+    limit?: number;
+    /** Ngày VN `YYYY-MM-DD`. Phải gửi CẶP from+to, BE trả 400 nếu chỉ có một đầu. */
+    from?: string;
+    to?: string;
+    source?: ReferrerTripSource;
+  } = {},
+): Promise<AdminReferrerTripsResponse> {
+  const q = new URLSearchParams();
+  if (params.page) q.set('page', String(params.page));
+  if (params.limit) q.set('limit', String(params.limit));
+  if (params.from && params.to) {
+    q.set('from', params.from);
+    q.set('to', params.to);
+  }
+  if (params.source) q.set('source', params.source);
+  const qs = q.toString();
+  const response = await fetchWithAuth(
+    `/referrals/admin/referrers/${referrerId}/trips${qs ? '?' + qs : ''}`,
+  );
+  return unwrap<AdminReferrerTripsResponse>(response);
+}
+
 export type AdminReferralDetail = AdminReferralRow & {
   events: Array<{ id: string; type: 'SIGNUP' | 'TRIP' | 'CLAWBACK'; amount: number; bookingId: string | null; note: string | null; createdAt: string; createdByAdminId: string | null }>;
 };

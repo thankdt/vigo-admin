@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 // Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
 // ĐÁNH RƠI khi giải xung đột merge (nhánh GĐ1 bỏ khối gọi-khách khỏi cùng dòng import),
@@ -44,6 +44,7 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
+import { buildTripPassText } from './booking-pass-utils';
 import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
@@ -642,6 +643,34 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
     setDuplicateDraft(bookingToDraft(booking));
   }
 
+  const handleCopyPass = async (booking: Booking) => {
+    const text = buildTripPassText(booking);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      toast({
+        title: 'Đã sao chép thông tin chuyến',
+        description: 'Đã copy đầy đủ thông tin để pass vào nhóm Zalo/Telegram.',
+      });
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Không thể sao chép',
+        description: 'Vui lòng thử lại hoặc cấp quyền clipboard cho trình duyệt.',
+      });
+    }
+  };
+
   const handleStatusUpdate = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     if (!dialogState.booking || !dialogState.newStatus) return;
@@ -1116,6 +1145,10 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                               🛎️ Nhận xử lý
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem onSelect={() => handleCopyPass(booking)}>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy pass chuyến
+                          </DropdownMenuItem>
                           {/* Không khoá theo trạng thái: nhân bản chuyến đã hoàn thành / đã huỷ
                               chính là ca dùng chính (khách quen đặt lại tuyến cũ). */}
                           <DropdownMenuItem onSelect={() => startDuplicate(booking)}>

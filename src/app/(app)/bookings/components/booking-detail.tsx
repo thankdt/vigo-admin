@@ -16,13 +16,14 @@ import * as React from 'react';
 // 7 tiếng giữa dòng và dialog mở từ chính dòng đó. CLAUDE.md: mọi mốc là giờ VN.
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { Button } from '@/components/ui/button';
-import { Loader2, Car, User, Clock, Zap, CopyPlus, Store } from 'lucide-react';
+import { Loader2, Car, User, Clock, Zap, CopyPlus, Store, Copy, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag } from '@/lib/api';
 import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
+import { buildTripPassText } from './booking-pass-utils';
 import type {} from '@/lib/types';
 import { formatScheduleWindow } from './schedule-window';
 import type { Booking, CustomerCallStatus, BookingCustomerCallEvent } from '@/lib/types';
@@ -561,14 +562,63 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
     booking?.scheduledToTime,
   );
 
+  const [copiedPass, setCopiedPass] = React.useState(false);
+
+  const handleCopyPass = async () => {
+    if (!booking) return;
+    const text = buildTripPassText(booking);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopiedPass(true);
+      setTimeout(() => setCopiedPass(false), 2000);
+      toast({
+        title: 'Đã sao chép thông tin chuyến',
+        description: 'Đã copy đầy đủ thông tin để pass vào nhóm Zalo/Telegram.',
+      });
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Không thể sao chép',
+        description: 'Vui lòng thử lại hoặc cấp quyền clipboard cho trình duyệt.',
+      });
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
         <DialogHeader>
-          <DialogTitle>Chi tiết chuyến đi</DialogTitle>
-          <DialogDescription>
-            Mã chuyến: {bookingId}
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3 pr-6">
+            <div>
+              <DialogTitle>Chi tiết chuyến đi</DialogTitle>
+              <DialogDescription>
+                Mã chuyến: {bookingId}
+              </DialogDescription>
+            </div>
+            {booking && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleCopyPass}
+                className="shrink-0 h-8 gap-1.5 text-xs font-medium bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+              >
+                {copiedPass ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                {copiedPass ? 'Đã copy' : 'Copy pass chuyến'}
+              </Button>
+            )}
+          </div>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {isLoading && <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>}
@@ -727,27 +777,6 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 </Card>
               )}
 
-              {/* Scheduled pickup time — only when the customer booked ahead.
-                  Chuyến đời mới có khung [from, to]; `scheduledTime` chỉ mirror
-                  mốc đầu (client cũ) nên phải đọc from/to mới thấy đủ 2 mốc.
-
-                  🚨 Khối này PORT TAY từ `bc37223`/`8d75fa6` của main (2026-08-24). Nhánh
-                  CRM đã tách `BookingDetail` ra file này, còn main sửa ở vị trí CŨ trong
-                  `bookings-table.tsx` — git KHÔNG báo xung đột giữa hai chỗ đó, nên lấy
-                  nguyên bên mình là làm mất thay đổi của main trong im lặng (đúng bẫy
-                  §15.2 của spec CRM). */}
-              {scheduleWindow && (
-                <Card className="p-3 flex items-center gap-3 border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30">
-                  <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                    <Clock className="h-4 w-4 text-amber-700 dark:text-amber-300" />
-                  </div>
-                  <div className="flex-1 text-sm">
-                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Hẹn giờ</div>
-                    <div className="font-semibold">{scheduleWindow}</div>
-                  </div>
-                </Card>
-              )}
-
               {/* Customer */}
               <Card className="p-3 space-y-1">
                 <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Khách hàng</div>
@@ -800,6 +829,27 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   <p className="text-sm text-muted-foreground italic">Chưa có tài xế</p>
                 )}
               </Card>
+
+              {/* Scheduled pickup time — only when the customer booked ahead.
+                  Chuyến đời mới có khung [from, to]; `scheduledTime` chỉ mirror
+                  mốc đầu (client cũ) nên phải đọc from/to mới thấy đủ 2 mốc.
+
+                  🚨 Khối này PORT TAY từ `bc37223`/`8d75fa6` của main (2026-08-24). Nhánh
+                  CRM đã tách `BookingDetail` ra file này, còn main sửa ở vị trí CŨ trong
+                  `bookings-table.tsx` — git KHÔNG báo xung đột giữa hai chỗ đó, nên lấy
+                  nguyên bên mình là làm mất thay đổi của main trong im lặng (đúng bẫy
+                  §15.2 của spec CRM). */}
+              {scheduleWindow && (
+                <Card className="p-3 flex items-center gap-3 border-amber-300 bg-amber-50 dark:border-amber-900/60 dark:bg-amber-950/30">
+                  <div className="h-9 w-9 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                    <Clock className="h-4 w-4 text-amber-700 dark:text-amber-300" />
+                  </div>
+                  <div className="flex-1 text-sm">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Hẹn giờ</div>
+                    <div className="font-semibold">{scheduleWindow}</div>
+                  </div>
+                </Card>
+              )}
 
               {/* Addresses */}
               <Card className="p-3 space-y-3">
@@ -1031,14 +1081,23 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
             </>
           )}
         </div>
-        {booking && onDuplicate && (
-          <DialogFooter>
-            {/* Đặt lại chuyến giống hệt cho khách quen — mở form Tạo chuyến đã điền sẵn.
-                Chuyến đang xem KHÔNG bị thay đổi. */}
-            <Button variant="outline" onClick={() => onDuplicate(booking)}>
-              <CopyPlus className="mr-2 h-4 w-4" />
-              Nhân bản chuyến
+        {booking && (
+          <DialogFooter className="flex-row justify-between sm:justify-between items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleCopyPass}
+              className="bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+            >
+              {copiedPass ? <Check className="mr-2 h-4 w-4 text-green-600" /> : <Copy className="mr-2 h-4 w-4" />}
+              {copiedPass ? 'Đã copy' : 'Copy pass chuyến'}
             </Button>
+            {onDuplicate && (
+              <Button variant="outline" onClick={() => onDuplicate(booking)}>
+                <CopyPlus className="mr-2 h-4 w-4" />
+                Nhân bản chuyến
+              </Button>
+            )}
           </DialogFooter>
         )}
       </DialogContent>
