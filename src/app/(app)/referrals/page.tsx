@@ -36,6 +36,10 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { REFERRAL_EVENT_LABEL } from '@/lib/enum-labels';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { formatVND, formatVnDate, formatVnDateTime } from '@/lib/format-vn';
+import { BookingDetail } from '../bookings/components/booking-detail';
+import { ReferrerTripsTab } from './components/referrer-trips-tab';
 import {
   adminListReferrers,
   adminListReferrals,
@@ -46,17 +50,6 @@ import {
   type AdminReferralRow,
   type AdminReferralDetail,
 } from '@/lib/api';
-
-const formatVND = (n: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
-
-// Giờ VN (Asia/Ho_Chi_Minh) độc lập timezone trình duyệt — bắt buộc theo CLAUDE.md.
-const formatVnDateTime = (iso: string | null | undefined): string => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-};
 
 /**
  * Tiền là số nguyên đồng. `adjustment` là hiệu của các float64 nên về lý có thể ra 1e-10 →
@@ -125,13 +118,24 @@ export default function ReferralsPage() {
   const [drillFrom, setDrillFrom] = React.useState('');
   const [drillTo, setDrillTo] = React.useState('');
   const [drillPage, setDrillPage] = React.useState(1);
+  // Chuyến đang mở từ tab "Chuyến có hoa hồng". BookingDetail tự render Dialog riêng nên phải
+  // MOUNT CÓ ĐIỀU KIỆN ở đây (anh em của DialogContent), không bọc thêm Dialog quanh nó.
+  const [tripBookingId, setTripBookingId] = React.useState<string | null>(null);
+  // Tabs phải ĐIỀU KHIỂN được: Radix đặt `hidden={!present}` với `present = forceMount ||
+  // isSelected`, nên chỉ thêm forceMount là HIỆN CẢ HAI TAB cùng lúc. Tự giữ tab đang mở rồi
+  // tự set `hidden` mới vừa giữ được state của tab chuyến, vừa ẩn đúng.
+  const [drillTab, setDrillTab] = React.useState<'referees' | 'trips'>('referees');
+  // Mount LƯỜI: chưa mở tab chuyến thì chưa bắn query gộp 3 bảng. Mở rồi thì giữ mount.
+  const [tripsOpened, setTripsOpened] = React.useState(false);
   const [eventPage, setEventPage] = React.useState(1);
   React.useEffect(() => { setEventPage(1); }, [detail]);
 
   const filteredReferrals = React.useMemo(() => {
     const q = drillSearch.trim().toLowerCase();
-    const fromT = drillFrom ? new Date(`${drillFrom}T00:00:00`).getTime() : -Infinity;
-    const toT = drillTo ? new Date(`${drillTo}T23:59:59`).getTime() : Infinity;
+    // Biên phải là ngày VN (+07:00). Không ghi offset thì trình duyệt dựng theo giờ MÁY —
+    // admin ngồi múi giờ khác sẽ lọc lệch nguyên một ngày.
+    const fromT = drillFrom ? new Date(`${drillFrom}T00:00:00+07:00`).getTime() : -Infinity;
+    const toT = drillTo ? new Date(`${drillTo}T23:59:59.999+07:00`).getTime() : Infinity;
     return referrals.filter((r) => {
       const name = (r.referee.fullName ?? '').toLowerCase();
       const phone = (r.referee.phone ?? '').toLowerCase();
@@ -197,6 +201,8 @@ export default function ReferralsPage() {
 
   const openReferrerDrilldown = async (r: AdminReferrerSummary) => {
     setSelectedReferrer(r);
+    setDrillTab('referees');
+    setTripsOpened(false);
     setDrillSearch('');
     setDrillFrom('');
     setDrillTo('');
@@ -214,6 +220,8 @@ export default function ReferralsPage() {
   const closeReferrerDrilldown = () => {
     setSelectedReferrer(null);
     setReferrals([]);
+    // Không clear thì chi tiết chuyến sống sót sau khi drill-down đã đóng.
+    setTripBookingId(null);
   };
 
   const openDetail = async (row: AdminReferralRow) => {
@@ -451,7 +459,7 @@ export default function ReferralsPage() {
 
       {/* Drill-down: referees of a specific referrer */}
       <Dialog open={!!selectedReferrer} onOpenChange={(open) => { if (!open) closeReferrerDrilldown(); }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-4xl">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={closeReferrerDrilldown}>
@@ -479,61 +487,94 @@ export default function ReferralsPage() {
               </DialogDescription>
             )}
           </DialogHeader>
-          {referralsLoading ? (
-            <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
-          ) : (
-            <>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-end pb-2">
-              <div className="relative flex-1">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input className="pl-9" placeholder="Lọc theo tên / SĐT khách..." value={drillSearch} onChange={(e) => setDrillSearch(e.target.value)} />
-              </div>
-              <Input type="date" className="sm:w-[150px]" value={drillFrom} onChange={(e) => setDrillFrom(e.target.value)} />
-              <Input type="date" className="sm:w-[150px]" value={drillTo} onChange={(e) => setDrillTo(e.target.value)} />
-            </div>
-            <div className="max-h-[55vh] overflow-y-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Người được mời</TableHead>
-                    <TableHead className="text-right">Chuyến</TableHead>
-                    <TableHead className="text-right">Tiền</TableHead>
-                    <TableHead>Ngày</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredReferrals.length === 0 ? (
-                    <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
-                  ) : pagedReferrals.map((r) => (
-                    <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(r)}>
-                      <TableCell>
-                        <div className="font-medium">{r.referee.fullName ?? '—'}</div>
-                        <div className="text-xs text-muted-foreground">{r.referee.phone}</div>
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
-                      <TableCell className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Chi tiết</Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-            {drillTotalPages > 1 && (
-              <div className="flex items-center justify-between border-t pt-2 mt-1">
-                <span className="text-sm text-muted-foreground">Trang {drillPage}/{drillTotalPages} · {filteredReferrals.length} khách</span>
-                <div className="flex items-center gap-1">
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={drillPage <= 1} onClick={() => setDrillPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>
-                  <Button variant="outline" size="icon" className="h-8 w-8" disabled={drillPage >= drillTotalPages} onClick={() => setDrillPage((p) => Math.min(drillTotalPages, p + 1))}><ChevronRight className="h-4 w-4" /></Button>
+          <Tabs
+            value={drillTab}
+            onValueChange={(v) => {
+              const tab = v as 'referees' | 'trips';
+              setDrillTab(tab);
+              if (tab === 'trips') setTripsOpened(true);
+            }}
+            className="w-full"
+          >
+            {/* grid thay vì inline-flex mặc định: 2 tab tiếng Việt tràn ngang trên máy 360px. */}
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="referees">Người được mời</TabsTrigger>
+              <TabsTrigger value="trips">Chuyến có hoa hồng</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="referees" className="mt-3">
+              {referralsLoading ? (
+                <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
+              ) : (
+                <>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-end pb-2">
+                  <div className="relative flex-1">
+                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input className="pl-9" placeholder="Lọc theo tên / SĐT khách..." value={drillSearch} onChange={(e) => setDrillSearch(e.target.value)} />
+                  </div>
+                  <Input type="date" className="sm:w-[150px]" value={drillFrom} onChange={(e) => setDrillFrom(e.target.value)} />
+                  <Input type="date" className="sm:w-[150px]" value={drillTo} onChange={(e) => setDrillTo(e.target.value)} />
                 </div>
-              </div>
-            )}
-            </>
-          )}
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Người được mời</TableHead>
+                        <TableHead className="text-right">Chuyến</TableHead>
+                        <TableHead className="text-right">Tiền</TableHead>
+                        <TableHead>Ngày</TableHead>
+                        <TableHead />
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredReferrals.length === 0 ? (
+                        <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
+                      ) : pagedReferrals.map((r) => (
+                        <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(r)}>
+                          <TableCell>
+                            <div className="font-medium">{r.referee.fullName ?? '—'}</div>
+                            <div className="text-xs text-muted-foreground">{r.referee.phone}</div>
+                          </TableCell>
+                          <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
+                          <TableCell className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
+                          <TableCell className="text-sm text-muted-foreground">{formatVnDate(r.createdAt)}</TableCell>
+                          <TableCell className="text-right">
+                            <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Chi tiết</Button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                {drillTotalPages > 1 && (
+                  <div className="flex items-center justify-between border-t pt-2 mt-1">
+                    <span className="text-sm text-muted-foreground">Trang {drillPage}/{drillTotalPages} · {filteredReferrals.length} khách</span>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled={drillPage <= 1} onClick={() => setDrillPage((p) => Math.max(1, p - 1))}><ChevronLeft className="h-4 w-4" /></Button>
+                      <Button variant="outline" size="icon" className="h-8 w-8" disabled={drillPage >= drillTotalPages} onClick={() => setDrillPage((p) => Math.min(drillTotalPages, p + 1))}><ChevronRight className="h-4 w-4" /></Button>
+                    </div>
+                  </div>
+                )}
+                </>
+              )}
+            </TabsContent>
+
+            {/* forceMount giữ state/kết quả khi đổi tab qua lại; `hidden` phải TỰ đặt vì với
+                forceMount thì Radix luôn tính present=true (xem state drillTab ở trên). */}
+            <TabsContent value="trips" className="mt-3" forceMount hidden={drillTab !== 'trips'}>
+              {tripsOpened && selectedReferrer && (
+                <ReferrerTripsTab referrer={selectedReferrer} onOpenBooking={setTripBookingId} />
+              )}
+            </TabsContent>
+          </Tabs>
         </DialogContent>
+
+        {/* Chi tiết chuyến chồng LÊN drill-down (drill-down giữ nguyên phía dưới, đóng thì về
+            đúng chỗ). Mount có điều kiện vì BookingDetail tự render Dialog riêng. KHÔNG truyền
+            onDuplicate — màn đối soát không phải chỗ nhân bản chuyến. */}
+        {tripBookingId && (
+          <BookingDetail bookingId={tripBookingId} onClose={() => setTripBookingId(null)} />
+        )}
       </Dialog>
 
       {/* Event log + clawback dialog (per referee relationship) */}
