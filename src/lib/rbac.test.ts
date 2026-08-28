@@ -19,10 +19,10 @@ const mkMe = (over: Partial<AdminMe> = {}): AdminMe => ({
 // forgets to declare its function, these hard-coded counts / derived assertions fail
 // instead of the permission silently slipping through the gate (spec §2.1).
 describe('rbac catalog mirror', () => {
-  it('has exactly 35 menu functions (navItems minus /settings)', () => {
+  it('has exactly 36 menu functions (navItems minus /settings)', () => {
     // 2026-08-12: +crm-queue · 2026-08-18: +crm-tickets, +crm-segments, +crm-campaigns,
-    // +crm-accounts, +crm-insights.
-    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(35);
+    // +crm-accounts, +crm-insights · 2026-08-28: +pooling.
+    expect(Object.keys(MENU_FUNCTION_BY_HREF).length).toBe(36);
   });
 
   // Ranh giới riêng tư của màn "Đội tài chuyên nghiệp": ghi chú tuyển team KHÔNG

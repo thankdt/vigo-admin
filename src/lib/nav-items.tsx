@@ -28,6 +28,7 @@ import {
   Headset,
   LifeBuoy,
   Layers,
+  Route,
   Send,
   Briefcase,
   LineChart,
@@ -58,6 +59,10 @@ export const navGroups: NavGroup[] = [
     items: [
       { href: '/bookings', label: 'Chuyến đi', icon: Book },
       { href: '/agent-orders', label: 'Đơn đặt hộ', icon: PackageOpen },
+      // Chỉ QUAN SÁT: xem chuyến lẻ nào gom chung xe được. Không tạo chuyến,
+      // không gán tài xế — nên đặt cạnh danh sách chuyến chứ không vào nhóm
+      // cấu hình.
+      { href: '/pooling', label: 'Gợi ý gom chuyến', icon: Route },
       { href: '/drivers', label: 'Tài xế', icon: Car },
       // Cạnh mục tài xế, cùng cụm "chất lượng tài xế" với Tỉ lệ huỷ / Góp ý.
       { href: '/driver-reputation', label: 'Điểm & đánh giá tài xế', icon: Star },
