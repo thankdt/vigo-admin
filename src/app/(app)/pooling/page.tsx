@@ -139,11 +139,10 @@ export default function PoolingPage() {
 
 function Summary({ data }: { data: PoolSuggestions }) {
   const pooled = data.groups.reduce((n, g) => n + g.bookingIds.length, 0);
-  // Chỉ cộng nhóm có ĐỦ giá. Nhóm thiếu giá bị bỏ khỏi tổng và nói rõ số lượng,
-  // chứ không cộng nửa vời rồi để admin đọc nhầm thành doanh thu đầy đủ.
-  const coGia = data.groups.filter((g) => g.totalPrice != null);
-  const thieuGia = data.groups.length - coGia.length;
-  const tongTien = coGia.reduce((s, g) => s + (g.totalPrice ?? 0), 0);
+  // Cộng hết (chốt 28/08). Vẫn đếm số chuyến chưa có giá để ghi chú — hiện
+  // tổng mà không nói còn thiếu thì admin đọc nó như doanh thu đầy đủ.
+  const tongTien = data.groups.reduce((s, g) => s + g.totalPrice, 0);
+  const thieuGia = data.groups.reduce((s, g) => s + g.missingPriceCount, 0);
   return (
     <Card className="p-4">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
@@ -152,10 +151,10 @@ function Summary({ data }: { data: PoolSuggestions }) {
         <Stat label="Chuyến nằm trong nhóm" value={String(pooled)} />
         <Stat
           label="Tổng tiền các nhóm"
-          value={formatVnd(tongTien)}
+          value={`${formatVnd(tongTien)}${thieuGia > 0 ? ' *' : ''}`}
           hint={
             thieuGia > 0
-              ? `${thieuGia} nhóm chưa đủ giá nên không tính vào tổng này`
+              ? `Chưa gồm ${thieuGia} chuyến không có giá`
               : 'Cộng giá từng khách trong mọi nhóm gợi ý'
           }
         />
@@ -203,9 +202,10 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
           {g.bookingIds.length} chuyến · {g.totalSeats} khách
         </span>
         <Badge variant="outline">chủ: {shortId(g.anchorBookingId)}</Badge>
-        {g.totalPrice != null && (
-          <Badge variant="secondary">{formatVnd(g.totalPrice)}</Badge>
-        )}
+        <Badge variant="secondary">
+          {formatVnd(g.totalPrice)}
+          {g.missingPriceCount > 0 && ' *'}
+        </Badge>
         {g.savedKm != null && (
           <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
             tiết kiệm {g.savedKm} km
@@ -271,8 +271,16 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
               Tổng nhóm
             </TableCell>
             <TableCell className="text-right font-semibold">{g.totalSeats}</TableCell>
-            <TableCell className="text-right font-semibold">
+            <TableCell
+              className="text-right font-semibold"
+              title={
+                g.missingPriceCount > 0
+                  ? `Chưa gồm ${g.missingPriceCount} chuyến không có giá`
+                  : undefined
+              }
+            >
               {formatVnd(g.totalPrice)}
+              {g.missingPriceCount > 0 && ' *'}
             </TableCell>
           </TableRow>
         </TableBody>
