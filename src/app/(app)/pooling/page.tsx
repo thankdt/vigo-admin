@@ -15,12 +15,23 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Loader2, Route as RouteIcon, Search, TrendingDown } from 'lucide-react';
+import {
+  Check,
+  Copy,
+  Eye,
+  EyeOff,
+  Loader2,
+  Route as RouteIcon,
+  Search,
+  TrendingDown,
+} from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getPoolingSuggestions, type PoolSuggestions } from '@/lib/api';
 import {
+  buildGroupText,
   delayLabel,
   formatVnd,
+  maskPhone,
   REJECT_HINT,
   REJECT_LABEL,
   shortAddress,
@@ -43,6 +54,9 @@ export default function PoolingPage() {
   const [windowHours, setWindowHours] = React.useState('2');
   const [loading, setLoading] = React.useState(false);
   const [data, setData] = React.useState<PoolSuggestions | null>(null);
+  // SĐT ẩn MẶC ĐỊNH. Admin hay chụp màn hình chuyển chuyến cho tài xế, và ảnh
+  // đó không được lộ số của khách. Bật lên là hành động có chủ ý.
+  const [hienSdt, setHienSdt] = React.useState(false);
 
   const run = React.useCallback(async () => {
     setLoading(true);
@@ -117,6 +131,22 @@ export default function PoolingPage() {
             )}
             Quét
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setHienSdt((v) => !v)}
+            title={
+              hienSdt
+                ? 'Ẩn lại trước khi chụp màn hình'
+                : 'Hiện số điện thoại khách (đừng chụp màn hình khi đang hiện)'
+            }
+          >
+            {hienSdt ? (
+              <EyeOff className="mr-2 h-4 w-4" />
+            ) : (
+              <Eye className="mr-2 h-4 w-4" />
+            )}
+            {hienSdt ? 'Ẩn SĐT' : 'Hiện SĐT'}
+          </Button>
         </div>
         <p className="mt-3 text-xs text-muted-foreground">
           Nới hai ngưỡng trên sẽ ra nhiều gợi ý hơn, nhưng tài xế phải vòng xa hơn.
@@ -126,7 +156,7 @@ export default function PoolingPage() {
 
       {data && <Summary data={data} />}
       {data?.groups.map((g) => (
-        <GroupCard key={g.anchorBookingId} group={g} />
+        <GroupCard key={g.anchorBookingId} group={g} hienSdt={hienSdt} />
       ))}
 
       {data && data.groups.length === 0 && (
@@ -208,7 +238,72 @@ function tenKhach(
   return p?.customerName?.trim() || shortId(bookingId);
 }
 
-function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
+/**
+ * Nút chép thông tin nhóm để chuyển cho tài xế.
+ *
+ * Nội dung do `buildGroupText` dựng, và nó CỐ Ý không kèm số điện thoại — có
+ * test canh riêng. Chép nguyên bảng thì SĐT đi theo, đúng thứ cần tránh.
+ */
+function CopyGroupButton({
+  group: g,
+}: {
+  group: PoolSuggestions['groups'][number];
+}) {
+  const { toast } = useToast();
+  const [copied, setCopied] = React.useState(false);
+
+  const onCopy = async () => {
+    const text = buildGroupText(g as any);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Trình duyệt cũ / không có quyền clipboard: rơi về textarea + execCommand
+        // chứ không im lặng, vì admin sẽ tưởng đã chép được.
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast({
+        variant: 'destructive',
+        title: 'Không chép được',
+        description: 'Trình duyệt chặn clipboard — bấm chuột phải để chép tay.',
+      });
+    }
+  };
+
+  return (
+    <Button
+      variant="outline"
+      size="sm"
+      onClick={onCopy}
+      title="Chép thông tin nhóm (KHÔNG kèm số điện thoại)"
+    >
+      {copied ? (
+        <Check className="mr-1.5 h-3.5 w-3.5 text-emerald-600" />
+      ) : (
+        <Copy className="mr-1.5 h-3.5 w-3.5" />
+      )}
+      {copied ? 'Đã chép' : 'Chép'}
+    </Button>
+  );
+}
+
+function GroupCard({
+  group: g,
+  hienSdt,
+}: {
+  group: PoolSuggestions['groups'][number];
+  hienSdt: boolean;
+}) {
   const rejects = Object.entries(g.rejected).filter(([, n]) => n > 0);
   const anchorRoute = g.passengers.find((p) => p.isAnchor)?.routeName ?? null;
   // Khách nào bị đón trễ quá ngân sách 25 phút — con số quyết định nhóm có
@@ -257,6 +352,9 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
             {g.pooledDurationMin != null && ` · ~${g.pooledDurationMin} phút`}
           </span>
         )}
+        <div className="ml-auto">
+          <CopyGroupButton group={g} />
+        </div>
       </div>
 
       <Table>
@@ -299,7 +397,7 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
                 )}
               </TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">
-                {p.customerPhone ?? '—'}
+                {hienSdt ? (p.customerPhone ?? '—') : maskPhone(p.customerPhone)}
               </TableCell>
               <TableCell className="whitespace-nowrap">{vnTime(p.pickupAt)}</TableCell>
               <TableCell className="whitespace-nowrap">
