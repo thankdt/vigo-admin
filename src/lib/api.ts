@@ -4563,8 +4563,10 @@ export interface PoolGroupView {
   anchorBookingId: string;
   bookingIds: string[];
   passengers: PoolPassenger[];
-  /** null khi có chuyến thiếu giá — cố ý không cộng nửa vời. */
-  totalPrice: number | null;
+  /** Tổng tiền nhóm = cộng giá từng khách CÓ giá. */
+  totalPrice: number;
+  /** Bao nhiêu chuyến chưa có giá — >0 nghĩa là tổng chưa đủ vế. */
+  missingPriceCount: number;
   totalSeats: number;
   stops: PoolStop[] | null;
   pooledDistanceKm: number | null;
