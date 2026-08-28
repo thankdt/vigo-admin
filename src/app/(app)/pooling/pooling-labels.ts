@@ -56,11 +56,15 @@ export function formatVnd(v: number | string | null | undefined): string {
   return `${Math.round(n).toLocaleString('vi-VN')}đ`;
 }
 
-/** Địa chỉ dài thì cắt bớt, giữ đủ để nhận ra nơi đó. */
-export function shortAddress(a: string | null | undefined, max = 42): string {
+/**
+ * Địa chỉ ĐẦY ĐỦ, không cắt. Trước 28/08 hàm này cắt còn 42 ký tự và thêm dấu
+ * `…`, nhưng màn này sinh ra để admin CHỤP MÀN HÌNH gửi nhóm tài xế — địa chỉ
+ * cụt thì tài xế không tới được, tức là cắt chữ làm hỏng đúng công dụng chính.
+ * Ô bảng cho xuống dòng thay vì cắt.
+ */
+export function addressText(a: string | null | undefined): string {
   const t = (a ?? '').trim();
-  if (!t) return '—';
-  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+  return t || '—';
 }
 
 /**

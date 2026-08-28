@@ -27,6 +27,10 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getPoolingSuggestions, type PoolSuggestions } from '@/lib/api';
+// Dùng lại nguyên dialog chi tiết chuyến của màn /bookings thay vì dựng bản
+// riêng: nó đã có đủ giá, lịch sử, cờ test/trùng, và quan trọng hơn là mọi
+// thay đổi sau này chỉ phải sửa một chỗ.
+import { BookingDetail } from '../bookings/components/booking-detail';
 import {
   buildGroupText,
   delayLabel,
@@ -34,7 +38,7 @@ import {
   maskPhone,
   REJECT_HINT,
   REJECT_LABEL,
-  shortAddress,
+  addressText,
   shortId,
   vnTime,
   vnToday,
@@ -57,6 +61,10 @@ export default function PoolingPage() {
   // SĐT ẩn MẶC ĐỊNH. Admin hay chụp màn hình chuyển chuyến cho tài xế, và ảnh
   // đó không được lộ số của khách. Bật lên là hành động có chủ ý.
   const [hienSdt, setHienSdt] = React.useState(false);
+  // Chuyến đang mở dialog chi tiết. Giữ ở cấp TRANG chứ không trong từng thẻ
+  // nhóm: một chuyến có thể xuất hiện ở dải "thứ tự chạy" lẫn trong bảng, và
+  // hai chỗ đó phải mở cùng một dialog.
+  const [chiTietId, setChiTietId] = React.useState<string | null>(null);
 
   const run = React.useCallback(async () => {
     setLoading(true);
@@ -177,8 +185,17 @@ export default function PoolingPage() {
 
       {data && <Summary data={data} />}
       {data?.groups.map((g) => (
-        <GroupCard key={g.anchorBookingId} group={g} hienSdt={hienSdt} />
+        <GroupCard
+          key={g.anchorBookingId}
+          group={g}
+          hienSdt={hienSdt}
+          onOpenBooking={setChiTietId}
+        />
       ))}
+
+      {chiTietId && (
+        <BookingDetail bookingId={chiTietId} onClose={() => setChiTietId(null)} />
+      )}
 
       {data && data.groups.length === 0 && (
         <Card className="p-6 text-center text-sm text-muted-foreground">
@@ -321,9 +338,11 @@ function CopyGroupButton({
 function GroupCard({
   group: g,
   hienSdt,
+  onOpenBooking,
 }: {
   group: PoolSuggestions['groups'][number];
   hienSdt: boolean;
+  onOpenBooking: (id: string) => void;
 }) {
   const rejects = Object.entries(g.rejected).filter(([, n]) => n > 0);
   const anchorRoute = g.passengers.find((p) => p.isAnchor)?.routeName ?? null;
@@ -398,7 +417,14 @@ function GroupCard({
               <TableCell>
                 <div className="font-medium">{p.customerName ?? '—'}</div>
                 <div className="font-mono text-[11px] text-muted-foreground">
-                  {shortId(p.bookingId)}
+                  <button
+                    type="button"
+                    onClick={() => onOpenBooking(p.bookingId)}
+                    className="underline decoration-dotted underline-offset-2 hover:text-foreground"
+                    title="Xem chi tiết chuyến"
+                  >
+                    {shortId(p.bookingId)}
+                  </button>
                   {p.isAnchor && <span className="ml-1.5">(chuyến chủ)</span>}
                 </div>
               </TableCell>
@@ -435,16 +461,16 @@ function GroupCard({
                   return <div className={`text-[11px] ${cls}`}>{d.text}</div>;
                 })()}
               </TableCell>
-              <TableCell className="text-xs" title={p.pickupAddress ?? undefined}>
-                {shortAddress(p.pickupAddress)}
+              <TableCell className="min-w-[200px] whitespace-normal break-words text-xs">
+                {addressText(p.pickupAddress)}
                 {p.pickupCrossMeters > 0 && (
                   <span className="ml-1 text-muted-foreground">
                     (lệch {(p.pickupCrossMeters / 1000).toFixed(1)}km)
                   </span>
                 )}
               </TableCell>
-              <TableCell className="text-xs" title={p.dropoffAddress ?? undefined}>
-                {shortAddress(p.dropoffAddress)}
+              <TableCell className="min-w-[200px] whitespace-normal break-words text-xs">
+                {addressText(p.dropoffAddress)}
                 {p.dropoffCrossMeters > 0 && (
                   <span className="ml-1 text-muted-foreground">
                     (lệch {(p.dropoffCrossMeters / 1000).toFixed(1)}km)
@@ -484,13 +510,15 @@ function GroupCard({
             {g.stops.map((s, i) => (
               <React.Fragment key={`${s.bookingId}-${s.kind}-${i}`}>
                 {i > 0 && <span className="text-muted-foreground">→</span>}
-                <Badge
-                  variant={s.kind === 'DON' ? 'default' : 'secondary'}
-                  className="font-normal"
-                  title={s.bookingId}
-                >
-                  {s.kind === 'DON' ? 'Đón' : 'Trả'} {tenKhach(g, s.bookingId)}
-                </Badge>
+                <button type="button" onClick={() => onOpenBooking(s.bookingId)}>
+                  <Badge
+                    variant={s.kind === 'DON' ? 'default' : 'secondary'}
+                    className="cursor-pointer font-normal hover:opacity-80"
+                    title={`${s.bookingId} — bấm để xem chi tiết`}
+                  >
+                    {s.kind === 'DON' ? 'Đón' : 'Trả'} {tenKhach(g, s.bookingId)}
+                  </Badge>
+                </button>
               </React.Fragment>
             ))}
           </div>
