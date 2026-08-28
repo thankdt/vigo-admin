@@ -37,3 +37,16 @@ export function vnToday(): string {
 
 /** Rút gọn id chuyến cho bảng hẹp. */
 export const shortId = (id: string) => id.slice(0, 8);
+
+/** Tiền VND kiểu Việt: 430.000đ. `null` → gạch ngang, KHÔNG hiện 0. */
+export function formatVnd(v: number | null | undefined): string {
+  if (v == null) return '—';
+  return `${Math.round(v).toLocaleString('vi-VN')}đ`;
+}
+
+/** Địa chỉ dài thì cắt bớt, giữ đủ để nhận ra nơi đó. */
+export function shortAddress(a: string | null | undefined, max = 42): string {
+  const t = (a ?? '').trim();
+  if (!t) return '—';
+  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+}

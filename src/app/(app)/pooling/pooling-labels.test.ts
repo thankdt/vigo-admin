@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { REJECT_HINT, REJECT_LABEL, shortId, vnToday } from './pooling-labels';
+import { formatVnd, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -27,6 +27,23 @@ describe('pooling-labels', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-04T20:00:00Z'));
     expect(vnToday()).toBe('2026-01-05');
+  });
+
+  it('formatVnd theo kiểu Việt, null thành gạch ngang chứ KHÔNG thành 0', () => {
+    // Hiện 0đ cho một nhóm chưa biết giá là nói dối admin về doanh thu.
+    expect(formatVnd(430000)).toBe('430.000đ');
+    expect(formatVnd(null)).toBe('—');
+    expect(formatVnd(undefined)).toBe('—');
+    expect(formatVnd(0)).toBe('0đ');
+  });
+
+  it('shortAddress cắt địa chỉ dài, rỗng thành gạch ngang', () => {
+    expect(shortAddress('Bến xe Mỹ Đình')).toBe('Bến xe Mỹ Đình');
+    expect(shortAddress(null)).toBe('—');
+    expect(shortAddress('   ')).toBe('—');
+    const dai = 'Số 1 đường Phạm Hùng, phường Mỹ Đình 2, quận Nam Từ Liêm, Hà Nội';
+    expect(shortAddress(dai).length).toBeLessThanOrEqual(42);
+    expect(shortAddress(dai).endsWith('…')).toBe(true);
   });
 
   it('shortId rút gọn nhưng vẫn đủ phân biệt', () => {
