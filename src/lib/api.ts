@@ -4523,3 +4523,65 @@ export async function getCrmTripFrequency(): Promise<Array<{ bucket: string; cus
   const response = await fetchWithAuth('/admin/crm/insights/trip-frequency');
   return unwrap<Array<{ bucket: string; customers: number }>>(response);
 }
+
+// ─── Gợi ý gom chuyến (chỉ QUAN SÁT) ─────────────────────────────────────────
+// Backend chạy bộ ghép theo yêu cầu và trả về nhóm ghép được + LÝ DO LOẠI.
+// Không tạo chuyến, không gán tài xế — màn này chỉ để nhìn thuật toán nghĩ gì.
+
+export type PoolRejectReason =
+  | 'CUNG_KHACH'
+  | 'DAT_LAI'
+  | 'LECH_GIO'
+  | 'QUA_GHE'
+  | 'DON_LECH_HANH_LANG'
+  | 'TRA_LECH_HANH_LANG'
+  | 'NGUOC_CHIEU';
+
+export interface PoolStop {
+  bookingId: string;
+  kind: 'DON' | 'TRA';
+  lat: number;
+  lng: number;
+  crossMeters: number;
+}
+
+export interface PoolGroupView {
+  anchorBookingId: string;
+  bookingIds: string[];
+  totalSeats: number;
+  stops: PoolStop[] | null;
+  pooledDistanceKm: number | null;
+  pooledDurationMin: number | null;
+  separateDistanceKm: number | null;
+  savedKm: number | null;
+  rejected: Record<PoolRejectReason, number>;
+}
+
+export interface PoolSuggestions {
+  dateVn: string;
+  scanned: number;
+  groups: PoolGroupView[];
+  totalSavedKm: number;
+  rules: {
+    corridorMeters: number;
+    windowMs: number;
+    maxSeats: number;
+  };
+}
+
+export async function getPoolingSuggestions(params: {
+  /** Ngày VN, YYYY-MM-DD. */
+  date: string;
+  routeId?: number;
+  corridorKm?: number;
+  windowHours?: number;
+}): Promise<PoolSuggestions> {
+  const query = new URLSearchParams({ date: params.date });
+  if (params.routeId) query.set('routeId', String(params.routeId));
+  if (params.corridorKm) query.set('corridorKm', String(params.corridorKm));
+  if (params.windowHours) query.set('windowHours', String(params.windowHours));
+
+  const response = await fetchWithAuth(`/admin/pooling/suggestions?${query}`);
+  const result = await response.json();
+  return result.data ?? result;
+}

@@ -15,6 +15,10 @@ export const MENU_FUNCTION_BY_HREF: Record<string, string> = {
   '/driver-team': 'driver-team',
   '/transport-companies': 'transport-companies',
   '/bookings': 'bookings',
+  // Quyền RIÊNG, không dùng ké 'bookings': repo có bất biến "key = href bỏ dấu
+  // gạch" (rbac.test.ts), và tách ra thì cấp được cho người điều phối mà không
+  // mở luôn quyền sửa chuyến. Backend gác cùng key: @RequireFunction('pooling').
+  '/pooling': 'pooling',
   '/referrals': 'referrals',
   '/kol': 'kol',
   '/agent': 'agent',
