@@ -2477,6 +2477,8 @@ export type AdminAgentOrder = {
   driverName: string | null;
   driverPhone: string | null;
   customerName: string | null;
+  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  routeName: string | null;
   customerPhone: string | null;
 };
 
@@ -2763,6 +2765,8 @@ export type AgentBooking = {
   // Hoa hồng "dự kiến" cho đơn CHƯA hoàn thành (null nếu đã có số thật / không phát sinh). additive.
   agentCommissionEstimate?: number | null;
   customerName: string | null;
+  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  routeName: string | null;
   customerPhone: string | null;
   passengerNames: string[] | null;
   createdAt: string;
@@ -4549,6 +4553,8 @@ export interface PoolPassenger {
   bookingId: string;
   isAnchor: boolean;
   customerName: string | null;
+  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  routeName: string | null;
   customerPhone: string | null;
   pickupAddress: string | null;
   dropoffAddress: string | null;

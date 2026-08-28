@@ -142,7 +142,7 @@ function Summary({ data }: { data: PoolSuggestions }) {
   const pooled = data.groups.reduce((n, g) => n + g.bookingIds.length, 0);
   // Cộng hết (chốt 28/08). Vẫn đếm số chuyến chưa có giá để ghi chú — hiện
   // tổng mà không nói còn thiếu thì admin đọc nó như doanh thu đầy đủ.
-  const tongTien = data.groups.reduce((s, g) => s + g.totalPrice, 0);
+  const tongTien = data.groups.reduce((s, g) => s + (Number(g.totalPrice) || 0), 0);
   const thieuGia = data.groups.reduce((s, g) => s + g.missingPriceCount, 0);
   return (
     <Card className="p-4">
@@ -209,6 +209,10 @@ function tenKhach(
 
 function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
   const rejects = Object.entries(g.rejected).filter(([, n]) => n > 0);
+  const anchorRoute = g.passengers.find((p) => p.isAnchor)?.routeName ?? null;
+  const soKhacTuyen = g.passengers.filter(
+    (p) => !p.isAnchor && p.routeName && p.routeName !== anchorRoute,
+  ).length;
 
   return (
     <Card className="p-4">
@@ -217,7 +221,12 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
         <span className="font-semibold">
           {g.bookingIds.length} chuyến · {g.totalSeats} khách
         </span>
-        <Badge variant="outline">chủ: {shortId(g.anchorBookingId)}</Badge>
+        {anchorRoute && <Badge variant="outline">{anchorRoute}</Badge>}
+        {soKhacTuyen > 0 && (
+          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
+            +{soKhacTuyen} khác tuyến
+          </Badge>
+        )}
         <Badge variant="secondary">
           {formatVnd(g.totalPrice)}
           {g.missingPriceCount > 0 && ' *'}
@@ -240,6 +249,7 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
         <TableHeader>
           <TableRow>
             <TableHead>Khách</TableHead>
+            <TableHead>Tuyến</TableHead>
             <TableHead>Điện thoại</TableHead>
             <TableHead className="whitespace-nowrap">Giờ đón</TableHead>
             <TableHead>Đón</TableHead>
@@ -257,6 +267,21 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
                   {shortId(p.bookingId)}
                   {p.isAnchor && <span className="ml-1.5">(chuyến chủ)</span>}
                 </div>
+              </TableCell>
+              <TableCell className="text-xs">
+                {p.routeName ?? '—'}
+                {/* Khác tuyến chuyến chủ = ĐÚNG ca ghép theo hành lang, thứ mà
+                    cách so routeId hiện tại không nhìn thấy. Đánh dấu để admin
+                    nhận ra ngay giá trị mới nằm ở đâu. */}
+                {!p.isAnchor && p.routeName && p.routeName !== anchorRoute && (
+                  <Badge
+                    variant="outline"
+                    className="ml-1.5 border-amber-300 bg-amber-50 font-normal text-amber-800"
+                    title="Khác tuyến chuyến chủ — chỉ ghép theo hành lang mới thấy được"
+                  >
+                    khác tuyến
+                  </Badge>
+                )}
               </TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">
                 {p.customerPhone ?? '—'}
@@ -287,7 +312,7 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
             </TableRow>
           ))}
           <TableRow className="bg-muted/40">
-            <TableCell colSpan={5} className="font-semibold">
+            <TableCell colSpan={6} className="font-semibold">
               Tổng nhóm
             </TableCell>
             <TableCell className="text-right font-semibold">{g.totalSeats}</TableCell>
