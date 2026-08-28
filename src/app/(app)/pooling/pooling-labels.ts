@@ -50,3 +50,17 @@ export function shortAddress(a: string | null | undefined, max = 42): string {
   if (!t) return '—';
   return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
 }
+
+/**
+ * Giờ VN dạng `HH:mm` từ mốc ISO. Cộng thẳng 7 giờ rồi đọc bằng `getUTC*`,
+ * KHÔNG dùng `toLocaleTimeString` với timeZone: máy admin có thể ở múi khác,
+ * và giờ hiển thị ở đây phải là giờ của TÀI XẾ.
+ */
+export function vnTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = Date.parse(iso);
+  if (Number.isNaN(t)) return '—';
+  const vn = new Date(t + 7 * 3600_000);
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${p(vn.getUTCHours())}:${p(vn.getUTCMinutes())}`;
+}

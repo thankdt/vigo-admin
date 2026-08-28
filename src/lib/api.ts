@@ -4553,6 +4553,8 @@ export interface PoolPassenger {
   pickupAddress: string | null;
   dropoffAddress: string | null;
   seats: number;
+  /** Mốc đón dự kiến, ISO UTC — màn hình tự đổi sang giờ VN. */
+  pickupAt: string;
   /** Tiền KHÁCH NÀY trả — giá chốt lúc đặt; gom chuyến không đổi giá. */
   price: number | null;
   pickupCrossMeters: number;

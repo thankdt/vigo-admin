@@ -24,6 +24,7 @@ import {
   REJECT_LABEL,
   shortAddress,
   shortId,
+  vnTime,
   vnToday,
 } from './pooling-labels';
 
@@ -191,6 +192,21 @@ function Stat({
   );
 }
 
+/**
+ * Tên khách của một chuyến trong nhóm, để dải "thứ tự chạy" đọc được thành
+ * câu người — "Đón Nguyễn A → Đón Trần B" — thay vì một dãy id băm.
+ *
+ * Khách chưa có tên (dữ liệu cũ) thì rơi về id rút gọn chứ không để trống: một
+ * ô trống giữa dải mũi tên trông như thiếu điểm dừng.
+ */
+function tenKhach(
+  g: PoolSuggestions['groups'][number],
+  bookingId: string,
+): string {
+  const p = g.passengers.find((x) => x.bookingId === bookingId);
+  return p?.customerName?.trim() || shortId(bookingId);
+}
+
 function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
   const rejects = Object.entries(g.rejected).filter(([, n]) => n > 0);
 
@@ -225,6 +241,7 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
           <TableRow>
             <TableHead>Khách</TableHead>
             <TableHead>Điện thoại</TableHead>
+            <TableHead className="whitespace-nowrap">Giờ đón</TableHead>
             <TableHead>Đón</TableHead>
             <TableHead>Trả</TableHead>
             <TableHead className="text-right">Khách</TableHead>
@@ -243,6 +260,9 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
               </TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">
                 {p.customerPhone ?? '—'}
+              </TableCell>
+              <TableCell className="whitespace-nowrap font-medium">
+                {vnTime(p.pickupAt)}
               </TableCell>
               <TableCell className="text-xs" title={p.pickupAddress ?? undefined}>
                 {shortAddress(p.pickupAddress)}
@@ -267,7 +287,7 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
             </TableRow>
           ))}
           <TableRow className="bg-muted/40">
-            <TableCell colSpan={4} className="font-semibold">
+            <TableCell colSpan={5} className="font-semibold">
               Tổng nhóm
             </TableCell>
             <TableCell className="text-right font-semibold">{g.totalSeats}</TableCell>
@@ -293,8 +313,12 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
             {g.stops.map((s, i) => (
               <React.Fragment key={`${s.bookingId}-${s.kind}-${i}`}>
                 {i > 0 && <span className="text-muted-foreground">→</span>}
-                <Badge variant={s.kind === 'DON' ? 'default' : 'secondary'} className="font-normal">
-                  {s.kind === 'DON' ? 'Đón' : 'Trả'} {shortId(s.bookingId)}
+                <Badge
+                  variant={s.kind === 'DON' ? 'default' : 'secondary'}
+                  className="font-normal"
+                  title={s.bookingId}
+                >
+                  {s.kind === 'DON' ? 'Đón' : 'Trả'} {tenKhach(g, s.bookingId)}
                 </Badge>
               </React.Fragment>
             ))}
