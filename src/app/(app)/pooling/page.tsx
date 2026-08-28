@@ -38,7 +38,7 @@ import {
   maskPhone,
   REJECT_HINT,
   REJECT_LABEL,
-  shortAddress,
+  addressText,
   shortId,
   vnTime,
   vnToday,
@@ -461,16 +461,16 @@ function GroupCard({
                   return <div className={`text-[11px] ${cls}`}>{d.text}</div>;
                 })()}
               </TableCell>
-              <TableCell className="text-xs" title={p.pickupAddress ?? undefined}>
-                {shortAddress(p.pickupAddress)}
+              <TableCell className="min-w-[200px] whitespace-normal break-words text-xs">
+                {addressText(p.pickupAddress)}
                 {p.pickupCrossMeters > 0 && (
                   <span className="ml-1 text-muted-foreground">
                     (lệch {(p.pickupCrossMeters / 1000).toFixed(1)}km)
                   </span>
                 )}
               </TableCell>
-              <TableCell className="text-xs" title={p.dropoffAddress ?? undefined}>
-                {shortAddress(p.dropoffAddress)}
+              <TableCell className="min-w-[200px] whitespace-normal break-words text-xs">
+                {addressText(p.dropoffAddress)}
                 {p.dropoffCrossMeters > 0 && (
                   <span className="ml-1 text-muted-foreground">
                     (lệch {(p.dropoffCrossMeters / 1000).toFixed(1)}km)

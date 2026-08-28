@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { buildGroupText, delayLabel, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnTime, vnToday } from './pooling-labels';
+import { buildGroupText, delayLabel, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, addressText, shortId, vnTime, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -46,13 +46,14 @@ describe('pooling-labels', () => {
     expect(formatVnd(Infinity)).toBe('—');
   });
 
-  it('shortAddress cắt địa chỉ dài, rỗng thành gạch ngang', () => {
-    expect(shortAddress('Bến xe Mỹ Đình')).toBe('Bến xe Mỹ Đình');
-    expect(shortAddress(null)).toBe('—');
-    expect(shortAddress('   ')).toBe('—');
-    const dai = 'Số 1 đường Phạm Hùng, phường Mỹ Đình 2, quận Nam Từ Liêm, Hà Nội';
-    expect(shortAddress(dai).length).toBeLessThanOrEqual(42);
-    expect(shortAddress(dai).endsWith('…')).toBe(true);
+  it('addressText giữ NGUYÊN địa chỉ dài — admin chụp màn gửi tài xế, cắt là hỏng', () => {
+    expect(addressText('Bến xe Mỹ Đình')).toBe('Bến xe Mỹ Đình');
+    expect(addressText(null)).toBe('—');
+    expect(addressText('   ')).toBe('—');
+    const dai =
+      'S403 Vinhomes Sapphire Parkville 2P3R+F7V, Đại lộ Thăng Long, Nam Từ Liêm, Hà Nội';
+    expect(addressText(dai)).toBe(dai);
+    expect(addressText(dai)).not.toContain('…');
   });
 
   it('vnTime đổi sang giờ VN, không theo giờ máy admin', () => {
