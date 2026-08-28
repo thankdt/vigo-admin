@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { delayLabel, formatVnd, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnTime, vnToday } from './pooling-labels';
+import { buildGroupText, delayLabel, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnTime, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -79,7 +79,86 @@ describe('pooling-labels', () => {
     expect(delayLabel(26).level).toBe('bad');
   });
 
+  it('maskPhone giữ 3 số đầu + 2 số cuối, đủ để nhận ra mà không đọc được', () => {
+    expect(maskPhone('0912345678')).toBe('091•••••78');
+    expect(maskPhone('0912 345 678')).toBe('091•••••78');
+    expect(maskPhone(null)).toBe('—');
+    expect(maskPhone('')).toBe('—');
+    // Số ngắn bất thường thì che sạch, không để lộ gần hết.
+    expect(maskPhone('123')).toBe('•••');
+  });
+
   it('shortId rút gọn nhưng vẫn đủ phân biệt', () => {
     expect(shortId('0a1b2c3d-dead-beef-0000-111122223333')).toBe('0a1b2c3d');
+  });
+});
+
+
+describe('buildGroupText — khối chữ copy cho tài xế', () => {
+  const nhom = {
+    totalSeats: 3,
+    totalPrice: 430000,
+    missingPriceCount: 0,
+    pooledDistanceKm: 95.2,
+    pooledDurationMin: 130,
+    passengers: [
+      {
+        bookingId: 'aaaaaaaa-1111', isAnchor: true, customerName: 'Nguyễn A',
+        routeName: 'Hà Nội - Hải Dương', pickupAddress: 'Bến xe Mỹ Đình',
+        dropoffAddress: 'TP Hải Dương', seats: 1,
+        pickupAt: '2026-08-28T00:00:00.000Z', etaPickupAt: '2026-08-28T00:00:00.000Z',
+        price: 250000,
+      },
+      {
+        bookingId: 'bbbbbbbb-2222', isAnchor: false, customerName: 'Trần B',
+        routeName: 'Hà Nội - Hưng Yên', pickupAddress: 'Ngã tư Trâu Quỳ',
+        dropoffAddress: 'TT Gia Lộc', seats: 2,
+        pickupAt: '2026-08-28T00:30:00.000Z', etaPickupAt: '2026-08-28T00:35:00.000Z',
+        price: 180000,
+      },
+    ],
+    stops: [
+      { bookingId: 'aaaaaaaa-1111', kind: 'DON' as const, etaAt: '2026-08-28T00:00:00.000Z' },
+      { bookingId: 'bbbbbbbb-2222', kind: 'DON' as const, etaAt: '2026-08-28T00:35:00.000Z' },
+      { bookingId: 'bbbbbbbb-2222', kind: 'TRA' as const, etaAt: '2026-08-28T01:40:00.000Z' },
+      { bookingId: 'aaaaaaaa-1111', kind: 'TRA' as const, etaAt: '2026-08-28T02:10:00.000Z' },
+    ],
+  };
+
+  it('KHÔNG BAO GIỜ chứa số điện thoại — lý do hàm này tồn tại', () => {
+    // Copy nguyên bảng thì SĐT đi theo. Đây là chốt cho đúng chuyện đó.
+    const text = buildGroupText(nhom as any);
+    expect(text).not.toMatch(/09\d{8}/);
+    expect(text).not.toMatch(/\d{9,11}/);
+    expect(text.toLowerCase()).not.toContain('điện thoại');
+  });
+
+  it('có đủ tên, tuyến, điểm đón/trả, giờ và tiền', () => {
+    const text = buildGroupText(nhom as any);
+    expect(text).toContain('Nguyễn A');
+    expect(text).toContain('Hà Nội - Hưng Yên');
+    expect(text).toContain('Bến xe Mỹ Đình');
+    expect(text).toContain('TT Gia Lộc');
+    expect(text).toContain('250.000đ');
+    expect(text).toContain('430.000đ');
+    expect(text).toContain('95.2 km');
+  });
+
+  it('có THỨ TỰ đón/trả tối ưu, ghi tên và giờ dự trù', () => {
+    const text = buildGroupText(nhom as any);
+    expect(text).toContain('THỨ TỰ ĐÓN/TRẢ TỐI ƯU');
+    expect(text).toContain('1. Đón Nguyễn A (07:00)');
+    expect(text).toContain('2. Đón Trần B (07:35)');
+    expect(text).toContain('4. Trả Nguyễn A (09:10)');
+  });
+
+  it('chưa sắp được thứ tự → bỏ hẳn mục đó, không in tiêu đề rỗng', () => {
+    const text = buildGroupText({ ...nhom, stops: null } as any);
+    expect(text).not.toContain('THỨ TỰ');
+  });
+
+  it('thiếu giá → nói rõ trong dòng tổng, không im lặng', () => {
+    const text = buildGroupText({ ...nhom, missingPriceCount: 1 } as any);
+    expect(text).toContain('chưa gồm 1 chuyến chưa có giá');
   });
 });
