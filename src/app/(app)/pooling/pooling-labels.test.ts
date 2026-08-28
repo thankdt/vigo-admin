@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatVnd, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnToday } from './pooling-labels';
+import { formatVnd, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnTime, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -44,6 +44,19 @@ describe('pooling-labels', () => {
     const dai = 'Số 1 đường Phạm Hùng, phường Mỹ Đình 2, quận Nam Từ Liêm, Hà Nội';
     expect(shortAddress(dai).length).toBeLessThanOrEqual(42);
     expect(shortAddress(dai).endsWith('…')).toBe(true);
+  });
+
+  it('vnTime đổi sang giờ VN, không theo giờ máy admin', () => {
+    expect(vnTime('2026-08-28T01:00:00.000Z')).toBe('08:00');
+    // Qua nửa đêm VN: 17:30 UTC = 00:30 hôm sau.
+    expect(vnTime('2026-08-27T17:30:00.000Z')).toBe('00:30');
+    expect(vnTime('2026-08-27T16:59:00.000Z')).toBe('23:59');
+  });
+
+  it('vnTime với mốc hỏng/rỗng → gạch ngang, KHÔNG ném', () => {
+    expect(vnTime(null)).toBe('—');
+    expect(vnTime('')).toBe('—');
+    expect(vnTime('không-phải-ngày')).toBe('—');
   });
 
   it('shortId rút gọn nhưng vẫn đủ phân biệt', () => {
