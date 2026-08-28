@@ -37,6 +37,15 @@ describe('pooling-labels', () => {
     expect(formatVnd(0)).toBe('0đ');
   });
 
+  it('formatVnd nhận CHUỖI decimal và KHÔNG bao giờ hiện NaN', () => {
+    // Lỗi thật 28/08: backend rò chuỗi decimal của TypeORM ra API, ô "Tổng
+    // nhóm" hiện NaN. Backend đã ép số, đây là lớp phòng thủ thứ hai.
+    expect(formatVnd('250000.00' as any)).toBe('250.000đ');
+    expect(formatVnd('abc' as any)).toBe('—');
+    expect(formatVnd(NaN)).toBe('—');
+    expect(formatVnd(Infinity)).toBe('—');
+  });
+
   it('shortAddress cắt địa chỉ dài, rỗng thành gạch ngang', () => {
     expect(shortAddress('Bến xe Mỹ Đình')).toBe('Bến xe Mỹ Đình');
     expect(shortAddress(null)).toBe('—');

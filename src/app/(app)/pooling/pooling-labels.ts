@@ -38,10 +38,22 @@ export function vnToday(): string {
 /** Rút gọn id chuyến cho bảng hẹp. */
 export const shortId = (id: string) => id.slice(0, 8);
 
-/** Tiền VND kiểu Việt: 430.000đ. `null` → gạch ngang, KHÔNG hiện 0. */
-export function formatVnd(v: number | null | undefined): string {
-  if (v == null) return '—';
-  return `${Math.round(v).toLocaleString('vi-VN')}đ`;
+/**
+ * Tiền VND kiểu Việt: 430.000đ.
+ *
+ * Nhận cả CHUỖI: cột tiền bên backend khai `@Column('decimal')` và TypeORM trả
+ * chuỗi, nên một API nào đó rò chuỗi ra là chuyện có thật — đã xảy ra 28/08,
+ * ô "Tổng nhóm" hiện `NaN` trên màn admin.
+ *
+ * Không ra số hữu hạn ⇒ gạch ngang. Thà hiện "chưa biết" còn hơn hiện `NaN`
+ * hay `0đ`: cả hai đều là nói dối admin về doanh thu, mà `NaN` ít ra còn nhìn
+ * ra là hỏng, `0đ` thì không.
+ */
+export function formatVnd(v: number | string | null | undefined): string {
+  if (v === null || v === undefined || v === '') return '—';
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n)) return '—';
+  return `${Math.round(n).toLocaleString('vi-VN')}đ`;
 }
 
 /** Địa chỉ dài thì cắt bớt, giữ đủ để nhận ra nơi đó. */
