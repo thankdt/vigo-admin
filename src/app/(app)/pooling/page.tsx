@@ -154,6 +154,27 @@ export default function PoolingPage() {
         </p>
       </Card>
 
+      {hienSdt && (
+        // Admin xem SĐT thoải mái — băng này KHÔNG chặn gì, chỉ nhắc trạng thái.
+        // Giá trị của nó nằm ở chỗ: chụp màn hình lúc này thì chính nó cũng vào
+        // ảnh, nên người nhận biết ngay ảnh có chứa SĐT. Một dòng nhắc chỉ hiện
+        // lúc thao tác thì vô dụng với đúng cái rủi ro cần chặn.
+        <Card className="border-amber-300 bg-amber-50 p-2.5">
+          <div className="flex items-center gap-2 text-sm text-amber-900">
+            <Eye className="h-4 w-4 shrink-0" />
+            Đang hiện SĐT — ảnh chụp lúc này sẽ có số điện thoại khách
+            <Button
+              size="sm"
+              variant="outline"
+              className="ml-auto border-amber-300 bg-white"
+              onClick={() => setHienSdt(false)}
+            >
+              Ẩn
+            </Button>
+          </div>
+        </Card>
+      )}
+
       {data && <Summary data={data} />}
       {data?.groups.map((g) => (
         <GroupCard key={g.anchorBookingId} group={g} hienSdt={hienSdt} />
