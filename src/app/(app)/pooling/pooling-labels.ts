@@ -76,3 +76,22 @@ export function vnTime(iso: string | null | undefined): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${p(vn.getUTCHours())}:${p(vn.getUTCMinutes())}`;
 }
+
+/**
+ * Nhãn độ trễ đón. Trả cả chuỗi lẫn mức độ để màn hình tô màu.
+ *
+ * Ngưỡng theo đúng thứ đã chốt cho bộ ghép: mỗi khách vẫn phải được đón trong
+ * khung giờ họ chọn, còn vòng thêm thì tối đa 25 phút một khách. Nên >25' là
+ * ĐỎ (vượt ngân sách đã thống nhất), 10–25' là VÀNG, dưới 10' coi như bình thường.
+ */
+export function delayLabel(min: number | null | undefined): {
+  text: string;
+  level: 'ok' | 'warn' | 'bad' | 'unknown';
+} {
+  if (min == null) return { text: '—', level: 'unknown' };
+  if (min <= -1) return { text: `sớm ${Math.abs(min)}′`, level: 'ok' };
+  if (min === 0) return { text: 'đúng giờ', level: 'ok' };
+  if (min <= 10) return { text: `trễ ${min}′`, level: 'ok' };
+  if (min <= 25) return { text: `trễ ${min}′`, level: 'warn' };
+  return { text: `trễ ${min}′`, level: 'bad' };
+}
