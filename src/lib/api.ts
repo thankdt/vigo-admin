@@ -4545,9 +4545,26 @@ export interface PoolStop {
   crossMeters: number;
 }
 
+export interface PoolPassenger {
+  bookingId: string;
+  isAnchor: boolean;
+  customerName: string | null;
+  customerPhone: string | null;
+  pickupAddress: string | null;
+  dropoffAddress: string | null;
+  seats: number;
+  /** Tiền KHÁCH NÀY trả — giá chốt lúc đặt; gom chuyến không đổi giá. */
+  price: number | null;
+  pickupCrossMeters: number;
+  dropoffCrossMeters: number;
+}
+
 export interface PoolGroupView {
   anchorBookingId: string;
   bookingIds: string[];
+  passengers: PoolPassenger[];
+  /** null khi có chuyến thiếu giá — cố ý không cộng nửa vời. */
+  totalPrice: number | null;
   totalSeats: number;
   stops: PoolStop[] | null;
   pooledDistanceKm: number | null;

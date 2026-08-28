@@ -18,7 +18,14 @@ import {
 import { Loader2, Route as RouteIcon, Search, TrendingDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { getPoolingSuggestions, type PoolSuggestions } from '@/lib/api';
-import { REJECT_HINT, REJECT_LABEL, shortId, vnToday } from './pooling-labels';
+import {
+  formatVnd,
+  REJECT_HINT,
+  REJECT_LABEL,
+  shortAddress,
+  shortId,
+  vnToday,
+} from './pooling-labels';
 
 /**
  * Gợi ý gom chuyến — màn QUAN SÁT.
@@ -132,12 +139,26 @@ export default function PoolingPage() {
 
 function Summary({ data }: { data: PoolSuggestions }) {
   const pooled = data.groups.reduce((n, g) => n + g.bookingIds.length, 0);
+  // Chỉ cộng nhóm có ĐỦ giá. Nhóm thiếu giá bị bỏ khỏi tổng và nói rõ số lượng,
+  // chứ không cộng nửa vời rồi để admin đọc nhầm thành doanh thu đầy đủ.
+  const coGia = data.groups.filter((g) => g.totalPrice != null);
+  const thieuGia = data.groups.length - coGia.length;
+  const tongTien = coGia.reduce((s, g) => s + (g.totalPrice ?? 0), 0);
   return (
     <Card className="p-4">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
         <Stat label="Chuyến đã quét" value={String(data.scanned)} />
         <Stat label="Nhóm gom được" value={String(data.groups.length)} />
         <Stat label="Chuyến nằm trong nhóm" value={String(pooled)} />
+        <Stat
+          label="Tổng tiền các nhóm"
+          value={formatVnd(tongTien)}
+          hint={
+            thieuGia > 0
+              ? `${thieuGia} nhóm chưa đủ giá nên không tính vào tổng này`
+              : 'Cộng giá từng khách trong mọi nhóm gợi ý'
+          }
+        />
         <Stat
           label="Tiết kiệm"
           value={`${data.totalSavedKm} km`}
@@ -182,6 +203,9 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
           {g.bookingIds.length} chuyến · {g.totalSeats} khách
         </span>
         <Badge variant="outline">chủ: {shortId(g.anchorBookingId)}</Badge>
+        {g.totalPrice != null && (
+          <Badge variant="secondary">{formatVnd(g.totalPrice)}</Badge>
+        )}
         {g.savedKm != null && (
           <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100">
             tiết kiệm {g.savedKm} km
@@ -196,45 +220,84 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
         )}
       </div>
 
-      {g.stops ? (
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-12">#</TableHead>
-              <TableHead className="w-24">Việc</TableHead>
-              <TableHead>Chuyến</TableHead>
-              <TableHead className="text-right">Lệch tuyến</TableHead>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Khách</TableHead>
+            <TableHead>Điện thoại</TableHead>
+            <TableHead>Đón</TableHead>
+            <TableHead>Trả</TableHead>
+            <TableHead className="text-right">Khách</TableHead>
+            <TableHead className="text-right">Tiền</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {g.passengers.map((p) => (
+            <TableRow key={p.bookingId}>
+              <TableCell>
+                <div className="font-medium">{p.customerName ?? '—'}</div>
+                <div className="font-mono text-[11px] text-muted-foreground">
+                  {shortId(p.bookingId)}
+                  {p.isAnchor && <span className="ml-1.5">(chuyến chủ)</span>}
+                </div>
+              </TableCell>
+              <TableCell className="whitespace-nowrap font-mono text-xs">
+                {p.customerPhone ?? '—'}
+              </TableCell>
+              <TableCell className="text-xs" title={p.pickupAddress ?? undefined}>
+                {shortAddress(p.pickupAddress)}
+                {p.pickupCrossMeters > 0 && (
+                  <span className="ml-1 text-muted-foreground">
+                    (lệch {(p.pickupCrossMeters / 1000).toFixed(1)}km)
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-xs" title={p.dropoffAddress ?? undefined}>
+                {shortAddress(p.dropoffAddress)}
+                {p.dropoffCrossMeters > 0 && (
+                  <span className="ml-1 text-muted-foreground">
+                    (lệch {(p.dropoffCrossMeters / 1000).toFixed(1)}km)
+                  </span>
+                )}
+              </TableCell>
+              <TableCell className="text-right">{p.seats}</TableCell>
+              <TableCell className="text-right font-medium">
+                {formatVnd(p.price)}
+              </TableCell>
             </TableRow>
-          </TableHeader>
-          <TableBody>
+          ))}
+          <TableRow className="bg-muted/40">
+            <TableCell colSpan={4} className="font-semibold">
+              Tổng nhóm
+            </TableCell>
+            <TableCell className="text-right font-semibold">{g.totalSeats}</TableCell>
+            <TableCell className="text-right font-semibold">
+              {formatVnd(g.totalPrice)}
+            </TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+
+      {g.stops ? (
+        <div className="mt-3 border-t pt-3">
+          <div className="mb-1.5 text-xs text-muted-foreground">Thứ tự chạy:</div>
+          <div className="flex flex-wrap items-center gap-1.5 text-xs">
             {g.stops.map((s, i) => (
-              <TableRow key={`${s.bookingId}-${s.kind}-${i}`}>
-                <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                <TableCell>
-                  <Badge variant={s.kind === 'DON' ? 'default' : 'secondary'}>
-                    {s.kind === 'DON' ? 'Đón' : 'Trả'}
-                  </Badge>
-                </TableCell>
-                <TableCell className="font-mono text-xs">
-                  {shortId(s.bookingId)}
-                  {s.bookingId === g.anchorBookingId && (
-                    <span className="ml-2 text-muted-foreground">(chủ)</span>
-                  )}
-                </TableCell>
-                <TableCell className="text-right text-xs text-muted-foreground">
-                  {s.crossMeters > 0 ? `${(s.crossMeters / 1000).toFixed(1)} km` : '—'}
-                </TableCell>
-              </TableRow>
+              <React.Fragment key={`${s.bookingId}-${s.kind}-${i}`}>
+                {i > 0 && <span className="text-muted-foreground">→</span>}
+                <Badge variant={s.kind === 'DON' ? 'default' : 'secondary'} className="font-normal">
+                  {s.kind === 'DON' ? 'Đón' : 'Trả'} {shortId(s.bookingId)}
+                </Badge>
+              </React.Fragment>
             ))}
-          </TableBody>
-        </Table>
+          </div>
+        </div>
       ) : (
         // Thứ tự điểm dừng CỐ Ý không hiện khi API sắp thứ tự lỗi. Bịa một thứ
         // tự trông y hệt thứ tự thật, mà đây lại là thứ admin dựa vào để đánh
         // giá thuật toán.
-        <p className="text-sm text-amber-700">
-          Chưa sắp được thứ tự điểm dừng (API bản đồ không phản hồi). Nhóm vẫn ghép
-          được, chỉ là chưa biết đi theo thứ tự nào.
+        <p className="mt-3 border-t pt-3 text-sm text-amber-700">
+          Chưa sắp được thứ tự điểm dừng (API bản đồ không phản hồi).
         </p>
       )}
 
