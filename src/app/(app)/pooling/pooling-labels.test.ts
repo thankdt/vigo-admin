@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { formatVnd, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnTime, vnToday } from './pooling-labels';
+import { delayLabel, formatVnd, REJECT_HINT, REJECT_LABEL, shortAddress, shortId, vnTime, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -66,6 +66,17 @@ describe('pooling-labels', () => {
     expect(vnTime(null)).toBe('—');
     expect(vnTime('')).toBe('—');
     expect(vnTime('không-phải-ngày')).toBe('—');
+  });
+
+  it('delayLabel phân mức theo đúng ngân sách vòng thêm đã chốt (25 phút/khách)', () => {
+    expect(delayLabel(null).level).toBe('unknown');
+    expect(delayLabel(-40)).toEqual({ text: 'sớm 40′', level: 'ok' });
+    expect(delayLabel(0)).toEqual({ text: 'đúng giờ', level: 'ok' });
+    expect(delayLabel(10).level).toBe('ok');
+    expect(delayLabel(11).level).toBe('warn');
+    expect(delayLabel(25).level).toBe('warn');
+    // Vượt ngân sách 25 phút/khách ⇒ đỏ.
+    expect(delayLabel(26).level).toBe('bad');
   });
 
   it('shortId rút gọn nhưng vẫn đủ phân biệt', () => {

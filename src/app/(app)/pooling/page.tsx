@@ -19,6 +19,7 @@ import { Loader2, Route as RouteIcon, Search, TrendingDown } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast';
 import { getPoolingSuggestions, type PoolSuggestions } from '@/lib/api';
 import {
+  delayLabel,
   formatVnd,
   REJECT_HINT,
   REJECT_LABEL,
@@ -210,6 +211,11 @@ function tenKhach(
 function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
   const rejects = Object.entries(g.rejected).filter(([, n]) => n > 0);
   const anchorRoute = g.passengers.find((p) => p.isAnchor)?.routeName ?? null;
+  // Khách nào bị đón trễ quá ngân sách 25 phút — con số quyết định nhóm có
+  // dùng được không, nên phải nổi lên đầu thẻ chứ không nằm im trong bảng.
+  const treQuaMuc = g.passengers.filter(
+    (p) => p.pickupDelayMin != null && p.pickupDelayMin > 25,
+  ).length;
   const soKhacTuyen = g.passengers.filter(
     (p) => !p.isAnchor && p.routeName && p.routeName !== anchorRoute,
   ).length;
@@ -222,6 +228,14 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
           {g.bookingIds.length} chuyến · {g.totalSeats} khách
         </span>
         {anchorRoute && <Badge variant="outline">{anchorRoute}</Badge>}
+        {treQuaMuc > 0 && (
+          <Badge
+            className="bg-red-100 text-red-800 hover:bg-red-100"
+            title="Vượt ngân sách vòng thêm 25 phút/khách đã chốt"
+          >
+            {treQuaMuc} khách bị đón trễ &gt;25′
+          </Badge>
+        )}
         {soKhacTuyen > 0 && (
           <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
             +{soKhacTuyen} khác tuyến
@@ -251,7 +265,8 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
             <TableHead>Khách</TableHead>
             <TableHead>Tuyến</TableHead>
             <TableHead>Điện thoại</TableHead>
-            <TableHead className="whitespace-nowrap">Giờ đón</TableHead>
+            <TableHead className="whitespace-nowrap">Khách đặt</TableHead>
+            <TableHead className="whitespace-nowrap">Dự trù đón</TableHead>
             <TableHead>Đón</TableHead>
             <TableHead>Trả</TableHead>
             <TableHead className="text-right">Khách</TableHead>
@@ -286,8 +301,20 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
               <TableCell className="whitespace-nowrap font-mono text-xs">
                 {p.customerPhone ?? '—'}
               </TableCell>
-              <TableCell className="whitespace-nowrap font-medium">
-                {vnTime(p.pickupAt)}
+              <TableCell className="whitespace-nowrap">{vnTime(p.pickupAt)}</TableCell>
+              <TableCell className="whitespace-nowrap">
+                <span className="font-medium">{vnTime(p.etaPickupAt)}</span>
+                {(() => {
+                  const d = delayLabel(p.pickupDelayMin);
+                  if (d.level === 'unknown') return null;
+                  const cls =
+                    d.level === 'bad'
+                      ? 'text-red-600'
+                      : d.level === 'warn'
+                        ? 'text-amber-700'
+                        : 'text-muted-foreground';
+                  return <div className={`text-[11px] ${cls}`}>{d.text}</div>;
+                })()}
               </TableCell>
               <TableCell className="text-xs" title={p.pickupAddress ?? undefined}>
                 {shortAddress(p.pickupAddress)}
@@ -312,7 +339,7 @@ function GroupCard({ group: g }: { group: PoolSuggestions['groups'][number] }) {
             </TableRow>
           ))}
           <TableRow className="bg-muted/40">
-            <TableCell colSpan={6} className="font-semibold">
+            <TableCell colSpan={7} className="font-semibold">
               Tổng nhóm
             </TableCell>
             <TableCell className="text-right font-semibold">{g.totalSeats}</TableCell>
