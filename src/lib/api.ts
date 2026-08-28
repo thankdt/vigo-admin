@@ -2477,6 +2477,8 @@ export type AdminAgentOrder = {
   driverName: string | null;
   driverPhone: string | null;
   customerName: string | null;
+  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  routeName: string | null;
   customerPhone: string | null;
 };
 
@@ -2763,6 +2765,8 @@ export type AgentBooking = {
   // Hoa hồng "dự kiến" cho đơn CHƯA hoàn thành (null nếu đã có số thật / không phát sinh). additive.
   agentCommissionEstimate?: number | null;
   customerName: string | null;
+  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  routeName: string | null;
   customerPhone: string | null;
   passengerNames: string[] | null;
   createdAt: string;
@@ -4522,4 +4526,93 @@ export async function getCrmCsat(
 export async function getCrmTripFrequency(): Promise<Array<{ bucket: string; customers: number }>> {
   const response = await fetchWithAuth('/admin/crm/insights/trip-frequency');
   return unwrap<Array<{ bucket: string; customers: number }>>(response);
+}
+
+// ─── Gợi ý gom chuyến (chỉ QUAN SÁT) ─────────────────────────────────────────
+// Backend chạy bộ ghép theo yêu cầu và trả về nhóm ghép được + LÝ DO LOẠI.
+// Không tạo chuyến, không gán tài xế — màn này chỉ để nhìn thuật toán nghĩ gì.
+
+export type PoolRejectReason =
+  | 'CUNG_KHACH'
+  | 'DAT_LAI'
+  | 'LECH_GIO'
+  | 'QUA_GHE'
+  | 'DON_LECH_HANH_LANG'
+  | 'TRA_LECH_HANH_LANG'
+  | 'NGUOC_CHIEU';
+
+export interface PoolStop {
+  bookingId: string;
+  kind: 'DON' | 'TRA';
+  lat: number;
+  lng: number;
+  crossMeters: number;
+}
+
+export interface PoolPassenger {
+  bookingId: string;
+  isAnchor: boolean;
+  customerName: string | null;
+  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  routeName: string | null;
+  customerPhone: string | null;
+  pickupAddress: string | null;
+  dropoffAddress: string | null;
+  seats: number;
+  /** Mốc đón KHÁCH ĐẶT, ISO UTC — màn hình tự đổi sang giờ VN. */
+  pickupAt: string;
+  /** Giờ DỰ TRÙ xe tới đón theo lộ trình gom (ISO UTC). */
+  etaPickupAt: string | null;
+  /** Đón trễ hơn giờ khách đặt bao nhiêu phút (âm = xe tới sớm, phải chờ). */
+  pickupDelayMin: number | null;
+  /** Tiền KHÁCH NÀY trả — giá chốt lúc đặt; gom chuyến không đổi giá. */
+  price: number | null;
+  pickupCrossMeters: number;
+  dropoffCrossMeters: number;
+}
+
+export interface PoolGroupView {
+  anchorBookingId: string;
+  bookingIds: string[];
+  passengers: PoolPassenger[];
+  /** Tổng tiền nhóm = cộng giá từng khách CÓ giá. */
+  totalPrice: number;
+  /** Bao nhiêu chuyến chưa có giá — >0 nghĩa là tổng chưa đủ vế. */
+  missingPriceCount: number;
+  totalSeats: number;
+  stops: PoolStop[] | null;
+  pooledDistanceKm: number | null;
+  pooledDurationMin: number | null;
+  separateDistanceKm: number | null;
+  savedKm: number | null;
+  rejected: Record<PoolRejectReason, number>;
+}
+
+export interface PoolSuggestions {
+  dateVn: string;
+  scanned: number;
+  groups: PoolGroupView[];
+  totalSavedKm: number;
+  rules: {
+    corridorMeters: number;
+    windowMs: number;
+    maxSeats: number;
+  };
+}
+
+export async function getPoolingSuggestions(params: {
+  /** Ngày VN, YYYY-MM-DD. */
+  date: string;
+  routeId?: number;
+  corridorKm?: number;
+  windowHours?: number;
+}): Promise<PoolSuggestions> {
+  const query = new URLSearchParams({ date: params.date });
+  if (params.routeId) query.set('routeId', String(params.routeId));
+  if (params.corridorKm) query.set('corridorKm', String(params.corridorKm));
+  if (params.windowHours) query.set('windowHours', String(params.windowHours));
+
+  const response = await fetchWithAuth(`/admin/pooling/suggestions?${query}`);
+  const result = await response.json();
+  return result.data ?? result;
 }
