@@ -95,3 +95,88 @@ export function delayLabel(min: number | null | undefined): {
   if (min <= 25) return { text: `trễ ${min}′`, level: 'warn' };
   return { text: `trễ ${min}′`, level: 'bad' };
 }
+
+/**
+ * Che SĐT cho ảnh chụp màn hình: giữ 3 số đầu và 2 số cuối.
+ *
+ * ⚠️ Đây là chốt CHỐNG LỘ QUA ẢNH, không phải chốt bảo mật: số thật vẫn nằm
+ * trong response và mở DevTools là đọc được. Cùng nhận định với `PhoneCell` ở
+ * màn /users — chỗ che thật sự là backend. Ở đây mối lo là admin chụp màn hình
+ * chuyển cho tài xế, và che ở FE giải quyết đúng cái đó.
+ */
+export function maskPhone(p: string | null | undefined): string {
+  const t = (p ?? '').replace(/\s/g, '');
+  if (!t) return '—';
+  if (t.length <= 5) return '•'.repeat(t.length);
+  return `${t.slice(0, 3)}${'•'.repeat(Math.max(3, t.length - 5))}${t.slice(-2)}`;
+}
+
+export interface CopyableStop {
+  bookingId: string;
+  kind: 'DON' | 'TRA';
+  etaAt: string | null;
+}
+
+export interface CopyablePassenger {
+  bookingId: string;
+  isAnchor: boolean;
+  customerName: string | null;
+  routeName: string | null;
+  pickupAddress: string | null;
+  dropoffAddress: string | null;
+  seats: number;
+  pickupAt: string;
+  etaPickupAt: string | null;
+  price: number | null;
+}
+
+export interface CopyableGroup {
+  passengers: CopyablePassenger[];
+  stops: CopyableStop[] | null;
+  totalSeats: number;
+  totalPrice: number;
+  missingPriceCount: number;
+  pooledDistanceKm: number | null;
+  pooledDurationMin: number | null;
+}
+
+/**
+ * Dựng khối chữ để admin copy chuyển cho tài xế.
+ *
+ * TUYỆT ĐỐI KHÔNG kèm số điện thoại — đó là lý do hàm này tồn tại thay vì copy
+ * nguyên bảng. Có test canh riêng chuyện đó.
+ */
+export function buildGroupText(g: CopyableGroup): string {
+  const L: string[] = [];
+  L.push(`CHUYẾN GHÉP · ${g.passengers.length} chuyến · ${g.totalSeats} khách`);
+
+  const tong = `${formatVnd(g.totalPrice)}${g.missingPriceCount > 0 ? ` (chưa gồm ${g.missingPriceCount} chuyến chưa có giá)` : ''}`;
+  L.push(`Tổng tiền: ${tong}`);
+  if (g.pooledDistanceKm != null) {
+    const t = g.pooledDurationMin != null ? ` · ~${g.pooledDurationMin} phút` : '';
+    L.push(`Quãng đường: ${g.pooledDistanceKm} km${t}`);
+  }
+  L.push('');
+
+  g.passengers.forEach((p, i) => {
+    L.push(`${i + 1}. ${p.customerName ?? '(chưa có tên)'}${p.isAnchor ? ' — chuyến chính' : ''}`);
+    if (p.routeName) L.push(`   Tuyến: ${p.routeName}`);
+    L.push(`   Đón: ${p.pickupAddress ?? '—'}`);
+    L.push(`   Trả: ${p.dropoffAddress ?? '—'}`);
+    const duTru = p.etaPickupAt ? ` · dự trù đón ${vnTime(p.etaPickupAt)}` : '';
+    L.push(`   Giờ khách đặt: ${vnTime(p.pickupAt)}${duTru}`);
+    L.push(`   ${p.seats} khách · ${formatVnd(p.price)}`);
+    L.push('');
+  });
+
+  if (g.stops?.length) {
+    const ten = new Map(g.passengers.map((p) => [p.bookingId, p.customerName?.trim() || shortId(p.bookingId)]));
+    L.push('THỨ TỰ ĐÓN/TRẢ TỐI ƯU:');
+    g.stops.forEach((st, i) => {
+      const gio = st.etaAt ? ` (${vnTime(st.etaAt)})` : '';
+      L.push(`   ${i + 1}. ${st.kind === 'DON' ? 'Đón' : 'Trả'} ${ten.get(st.bookingId) ?? shortId(st.bookingId)}${gio}`);
+    });
+  }
+
+  return L.join('\n').trim();
+}
