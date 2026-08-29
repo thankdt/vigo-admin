@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { buildGroupText, delayLabel, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, addressText, shortId, vnTime, vnToday } from './pooling-labels';
+import { buildGroupText, delayLabel, lastScanText, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, addressText, shortId, vnTime, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -161,5 +161,49 @@ describe('buildGroupText — khối chữ copy cho tài xế', () => {
   it('thiếu giá → nói rõ trong dòng tổng, không im lặng', () => {
     const text = buildGroupText({ ...nhom, missingPriceCount: 1 } as any);
     expect(text).toContain('chưa gồm 1 chuyến chưa có giá');
+  });
+});
+
+describe('lastScanText — dòng cho biết job nền có chạy không', () => {
+  const co = {
+    runAt: '2026-08-29T02:25:00.000Z', // 09:25 giờ VN
+    source: 'AUTO_JOB',
+    scanned: 113,
+    groups: 19,
+    lone: 7,
+    savedKm: 1368.7,
+  };
+
+  it('chưa quét lần nào thì trả null, để trang không hiện dòng rỗng', () => {
+    expect(lastScanText(null)).toBeNull();
+  });
+
+  it('nói rõ HỆ THỐNG tự quét, kèm giờ VN', () => {
+    // Đây là chỗ duy nhất admin thấy job nền tồn tại; ghi mỗi con số thì người
+    // dùng vẫn tưởng phải bấm Quét mới có gì.
+    const t = lastScanText(co)!;
+    expect(t).toContain('Hệ thống tự quét lúc 09:25');
+    expect(t).toContain('113 chuyến');
+    expect(t).toContain('19 nhóm');
+    expect(t).toContain('7 chuyến lẻ');
+    expect(t).toContain('tiết kiệm 1368.7 km');
+  });
+
+  it('phân biệt người bấm Quét với job nền', () => {
+    expect(lastScanText({ ...co, source: 'ADMIN_SCAN' })).toContain('Quét thủ công');
+  });
+
+  it('0 nhóm nói THẲNG là chưa ghép được, không im lặng', () => {
+    // "113 chuyến" đứng một mình đọc như đang tải dở. 0 nhóm là kết quả có
+    // nghĩa: hệ thống đã xem và không ghép được gì.
+    const t = lastScanText({ ...co, groups: 0, savedKm: null })!;
+    expect(t).toContain('chưa ghép được nhóm nào');
+    expect(t).not.toContain('tiết kiệm');
+  });
+
+  it('bỏ qua các vế rỗng thay vì in "0 chuyến lẻ" / "tiết kiệm 0 km"', () => {
+    const t = lastScanText({ ...co, lone: 0, savedKm: 0 })!;
+    expect(t).not.toContain('chuyến lẻ');
+    expect(t).not.toContain('tiết kiệm');
   });
 });

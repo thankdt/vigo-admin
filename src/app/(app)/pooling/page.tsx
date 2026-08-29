@@ -26,7 +26,12 @@ import {
   TrendingDown,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { getPoolingSuggestions, type PoolSuggestions } from '@/lib/api';
+import {
+  getPoolingLastScan,
+  getPoolingSuggestions,
+  type PoolLastScan,
+  type PoolSuggestions,
+} from '@/lib/api';
 // Dùng lại nguyên dialog chi tiết chuyến của màn /bookings thay vì dựng bản
 // riêng: nó đã có đủ giá, lịch sử, cờ test/trùng, và quan trọng hơn là mọi
 // thay đổi sau này chỉ phải sửa một chỗ.
@@ -39,6 +44,7 @@ import {
   REJECT_HINT,
   REJECT_LABEL,
   addressText,
+  lastScanText,
   shortId,
   vnTime,
   vnToday,
@@ -65,6 +71,25 @@ export default function PoolingPage() {
   // nhóm: một chuyến có thể xuất hiện ở dải "thứ tự chạy" lẫn trong bảng, và
   // hai chỗ đó phải mở cùng một dialog.
   const [chiTietId, setChiTietId] = React.useState<string | null>(null);
+  // Tóm tắt lượt quét gần nhất, đọc từ nhật ký. Rẻ nên tải ngay khi mở trang —
+  // khác `run()` vốn phải gọi API sắp thứ tự cho từng nhóm.
+  const [lanQuetCuoi, setLanQuetCuoi] = React.useState<PoolLastScan | null>(null);
+
+  const doiLanQuetCuoi = React.useCallback(async () => {
+    try {
+      setLanQuetCuoi(await getPoolingLastScan(date));
+    } catch {
+      // Đây chỉ là dòng trạng thái. Hỏng thì im lặng — nổi toast lỗi cho một
+      // thông tin phụ sẽ che mất lỗi thật của nút Quét.
+      setLanQuetCuoi(null);
+    }
+  }, [date]);
+
+  // Hệ thống tự quét mỗi 5 phút. Không hiện điều đó ra thì job nền vô hình, và
+  // admin vẫn tưởng phải bấm Quét mới có gì.
+  React.useEffect(() => {
+    void doiLanQuetCuoi();
+  }, [doiLanQuetCuoi]);
 
   const run = React.useCallback(async () => {
     setLoading(true);
@@ -75,6 +100,7 @@ export default function PoolingPage() {
         windowHours: Number(windowHours) || undefined,
       });
       setData(res);
+      void doiLanQuetCuoi();
     } catch (e: any) {
       toast({
         variant: 'destructive',
@@ -84,7 +110,7 @@ export default function PoolingPage() {
     } finally {
       setLoading(false);
     }
-  }, [date, corridorKm, windowHours, toast]);
+  }, [date, corridorKm, windowHours, toast, doiLanQuetCuoi]);
 
   // Cố ý KHÔNG tự chạy khi mở trang: mỗi lượt quét gọi API bản đồ cho từng nhóm
   // tìm được, nên để admin bấm thì tải nằm trong tay người dùng.
@@ -156,6 +182,12 @@ export default function PoolingPage() {
             {hienSdt ? 'Ẩn SĐT' : 'Hiện SĐT'}
           </Button>
         </div>
+        {lanQuetCuoi && (
+          <p className="mt-3 text-xs text-muted-foreground">
+            <span className="font-medium text-foreground">{lastScanText(lanQuetCuoi)}</span>
+            {' — bấm Quét để tính lại theo ngưỡng bên trên.'}
+          </p>
+        )}
         <p className="mt-3 text-xs text-muted-foreground">
           Nới hai ngưỡng trên sẽ ra nhiều gợi ý hơn, nhưng tài xế phải vòng xa hơn.
           Con số ở đây chỉ dùng để xem thử — chưa áp vào hệ thống thật.
