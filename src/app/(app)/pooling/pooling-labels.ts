@@ -184,3 +184,31 @@ export function buildGroupText(g: CopyableGroup): string {
 
   return L.join('\n').trim();
 }
+
+/**
+ * Câu tóm tắt lượt quét gần nhất.
+ *
+ * Tách khỏi component để test được câu chữ mà không phải render cả trang —
+ * và vì đây là chỗ duy nhất admin nhìn thấy job nền đang chạy, nên nó phải
+ * nói rõ AI quét (hệ thống hay người) chứ không chỉ hiện con số.
+ */
+export function lastScanText(s: {
+  runAt: string;
+  source: string;
+  scanned: number;
+  groups: number;
+  lone: number;
+  savedKm: number | null;
+} | null): string | null {
+  if (!s) return null;
+  const ai = s.source === 'AUTO_JOB' ? 'Hệ thống tự quét' : 'Quét thủ công';
+  const phan = [
+    `${ai} lúc ${vnTime(s.runAt)}`,
+    `${s.scanned} chuyến`,
+    // 0 nhóm là một kết quả có nghĩa, không phải thiếu dữ liệu — nói thẳng.
+    s.groups > 0 ? `${s.groups} nhóm` : 'chưa ghép được nhóm nào',
+  ];
+  if (s.lone > 0) phan.push(`${s.lone} chuyến lẻ`);
+  if (s.savedKm != null && s.savedKm > 0) phan.push(`tiết kiệm ${s.savedKm} km`);
+  return phan.join(' · ');
+}
