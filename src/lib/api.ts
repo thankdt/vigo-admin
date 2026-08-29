@@ -4639,5 +4639,10 @@ export type PoolLastScan = {
 export async function getPoolingLastScan(date: string): Promise<PoolLastScan | null> {
   const response = await fetchWithAuth(`/admin/pooling/last-scan?date=${date}`);
   const result = await response.json();
-  return result.data ?? result ?? null;
+  // KHÔNG dùng thành ngữ `result.data ?? result` như các hàm khác trong file này.
+  // Chúng an toàn vì endpoint của chúng không bao giờ trả `data: null` hợp lệ.
+  // Đây là endpoint ĐẦU TIÊN coi `null` là câu trả lời có nghĩa ("ngày này chưa
+  // quét lần nào"), nên `?? result` sẽ rơi về chính cái VỎ `{success,data:null}`
+  // — một object truthy — và màn hình in ra "undefined chuyến".
+  return (result && typeof result === 'object' && 'data' in result ? result.data : result) ?? null;
 }

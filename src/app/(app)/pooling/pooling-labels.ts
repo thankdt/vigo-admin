@@ -200,7 +200,10 @@ export function lastScanText(s: {
   lone: number;
   savedKm: number | null;
 } | null): string | null {
-  if (!s) return null;
+  // Chặn cả `null` LẪN object thiếu field. Lỗi thật 29/08: hàm gọi API trả về
+  // cả vỏ `{success:true,data:null}` khi backend báo "chưa quét lần nào"; vỏ đó
+  // truthy nên lọt qua, và dòng trạng thái in ra "undefined chuyến".
+  if (!s || typeof s.runAt !== 'string' || !Number.isFinite(s.scanned)) return null;
   const ai = s.source === 'AUTO_JOB' ? 'Hệ thống tự quét' : 'Quét thủ công';
   const phan = [
     `${ai} lúc ${vnTime(s.runAt)}`,

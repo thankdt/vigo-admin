@@ -207,3 +207,15 @@ describe('lastScanText — dòng cho biết job nền có chạy không', () => 
     expect(t).not.toContain('tiết kiệm');
   });
 });
+
+describe('lastScanText — không được nhận nhầm VỎ response', () => {
+  it('nhận object rỗng field thì KHÔNG in "undefined chuyến"', () => {
+    // Bảo hiểm cho lỗi thật: `getPoolingLastScan` từng trả về cả vỏ
+    // `{success:true,data:null}` khi backend trả null, và vỏ đó là object
+    // truthy nên lọt qua `if (!s) return null`, in ra "undefined chuyến".
+    // Sửa gốc nằm ở api.ts; đây là lớp chặn thứ hai.
+    const vo = { success: true, data: null } as any;
+    const t = lastScanText(vo);
+    expect(t == null || !t.includes('undefined')).toBe(true);
+  });
+});
