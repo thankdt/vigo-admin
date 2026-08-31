@@ -8,8 +8,17 @@ import {
   type RecentRatingsQueryInput,
 } from '@/lib/driver-reputation-query';
 import { ApiError, buildApiError } from '@/lib/api-error';
+import {
+  buildReportParams,
+  type ReportSpec,
+  type ReportMeta,
+  type ReportResult,
+  type ReportSeries,
+  type ReportRowsResult,
+} from '@/lib/report-query';
 
 export { ApiError } from '@/lib/api-error';
+export type { ReportSpec, ReportMeta, ReportResult, ReportSeries, ReportRow, ReportRowsResult } from '@/lib/report-query';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -4615,4 +4624,37 @@ export async function getPoolingSuggestions(params: {
   const response = await fetchWithAuth(`/admin/pooling/suggestions?${query}`);
   const result = await response.json();
   return result.data ?? result;
+}
+
+// --- Báo cáo động (/admin/reports) ---
+
+export async function getReportMeta(): Promise<ReportMeta> {
+  const response = await fetchWithAuth('/admin/reports/meta');
+  const result = await response.json();
+  return result.data;
+}
+
+export async function getReportQuery(spec: ReportSpec): Promise<ReportResult> {
+  const response = await fetchWithAuth(`/admin/reports/query?${buildReportParams(spec).toString()}`);
+  const result = await response.json();
+  return result.data;
+}
+
+export async function getReportSeries(spec: ReportSpec): Promise<ReportSeries> {
+  const response = await fetchWithAuth(`/admin/reports/series?${buildReportParams(spec).toString()}`);
+  const result = await response.json();
+  return result.data;
+}
+
+export async function getReportRows(
+  spec: ReportSpec,
+  page: number,
+  pageSize: number,
+): Promise<ReportRowsResult> {
+  const qs = buildReportParams(spec);
+  qs.set('page', String(page));
+  qs.set('pageSize', String(pageSize));
+  const response = await fetchWithAuth(`/admin/reports/rows?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
 }
