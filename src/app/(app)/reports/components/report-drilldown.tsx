@@ -1,20 +1,24 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
 import { Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getReportRows, type ReportRow, type ReportSpec } from '@/lib/api';
+import { statusLabelMap, CANCELLED_BY_ROLE_LABEL } from '../../bookings/components/booking-shared';
 
 const PAGE_SIZE = 100;
 
 export function ReportDrilldown({
   spec,
   dims,
+  expectedTotal,
   onClose,
 }: {
   spec: ReportSpec;
   dims: Record<string, string>;
+  /** Chuyến tạo của đúng dòng vừa bấm (measure `created` của bảng) — hiện cạnh tiêu
+   *  đề để người dùng tự đối chiếu với tổng số dòng đang xem qua các trang. */
+  expectedTotal?: number | null;
   onClose: () => void;
 }) {
   const [rows, setRows] = React.useState<ReportRow[] | null>(null);
@@ -46,8 +50,13 @@ export function ReportDrilldown({
       <div className="flex items-center justify-between">
         <p className="text-sm font-medium">
           Chuyến trong ô: {Object.entries(dims).map(([, v]) => v).join(' · ')}
+          {expectedTotal != null ? (
+            <span className="ml-2 font-normal text-muted-foreground">
+              — Tổng theo bảng: {expectedTotal.toLocaleString('vi-VN')} chuyến
+            </span>
+          ) : null}
         </p>
-        <Button size="sm" variant="ghost" onClick={onClose}><X className="h-4 w-4" /></Button>
+        <Button size="sm" variant="ghost" aria-label="Đóng" onClick={onClose}><X className="h-4 w-4" /></Button>
       </div>
 
       {rows === null ? (
@@ -70,18 +79,21 @@ export function ReportDrilldown({
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t">
                     <td className="px-2 py-1">
-                      <Link href={`/bookings?id=${r.id}`} className="text-primary underline">
-                        {r.id.slice(0, 8)}
-                      </Link>
+                      {/* Không phải link: /bookings không đọc bất kỳ query param nào để
+                          mở đúng một chuyến — trỏ tới đó sẽ là link chết. Hiện mã đầy đủ
+                          qua title để admin tự sao chép/tìm bằng ô "Mã chuyến". */}
+                      <span className="font-mono" title={r.id}>{r.id.slice(0, 8)}</span>
                     </td>
                     <td className="px-2 py-1">
                       {new Date(r.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                     </td>
-                    <td className="px-2 py-1">{r.status}</td>
+                    <td className="px-2 py-1">{statusLabelMap[r.status] ?? r.status}</td>
                     <td className="px-2 py-1 text-right tabular-nums">
                       {r.price != null ? r.price.toLocaleString('vi-VN') : '—'}
                     </td>
-                    <td className="px-2 py-1">{r.cancelledByRole ?? '—'}</td>
+                    <td className="px-2 py-1">
+                      {r.cancelledByRole ? (CANCELLED_BY_ROLE_LABEL[r.cancelledByRole] ?? r.cancelledByRole) : '—'}
+                    </td>
                     <td className="px-2 py-1">{r.cancelReason ?? '—'}</td>
                   </tr>
                 ))}

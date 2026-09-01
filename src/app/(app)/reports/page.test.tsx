@@ -26,6 +26,7 @@ vi.mock('recharts', () => ({
   ResponsiveContainer: () => null,
   LineChart: () => null,
   Line: () => null,
+  Legend: () => null,
   CartesianGrid: () => null,
   XAxis: () => null,
   YAxis: () => null,
@@ -157,6 +158,48 @@ describe('/reports', () => {
     const [sentSpec, sentPage] = getReportRows.mock.calls[2];
     expect(sentSpec.filters.route).toEqual(['HN-VT']);
     expect(sentPage).toBe(1); // KHÔNG kế thừa trang 2 của ô trước
+  });
+
+  it('drill-down hiện đúng "Tổng theo bảng" = measure created của dòng vừa bấm, để đối chiếu', async () => {
+    getReportQuery.mockResolvedValue(
+      makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 37 } }] }),
+    );
+    render(<ReportsPage />);
+    await screen.findByText('HN-HP');
+    fireEvent.click(screen.getByText('HN-HP').closest('tr')!);
+    expect(await screen.findByText(/Tổng theo bảng: 37 chuyến/)).toBeInTheDocument();
+  });
+
+  it('BẤT BIẾN TRUNG TÂM: đổi kỳ (preset/khoảng ngày) rồi bấm dòng NGAY trong lúc kỳ mới còn đang tải — drill-down phải dùng spec của kỳ ĐANG HIỂN THỊ (kỳ cũ), không phải spec sống đã đổi', async () => {
+    // Kỳ đầu ("Hôm nay", mặc định) tải xong trước.
+    getReportQuery.mockResolvedValueOnce(
+      makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 10 } }] }),
+    );
+    render(<ReportsPage />);
+    await screen.findByText('HN-HP');
+    const firstSpec = getReportQuery.mock.calls[0][0];
+
+    // Đổi sang "30 ngày qua" — request thứ hai CỐ Ý không resolve trong lúc test
+    // đang thao tác, mô phỏng "đang tải" kéo dài (network chậm).
+    let resolveSecond: ((r: ReturnType<typeof makeResult>) => void) | undefined;
+    getReportQuery.mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+    fireEvent.click(screen.getByRole('button', { name: '30 ngày qua' }));
+    await waitFor(() => expect(getReportQuery).toHaveBeenCalledTimes(2));
+    const secondSpec = getReportQuery.mock.calls[1][0];
+    expect(secondSpec.from).not.toBe(firstSpec.from); // sanity: hai kỳ THẬT SỰ khác nhau
+
+    // Bảng vẫn hiện dòng của kỳ CŨ trong lúc kỳ mới đang tải — bấm ngay.
+    expect(screen.getByText('HN-HP')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('HN-HP').closest('tr')!);
+
+    await waitFor(() => expect(getReportRows).toHaveBeenCalled());
+    const sentSpec = getReportRows.mock.calls[0][0];
+    // Bộ lọc gửi lên PHẢI mô tả đúng ô đang NHÌN THẤY (kỳ cũ) — lệch là ô hiện 10
+    // nhưng drill-down trả về số của khoảng 30 ngày (đúng bug reviewer mô tả).
+    expect(sentSpec.from).toBe(firstSpec.from);
+    expect(sentSpec.to).toBe(firstSpec.to);
+
+    resolveSecond!(makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 240 } }] }));
   });
 
   it('đổi preset khi drill-down đang mở thì drill-down đóng lại', async () => {
