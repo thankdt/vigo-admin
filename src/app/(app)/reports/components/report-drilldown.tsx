@@ -23,6 +23,7 @@ export function ReportDrilldown({
   onClose: () => void;
 }) {
   const [rows, setRows] = React.useState<ReportRow[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
   const [page, setPage] = React.useState(1);
 
   // Bộ lọc của ô = bộ lọc hiện có CỘNG giá trị từng chiều của dòng vừa bấm.
@@ -40,9 +41,14 @@ export function ReportDrilldown({
   React.useEffect(() => {
     let cancelled = false;
     setRows(null);
+    setError(null);
     getReportRows(drillSpec, page, PAGE_SIZE)
-      .then((r) => { if (!cancelled) setRows(r.rows); })
-      .catch(() => { if (!cancelled) setRows([]); });
+      .then((r) => { if (!cancelled) { setRows(r.rows); } })
+      // Lỗi gọi API KHÔNG được hiện thành danh sách rỗng: "Không có chuyến nào" nằm
+      // ngay dưới "Tổng theo bảng: 42 chuyến" đọc ra thành mâu thuẫn số liệu, đúng thứ
+      // mà bất biến trung tâm của tính năng này sinh ra để ngăn. Phiên hết hạn hay
+      // backend 500 phải nói rõ là lỗi.
+      .catch(() => { if (!cancelled) { setRows([]); setError('Không tải được danh sách chuyến. Thử lại hoặc tải lại trang.'); } });
     return () => { cancelled = true; };
   }, [drillSpec, page]);
 
@@ -109,7 +115,7 @@ export function ReportDrilldown({
                   </tr>
                 ))}
                 {rows.length === 0 ? (
-                  <tr><td colSpan={6} className="px-2 py-6 text-center text-muted-foreground">Không có chuyến nào.</td></tr>
+                  <tr><td colSpan={6} className={`px-2 py-6 text-center ${error ? 'text-destructive' : 'text-muted-foreground'}`}>{error ?? 'Không có chuyến nào.'}</td></tr>
                 ) : null}
               </tbody>
             </table>

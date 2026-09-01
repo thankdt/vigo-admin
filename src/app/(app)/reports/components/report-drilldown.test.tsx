@@ -202,3 +202,38 @@ describe('ReportDrilldown', () => {
     expect(screen.getByText('MATCHED')).toBeInTheDocument();
   });
 });
+
+// Lỗi gọi API từng bị nuốt thành `setRows([])`, nên phiên hết hạn hay backend 500 hiện
+// ra "Không có chuyến nào." ngay dưới "Tổng theo bảng: 42 chuyến" — người dùng đọc thành
+// mâu thuẫn số liệu chứ không phải sự cố mạng.
+describe('ReportDrilldown — lỗi tải KHÁC danh sách rỗng', () => {
+  beforeEach(() => { getReportRows.mockReset(); });
+
+  it('báo lỗi rõ ràng khi gọi /rows thất bại, không hiện "Không có chuyến nào."', async () => {
+    getReportRows.mockRejectedValue(new Error('401'));
+    render(
+      <ReportDrilldown
+        spec={makeSpec()}
+        dims={{ route: 'Hà Nội → Hải Phòng' }}
+        expectedTotal={42}
+        onClose={() => {}}
+      />,
+    );
+    expect(await screen.findByText(/Không tải được danh sách chuyến/)).toBeInTheDocument();
+    expect(screen.queryByText('Không có chuyến nào.')).not.toBeInTheDocument();
+  });
+
+  it('vẫn hiện "Không có chuyến nào." khi API trả về đúng 0 dòng', async () => {
+    getReportRows.mockResolvedValue({ rows: [], page: 1, pageSize: 100 } as ReportRowsResult);
+    render(
+      <ReportDrilldown
+        spec={makeSpec()}
+        dims={{ route: 'Hà Nội → Hải Phòng' }}
+        expectedTotal={0}
+        onClose={() => {}}
+      />,
+    );
+    expect(await screen.findByText('Không có chuyến nào.')).toBeInTheDocument();
+    expect(screen.queryByText(/Không tải được danh sách chuyến/)).not.toBeInTheDocument();
+  });
+});
