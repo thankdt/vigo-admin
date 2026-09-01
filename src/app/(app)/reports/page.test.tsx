@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import ReportsPage from './page';
 import type { ReportResult } from '@/lib/api';
+import { formatVnDate } from '@/lib/format-vn';
 
 const getReportQuery = vi.fn();
 // Task 9: /reports giờ cũng gọi series (biểu đồ) và rows (drill-down). Mock cả hai
@@ -235,6 +236,11 @@ describe('/reports', () => {
     // vẫn mang bộ lọc + "Tổng theo bảng" của kỳ CŨ (đúng ô đã bấm).
     expect(getReportRows).toHaveBeenCalledTimes(1);
     expect(screen.getByText(/Tổng theo bảng: 10 chuyến/)).toBeInTheDocument();
+    // Vòng 3: header drill-down vẫn phải in kỳ CŨ (kỳ của dòng đã bấm) — bảng phía
+    // trên đã nhảy sang kỳ mới, nhưng ô này KHÔNG tự đóng và KHÔNG đổi kỳ hiện theo
+    // bảng; dòng "Kỳ: ..." là chỗ người dùng đối chiếu vì sao hai số không khớp.
+    const expectedPeriod = `Kỳ: ${formatVnDate(firstSpec.from)} – ${formatVnDate(firstSpec.to)}`;
+    expect(screen.getByText(expectedPeriod)).toBeInTheDocument();
   });
 
   it('đổi preset khi drill-down đang mở thì drill-down đóng lại', async () => {

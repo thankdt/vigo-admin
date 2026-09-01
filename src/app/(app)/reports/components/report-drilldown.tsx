@@ -5,6 +5,7 @@ import { Loader2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getReportRows, type ReportRow, type ReportSpec } from '@/lib/api';
 import { statusLabelMap, CANCELLED_BY_ROLE_LABEL } from '../../bookings/components/booking-shared';
+import { formatVnDate } from '@/lib/format-vn';
 
 const PAGE_SIZE = 100;
 
@@ -48,14 +49,24 @@ export function ReportDrilldown({
   return (
     <div className="space-y-3 rounded-md border p-4">
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium">
-          Chuyến trong ô: {Object.entries(dims).map(([, v]) => v).join(' · ')}
-          {expectedTotal != null ? (
-            <span className="ml-2 font-normal text-muted-foreground">
-              — Tổng theo bảng: {expectedTotal.toLocaleString('vi-VN')} chuyến
-            </span>
-          ) : null}
-        </p>
+        <div>
+          <p className="text-sm font-medium">
+            Chuyến trong ô: {Object.entries(dims).map(([, v]) => v).join(' · ')}
+            {expectedTotal != null ? (
+              <span className="ml-2 font-normal text-muted-foreground">
+                — Tổng theo bảng: {expectedTotal.toLocaleString('vi-VN')} chuyến
+              </span>
+            ) : null}
+          </p>
+          {/* In kỳ của ẢNH CHỤP (`spec` truyền vào — chụp lúc bấm, xem page.tsx) chứ
+              không phải kỳ đang chọn trên bộ lọc phía trên. Nếu người dùng đổi kỳ trong
+              lúc drill-down này còn mở, bảng phía trên có thể đã nhảy sang số của kỳ
+              mới trong khi ô này vẫn đúng cho kỳ cũ — dòng này giải thích vì sao hai
+              con số không khớp, thay vì để người dùng tự đoán hoặc nghi ngờ có bug. */}
+          <p className="text-xs text-muted-foreground">
+            Kỳ: {formatVnDate(spec.from)} – {formatVnDate(spec.to)}
+          </p>
+        </div>
         <Button size="sm" variant="ghost" aria-label="Đóng" onClick={onClose}><X className="h-4 w-4" /></Button>
       </div>
 

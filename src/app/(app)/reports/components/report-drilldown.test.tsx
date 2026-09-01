@@ -123,6 +123,17 @@ describe('ReportDrilldown', () => {
     expect(screen.queryByText(/Tổng theo bảng/)).toBeNull();
   });
 
+  it('hiện kỳ (from → to) của ĐÚNG spec truyền vào — ảnh chụp lúc bấm, không phải kỳ nào khác', async () => {
+    render(
+      <ReportDrilldown
+        spec={makeSpec({ from: '2026-08-01', to: '2026-08-31' })}
+        dims={{ route: 'HN-HP' }}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(await screen.findByText('Kỳ: 01/08/2026 – 31/08/2026')).toBeInTheDocument();
+  });
+
   it('không có chuyến nào thì báo rõ, không hiện bảng trống im lặng', async () => {
     getReportRows.mockResolvedValue(makeRowsResult({ rows: [] }));
     render(<ReportDrilldown spec={makeSpec()} dims={{ route: 'HN-HP' }} onClose={vi.fn()} />);
