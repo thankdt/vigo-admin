@@ -202,6 +202,41 @@ describe('/reports', () => {
     resolveSecond!(makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 240 } }] }));
   });
 
+  it('BẤT BIẾN TRUNG TÂM (vòng 2): bấm dòng lúc kỳ mới đang tải, GIỮ drill-down mở tới khi fetch nền xong — không được ghép kỳ mới với dòng đã bấm', async () => {
+    // Kỳ đầu ("Hôm nay") tải xong trước, hiện dòng HN-HP = 10.
+    getReportQuery.mockResolvedValueOnce(
+      makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 10 } }] }),
+    );
+    render(<ReportsPage />);
+    await screen.findByText('HN-HP');
+    const firstSpec = getReportQuery.mock.calls[0][0];
+
+    // Đổi sang "30 ngày qua" — request thứ hai treo lại, mô phỏng fetch nền còn chạy
+    // trong lúc người dùng đã bấm dòng và đang XEM drill-down.
+    let resolveSecond: ((r: ReturnType<typeof makeResult>) => void) | undefined;
+    getReportQuery.mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+    fireEvent.click(screen.getByRole('button', { name: '30 ngày qua' }));
+    await waitFor(() => expect(getReportQuery).toHaveBeenCalledTimes(2));
+
+    // Bấm dòng của kỳ CŨ trong khi kỳ mới còn đang tải nền, rồi GIỮ drill-down mở.
+    fireEvent.click(screen.getByText('HN-HP').closest('tr')!);
+    await waitFor(() => expect(getReportRows).toHaveBeenCalledTimes(1));
+    const [firstRowsSpec] = getReportRows.mock.calls[0];
+    expect(firstRowsSpec.from).toBe(firstSpec.from);
+    expect(await screen.findByText(/Tổng theo bảng: 10 chuyến/)).toBeInTheDocument();
+
+    // Fetch nền của kỳ mới hoàn tất TRONG LÚC drill-down vẫn đang mở — resultState
+    // đổi sang kỳ mới, nhưng drillTarget đã CHỤP spec từ trước nên không được lay động.
+    resolveSecond!(makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 240 } }] }));
+    // Đợi bảng cập nhật sang số của kỳ mới (240) để chắc chắn resultState đã đổi.
+    await screen.findByText('240');
+
+    // Drill-down KHÔNG được refetch/remount theo kỳ mới: vẫn đúng 1 lần gọi /rows,
+    // vẫn mang bộ lọc + "Tổng theo bảng" của kỳ CŨ (đúng ô đã bấm).
+    expect(getReportRows).toHaveBeenCalledTimes(1);
+    expect(screen.getByText(/Tổng theo bảng: 10 chuyến/)).toBeInTheDocument();
+  });
+
   it('đổi preset khi drill-down đang mở thì drill-down đóng lại', async () => {
     getReportQuery.mockResolvedValue(
       makeResult({ rows: [{ dims: { route: 'HN-HP' }, measures: { created: 10 } }] }),

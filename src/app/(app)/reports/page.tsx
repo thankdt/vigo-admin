@@ -11,6 +11,16 @@ import { ReportChart } from './components/report-chart';
 import { ReportDrilldown } from './components/report-drilldown';
 
 type DrillTarget = {
+  /**
+   * `spec` chụp lại NGAY LÚC BẤM — không phải tham chiếu tới `resultState.spec` sống.
+   * Nếu chỉ lưu `dims` rồi đọc `spec` từ state khác lúc render, drill-down đang mở
+   * có thể bị đổi kỳ ngầm dưới chân: bấm dòng lúc kỳ mới đang tải nền, giữ drill-down
+   * mở tới khi fetch xong — `resultState.spec` chuyển sang kỳ mới trong khi `dims` vẫn
+   * là của dòng thuộc kỳ cũ (key chỉ phụ thuộc `dims` nên không remount) → ghép sai kỳ.
+   * Chụp `spec` vào đây tại thời điểm bấm thì drill-down đang mở là ảnh chụp bất biến
+   * của đúng ô đã bấm, không thể bị state khác ghi đè.
+   */
+  spec: ReportSpec;
   dims: Record<string, string>;
   /** measure `created` của dòng vừa bấm — hiện cạnh tiêu đề drill-down để đối chiếu. */
   totalCount: number | null;
@@ -61,7 +71,10 @@ export default function ReportsPage() {
   );
 
   const handleRowClick = (row: ReportResultRow) => {
-    setDrillTarget({ dims: row.dims, totalCount: row.measures.created ?? null });
+    if (!resultState) return;
+    // Chụp spec của kết quả ĐANG HIỂN THỊ (đúng kỳ sinh ra dòng vừa bấm) ngay tại
+    // thời điểm bấm — xem ghi chú ở khai báo DrillTarget.
+    setDrillTarget({ spec: resultState.spec, dims: row.dims, totalCount: row.measures.created ?? null });
   };
 
   return (
@@ -100,11 +113,12 @@ export default function ReportsPage() {
           {drillTarget ? (
             // key = danh tính của ô đang xem: bấm sang ô khác phải là một phiên
             // drill-down MỚI (trang quay về 1), không kế thừa state của ô trước.
-            // spec = resultState.spec (kỳ của KẾT QUẢ ĐANG HIỂN THỊ), không phải
-            // `spec` sống — xem ghi chú bất biến trung tâm ở trên.
+            // spec = drillTarget.spec (ảnh CHỤP tại thời điểm bấm), KHÔNG phải
+            // `resultState.spec`/`spec` sống — nếu đọc state sống, giữ drill-down mở
+            // trong lúc kỳ mới tải xong nền sẽ ghép kỳ mới với dims của kỳ cũ.
             <ReportDrilldown
               key={JSON.stringify(drillTarget.dims)}
-              spec={resultState.spec}
+              spec={drillTarget.spec}
               dims={drillTarget.dims}
               expectedTotal={drillTarget.totalCount}
               onClose={() => setDrillTarget(null)}
