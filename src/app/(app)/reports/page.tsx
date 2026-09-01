@@ -7,6 +7,8 @@ import { getReportQuery, type ReportResult, type ReportSpec } from '@/lib/api';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 import { ReportPresetBar, REPORT_PRESETS } from './components/report-preset-bar';
 import { ReportTable } from './components/report-table';
+import { ReportChart } from './components/report-chart';
+import { ReportDrilldown } from './components/report-drilldown';
 
 export default function ReportsPage() {
   const { toast } = useToast();
@@ -14,6 +16,7 @@ export default function ReportsPage() {
   const [presetKey, setPresetKey] = React.useState(REPORT_PRESETS[0].key);
   const [result, setResult] = React.useState<ReportResult | null>(null);
   const [isLoading, setIsLoading] = React.useState(true);
+  const [drillDims, setDrillDims] = React.useState<Record<string, string> | null>(null);
 
   const spec: ReportSpec = React.useMemo(() => {
     const preset = REPORT_PRESETS.find((p) => p.key === presetKey) ?? REPORT_PRESETS[0];
@@ -23,6 +26,7 @@ export default function ReportsPage() {
   React.useEffect(() => {
     let cancelled = false;
     setIsLoading(true);
+    setDrillDims(null);
     getReportQuery(spec)
       .then((r) => { if (!cancelled) setResult(r); })
       .catch((err: any) => {
@@ -64,7 +68,18 @@ export default function ReportsPage() {
               Chỉ hiển thị {result.meta.rowCount} dòng đầu — hãy thu hẹp khoảng ngày để xem đủ.
             </p>
           ) : null}
-          <ReportTable result={result} onRowClick={() => { /* Task 9 nối drill-down */ }} />
+          <ReportTable result={result} onRowClick={setDrillDims} />
+          {drillDims ? (
+            // key = danh tính của ô đang xem: bấm sang ô khác phải là một phiên
+            // drill-down MỚI (trang quay về 1), không kế thừa state của ô trước.
+            <ReportDrilldown
+              key={JSON.stringify(drillDims)}
+              spec={spec}
+              dims={drillDims}
+              onClose={() => setDrillDims(null)}
+            />
+          ) : null}
+          <ReportChart spec={spec} />
         </>
       ) : null}
     </div>
