@@ -105,6 +105,15 @@ describe('BookingsTable — colSpan khớp số cột THẬT', () => {
     await expectColSpanMatchesHeaders();
   });
 
+  it('tab Huỷ sau khi nhận (+3 cột huỷ như tab Đã hủy)', async () => {
+    // Tab huỷ THỨ HAI: 3 cột kia bị gate theo tên tab, nên đây là chỗ lệch colSpan
+    // dễ xảy ra nhất khi thêm tab.
+    render(<BookingsTable />);
+    await emptyRowCell();
+    await userEvent.click(screen.getByRole('tab', { name: 'Huỷ sau khi nhận' }));
+    await expectColSpanMatchesHeaders();
+  });
+
   it('Đặt lịch + tab Đã hủy (hai phần cộng dồn — ca dễ sót nhất)', async () => {
     render(<BookingsTable />);
     await emptyRowCell();
