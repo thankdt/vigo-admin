@@ -419,6 +419,12 @@ export type Booking = {
   // Optional vì backend cũ chưa trả field. Luôn so `=== true` / `booking.isDuplicateTrip &&`
   // — KHÔNG `=== false`: `undefined` và `false` phải cùng nghĩa "không trùng".
   isDuplicateTrip?: boolean;
+  /**
+   * Chuyến này là chuyến ĐẦU TIÊN tài khoản khách đó từng đặt (backend đếm mọi chuyến,
+   * kể cả huỷ). Optional vì backend cũ chưa trả — LUÔN so `=== true`, đừng dùng
+   * `!booking.isFirstBooking` để suy ra "khách cũ": field vắng mặt không có nghĩa gì cả.
+   */
+  isFirstBooking?: boolean;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.
