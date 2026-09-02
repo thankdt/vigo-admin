@@ -3650,8 +3650,11 @@ export type PenaltyReasonCode =
   | 'OTHER';
 export type PenaltyStatus = 'ACTIVE' | 'REVERSED';
 export type PenaltySource = 'PENALTY_PAGE' | 'CANCEL_REVIEW' | 'LEAKAGE_REVIEW';
-/** Việc đã xử lý xong chưa. `pending` = còn phải phạt (mặc định của hàng đợi). */
-export type PenaltyQueueState = 'pending' | 'all' | 'penalized';
+/**
+ * Việc đã xử lý xong chưa. `pending` = còn phải phạt (mặc định của hàng đợi),
+ * `dismissed` = đã đánh dấu "Không phạt" (rời hàng đợi mà không mất dấu vết).
+ */
+export type PenaltyQueueState = 'pending' | 'all' | 'penalized' | 'dismissed';
 /** Hệ thống thấy dấu hiệu gì. Tách khỏi `state` để lọc được "nghi rò rỉ mà CHƯA phạt". */
 export type PenaltyQueueSignal = 'all' | 'leakage' | 'cancelAlert';
 
@@ -3665,7 +3668,9 @@ export type PenaltyBlockedReason =
   /** Chuyến quá cũ: sổ ví không nhúng mức hoa hồng nên không tự tính được. */
   | 'LEGACY_LEDGER'
   | 'LEDGER_ANOMALY'
-  | 'DRIVER_NOT_FOUND';
+  | 'DRIVER_NOT_FOUND'
+  /** Chuyến đang ở trạng thái "Không phạt" — phải Khôi phục trước khi phạt. */
+  | 'DISMISSED';
 
 export type PenaltyPreview = {
   amount: number;
@@ -3696,6 +3701,14 @@ export type PenaltyQueueRow = {
   penaltyId: string | null;
   penaltyStatus: PenaltyStatus | null;
   penaltyAmount: number | null;
+  /**
+   * Bản ghi "Không phạt" CÒN HIỆU LỰC (null = chuyến chưa bị bỏ qua). Backend cũ chưa
+   * deploy thì cả 4 field này vắng mặt → undefined, mọi chỗ đọc phải chịu được điều đó.
+   */
+  dismissalId: string | null;
+  dismissNote: string | null;
+  dismissedAt: string | null;
+  dismissedByName: string | null;
   collectibleAmount: number;
 };
 
@@ -3789,6 +3802,43 @@ export async function listPenalties(params: {
     if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
   });
   return unwrap(await fetchWithAuth(`/admin/driver-penalties?${qs.toString()}`));
+}
+
+/** Bản ghi "Không phạt" backend trả về (không có field JOIN nào). */
+export type PenaltyDismissalEntity = {
+  id: string;
+  bookingId: string;
+  note: string | null;
+  status: 'ACTIVE' | 'RESTORED';
+  dismissedByUserId: string;
+  createdAt: string;
+  restoredByUserId: string | null;
+  restoredAt: string | null;
+};
+
+/** Đánh dấu "Không phạt" — chuyến rời hàng đợi việc, KHÔNG có đồng nào chuyển dịch. */
+export async function dismissPenaltyBooking(
+  bookingId: string,
+  note?: string,
+): Promise<PenaltyDismissalEntity> {
+  return unwrap(
+    await fetchWithAuth('/admin/driver-penalties/dismiss', {
+      method: 'POST',
+      body: JSON.stringify({ bookingId, ...(note && { note }) }),
+    }),
+  );
+}
+
+/** Khôi phục: đưa chuyến đã bỏ qua trở lại hàng đợi "Cần xử lý". */
+export async function restorePenaltyDismissal(
+  bookingId: string,
+): Promise<PenaltyDismissalEntity> {
+  return unwrap(
+    await fetchWithAuth(
+      `/admin/driver-penalties/dismiss/${encodeURIComponent(bookingId)}/restore`,
+      { method: 'POST' },
+    ),
+  );
 }
 
 export async function reversePenalty(id: string, note?: string): Promise<DriverPenaltyEntity> {
