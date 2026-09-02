@@ -45,7 +45,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
 import { buildTripPassText } from './booking-pass-utils';
-import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -1012,7 +1012,15 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     <TableCell className="font-medium">
                       <div className="flex flex-col">
                         <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
-                        <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
+                        {/* Badge đi cùng SĐT, KHÔNG cùng tên: SĐT rộng gần như cố định (10 số)
+                            nên badge nằm ở một vị trí ổn định, mắt quét dọc bảng thấy ngay —
+                            đứng cạnh tên thì tên dài đẩy badge chạy lung tung mỗi dòng.
+                            Hàng NGANG bắt buộc: container ngoài là `flex flex-col`, thả Badge
+                            thẳng vào đó thì align-items:stretch kéo badge rộng bằng cả ô. */}
+                        <div className="flex items-center gap-1">
+                          <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
+                          {booking.isFirstBooking === true && <FirstTripBadge />}
+                        </div>
                         {booking.agentPhone && (
                           <span className='inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400'>
                             <Store className='h-3 w-3' /> Đặt hộ: {booking.agentPhone}
