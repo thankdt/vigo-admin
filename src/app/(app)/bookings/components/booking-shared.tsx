@@ -115,6 +115,29 @@ export function DuplicateTripBadge() {
 }
 
 /**
+ * Nhãn "khách lần đầu" — chuyến này là chuyến ĐẦU TIÊN tài khoản khách đó từng đặt
+ * (backend tính bằng cờ `isFirstBooking`, đếm mọi chuyến kể cả huỷ).
+ *
+ * Xanh dương nhạt, viền mảnh: đây là thông tin để CSKH chăm khéo hơn, KHÔNG phải cảnh
+ * báo — không được tranh màu với cờ TEST (tím) hay TRÙNG (xám đá), càng không được
+ * trông như một trạng thái chuyến.
+ *
+ * `title` nói "tài khoản khách này" chứ không nói "khách này": chuyến giao hàng hiện
+ * tên NGƯỜI GỬI do client nhập, có thể khác chủ tài khoản mà cờ đang nói tới.
+ */
+export function FirstTripBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="shrink-0 whitespace-nowrap border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50"
+      title="Đây là chuyến đầu tiên tài khoản khách này đặt"
+    >
+      Khách lần đầu
+    </Badge>
+  );
+}
+
+/**
  * Mốc thời gian NGẮN `dd/MM HH:mm` cho các ô trong bảng chuyến, LUÔN giờ VN (UTC+7)
  * bất kể múi giờ máy admin — luật bắt buộc của repo.
  *
