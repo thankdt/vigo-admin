@@ -805,6 +805,10 @@ export async function getBookings(params: {
   // undefined = hiện cả hai (mặc định — cùng lý do với `testFilter`: admin phải thấy
   // chuyến mình đánh dấu để sửa nếu gạt nhầm), và để an toàn khi backend chưa deploy.
   duplicateFilter?: DuplicateTripFilter;
+  // Tab "Huỷ sau khi nhận": 'afterAccept' = chuyến huỷ mà ĐÃ có tài xế (BE lọc
+  // driverId IS NOT NULL). CHỈ có nghĩa kèm status='CANCELLED' — gửi một mình thì BE bỏ qua.
+  // undefined = không lọc (và an toàn khi backend chưa deploy).
+  cancelledState?: 'afterAccept';
 } = {}): Promise<{ data: Booking[]; total: number; page: number; limit: number; totalPages: number }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
@@ -832,6 +836,7 @@ export async function getBookings(params: {
     ...(params.testFilter && { testFilter: params.testFilter }),
     ...(params.address && { address: params.address }),
     ...(params.duplicateFilter && { duplicateFilter: params.duplicateFilter }),
+    ...(params.cancelledState && { cancelledState: params.cancelledState }),
   });
 
   const response = await fetchWithAuth(`/bookings/admin/list?${query.toString()}`);
