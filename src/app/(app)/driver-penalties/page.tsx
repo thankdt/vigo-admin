@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Gavel, Loader2, RotateCcw, Search } from 'lucide-react';
+import { Ban, Gavel, Loader2, RotateCcw, Search, Undo2 } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,10 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { toastApiError } from '@/hooks/use-api-error-toast';
 import {
+  dismissPenaltyBooking,
   getPenaltyQueue,
   listPenalties,
+  restorePenaltyDismissal,
   reversePenalty,
   type DriverPenaltyRow,
   type PenaltyQueueRow,
@@ -36,6 +38,7 @@ import {
   cancelledByLabel,
   formatVnd,
   leakageSignal,
+  penaltyDismissedBadge,
   penaltyStatusBadge,
 } from './penalty-labels';
 
@@ -53,13 +56,18 @@ const defaultRange = () =>
  *  - `pending`: còn phải xử lý. Phạt xong là rời khỏi đây — hàng đợi phải cạn dần,
  *    nếu không người soát mất hẳn cảm giác "còn bao nhiêu việc".
  *  - `all`: mọi chuyến huỷ có tài xế, để tra cứu lại chuyến bất kỳ.
+ *  - `dismissed`: đã xem và quyết định KHÔNG phạt — cất khỏi `pending` nhưng vẫn
+ *    khôi phục lại được, không xoá dấu vết.
  *  - `history`: các vụ phạt đã ra quyết định (kèm huỷ phạt).
+ *
+ * Tabs render bằng `Object.keys(TAB_LABEL)` nên THỨ TỰ KHAI KHOÁ = thứ tự tab hiện ra.
  */
-type MainTab = 'pending' | 'all' | 'history';
+type MainTab = 'pending' | 'all' | 'dismissed' | 'history';
 
 const TAB_LABEL: Record<MainTab, string> = {
   pending: 'Cần xử lý',
   all: 'Tất cả chuyến huỷ',
+  dismissed: 'Đã bỏ qua',
   history: 'Lịch sử phạt',
 };
 
@@ -84,6 +92,8 @@ export default function DriverPenaltiesPage() {
   const [totals, setTotals] = React.useState({ count: 0, amount: 0 });
   const [loading, setLoading] = React.useState(true);
   const [reversing, setReversing] = React.useState<string | null>(null);
+  // Khoá theo bookingId: chỉ dòng đang gửi bị khoá, các dòng khác vẫn bấm được.
+  const [dismissing, setDismissing] = React.useState<string | null>(null);
   const [penaltyTarget, setPenaltyTarget] = React.useState<string | null>(null);
 
   // Debounce huỷ được timer nhưng KHÔNG huỷ request đang bay. Không có seq guard thì
@@ -98,9 +108,9 @@ export default function DriverPenaltiesPage() {
         const res = await getPenaltyQueue({
           from: range.from,
           to: range.to,
-          // TS thu hẹp `tab` về 'pending' | 'all' nhờ nhánh `tab !== 'history'`, và
-          // hai giá trị đó chính là `PenaltyQueueState` — đổi tên khoá tab là compile
-          // đỏ ngay, không trôi lệch âm thầm.
+          // TS thu hẹp `tab` về 'pending' | 'all' | 'dismissed' nhờ nhánh
+          // `tab !== 'history'`, và đúng ba giá trị đó là `PenaltyQueueState` — đổi tên
+          // khoá tab là compile đỏ ngay, không trôi lệch âm thầm.
           state: tab,
           signal,
           q: search.trim() || undefined,
@@ -162,6 +172,44 @@ export default function DriverPenaltiesPage() {
     }
   };
 
+  const doDismiss = async (row: PenaltyQueueRow) => {
+    const note = window.prompt(
+      `Đánh dấu KHÔNG phạt chuyến của ${row.driverName || 'tài xế'}?\nChuyến sẽ rời tab "Cần xử lý" và nằm ở tab "Đã bỏ qua" — khôi phục lại được bất cứ lúc nào.\n\nLý do (tuỳ chọn):`,
+    );
+    // prompt trả null khi bấm Huỷ — khác hẳn chuỗi rỗng (bấm OK mà không gõ gì).
+    if (note === null) return;
+    setDismissing(row.bookingId);
+    try {
+      // Backend @MaxLength(500) — cắt tại chỗ thay vì đi một vòng để nhận 400.
+      await dismissPenaltyBooking(row.bookingId, note.trim().slice(0, 500) || undefined);
+      toast({
+        title: 'Đã bỏ qua chuyến này',
+        description: 'Chuyến không còn nằm trong danh sách cần xử lý.',
+      });
+      load();
+    } catch (err) {
+      toastApiError(err, 'Không bỏ qua được chuyến này');
+    } finally {
+      setDismissing(null);
+    }
+  };
+
+  const doRestore = async (row: PenaltyQueueRow) => {
+    setDismissing(row.bookingId);
+    try {
+      await restorePenaltyDismissal(row.bookingId);
+      toast({
+        title: 'Đã khôi phục',
+        description: 'Chuyến quay lại danh sách cần xử lý.',
+      });
+      load();
+    } catch (err) {
+      toastApiError(err, 'Khôi phục thất bại');
+    } finally {
+      setDismissing(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -218,6 +266,15 @@ export default function DriverPenaltiesPage() {
           </Tabs>
         )}
 
+        {/* Tab này lọc theo NGÀY BỎ QUA, không phải ngày huỷ chuyến — nói rõ, nếu không
+            người soát bỏ qua chuyến huỷ từ 2 tháng trước sẽ tưởng thao tác bị trượt. */}
+        {tab === 'dismissed' && (
+          <p className="text-sm text-muted-foreground">
+            Khoảng ngày ở đây tính theo <strong>ngày bấm “Không phạt”</strong>, không phải ngày
+            huỷ chuyến.
+          </p>
+        )}
+
         {tab === 'history' && (
           <p className="text-sm text-muted-foreground">
             Trong khoảng đã chọn: <strong>{totals.count}</strong> vụ phạt còn hiệu lực, tổng đã thu{' '}
@@ -254,13 +311,21 @@ export default function DriverPenaltiesPage() {
                   <TableCell colSpan={QUEUE_COLS} className="py-8 text-center text-muted-foreground">
                     {tab === 'pending'
                       ? 'Không còn chuyến nào cần xử lý trong khoảng ngày này.'
-                      : 'Không có chuyến huỷ nào trong khoảng ngày này.'}
+                      : tab === 'dismissed'
+                        ? 'Chưa bỏ qua chuyến nào trong khoảng ngày này.'
+                        : 'Không có chuyến huỷ nào trong khoảng ngày này.'}
                   </TableCell>
                 </TableRow>
               )}
               {!loading &&
                 queueRows.map((r) => {
-                  const status = penaltyStatusBadge(r.penaltyStatus);
+                  // Đã phạt thì "Đã phạt" thắng: bỏ qua rồi mới phạt (hoặc ngược lại,
+                  // trường hợp hi hữu) thì thứ người soát cần thấy trước là ĐÃ TRỪ TIỀN.
+                  const dismissed = !!r.dismissalId && r.penaltyStatus !== 'ACTIVE';
+                  const status = dismissed
+                    ? penaltyDismissedBadge()
+                    : penaltyStatusBadge(r.penaltyStatus);
+                  const busy = dismissing === r.bookingId;
                   const leakage = leakageSignal(r.leakageVerdict);
                   const alert = cancelAlertSignal({
                     rule: r.cancelAlertRule,
@@ -330,23 +395,77 @@ export default function DriverPenaltiesPage() {
                       </TableCell>
                       <TableCell className="whitespace-nowrap">
                         <Badge className={status.className}>{status.label}</Badge>
+                        {/* Ai bỏ qua và vì sao — người soát sau phải trả lời được câu
+                            "tại sao chuyến này không bị phạt" mà không cần hỏi ai. */}
+                        {r.dismissalId && (
+                          <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                            <p>{formatVnDateTime(r.dismissedAt)}</p>
+                            <p>{r.dismissedByName || 'Không rõ người bỏ qua'}</p>
+                            {r.dismissNote && (
+                              <p className="max-w-[180px] whitespace-normal" title={r.dismissNote}>
+                                Lý do: {r.dismissNote}
+                              </p>
+                            )}
+                          </div>
+                        )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap text-right">
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          disabled={r.penaltyStatus === 'ACTIVE' || r.collectibleAmount <= 0}
-                          title={
-                            r.penaltyStatus === 'ACTIVE'
-                              ? 'Chuyến này đã bị phạt rồi'
-                              : r.collectibleAmount <= 0
-                                ? 'Chuyến này không có hoa hồng để thu lại'
-                                : undefined
-                          }
-                          onClick={() => setPenaltyTarget(r.bookingId)}
-                        >
-                          <Gavel className="mr-1.5 h-3.5 w-3.5" /> Phạt
-                        </Button>
+                        {tab === 'dismissed' ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busy}
+                            onClick={() => doRestore(r)}
+                          >
+                            {busy ? (
+                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Undo2 className="mr-1.5 h-3.5 w-3.5" />
+                            )}
+                            Khôi phục
+                          </Button>
+                        ) : (
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={r.penaltyStatus === 'ACTIVE' || r.collectibleAmount <= 0}
+                              title={
+                                r.penaltyStatus === 'ACTIVE'
+                                  ? 'Chuyến này đã bị phạt rồi'
+                                  : r.collectibleAmount <= 0
+                                    ? 'Chuyến này không có hoa hồng để thu lại'
+                                    : undefined
+                              }
+                              onClick={() => setPenaltyTarget(r.bookingId)}
+                            >
+                              <Gavel className="mr-1.5 h-3.5 w-3.5" /> Phạt
+                            </Button>
+                            {/* KHÔNG copy điều kiện disabled của nút Phạt: chuyến không
+                                thu được đồng nào (collectibleAmount = 0) chính là nhóm
+                                cần dọn khỏi hàng đợi nhất, phải bỏ qua được. */}
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              disabled={busy || r.penaltyStatus === 'ACTIVE' || !!r.dismissalId}
+                              title={
+                                r.penaltyStatus === 'ACTIVE'
+                                  ? 'Chuyến này đã bị phạt rồi'
+                                  : r.dismissalId
+                                    ? 'Chuyến này đã được bỏ qua'
+                                    : 'Đánh dấu không phạt và cất khỏi danh sách cần xử lý'
+                              }
+                              onClick={() => doDismiss(r)}
+                            >
+                              {busy ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <Ban className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Không phạt
+                            </Button>
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
