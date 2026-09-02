@@ -33,6 +33,10 @@ export const statusLabelMap: Record<string, string> = {
   PICKED_UP: 'Đã đón',
   COMPLETED: 'Hoàn thành',
   CANCELLED: 'Đã hủy',
+  // Tab ẢO (không phải BookingStatus): chuyến đã có tài xế rồi mới bị huỷ. BookingsTable
+  // map nó sang status=CANCELLED + cancelledState=afterAccept. Nằm ở đây vì dải tab đọc
+  // chung map này; không dòng dữ liệu nào mang status này nên getStatusBadge không đụng tới.
+  CANCELLED_AFTER_ACCEPT: 'Huỷ sau khi nhận',
 };
 
 export const CANCELLED_BY_ROLE_LABEL: Record<string, string> = {

@@ -73,7 +73,9 @@ type SortKey = keyof Booking;
 // single DB status. NEEDS_ADMIN = unclaimed (5-min auto-cancel + Telegram nags);
 // ADMIN_HANDLING = an admin claimed it and owns the resolution indefinitely.
 // Both are mapped to `status=PROCESSING&processingState=…` on the server.
-type TabKey = BookingStatus | 'NEEDS_ADMIN' | 'ADMIN_HANDLING' | 'ALL';
+// CANCELLED_AFTER_ACCEPT cũng là tab ảo: status=CANCELLED + cancelledState=afterAccept
+// (chuyến đã có tài xế rồi mới huỷ) — cùng khuôn, cùng lý do: không đẻ thêm BookingStatus.
+type TabKey = BookingStatus | 'NEEDS_ADMIN' | 'ADMIN_HANDLING' | 'CANCELLED_AFTER_ACCEPT' | 'ALL';
 
 // Outer trip-type tabs: 'all' = no filter (default landing, unchanged behaviour),
 // 'regular' = ride-now (scheduledTime IS NULL), 'scheduled' = booked-ahead (IS NOT NULL).
@@ -131,6 +133,7 @@ const tabKeys: TabKey[] = [
   'PICKED_UP',
   'COMPLETED',
   'CANCELLED',
+  'CANCELLED_AFTER_ACCEPT',
 ];
 
 
@@ -485,19 +488,25 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       // a single enum so the customer/driver apps stay unchanged.
       let status: string | undefined = tab === 'ALL' ? undefined : tab;
       let processingState: 'unclaimed' | 'claimed' | undefined;
+      // Tab ảo "Huỷ sau khi nhận" — cùng khuôn: BE lọc driverId IS NOT NULL, và nó CHỈ
+      // có nghĩa kèm status=CANCELLED. Quên gán lại `status` thì tab ra TOÀN BỘ chuyến.
+      let cancelledState: 'afterAccept' | undefined;
       if (tab === 'NEEDS_ADMIN') {
         status = 'PROCESSING';
         processingState = 'unclaimed';
       } else if (tab === 'ADMIN_HANDLING') {
         status = 'PROCESSING';
         processingState = 'claimed';
+      } else if (tab === 'CANCELLED_AFTER_ACCEPT') {
+        status = 'CANCELLED';
+        cancelledState = 'afterAccept';
       }
 
       // KHÔNG dùng `any` ở đây: `any` làm tsc thôi kiểm tên field, nên một typo kiểu
       // `params.adress` sẽ compile sạch, `getBookings` bỏ qua field lạ, và ô lọc im lặng
       // không lọc gì. Buộc kiểu theo đúng tham số của getBookings để typo là lỗi biên dịch.
       const params: NonNullable<Parameters<typeof getBookings>[0]> = {
-        page, limit, status, processingState,
+        page, limit, status, processingState, cancelledState,
         // Sắp xếp ở server → áp cho toàn bộ dữ liệu của tab, không chỉ trang đang xem.
         sortBy: sort.key,
         order: sort.direction === 'ascending' ? 'ASC' : 'DESC',
@@ -751,10 +760,14 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // này không ném lỗi, chỉ làm dòng "Không tìm thấy chuyến nào" co lệch bảng, nên đã
   // khoá bằng test (bookings-table.colspan.test.tsx: colSpan phải bằng số <th> thật).
   const showScheduledCol = tripKind === 'scheduled';
+  // 3 cột huỷ áp cho CẢ hai tab huỷ. Trước đây là chuỗi cứng `activeTab === 'CANCELLED'`
+  // ở 5 chỗ (2 <th>/<td> + công thức colSpan này) — thêm tab huỷ thứ hai mà sót một chỗ
+  // thì bảng lệch cột hoặc mất dữ liệu huỷ, KHÔNG có lỗi nào được ném ra.
+  const isCancelledTab = activeTab === 'CANCELLED' || activeTab === 'CANCELLED_AFTER_ACCEPT';
   const colSpan =
     8 +
     (activeTab === 'COMPLETED' ? 1 : 0) +
-    (activeTab === 'CANCELLED' ? 3 : 0) +
+    (isCancelledTab ? 3 : 0) +
     (showScheduledCol ? 1 : 0);
 
   return (
@@ -958,7 +971,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                 {/* CANCELLED tab gets 3 extra columns so admin can read who
                     cancelled and why without opening each detail dialog. Other
                     tabs keep the base 8-column layout. */}
-                {activeTab === 'CANCELLED' && (
+                {isCancelledTab && (
                   <>
                     <TableHead>Thời gian huỷ</TableHead>
                     <TableHead>Người huỷ</TableHead>
@@ -1091,7 +1104,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         )}
                       </div>
                     </TableCell>
-                    {activeTab === 'CANCELLED' && (
+                    {isCancelledTab && (
                       <>
                         <TableCell className="text-xs">
                           {booking.cancelledAt
