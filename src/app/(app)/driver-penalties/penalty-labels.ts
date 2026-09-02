@@ -184,3 +184,17 @@ export function cancelAlertSignal(a: {
 export function formatVnd(n: number | null | undefined): string {
   return `${Number(n ?? 0).toLocaleString('vi-VN')}đ`;
 }
+
+/**
+ * "Đã bỏ qua" = người soát đã xem và quyết định KHÔNG phạt chuyến này.
+ *
+ * Màu xám cố ý: đây là trạng thái đã-xử-lý-xong nhưng không có tiền đi kèm, không
+ * được nhìn giống "Đã phạt" (đỏ) hay "Chưa phạt" (hổ phách, tức còn việc).
+ */
+export function penaltyDismissedBadge(): { label: string; className: string } {
+  return {
+    label: 'Đã bỏ qua',
+    className:
+      'bg-slate-100 text-slate-700 hover:bg-slate-100 dark:bg-slate-800/60 dark:text-slate-300 dark:hover:bg-slate-800/60',
+  };
+}
