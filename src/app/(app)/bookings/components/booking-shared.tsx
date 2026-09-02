@@ -128,6 +128,9 @@ export function DuplicateTripBadge() {
  *
  * `title` nói "tài khoản khách này" chứ không nói "khách này": chuyến giao hàng hiện
  * tên NGƯỜI GỬI do client nhập, có thể khác chủ tài khoản mà cờ đang nói tới.
+ *
+ * Chữ "Chuyến đầu" (không phải "Khách lần đầu"): badge đứng cạnh SĐT — chỗ có bề rộng
+ * gần như cố định — nên phải ngắn để không đẩy layout khi cột bị bóp.
  */
 export function FirstTripBadge() {
   return (
@@ -136,7 +139,7 @@ export function FirstTripBadge() {
       className="shrink-0 whitespace-nowrap border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50"
       title="Đây là chuyến đầu tiên tài khoản khách này đặt"
     >
-      Khách lần đầu
+      Chuyến đầu
     </Badge>
   );
 }
