@@ -51,7 +51,7 @@ beforeEach(() => {
   vi.mocked(getBookings).mockReset();
 });
 
-const BADGE = /khách lần đầu/i;
+const BADGE = /^chuyến đầu$/i;
 
 describe('BookingsTable — badge "Khách lần đầu"', () => {
   it('isFirstBooking = true → hiện badge cạnh tên khách', async () => {
@@ -81,18 +81,20 @@ describe('BookingsTable — badge "Khách lần đầu"', () => {
     expect(screen.queryByText(BADGE)).not.toBeInTheDocument();
   });
 
-  it('badge không giãn hết ô: nằm trong hàng ngang cùng tên khách', async () => {
+  it('badge đứng cạnh SĐT (không cạnh tên) và không giãn hết ô', async () => {
     vi.mocked(getBookings).mockResolvedValue(
       listOf({ ...baseBooking, isFirstBooking: true } as Booking) as any,
     );
     render(<BookingsTable />);
 
     const badge = await screen.findByText(BADGE);
+    const phone = screen.getByText('0900000001');
     const name = screen.getByText('Nguyễn Văn A');
-    // Cùng một container, và container đó phải xếp NGANG — `flex flex-col` không có
-    // items-start sẽ kéo badge rộng bằng cả ô, nhìn như lỗi CSS.
+    // Cạnh SĐT: SĐT rộng cố định nên badge không bị tên dài đẩy chạy mỗi dòng.
     const row = badge.parentElement!;
-    expect(row).toBe(name.parentElement);
+    expect(row).toBe(phone.parentElement);
+    expect(row).not.toBe(name.parentElement);
+    // Hàng NGANG — `flex flex-col` không items-start sẽ kéo badge rộng bằng cả ô.
     expect(row.className).toContain('items-center');
   });
 });
