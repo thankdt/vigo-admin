@@ -4671,3 +4671,33 @@ export async function getPoolingSuggestions(params: {
   const result = await response.json();
   return result.data ?? result;
 }
+
+/** Tóm tắt lượt quét gom chuyến gần nhất của một ngày. */
+export type PoolLastScan = {
+  runId: string;
+  /** Mốc quét, ISO UTC. */
+  runAt: string;
+  /** `AUTO_JOB` = hệ thống tự quét · `ADMIN_SCAN` = có người bấm Quét. */
+  source: string;
+  routeId: number | null;
+  scanned: number;
+  groups: number;
+  /** Số chuyến không ghép được với ai. */
+  lone: number;
+  savedKm: number | null;
+};
+
+/**
+ * Đọc lượt quét gần nhất — KHÔNG tính lại, nên gọi được ngay lúc mở trang.
+ * `null` nghĩa là ngày đó chưa từng được quét lần nào.
+ */
+export async function getPoolingLastScan(date: string): Promise<PoolLastScan | null> {
+  const response = await fetchWithAuth(`/admin/pooling/last-scan?date=${date}`);
+  const result = await response.json();
+  // KHÔNG dùng thành ngữ `result.data ?? result` như các hàm khác trong file này.
+  // Chúng an toàn vì endpoint của chúng không bao giờ trả `data: null` hợp lệ.
+  // Đây là endpoint ĐẦU TIÊN coi `null` là câu trả lời có nghĩa ("ngày này chưa
+  // quét lần nào"), nên `?? result` sẽ rơi về chính cái VỎ `{success,data:null}`
+  // — một object truthy — và màn hình in ra "undefined chuyến".
+  return (result && typeof result === 'object' && 'data' in result ? result.data : result) ?? null;
+}

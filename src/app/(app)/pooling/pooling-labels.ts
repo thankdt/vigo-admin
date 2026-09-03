@@ -56,11 +56,15 @@ export function formatVnd(v: number | string | null | undefined): string {
   return `${Math.round(n).toLocaleString('vi-VN')}đ`;
 }
 
-/** Địa chỉ dài thì cắt bớt, giữ đủ để nhận ra nơi đó. */
-export function shortAddress(a: string | null | undefined, max = 42): string {
+/**
+ * Địa chỉ ĐẦY ĐỦ, không cắt. Trước 28/08 hàm này cắt còn 42 ký tự và thêm dấu
+ * `…`, nhưng màn này sinh ra để admin CHỤP MÀN HÌNH gửi nhóm tài xế — địa chỉ
+ * cụt thì tài xế không tới được, tức là cắt chữ làm hỏng đúng công dụng chính.
+ * Ô bảng cho xuống dòng thay vì cắt.
+ */
+export function addressText(a: string | null | undefined): string {
   const t = (a ?? '').trim();
-  if (!t) return '—';
-  return t.length <= max ? t : `${t.slice(0, max - 1)}…`;
+  return t || '—';
 }
 
 /**
@@ -179,4 +183,35 @@ export function buildGroupText(g: CopyableGroup): string {
   }
 
   return L.join('\n').trim();
+}
+
+/**
+ * Câu tóm tắt lượt quét gần nhất.
+ *
+ * Tách khỏi component để test được câu chữ mà không phải render cả trang —
+ * và vì đây là chỗ duy nhất admin nhìn thấy job nền đang chạy, nên nó phải
+ * nói rõ AI quét (hệ thống hay người) chứ không chỉ hiện con số.
+ */
+export function lastScanText(s: {
+  runAt: string;
+  source: string;
+  scanned: number;
+  groups: number;
+  lone: number;
+  savedKm: number | null;
+} | null): string | null {
+  // Chặn cả `null` LẪN object thiếu field. Lỗi thật 29/08: hàm gọi API trả về
+  // cả vỏ `{success:true,data:null}` khi backend báo "chưa quét lần nào"; vỏ đó
+  // truthy nên lọt qua, và dòng trạng thái in ra "undefined chuyến".
+  if (!s || typeof s.runAt !== 'string' || !Number.isFinite(s.scanned)) return null;
+  const ai = s.source === 'AUTO_JOB' ? 'Hệ thống tự quét' : 'Quét thủ công';
+  const phan = [
+    `${ai} lúc ${vnTime(s.runAt)}`,
+    `${s.scanned} chuyến`,
+    // 0 nhóm là một kết quả có nghĩa, không phải thiếu dữ liệu — nói thẳng.
+    s.groups > 0 ? `${s.groups} nhóm` : 'chưa ghép được nhóm nào',
+  ];
+  if (s.lone > 0) phan.push(`${s.lone} chuyến lẻ`);
+  if (s.savedKm != null && s.savedKm > 0) phan.push(`tiết kiệm ${s.savedKm} km`);
+  return phan.join(' · ');
 }
