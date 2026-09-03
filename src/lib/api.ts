@@ -4685,6 +4685,8 @@ export type PoolLastScan = {
   /** Số chuyến không ghép được với ai. */
   lone: number;
   savedKm: number | null;
+  /** Các nhóm của lượt quét đó, dựng lại từ nhật ký — không tính lại. */
+  groupsDetail: PoolGroupView[];
 };
 
 /**
