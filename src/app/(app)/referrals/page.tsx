@@ -342,6 +342,7 @@ export default function ReferralsPage() {
               <TableHead className="text-right">Số người mời</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
               <TableHead className="text-right whitespace-nowrap">Số dư ví</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Đã rút</TableHead>
               <TableHead className="text-right whitespace-nowrap">Tổng tiền</TableHead>
               <TableHead className="text-right whitespace-nowrap">Cập nhật</TableHead>
               <TableHead className="text-right" />
@@ -349,9 +350,9 @@ export default function ReferralsPage() {
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={11} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
             ) : referrers.length === 0 ? (
-              <TableRow><TableCell colSpan={11} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
             ) : (
               referrers.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openReferrerDrilldown(r)}>
@@ -432,11 +433,11 @@ export default function ReferralsPage() {
                     <div className="font-semibold text-emerald-600 dark:text-emerald-400">
                       {r.walletBalance != null ? formatVND(r.walletBalance) : '—'}
                     </div>
-                    {khac0(r.withdrawn) ? (
-                      <div className="text-[10px] text-muted-foreground leading-tight mt-0.5">
-                        Đã rút {formatVND(r.withdrawn!)}
-                      </div>
-                    ) : null}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <div className={khac0(r.withdrawn) ? 'font-medium' : 'text-muted-foreground'}>
+                      {r.withdrawn != null ? formatVND(r.withdrawn) : '—'}
+                    </div>
                     {khac0(r.withdrawalHeld) ? (
                       <div className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight mt-0.5">
                         Chờ chuyển {formatVND(r.withdrawalHeld!)}
