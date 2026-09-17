@@ -75,9 +75,25 @@ export default function PoolingPage() {
   // khác `run()` vốn phải gọi API sắp thứ tự cho từng nhóm.
   const [lanQuetCuoi, setLanQuetCuoi] = React.useState<PoolLastScan | null>(null);
 
-  const doiLanQuetCuoi = React.useCallback(async () => {
+  const doiLanQuetCuoi = React.useCallback(async (veBang = false) => {
     try {
-      setLanQuetCuoi(await getPoolingLastScan(date));
+      const ls = await getPoolingLastScan(date);
+      setLanQuetCuoi(ls);
+      // Vẽ luôn các nhóm hệ thống đã tìm được, KHÔNG chờ ai bấm Quét. Trước đây
+      // dòng trạng thái báo "1 nhóm" mà bảng bên dưới rỗng — job nền chạy đúng
+      // nhưng kết quả của nó không có đường nào ra màn hình.
+      // CHỈ vẽ khi đang mở trang. Gọi sau khi bấm Quét mà cũng vẽ thì kết quả
+      // tươi vừa tính bị ghi đè bằng dữ liệu nhật ký — mà nhật ký có thể là của
+      // lượt CŨ, vì lượt quét trùng y hệt lượt trước thì cố ý không ghi lại.
+      if (veBang && ls && ls.groupsDetail?.length) {
+        setData({
+          dateVn: date,
+          scanned: ls.scanned,
+          groups: ls.groupsDetail,
+          totalSavedKm: ls.savedKm ?? 0,
+          rules: { corridorMeters: 0, windowMs: 0, maxSeats: 0 },
+        });
+      }
     } catch {
       // Đây chỉ là dòng trạng thái. Hỏng thì im lặng — nổi toast lỗi cho một
       // thông tin phụ sẽ che mất lỗi thật của nút Quét.
@@ -88,7 +104,7 @@ export default function PoolingPage() {
   // Hệ thống tự quét mỗi 5 phút. Không hiện điều đó ra thì job nền vô hình, và
   // admin vẫn tưởng phải bấm Quét mới có gì.
   React.useEffect(() => {
-    void doiLanQuetCuoi();
+    void doiLanQuetCuoi(true);
   }, [doiLanQuetCuoi]);
 
   const run = React.useCallback(async () => {

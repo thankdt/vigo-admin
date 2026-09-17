@@ -31,7 +31,7 @@ describe('buildTripPassText', () => {
 
     const text = buildTripPassText(booking);
 
-    expect(text).toContain('🚕 THÔNG TIN CHUYẾN ĐI');
+    expect(text).toContain('🚕 CHƯA CÓ TÀI XẾ');
     expect(text).not.toContain('Mã: #BK123456');
     expect(text).toContain('⏰ Thời gian: 11:00 → 14:00 — 26/08/2026');
     expect(text).toContain('📍 Điểm đón: 2 Khu Đấu Giá Ngô Thì Nhậm, Yên Nghĩa, Hà Đông, Hà Nội');

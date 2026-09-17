@@ -269,7 +269,9 @@ export default function ReferralsPage() {
     // lại lệch với ví y như bug 69k/37k. `?? totalReward` để BE cũ (chưa ship field) không ra NaN.
     const sumAmount = referrers.reduce((s, r) => s + (r.lifetimeTotal ?? r.totalReward), 0);
     const sumReferees = referrers.reduce((s, r) => s + r.refereeCount, 0);
-    return { sumTrips, sumAmount, sumReferees };
+    const sumWalletBalance = referrers.reduce((s, r) => s + (r.walletBalance ?? 0), 0);
+    const sumWithdrawn = referrers.reduce((s, r) => s + (r.withdrawn ?? 0), 0);
+    return { sumTrips, sumAmount, sumReferees, sumWalletBalance, sumWithdrawn };
   }, [referrers]);
 
   return (
@@ -284,10 +286,17 @@ export default function ReferralsPage() {
       </div>
 
       {/* Page-level stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard icon={<Users className="h-4 w-4" />} label="Người có doanh thu (trang này)" value={String(referrers.length)} hint={`/${total} tổng`} />
         <StatCard icon={<TrendingUp className="h-4 w-4" />} label="Tổng chuyến (trang này)" value={pageStats.sumTrips.toLocaleString('vi-VN')} hint={`${pageStats.sumReferees} người được mời`} />
-        <StatCard icon={<Wallet className="h-4 w-4" />} label="Tổng đã chi (trang này)" value={formatVND(pageStats.sumAmount)} highlight />
+        <StatCard
+          icon={<Wallet className="h-4 w-4" />}
+          label="Số dư ví còn lại (trang này)"
+          value={formatVND(pageStats.sumWalletBalance)}
+          highlight
+          hint={pageStats.sumWithdrawn > 0 ? `Đã rút: ${formatVND(pageStats.sumWithdrawn)}` : undefined}
+        />
+        <StatCard icon={<Share2 className="h-4 w-4" />} label="Tổng tích luỹ (trang này)" value={formatVND(pageStats.sumAmount)} />
       </div>
 
       {/* Filter bar */}
@@ -332,16 +341,18 @@ export default function ReferralsPage() {
               <TableHead className="text-right whitespace-nowrap">Lượt tải</TableHead>
               <TableHead className="text-right">Số người mời</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
-              <TableHead className="text-right">Tổng tiền</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Số dư ví</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Đã rút</TableHead>
+              <TableHead className="text-right whitespace-nowrap">Tổng tiền</TableHead>
               <TableHead className="text-right whitespace-nowrap">Cập nhật</TableHead>
               <TableHead className="text-right" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
-              <TableRow><TableCell colSpan={10} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} className="h-24 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></TableCell></TableRow>
             ) : referrers.length === 0 ? (
-              <TableRow><TableCell colSpan={10} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={12} className="h-24 text-center text-muted-foreground">Không tìm thấy chủ link nào.</TableCell></TableRow>
             ) : (
               referrers.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openReferrerDrilldown(r)}>
@@ -418,6 +429,21 @@ export default function ReferralsPage() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{r.refereeCount}</TableCell>
                   <TableCell className="text-right tabular-nums">{r.tripCount}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <div className="font-semibold text-emerald-600 dark:text-emerald-400">
+                      {r.walletBalance != null ? formatVND(r.walletBalance) : '—'}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    <div className={khac0(r.withdrawn) ? 'font-medium' : 'text-muted-foreground'}>
+                      {r.withdrawn != null ? formatVND(r.withdrawn) : '—'}
+                    </div>
+                    {khac0(r.withdrawalHeld) ? (
+                      <div className="text-[10px] text-amber-600 dark:text-amber-400 leading-tight mt-0.5">
+                        Chờ chuyển {formatVND(r.withdrawalHeld!)}
+                      </div>
+                    ) : null}
+                  </TableCell>
                   {/* Số lớn = LŨY KẾ THẬT của ví. Dòng nhỏ tách các nguồn KHÔNG đi qua
                       referral_event, chỉ hiện phần khác 0 — đó chính là phần trước đây
                       admin không nhìn thấy nên số của admin lệch với số user thấy trong app. */}
@@ -469,17 +495,20 @@ export default function ReferralsPage() {
             </DialogTitle>
             {selectedReferrer && (
               <DialogDescription>
-                {selectedReferrer.refereeCount} người được mời · {selectedReferrer.tripCount} chuyến · lũy kế{' '}
+                {selectedReferrer.refereeCount} người được mời · {selectedReferrer.tripCount} chuyến · số dư ví{' '}
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                  {selectedReferrer.walletBalance != null ? formatVND(selectedReferrer.walletBalance) : '—'}
+                </span>
+                {' '}· lũy kế{' '}
                 <span className="font-medium text-foreground">
                   {formatVND(selectedReferrer.lifetimeTotal ?? selectedReferrer.totalReward)}
                 </span>
                 {/* Liệt kê đủ nguồn để admin đối chiếu được với màn hình user, và để thấy
                     tiền đã rời ví — nếu chỉ hiện số dư thì lại không giải thích được chênh lệch. */}
-                <span className="block text-xs">
+                <span className="block text-xs mt-1">
                   {[
                     // Từng nguồn một, không gộp.
                     ...nguonTien(selectedReferrer).map((n) => `${n.nhan} ${formatVND(n.tien)}`),
-                    selectedReferrer.walletBalance != null ? `Số dư ${formatVND(selectedReferrer.walletBalance)}` : null,
                     khac0(selectedReferrer.withdrawalHeld) ? `Đang chờ chuyển ${formatVND(selectedReferrer.withdrawalHeld!)}` : null,
                     khac0(selectedReferrer.withdrawn) ? `Đã rút ${formatVND(selectedReferrer.withdrawn!)}` : null,
                   ].filter(Boolean).join(' · ')}

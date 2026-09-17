@@ -73,7 +73,7 @@ export function buildTripPassText(booking: Booking): string {
   const priceText = fmtVnd(finalPrice);
 
   const lines = [
-    `🚕 THÔNG TIN CHUYẾN ĐI`,
+    `🚕 CHƯA CÓ TÀI XẾ`,
     `⏰ Thời gian: ${timeText}`,
     `📍 Điểm đón: ${pickup}`,
     `📍 Điểm trả: ${dropoff}`,
