@@ -754,7 +754,8 @@ export async function getBookings(params: {
   // Numeric route id → exact match; 'none' → bookings with no route stamped
   // (legacy + routing-miss). Caller passes the raw value through.
   routeId?: number | 'none';
-  // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone.
+  // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone
+  // OR the senderInfo snapshot name/phone (tên/SĐT lưu trên chuyến lúc đặt).
   q?: string;
   // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
   bookingId?: string;

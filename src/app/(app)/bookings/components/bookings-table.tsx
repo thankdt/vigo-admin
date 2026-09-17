@@ -45,7 +45,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
 import { buildTripPassText } from './booking-pass-utils';
-import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -1021,6 +1021,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                           <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
                           {booking.isFirstBooking === true && <FirstTripBadge />}
                         </div>
+                        <CurrentAccountLine booking={booking} />
                         {booking.agentPhone && (
                           <span className='inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400'>
                             <Store className='h-3 w-3' /> Đặt hộ: {booking.agentPhone}
