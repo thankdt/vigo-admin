@@ -38,6 +38,8 @@ const removeCrmCustomerNote = vi.fn();
 const getCrmCustomerTimeline = vi.fn();
 const getCrmTickets = vi.fn();
 const getCrmCustomerMetrics = vi.fn();
+const getAdminLoyalty = vi.fn();
+const adminAdjustVcoin = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -58,14 +60,24 @@ vi.mock('@/lib/api', async (importOriginal) => {
     getCrmCustomerTimeline: (...a: any[]) => getCrmCustomerTimeline(...a),
     getCrmTickets: (...a: any[]) => getCrmTickets(...a),
     getCrmCustomerMetrics: (...a: any[]) => getCrmCustomerMetrics(...a),
+    getAdminLoyalty: (...a: any[]) => getAdminLoyalty(...a),
+    adminAdjustVcoin: (...a: any[]) => adminAdjustVcoin(...a),
   };
 });
 
+/**
+ * Quyền do test đặt. Mặc định CÓ đủ các function được `can()` gate trên trang này
+ * (kể cả của các khối con) để hành vi mặc định giữ nguyên như mock `can: () => true`
+ * trước đây — test nào cần kiểm tra gating thì tự ghi đè `authFunctions.current`.
+ */
+const { authFunctions } = vi.hoisted(() => ({
+  authFunctions: { current: ['users', 'crm-tickets', 'crm-campaigns', 'crm-compensate', 'loyalty-adjust'] },
+}));
 vi.mock('@/lib/auth-context', () => ({
   useAuth: () => ({
-    me: { id: 'admin-1', fullName: 'Admin Một', phone: '0900', isSuperAdmin: false, functions: ['users'] },
+    me: { id: 'admin-1', fullName: 'Admin Một', phone: '0900', isSuperAdmin: false, functions: authFunctions.current },
     loading: false,
-    can: () => true,
+    can: (f: string) => authFunctions.current.includes(f),
     refresh: vi.fn(),
   }),
 }));
@@ -112,9 +124,21 @@ beforeAll(() => {
   }
 });
 
+const mkLoyalty = (over: Record<string, unknown> = {}) => ({
+  tier: 'MEMBER',
+  tierPoints: 0,
+  rewardPoints: 0,
+  expiringSoon: { points: 0, nextExpiresAt: null },
+  history: { items: [], total: 0, page: 1, limit: 20 },
+  vouchers: [],
+  ...over,
+});
+
 beforeEach(() => {
   vi.clearAllMocks();
+  authFunctions.current = ['users', 'crm-tickets', 'crm-campaigns', 'crm-compensate', 'loyalty-adjust'];
   getAdminUserDetail.mockResolvedValue(mkUser());
+  getAdminLoyalty.mockResolvedValue(mkLoyalty());
   getBookings.mockResolvedValue({ data: [], total: 0, page: 1, limit: 10, totalPages: 1 });
   adminGetUserReferralStats.mockResolvedValue(null);
   getCrmCustomerSource.mockResolvedValue(null);
@@ -590,6 +614,113 @@ describe('/users/detail — khối Chỉ số & phân khúc (GĐ4)', () => {
     await screen.findByText('Khách A');
     expect(screen.queryByText(/Chỉ số & phân khúc/)).toBeNull();
     expect(getCrmCustomerMetrics).not.toHaveBeenCalled();
+  });
+});
+
+describe('/users/detail — khối Vcoin & hạng (2026-09-21)', () => {
+  it('hiện số dư Vcoin, hạng, điểm hạng và Vcoin sắp hết hạn', async () => {
+    getAdminLoyalty.mockResolvedValue(
+      mkLoyalty({
+        tier: 'GOLD',
+        tierPoints: 120,
+        rewardPoints: 5000,
+        expiringSoon: { points: 300, nextExpiresAt: '2026-10-01T00:00:00Z' },
+      }),
+    );
+    render(<UserDetailPage />);
+    expect(await screen.findByText('Vàng')).toBeInTheDocument();
+    expect(screen.getByText('5.000')).toBeInTheDocument();
+    expect(screen.getByText('120')).toBeInTheDocument();
+    expect(screen.getByText(/300/)).toBeInTheDocument();
+  });
+
+  it('người thực hiện đọc từ createdByName khi có', async () => {
+    getAdminLoyalty.mockResolvedValue(
+      mkLoyalty({
+        history: {
+          items: [
+            {
+              id: 'h1', points: -100, type: 'ADJUST', pointKind: 'REWARD',
+              reason: 'Trừ tay do lỗi', transactionId: 'tx1', expiresAt: null,
+              remaining: null, createdAt: '2026-09-01T02:00:00Z',
+              createdById: 'admin-1', createdByName: 'Admin Một',
+            },
+          ],
+          total: 1, page: 1, limit: 20,
+        },
+      }),
+    );
+    render(<UserDetailPage />);
+    expect(await screen.findByText('Admin Một')).toBeInTheDocument();
+    expect(screen.getByText('Điều chỉnh')).toBeInTheDocument();
+  });
+
+  it('bảng voucher hiện mã, trạng thái tiếng Việt và chuyến đang gắn', async () => {
+    getAdminLoyalty.mockResolvedValue(
+      mkLoyalty({
+        vouchers: [
+          {
+            id: 'v1', promotionId: 'p1', code: 'GIAM10K', pointCost: 200,
+            endDate: '2026-12-31T00:00:00Z', redeemedAt: '2026-09-01T02:00:00Z',
+            bookingId: 'b-abcdefgh', bookingStatus: 'ACCEPTED', consumedAt: null,
+            usages: [], state: 'HELD',
+          },
+        ],
+      }),
+    );
+    render(<UserDetailPage />);
+    expect(await screen.findByText('GIAM10K')).toBeInTheDocument();
+    expect(screen.getByText('Đang giữ cho chuyến')).toBeInTheDocument();
+    expect(screen.getByText(/b-abcdef/)).toBeInTheDocument();
+  });
+
+  it('có quyền loyalty-adjust: hiện nút Cộng/Trừ Vcoin', async () => {
+    render(<UserDetailPage />);
+    expect(await screen.findByRole('button', { name: 'Cộng/Trừ Vcoin' })).toBeInTheDocument();
+  });
+
+  it('KHÔNG có quyền loyalty-adjust: ẩn nút Cộng/Trừ Vcoin', async () => {
+    authFunctions.current = ['users'];
+    render(<UserDetailPage />);
+    await screen.findByText('Khách A');
+    expect(screen.queryByRole('button', { name: 'Cộng/Trừ Vcoin' })).toBeNull();
+  });
+
+  it('role=DRIVER: không có khối Vcoin & hạng, không gọi API loyalty', async () => {
+    getAdminUserDetail.mockResolvedValue(mkUser({ role: 'DRIVER' }));
+    render(<UserDetailPage />);
+    await screen.findByText('Khách A');
+    expect(screen.queryByText('Vcoin & hạng')).toBeNull();
+    expect(getAdminLoyalty).not.toHaveBeenCalled();
+  });
+
+  it('lỗi tải loyalty -> hiện chữ lỗi, không vỡ trang', async () => {
+    getAdminLoyalty.mockRejectedValueOnce(new Error('toang'));
+    render(<UserDetailPage />);
+    expect(await screen.findByText(/Không tải được dữ liệu Vcoin/)).toBeInTheDocument();
+    expect(screen.getByText('Khách A')).toBeInTheDocument();
+  });
+
+  it('cộng Vcoin thành công -> refetch, số dư mới hiển thị lại', async () => {
+    getAdminLoyalty
+      .mockResolvedValueOnce(mkLoyalty({ rewardPoints: 100 }))
+      .mockResolvedValueOnce(mkLoyalty({ rewardPoints: 200 }));
+    adminAdjustVcoin.mockResolvedValue({ rewardPoints: 200, duplicate: false });
+    render(<UserDetailPage />);
+    expect(await screen.findByText('100')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cộng/Trừ Vcoin' }));
+    await userEvent.type(screen.getByLabelText('Số lượng Vcoin'), '100');
+    await userEvent.type(screen.getByLabelText('Lý do (bắt buộc)'), 'Bù lỗi hệ thống');
+    await userEvent.click(screen.getByRole('button', { name: 'Xác nhận cộng' }));
+
+    await waitFor(() => expect(adminAdjustVcoin).toHaveBeenCalledWith('u-1', expect.objectContaining({
+      operation: 'credit',
+      amount: 100,
+      reason: 'Bù lỗi hệ thống',
+    })));
+    await waitFor(() => expect(getAdminLoyalty).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText('200')).toBeInTheDocument();
   });
 });
 

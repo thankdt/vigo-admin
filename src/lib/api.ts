@@ -285,7 +285,11 @@ export type AdminUserDetail = {
   fullName?: string | null;
   avatar?: string;
   isActive: boolean;
+  // DEPRECATED (loyalty redesign 2026-06) — cột mirror cũ ở BE. Dùng `rewardPoints`
+  // (Vcoin thật, tiêu được) cho hiển thị mới; giữ field này lại vì kiểu response BE
+  // vẫn trả, không phải vì FE nên đọc nó.
   loyaltyPoints: number;
+  rewardPoints: number;
   loyaltyTier: 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND';
   referralCode?: string | null;
   bankInfo?: { bankName: string; accountNumber: string; accountHolder: string } | null;
@@ -4702,4 +4706,71 @@ export async function getPoolingLastScan(date: string): Promise<PoolLastScan | n
   // quét lần nào"), nên `?? result` sẽ rơi về chính cái VỎ `{success,data:null}`
   // — một object truthy — và màn hình in ra "undefined chuyến".
   return (result && typeof result === 'object' && 'data' in result ? result.data : result) ?? null;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Vcoin & hạng — hồ sơ chi tiết khách (spec 2026-09-21 §3.5).
+// Đọc: quyền `users` (chung với hồ sơ khách). Cộng/trừ tay: quyền RIÊNG
+// `loyalty-adjust` — Vcoin đổi được voucher = tiền thật.
+// ─────────────────────────────────────────────────────────────────────
+
+export type AdminLoyaltyTier = 'MEMBER' | 'SILVER' | 'GOLD' | 'DIAMOND' | string;
+export type LoyaltyHistoryType = 'EARN' | 'REDEEM' | 'ADJUST' | 'EXPIRE' | string;
+export type LoyaltyPointKind = 'REWARD' | 'TIER' | string;
+export type VoucherInstanceState = 'GIFT' | 'FREE' | 'HELD' | 'USED' | 'BURNED' | 'EXPIRED' | string;
+
+export type AdminLoyaltyHistoryItem = {
+  id: string;
+  /** Âm = trừ. */
+  points: number;
+  type: LoyaltyHistoryType;
+  pointKind: LoyaltyPointKind;
+  reason: string;
+  transactionId: string;
+  expiresAt: string | null;
+  remaining: number | null;
+  createdAt: string;
+  createdById: string | null;
+  createdByName: string | null;
+};
+
+export type AdminLoyaltyVoucherUsage = { bookingId: string; createdAt: string };
+
+export type AdminLoyaltyVoucher = {
+  id: string;
+  promotionId: string;
+  code: string;
+  pointCost: number;
+  endDate: string;
+  redeemedAt: string;
+  bookingId: string | null;
+  bookingStatus: string | null;
+  consumedAt: string | null;
+  usages: AdminLoyaltyVoucherUsage[];
+  state: VoucherInstanceState;
+};
+
+export type AdminLoyalty = {
+  tier: AdminLoyaltyTier;
+  tierPoints: number;
+  rewardPoints: number;
+  expiringSoon: { points: number; nextExpiresAt: string | null };
+  history: { items: AdminLoyaltyHistoryItem[]; total: number; page: number; limit: number };
+  vouchers: AdminLoyaltyVoucher[];
+};
+
+export async function getAdminLoyalty(userId: string, page = 1): Promise<AdminLoyalty> {
+  const response = await fetchWithAuth(`/users/admin/${userId}/loyalty?page=${page}`);
+  return unwrap<AdminLoyalty>(response);
+}
+
+export async function adminAdjustVcoin(
+  userId: string,
+  body: { operation: 'credit' | 'debit'; amount: number; reason: string; idempotencyKey: string },
+): Promise<{ rewardPoints: number; duplicate: boolean }> {
+  const response = await fetchWithAuth(`/users/admin/${userId}/vcoin/adjust`, {
+    method: 'POST',
+    body: JSON.stringify(body),
+  });
+  return unwrap<{ rewardPoints: number; duplicate: boolean }>(response);
 }
