@@ -200,6 +200,11 @@ export type Driver = {
     id: number;
     name: string;
   }[];
+  // 2025 Admin Reform: Surviving provinces selected by the driver
+  provinces?: {
+    id: number;
+    name: string;
+  }[];
   transportCompanyId?: string;
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
@@ -538,6 +543,19 @@ export type RoutePricing = {
   adminUnit: AdminUnit;
   startDistrict?: AdminUnit; // Optional: Start District Entity
 }
+
+export type AreaPriceAdjustment = {
+  id: number;
+  adminUnitId: number;
+  adminUnit?: AdminUnit;
+  serviceType: 'CARPOOL' | 'RIDE' | 'ALL' | string;
+  deltaAmount: number;
+  applyPerSeat: boolean;
+  isActive: boolean;
+  note?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 export type SystemConfig = {
   id: number;

@@ -24,11 +24,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, updateDriverCsStatus } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getSurvivingProvinces, updateDriverProvinces, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, updateDriverCsStatus } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
-import type { Driver, TransportCompany, Route } from '@/lib/types';
+import type { Driver, TransportCompany, Route, AdminUnit } from '@/lib/types';
 import {
   DRIVER_ONLINE_HINT,
   DRIVER_ONLINE_LABEL,
@@ -369,6 +369,51 @@ export function DriversTable() {
       toast({ variant: 'destructive', title: 'Không cập nhật được tuyến', description: e?.message });
     } finally {
       setSavingRoutes(false);
+    }
+  };
+
+  // Edit-provinces state (34 surviving provinces after 2025 merger).
+  const [editingProvinces, setEditingProvinces] = React.useState<number[] | null>(null);
+  const [savingProvinces, setSavingProvinces] = React.useState(false);
+  const [allProvinces, setAllProvinces] = React.useState<AdminUnit[]>([]);
+  const [loadingProvinces, setLoadingProvinces] = React.useState(false);
+
+  const startEditProvinces = async () => {
+    if (!viewDriver) return;
+    const current = (viewDriver.provinces ?? []).map((p) => p.id);
+    setEditingProvinces(current);
+    if (allProvinces.length === 0) {
+      setLoadingProvinces(true);
+      try {
+        setAllProvinces(await getSurvivingProvinces());
+      } catch (e: any) {
+        toast({ variant: 'destructive', title: 'Không tải được danh sách tỉnh', description: e?.message });
+      } finally {
+        setLoadingProvinces(false);
+      }
+    }
+  };
+
+  const handleSaveProvinces = async () => {
+    if (!viewDriver || editingProvinces === null) return;
+    setSavingProvinces(true);
+    try {
+      await updateDriverProvinces(viewDriver.id, editingProvinces);
+      const picked = allProvinces
+        .filter((p) => editingProvinces.includes(p.id))
+        .map((p) => ({ id: p.id, name: p.name }));
+      setViewDriver({
+        ...viewDriver,
+        provinces: picked,
+      });
+      setEditingProvinces(null);
+      toast({ title: 'Đã cập nhật tỉnh hoạt động' });
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+      refreshNeedsReviewCount();
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Không cập nhật được tỉnh', description: e?.message });
+    } finally {
+      setSavingProvinces(false);
     }
   };
 
@@ -833,7 +878,7 @@ export function DriversTable() {
                 <TableHead>Phương tiện</TableHead>
                 <TableHead>Đơn vị vận tải</TableHead>
                 <TableHead className="text-right">Số dư ví</TableHead>
-                <TableHead>Tuyến đường</TableHead>
+                <TableHead>Tỉnh / Tuyến</TableHead>
                 {showStatusCol && (
                   <TableHead>{activeTab === 'all' ? 'Trạng thái' : 'Online'}</TableHead>
                 )}
@@ -958,12 +1003,27 @@ export function DriversTable() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {/* Multi-route: prefer the M2M `routes` collection;
-                          fall back to legacy `fixedRoute` for drivers who
-                          haven't been re-saved since the migration. */}
-                      {driver.routes && driver.routes.length > 0 ? (
-                        // Cap at 2 badges + "+N" (full list on hover) so a driver
-                        // with many routes doesn't blow up the row height.
+                      {/* 2025: Tỉnh hoạt động (34 tỉnh sáp nhập), fallback về Tuyến cũ */}
+                      {driver.provinces && driver.provinces.length > 0 ? (
+                        <div className="flex flex-wrap gap-1">
+                          {driver.provinces.slice(0, 2).map((p) => (
+                            <span
+                              key={p.id}
+                              className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 text-xs font-medium"
+                            >
+                              {p.name}
+                            </span>
+                          ))}
+                          {driver.provinces.length > 2 && (
+                            <span
+                              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
+                              title={driver.provinces.map((p) => p.name).join(', ')}
+                            >
+                              +{driver.provinces.length - 2}
+                            </span>
+                          )}
+                        </div>
+                      ) : driver.routes && driver.routes.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {driver.routes.slice(0, 2).map((r) => (
                             <span
@@ -1778,6 +1838,57 @@ export function DriversTable() {
                       <AlertTriangle className="h-3.5 w-3.5" />
                       Gỡ hết tuyến: tài xế sẽ KHÔNG nhận được chuyến nào cho tới khi gán lại.
                     </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Provinces (34 surviving provinces after 2025 merger) in detail dialog */}
+          {viewDriver && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="font-semibold">Tỉnh hoạt động (Sau sáp nhập 2025)</h4>
+                  <p className="text-xs text-muted-foreground">Tài xế nhận các chuyến đón hoặc trả tại các tỉnh này</p>
+                </div>
+                {editingProvinces === null ? (
+                  <Button variant="ghost" size="sm" onClick={startEditProvinces}>Sửa</Button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" disabled={savingProvinces} onClick={() => setEditingProvinces(null)}>Hủy</Button>
+                    <Button size="sm" disabled={savingProvinces || loadingProvinces} onClick={handleSaveProvinces}>
+                      {savingProvinces && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                      Lưu
+                    </Button>
+                  </div>
+                )}
+              </div>
+              {editingProvinces === null ? (
+                <div className="flex flex-wrap gap-2">
+                  {viewDriver.provinces && viewDriver.provinces.length > 0 ? (
+                    viewDriver.provinces.map((p) => (
+                      <Badge key={p.id} variant="secondary" className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+                        {p.name}
+                      </Badge>
+                    ))
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">Chưa đăng ký tỉnh nào (đang dùng fallback theo tuyến cũ).</p>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-2 pt-1">
+                  {loadingProvinces ? (
+                    <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Đang tải danh sách tỉnh…</p>
+                  ) : (
+                    <MultiSelectComboBox
+                      options={allProvinces.map((p) => ({ value: String(p.id), label: p.name }))}
+                      selectedValues={editingProvinces.map(String)}
+                      onSelectedValuesChange={(vals) => setEditingProvinces(vals.map(Number))}
+                      placeholder="Chọn tỉnh hoạt động…"
+                      searchPlaceholder="Tìm tỉnh…"
+                      noResultsText="Không tìm thấy tỉnh phù hợp"
+                    />
                   )}
                 </div>
               )}

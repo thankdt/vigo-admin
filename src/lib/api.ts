@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -614,6 +614,23 @@ export async function updateDriverRoutes(id: string, routeIds: number[]): Promis
     method: 'PUT',
     body: JSON.stringify({ routeIds }),
   });
+  const json = await response.json();
+  return json.data || json;
+}
+
+// Admin sets a driver's dispatch provinces (34 surviving provinces).
+export async function updateDriverProvinces(id: string, provinceIds: number[]): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/provinces`, {
+    method: 'PUT',
+    body: JSON.stringify({ provinceIds }),
+  });
+  const json = await response.json();
+  return json.data || json;
+}
+
+// Get surviving provinces (34 provinces after 2025 merger)
+export async function getSurvivingProvinces(): Promise<AdminUnit[]> {
+  const response = await fetchWithAuth('/drivers/provinces');
   const json = await response.json();
   return json.data || json;
 }
@@ -1308,6 +1325,50 @@ export async function updatePricing(id: number, data: { price: number; serviceTy
 
 export async function deletePricing(id: number): Promise<void> {
   await fetchWithAuth(`/master-data/pricing/${id}/delete`, {
+    method: 'POST',
+  });
+}
+
+// ── Điều chỉnh giá theo khu vực (Tỉnh / Huyện) ──────────────────────────────
+export async function getAreaPriceAdjustments(serviceType?: string): Promise<AreaPriceAdjustment[]> {
+  const query = new URLSearchParams();
+  if (serviceType && serviceType !== 'ALL') query.set('serviceType', serviceType);
+  const qs = query.toString();
+  const response = await fetchWithAuth(`/master-data/area-adjustments${qs ? '?' + qs : ''}`);
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function createAreaPriceAdjustment(data: {
+  adminUnitId: number;
+  serviceType?: string;
+  deltaAmount: number;
+  applyPerSeat?: boolean;
+  isActive?: boolean;
+  note?: string | null;
+}): Promise<AreaPriceAdjustment> {
+  const response = await fetchWithAuth('/master-data/area-adjustments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function updateAreaPriceAdjustment(
+  id: number,
+  data: Partial<AreaPriceAdjustment>,
+): Promise<AreaPriceAdjustment> {
+  const response = await fetchWithAuth(`/master-data/area-adjustments/${id}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function deleteAreaPriceAdjustment(id: number): Promise<void> {
+  await fetchWithAuth(`/master-data/area-adjustments/${id}/delete`, {
     method: 'POST',
   });
 }
