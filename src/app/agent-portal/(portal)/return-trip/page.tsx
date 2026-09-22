@@ -1422,7 +1422,7 @@ export default function ReturnTripPage() {
             disabled={
               submitting ||
               (tripMode === 'GROUP' && (isGroupPriceBelowFloor || isEstimatingGroup)) ||
-              (tripMode === 'RETAIL' && totalRetailMinPrice > 0 && retailCustomPriceTotal < totalRetailMinPrice)
+              (tripMode === 'RETAIL' && (isRetailPriceBelowFloor || isEstimatingRetailBase))
             }
           >
             {submitting ? (
