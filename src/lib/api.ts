@@ -1231,7 +1231,7 @@ export interface DriverReturnTripResult {
 }
 
 /**
- * Đặt chuyến chiều về: tài xế tự tạo cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
+ * Tự tạo chuyến: tài xế tự tạo cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
  * Hỗ trợ 2 chế độ:
  * - GROUP: Khách hàng đi chung (1 chặng đón/trả chung, xuất VAT gộp).
  * - RETAIL: Khách lẻ (nhiều khách, đón/trả riêng, giá theo ghế, VAT riêng, hợp đồng riêng từng khách).
@@ -1261,7 +1261,7 @@ export async function createDriverReturnTrip(data: {
   });
   const result = await response.json();
   if (!response.ok) {
-    throw new Error(result.message || 'Không tạo được chuyến chiều về');
+    throw new Error(result.message || 'Không thể tự tạo chuyến');
   }
   return result.data || result;
 }
