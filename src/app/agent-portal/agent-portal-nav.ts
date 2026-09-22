@@ -14,7 +14,7 @@ import { AGENT_MULTI_STOP_ENABLED } from './agent-portal-flags';
  */
 export const ALL_NAV_ITEMS = [
   { href: '/agent-portal/dashboard', label: 'Tổng quan', icon: LayoutDashboard, enabled: true },
-  { href: '/agent-portal/return-trip', label: 'Tự tạo chuyến', icon: RotateCcw, enabled: true },
+  { href: '/agent-portal/return-trip', label: 'Tự đặt chuyến', icon: RotateCcw, enabled: true },
   { href: '/agent-portal/orders/new', label: 'Đặt hộ mới', icon: PlusCircle, enabled: AGENT_MULTI_STOP_ENABLED },
   { href: '/agent-portal/orders', label: 'Đơn của tôi', icon: ListOrdered, enabled: true },
   { href: '/agent-portal/wallet', label: 'Ví & Rút tiền', icon: Wallet, enabled: true },

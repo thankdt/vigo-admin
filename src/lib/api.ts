@@ -1231,10 +1231,10 @@ export interface DriverReturnTripResult {
 }
 
 /**
- * Tự tạo chuyến: tài xế tự tạo cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
+ * Tự đặt chuyến: tài xế tự đặt cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
  * Hỗ trợ 2 chế độ:
- * - GROUP: Khách hàng đi chung (1 chặng đón/trả chung, xuất VAT gộp).
- * - RETAIL: Khách lẻ (nhiều khách, đón/trả riêng, giá theo ghế, VAT riêng, hợp đồng riêng từng khách).
+ * - GROUP: Bao xe (1 chặng đón/trả chung, xuất VAT gộp).
+ * - RETAIL: Khách lẻ (nhiều khách, đón/trả riêng, cấu hình giá từng khách, VAT riêng, hợp đồng riêng từng khách).
  */
 export async function createDriverReturnTrip(data: {
   tripMode?: 'GROUP' | 'RETAIL';
@@ -1261,7 +1261,7 @@ export async function createDriverReturnTrip(data: {
   });
   const result = await response.json();
   if (!response.ok) {
-    throw new Error(result.message || 'Không thể tự tạo chuyến');
+    throw new Error(result.message || 'Không thể tự đặt chuyến');
   }
   return result.data || result;
 }
