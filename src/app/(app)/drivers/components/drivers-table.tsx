@@ -1882,7 +1882,16 @@ export function DriversTable() {
                     <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Đang tải danh sách tỉnh…</p>
                   ) : (
                     <MultiSelectComboBox
-                      options={allProvinces.map((p) => ({ value: String(p.id), label: p.name }))}
+                      options={allProvinces.map((p) => {
+                        const mergedOld = p.oldProvinces?.filter(
+                          (o) => !p.name.toLowerCase().includes(o.toLowerCase()),
+                        );
+                        const label =
+                          mergedOld && mergedOld.length > 0
+                            ? `${p.name} (gồm ${p.oldProvinces!.join(', ')})`
+                            : p.name;
+                        return { value: String(p.id), label };
+                      })}
                       selectedValues={editingProvinces.map(String)}
                       onSelectedValuesChange={(vals) => setEditingProvinces(vals.map(Number))}
                       placeholder="Chọn tỉnh hoạt động…"

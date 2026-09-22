@@ -1200,6 +1200,8 @@ export interface DriverReturnTripResult {
   driverId?: string;
   minPrice?: number;
   shareLink?: string;
+  requestedSeats?: number;
+  passengerNames?: string[];
   vatInfo?: {
     companyName?: string;
     taxCode?: string;

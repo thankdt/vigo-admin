@@ -36,6 +36,7 @@ import {
   RotateCcw,
   Navigation,
   Share2,
+  Home,
 } from 'lucide-react';
 
 interface AddressPoint {
@@ -370,11 +371,27 @@ export default function ReturnTripPage() {
             )}
 
             <div className="flex flex-col gap-2 pt-2">
+              <Button
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    const w = window as any;
+                    if (w.VigoApp?.postMessage) {
+                      w.VigoApp.postMessage('close');
+                      return;
+                    }
+                  }
+                  router.push('/agent-portal/dashboard');
+                }}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold gap-2 shadow-sm"
+              >
+                <Home className="h-4 w-4" /> Về trang chủ nhận khách
+              </Button>
               <Button onClick={handleResetForm} variant="outline" className="w-full gap-2">
                 <RotateCcw className="h-4 w-4" /> Đặt chuyến chiều về khác
               </Button>
               <Button
                 onClick={() => router.push('/agent-portal/orders')}
+                variant="ghost"
                 className="w-full"
               >
                 Xem danh sách đơn của tôi

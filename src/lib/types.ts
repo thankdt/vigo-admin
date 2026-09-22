@@ -512,6 +512,8 @@ export type AdminUnit = {
   // True for synthetic POI rows (sân bay, ga tàu, điểm du lịch…). UI uses
   // this to keep the POI picker focused instead of listing every commune.
   isPoi?: boolean;
+  // Constituent old provinces (pre-2025 merger)
+  oldProvinces?: string[];
 };
 
 export type Route = {
