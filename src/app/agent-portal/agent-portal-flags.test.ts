@@ -30,6 +30,7 @@ describe('cờ cổng đại lý', () => {
     const hrefs = visibleNavItems().map((i) => i.href);
     expect(hrefs).toEqual([
       '/agent-portal/dashboard',
+      '/agent-portal/return-trip',
       // "Đơn của tôi" đọc listAgentBookings (bảng booking) — KHÔNG liên quan
       // multi_stop_order nên không được tắt theo.
       '/agent-portal/orders',

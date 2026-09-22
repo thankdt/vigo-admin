@@ -1188,6 +1188,56 @@ export async function createAgentBooking(data: {
   return result.data || result;
 }
 
+export interface DriverReturnTripResult {
+  id: string;
+  code?: string;
+  price: number;
+  status: string;
+  customerPhone?: string;
+  customerName?: string;
+  pickupAddress: { address: string; lat: number; long?: number; lng?: number };
+  dropoffAddress: { address: string; lat: number; long?: number; lng?: number };
+  driverId?: string;
+  minPrice?: number;
+  shareLink?: string;
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
+}
+
+/**
+ * Đặt chuyến chiều về: tài xế tự tạo cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
+ * Giá cước tự nhập phải >= giá tối thiểu của 1 ghế (công thức định giá).
+ */
+export async function createDriverReturnTrip(data: {
+  customerPhone: string;
+  customerName?: string;
+  pickupAddress: { address: string; lat: number; long: number };
+  dropoffAddress: { address: string; lat: number; long: number };
+  customPrice: number;
+  driverPhone?: string;
+  note?: string;
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
+}): Promise<DriverReturnTripResult> {
+  const response = await fetchWithAuth('/agent/bookings/return-trip', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.message || 'Không tạo được chuyến chiều về');
+  }
+  return result.data || result;
+}
+
 // [DISABLED 2026-07-09] "admin ôm chuyến về operator" — endpoint BE (admin/:id/accept) đã tắt
 // vì gán về tài khoản ảo, 0 commission => vỡ dòng tiền. Dùng reassign tài xế THẬT thay thế.
 /*
@@ -2678,6 +2728,8 @@ export type AgentMe = {
   // Mức rút tối thiểu (BOK_004 nếu gửi thấp hơn). Hiện trước thay vì để người
   // dùng bấm rồi ăn lỗi.
   referralMinWithdrawal?: number;
+  phone?: string | null;
+  role?: string | null;
 };
 export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
 export type AgentPassenger = {

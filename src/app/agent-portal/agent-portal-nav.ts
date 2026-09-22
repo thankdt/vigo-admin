@@ -1,4 +1,4 @@
-import { LayoutDashboard, ListOrdered, PlusCircle, Wallet } from 'lucide-react';
+import { LayoutDashboard, ListOrdered, PlusCircle, RotateCcw, Wallet } from 'lucide-react';
 import { AGENT_MULTI_STOP_ENABLED } from './agent-portal-flags';
 
 /**
@@ -14,6 +14,7 @@ import { AGENT_MULTI_STOP_ENABLED } from './agent-portal-flags';
  */
 export const ALL_NAV_ITEMS = [
   { href: '/agent-portal/dashboard', label: 'Tổng quan', icon: LayoutDashboard, enabled: true },
+  { href: '/agent-portal/return-trip', label: 'Chuyến chiều về', icon: RotateCcw, enabled: true },
   { href: '/agent-portal/orders/new', label: 'Đặt hộ mới', icon: PlusCircle, enabled: AGENT_MULTI_STOP_ENABLED },
   { href: '/agent-portal/orders', label: 'Đơn của tôi', icon: ListOrdered, enabled: true },
   { href: '/agent-portal/wallet', label: 'Ví & Rút tiền', icon: Wallet, enabled: true },
