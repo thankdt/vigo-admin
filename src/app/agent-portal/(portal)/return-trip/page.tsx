@@ -12,6 +12,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { AddressAutocomplete } from '@/app/(app)/bookings/components/address-autocomplete';
 import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 import {
   createDriverReturnTrip,
   estimateTripPrice,
@@ -27,6 +28,9 @@ import {
   MapPin,
   Phone,
   User,
+  Users,
+  Minus,
+  Plus,
   DollarSign,
   Receipt,
   RotateCcw,
@@ -51,9 +55,11 @@ export default function ReturnTripPage() {
   const [driverPhone, setDriverPhone] = React.useState('');
   const [isEditingDriverPhone, setIsEditingDriverPhone] = React.useState(false);
 
-  // Customer info
+  // Customer info & seats
   const [customerPhone, setCustomerPhone] = React.useState('');
   const [customerName, setCustomerName] = React.useState('');
+  const [requestedSeats, setRequestedSeats] = React.useState<number>(1);
+  const [companionNames, setCompanionNames] = React.useState<string[]>([]);
   const [note, setNote] = React.useState('');
 
   // Route points
@@ -92,7 +98,20 @@ export default function ReturnTripPage() {
       });
   }, []);
 
-  // Recalculate floor price when pickup & dropoff coordinates are valid
+  // Update companion names array size when requestedSeats changes
+  React.useEffect(() => {
+    if (requestedSeats <= 1) {
+      setCompanionNames([]);
+    } else {
+      setCompanionNames((prev) => {
+        const next = [...prev];
+        while (next.length < requestedSeats - 1) next.push('');
+        return next.slice(0, requestedSeats - 1);
+      });
+    }
+  }, [requestedSeats]);
+
+  // Recalculate floor price when pickup & dropoff coordinates or requestedSeats change
   React.useEffect(() => {
     if (!pickup.lat || !pickup.long || !dropoff.lat || !dropoff.long) {
       setMinPrice(null);
@@ -108,15 +127,19 @@ export default function ReturnTripPage() {
       pickup: { address: pickup.address, lat: pickup.lat, long: pickup.long },
       dropoff: { address: dropoff.address, lat: dropoff.lat, long: dropoff.long },
       serviceType: 'CARPOOL',
-      requestedSeats: 1,
+      requestedSeats,
     })
       .then((res) => {
         if (!active) return;
         const floor = res.finalPrice || res.price;
         setMinPrice(floor);
         setDistanceKm(res.distanceKm ?? null);
-        // Default customPrice to floor if not yet set
-        setCustomPriceStr((prev) => (prev ? prev : floor.toString()));
+        // Default or adjust customPrice to floor if lower or empty
+        setCustomPriceStr((prev) => {
+          const current = Number(prev.replace(/\D/g, '')) || 0;
+          if (!prev || current < floor) return floor.toString();
+          return prev;
+        });
       })
       .catch((err) => {
         if (!active) return;
@@ -130,7 +153,7 @@ export default function ReturnTripPage() {
     return () => {
       active = false;
     };
-  }, [pickup.lat, pickup.long, dropoff.lat, dropoff.long, pickup.address, dropoff.address]);
+  }, [pickup.lat, pickup.long, dropoff.lat, dropoff.long, pickup.address, dropoff.address, requestedSeats]);
 
   const customPrice = Number(customPriceStr.replace(/\D/g, '')) || 0;
   const isPriceBelowFloor = minPrice != null && customPrice < minPrice;
@@ -161,7 +184,7 @@ export default function ReturnTripPage() {
 
     if (minPrice != null && customPrice < minPrice) {
       setErrorMessage(
-        `Giá cước không được thấp hơn giá sàn tối thiểu ${fmtVnd(minPrice)} (1 ghế ghép theo công thức).`,
+        `Giá cước không được thấp hơn giá sàn tối thiểu ${fmtVnd(minPrice)} (${requestedSeats} ghế ghép theo công thức).`,
       );
       return;
     }
@@ -173,6 +196,11 @@ export default function ReturnTripPage() {
       }
     }
 
+    const allPassengerNames = [
+      customerName.trim(),
+      ...companionNames.map((n) => n.trim()),
+    ].filter((n) => n.length > 0);
+
     setSubmitting(true);
     try {
       const res = await createDriverReturnTrip({
@@ -181,6 +209,8 @@ export default function ReturnTripPage() {
         pickupAddress: pickup,
         dropoffAddress: dropoff,
         customPrice,
+        requestedSeats,
+        passengerNames: allPassengerNames.length > 0 ? allPassengerNames : undefined,
         driverPhone: driverPhone.trim() || undefined,
         note: note.trim() || undefined,
         vatInfo: needVat
@@ -225,6 +255,8 @@ export default function ReturnTripPage() {
     setCreatedBooking(null);
     setCustomerPhone('');
     setCustomerName('');
+    setRequestedSeats(1);
+    setCompanionNames([]);
     setNote('');
     setPickup(emptyPoint());
     setDropoff(emptyPoint());
@@ -271,6 +303,12 @@ export default function ReturnTripPage() {
                 <span className="font-medium">
                   {createdBooking.customerName || 'Khách vãng lai'} ({createdBooking.customerPhone || customerPhone})
                 </span>
+              </div>
+              <div className="flex justify-between items-center border-b pb-2">
+                <span className="text-muted-foreground">Số lượng khách / Ghế:</span>
+                <Badge variant="secondary" className="font-semibold">
+                  {createdBooking.requestedSeats || requestedSeats} ghế
+                </Badge>
               </div>
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-muted-foreground">Giá cước:</span>
@@ -446,7 +484,92 @@ export default function ReturnTripPage() {
               </div>
             </div>
 
-            <div className="space-y-1.5">
+            {/* Passenger count / seats selector */}
+            <div className="space-y-2 pt-2 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-primary" />
+                  Số lượng khách / Số ghế <span className="text-rose-500">*</span>
+                </Label>
+                <span className="text-xs font-semibold text-primary">
+                  {requestedSeats} khách ({requestedSeats} ghế)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <div className="flex rounded-md border p-1 bg-muted/40 gap-1 flex-1">
+                  {[1, 2, 3, 4].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      onClick={() => setRequestedSeats(num)}
+                      className={cn(
+                        'flex-1 py-1.5 text-xs font-medium rounded transition-colors',
+                        requestedSeats === num
+                          ? 'bg-background text-foreground shadow-sm font-semibold'
+                          : 'text-muted-foreground hover:text-foreground',
+                      )}
+                    >
+                      {num} khách
+                    </button>
+                  ))}
+                </div>
+
+                {/* Stepper for 1 to 7 */}
+                <div className="flex items-center border rounded-md h-9 px-1 bg-background shrink-0">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-sm"
+                    disabled={requestedSeats <= 1}
+                    onClick={() => setRequestedSeats((s) => Math.max(1, s - 1))}
+                  >
+                    <Minus className="h-3 w-3" />
+                  </Button>
+                  <span className="w-7 text-center text-sm font-bold">{requestedSeats}</span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-sm"
+                    disabled={requestedSeats >= 7}
+                    onClick={() => setRequestedSeats((s) => Math.min(7, s + 1))}
+                  >
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+
+              {/* Companion names when > 1 */}
+              {requestedSeats > 1 && (
+                <div className="space-y-2 pt-2">
+                  <Label className="text-[11px] text-muted-foreground">
+                    Tên các khách đi cùng (tuỳ chọn):
+                  </Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    {companionNames.map((name, idx) => (
+                      <Input
+                        key={idx}
+                        placeholder={`Khách ${idx + 2} (người đi cùng)`}
+                        value={name}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCompanionNames((prev) => {
+                            const next = [...prev];
+                            next[idx] = val;
+                            return next;
+                          });
+                        }}
+                        className="h-8 text-xs"
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-1.5 pt-1">
               <Label htmlFor="note" className="text-xs font-medium">
                 Ghi chú cuốc xe (tuỳ chọn)
               </Label>
@@ -462,14 +585,14 @@ export default function ReturnTripPage() {
         </Card>
 
         {/* Section: Route */}
-        <Card>
+        <Card className="overflow-visible">
           <CardHeader className="pb-3">
             <CardTitle className="text-base font-semibold flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary" /> Lộ trình di chuyển
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
+          <CardContent className="space-y-4 overflow-visible">
+            <div className="space-y-1.5 relative z-20">
               <Label className="text-xs font-medium flex items-center gap-1.5">
                 <span className="flex h-2 w-2 rounded-full bg-emerald-500" />
                 Điểm đón khách <span className="text-rose-500">*</span>
@@ -482,7 +605,7 @@ export default function ReturnTripPage() {
               />
             </div>
 
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 relative z-10">
               <Label className="text-xs font-medium flex items-center gap-1.5">
                 <span className="flex h-2 w-2 rounded-full bg-rose-500" />
                 Điểm trả khách <span className="text-rose-500">*</span>
@@ -512,7 +635,7 @@ export default function ReturnTripPage() {
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-medium text-muted-foreground">
-                    Giá sàn tối thiểu (1 ghế ghép):
+                    Giá sàn tối thiểu ({requestedSeats} ghế ghép):
                   </span>
                   <span className="text-base font-bold text-primary">
                     {isEstimating ? (
@@ -525,7 +648,7 @@ export default function ReturnTripPage() {
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Hệ thống không cho phép nhập giá thấp hơn giá sàn của 1 ghế xe ghép theo công thức định giá.
+                  Hệ thống không cho phép nhập giá thấp hơn giá sàn của {requestedSeats} ghế xe ghép theo công thức định giá.
                 </p>
               </div>
             )}

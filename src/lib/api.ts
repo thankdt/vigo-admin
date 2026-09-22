@@ -1220,6 +1220,8 @@ export async function createDriverReturnTrip(data: {
   customPrice: number;
   driverPhone?: string;
   note?: string;
+  requestedSeats?: number;
+  passengerNames?: string[];
   vatInfo?: {
     companyName?: string;
     taxCode?: string;
