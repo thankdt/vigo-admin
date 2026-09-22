@@ -376,7 +376,11 @@ export default function ReturnTripPage() {
                   if (typeof window !== 'undefined') {
                     const w = window as any;
                     if (w.VigoApp?.postMessage) {
-                      w.VigoApp.postMessage('close');
+                      w.VigoApp.postMessage(
+                        createdBooking?.id
+                          ? `open-booking:${createdBooking.id}`
+                          : 'close',
+                      );
                       return;
                     }
                   }
