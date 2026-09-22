@@ -180,11 +180,6 @@ export default function ReturnTripPage() {
         const floor = res.finalPrice || res.price;
         setGroupMinPrice(floor);
         setGroupDistanceKm(res.distanceKm ?? null);
-        setGroupCustomPriceStr((prev) => {
-          const current = Number(prev.replace(/\D/g, '')) || 0;
-          if (!prev || current < floor) return floor.toString();
-          return prev;
-        });
       })
       .catch((err) => {
         if (!active) return;
@@ -202,7 +197,8 @@ export default function ReturnTripPage() {
 
   // ── Retail Helpers & Allocations ────────────────────────────────────
   const groupCustomPrice = Number(groupCustomPriceStr.replace(/\D/g, '')) || 0;
-  const isGroupPriceBelowFloor = groupMinPrice != null && groupCustomPrice < groupMinPrice;
+  const isGroupPriceBelowFloor =
+    groupMinPrice != null && (groupCustomPrice <= 0 || groupCustomPrice < groupMinPrice);
 
   // Floor price của chuyến đi lấy khách đầu tiên làm base (1 ghế)
   const baseRetailPassenger = retailPassengers[0];
@@ -210,20 +206,8 @@ export default function ReturnTripPage() {
   const isEstimatingRetailBase = baseRetailPassenger?.isEstimating ?? false;
 
   const retailCustomPriceTotal = Number(retailTotalPriceStr.replace(/\D/g, '')) || 0;
-  const isRetailPriceBelowFloor = retailFloorPrice != null && retailCustomPriceTotal < retailFloorPrice;
-
-  // Tự động điền giá sàn chuyến đi khi đã tính xong giá 1 ghế của Khách #1
-  React.useEffect(() => {
-    if (tripMode === 'RETAIL' && retailFloorPrice != null && retailFloorPrice > 0) {
-      setRetailTotalPriceStr((prev) => {
-        const cur = Number(prev.replace(/\D/g, '')) || 0;
-        if (!prev || cur < retailFloorPrice) {
-          return retailFloorPrice.toString();
-        }
-        return prev;
-      });
-    }
-  }, [tripMode, retailFloorPrice]);
+  const isRetailPriceBelowFloor =
+    retailFloorPrice != null && (retailCustomPriceTotal <= 0 || retailCustomPriceTotal < retailFloorPrice);
 
   const updateRetailPassenger = (index: number, updates: Partial<RetailPassengerItem>) => {
     setRetailPassengers((prev) => {
@@ -231,6 +215,16 @@ export default function ReturnTripPage() {
       if (index >= 0 && index < next.length) {
         next[index] = { ...next[index], ...updates };
       }
+
+      // Khi tài xế điền hoặc cập nhật giá của khách lẻ, tự động tính lại tổng cước chuyến đi
+      if (updates.customPriceStr !== undefined) {
+        const sum = next.reduce((acc, p) => {
+          const val = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
+          return acc + val;
+        }, 0);
+        setRetailTotalPriceStr(sum > 0 ? sum.toString() : '');
+      }
+
       return next;
     });
   };
@@ -249,7 +243,15 @@ export default function ReturnTripPage() {
 
   const removeRetailPassenger = (index: number) => {
     if (retailPassengers.length <= 1) return;
-    setRetailPassengers((prev) => prev.filter((_, i) => i !== index));
+    setRetailPassengers((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      const sum = next.reduce((acc, p) => {
+        const val = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
+        return acc + val;
+      }, 0);
+      setRetailTotalPriceStr(sum > 0 ? sum.toString() : '');
+      return next;
+    });
   };
 
   // ── Form Submissions ────────────────────────────────────────────────
@@ -272,12 +274,16 @@ export default function ReturnTripPage() {
         return;
       }
       if (!groupCustomPrice || groupCustomPrice <= 0) {
-        setErrorMessage('Vui lòng nhập giá cước cho chuyến đi.');
+        setErrorMessage(
+          groupMinPrice != null
+            ? `Vui lòng nhập giá cước cho chuyến đi (tối thiểu ${fmtVnd(groupMinPrice)}).`
+            : 'Vui lòng nhập giá cước cho chuyến đi.',
+        );
         return;
       }
       if (groupMinPrice != null && groupCustomPrice < groupMinPrice) {
         setErrorMessage(
-          `Giá cước không được thấp hơn giá sàn tối thiểu ${fmtVnd(groupMinPrice)} (${requestedSeats} ghế ghép theo công thức).`,
+          `Giá cước chuyến đi (${fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu (${fmtVnd(groupMinPrice)}).`,
         );
         return;
       }
@@ -369,16 +375,26 @@ export default function ReturnTripPage() {
             return;
           }
         }
+
+        const pPrice = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
+        if (pPrice <= 0) {
+          setErrorMessage(`Khách lẻ #${i + 1} chưa có giá cước hợp đồng. Vui lòng nhập giá cho khách.`);
+          return;
+        }
       }
 
       if (retailCustomPriceTotal <= 0) {
-        setErrorMessage('Vui lòng nhập giá cước cho chuyến đi.');
+        setErrorMessage(
+          retailFloorPrice != null
+            ? `Vui lòng nhập giá cước cho chuyến đi (tối thiểu ${fmtVnd(retailFloorPrice)} - theo 1 ghế Khách #1).`
+            : 'Vui lòng nhập giá cước cho chuyến đi.',
+        );
         return;
       }
 
       if (retailFloorPrice != null && retailCustomPriceTotal < retailFloorPrice) {
         setErrorMessage(
-          `Giá cước chuyến đi (${fmtVnd(retailCustomPriceTotal)}) không được thấp hơn giá sàn tối thiểu 1 ghế của khách đầu tiên (${fmtVnd(retailFloorPrice)}).`,
+          `Giá cước chuyến đi (${fmtVnd(retailCustomPriceTotal)}) không đủ giá trị tối thiểu (${fmtVnd(retailFloorPrice)} - theo 1 ghế Khách #1).`,
         );
         return;
       }
@@ -1073,7 +1089,7 @@ export default function ReturnTripPage() {
                       id="groupCustomPrice"
                       type="text"
                       inputMode="numeric"
-                      placeholder="0"
+                      placeholder={groupMinPrice ? groupMinPrice.toLocaleString('vi-VN') : '0'}
                       value={
                         groupCustomPrice > 0
                           ? groupCustomPrice.toLocaleString('vi-VN')
@@ -1092,11 +1108,20 @@ export default function ReturnTripPage() {
                     </span>
                   </div>
 
-                  {isGroupPriceBelowFloor && (
-                    <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      Giá bạn nhập ({fmtVnd(groupCustomPrice)}) thấp hơn giá sàn tối thiểu ({fmtVnd(groupMinPrice)}).
-                    </p>
+                  {groupMinPrice != null && (
+                    <>
+                      {groupCustomPrice <= 0 ? (
+                        <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          Giá cước chuyến đi chưa được nhập (tối thiểu {fmtVnd(groupMinPrice)}).
+                        </p>
+                      ) : groupCustomPrice < groupMinPrice ? (
+                        <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          Giá cước chuyến đi ({fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu ({fmtVnd(groupMinPrice)}).
+                        </p>
+                      ) : null}
+                    </>
                   )}
                 </div>
 
@@ -1291,7 +1316,7 @@ export default function ReturnTripPage() {
                       id="retailTotalPrice"
                       type="text"
                       inputMode="numeric"
-                      placeholder="0"
+                      placeholder={retailFloorPrice ? retailFloorPrice.toLocaleString('vi-VN') : '0'}
                       value={
                         retailCustomPriceTotal > 0
                           ? retailCustomPriceTotal.toLocaleString('vi-VN')
@@ -1312,11 +1337,20 @@ export default function ReturnTripPage() {
                     </span>
                   </div>
 
-                  {isRetailPriceBelowFloor && (
-                    <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
-                      <AlertCircle className="h-3.5 w-3.5" />
-                      Giá cước nhập ({fmtVnd(retailCustomPriceTotal)}) thấp hơn giá tối thiểu của chuyến ({fmtVnd(retailFloorPrice)} - theo 1 ghế Khách #1).
-                    </p>
+                  {retailFloorPrice != null && (
+                    <>
+                      {retailCustomPriceTotal <= 0 ? (
+                        <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          Giá cước chuyến đi chưa được nhập (tối thiểu {fmtVnd(retailFloorPrice)} - theo 1 ghế Khách #1).
+                        </p>
+                      ) : retailCustomPriceTotal < retailFloorPrice ? (
+                        <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
+                          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+                          Giá cước chuyến đi ({fmtVnd(retailCustomPriceTotal)}) không đủ giá trị tối thiểu ({fmtVnd(retailFloorPrice)} - theo 1 ghế Khách #1).
+                        </p>
+                      ) : null}
+                    </>
                   )}
                 </div>
 
@@ -1456,7 +1490,6 @@ function RetailPassengerCard({
           minPrice: floor,
           distanceKm: res.distanceKm ?? null,
           isEstimating: false,
-          ...(passenger.customPriceStr ? {} : { customPriceStr: floor.toString() }),
         });
       })
       .catch((err) => {
