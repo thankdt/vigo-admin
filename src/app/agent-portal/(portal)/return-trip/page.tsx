@@ -65,8 +65,6 @@ interface RetailPassengerItem {
   minPrice: number | null;
   distanceKm: number | null;
   isEstimating: boolean;
-  hasCustomPrice: boolean;
-  customPriceStr: string;
   needVat: boolean;
   companyName: string;
   taxCode: string;
@@ -83,8 +81,6 @@ const createInitialRetailPassenger = (): RetailPassengerItem => ({
   minPrice: null,
   distanceKm: null,
   isEstimating: false,
-  hasCustomPrice: false,
-  customPriceStr: '',
   needVat: false,
   companyName: '',
   taxCode: '',
@@ -206,29 +202,26 @@ export default function ReturnTripPage() {
   const groupCustomPrice = Number(groupCustomPriceStr.replace(/\D/g, '')) || 0;
   const isGroupPriceBelowFloor = groupMinPrice != null && groupCustomPrice < groupMinPrice;
 
-  // Sum of base route prices
-  const totalRetailMinPrice = retailPassengers.reduce((sum, p) => sum + (p.minPrice || 0), 0);
-
-  // Sum of individual contract prices: custom price if configured, otherwise original route price (minPrice)
-  const totalCalculatedRetailPrice = retailPassengers.reduce((sum, p) => {
-    const cp = Number(p.customPriceStr.replace(/\D/g, '')) || 0;
-    return sum + (p.hasCustomPrice && cp > 0 ? cp : (p.minPrice || 0));
-  }, 0);
+  // Floor price của chuyến đi lấy khách đầu tiên làm base (1 ghế)
+  const baseRetailPassenger = retailPassengers[0];
+  const retailFloorPrice = baseRetailPassenger?.minPrice ?? null;
+  const isEstimatingRetailBase = baseRetailPassenger?.isEstimating ?? false;
 
   const retailCustomPriceTotal = Number(retailTotalPriceStr.replace(/\D/g, '')) || 0;
+  const isRetailPriceBelowFloor = retailFloorPrice != null && retailCustomPriceTotal < retailFloorPrice;
 
-  // Auto-adjust or default retailTotalPriceStr when calculated price changes
+  // Tự động điền giá sàn chuyến đi khi đã tính xong giá 1 ghế của Khách #1
   React.useEffect(() => {
-    if (tripMode === 'RETAIL' && totalCalculatedRetailPrice > 0) {
+    if (tripMode === 'RETAIL' && retailFloorPrice != null && retailFloorPrice > 0) {
       setRetailTotalPriceStr((prev) => {
         const cur = Number(prev.replace(/\D/g, '')) || 0;
-        if (!prev || cur < totalCalculatedRetailPrice) {
-          return totalCalculatedRetailPrice.toString();
+        if (!prev || cur < retailFloorPrice) {
+          return retailFloorPrice.toString();
         }
         return prev;
       });
     }
-  }, [tripMode, totalCalculatedRetailPrice]);
+  }, [tripMode, retailFloorPrice]);
 
   const updateRetailPassenger = (index: number, updates: Partial<RetailPassengerItem>) => {
     setRetailPassengers((prev) => {
@@ -368,20 +361,6 @@ export default function ReturnTripPage() {
           return;
         }
 
-        if (p.hasCustomPrice) {
-          const pCustom = Number(p.customPriceStr.replace(/\D/g, '')) || 0;
-          if (pCustom <= 0) {
-            setErrorMessage(`Vui lòng nhập giá cước riêng cho khách lẻ #${i + 1}.`);
-            return;
-          }
-          if (p.minPrice != null && pCustom < p.minPrice) {
-            setErrorMessage(
-              `Giá cước của khách #${i + 1} (${fmtVnd(pCustom)}) không được thấp hơn giá sàn 1 ghế (${fmtVnd(p.minPrice)}).`,
-            );
-            return;
-          }
-        }
-
         if (p.needVat) {
           if (!p.companyName.trim() || !p.taxCode.trim() || !p.companyAddress.trim()) {
             setErrorMessage(`Khách lẻ #${i + 1}: Vui lòng điền đầy đủ Tên công ty, MST và Địa chỉ công ty để xuất hoá đơn.`);
@@ -390,24 +369,27 @@ export default function ReturnTripPage() {
         }
       }
 
-      const finalRetailPrice = Math.max(retailCustomPriceTotal, totalCalculatedRetailPrice);
-      if (finalRetailPrice <= 0) {
-        setErrorMessage('Vui lòng nhập tổng giá cước chuyến đi.');
+      if (retailCustomPriceTotal <= 0) {
+        setErrorMessage('Vui lòng nhập giá cước cho chuyến đi.');
+        return;
+      }
+
+      if (retailFloorPrice != null && retailCustomPriceTotal < retailFloorPrice) {
+        setErrorMessage(
+          `Giá cước chuyến đi (${fmtVnd(retailCustomPriceTotal)}) không được thấp hơn giá sàn tối thiểu 1 ghế của khách đầu tiên (${fmtVnd(retailFloorPrice)}).`,
+        );
         return;
       }
 
       const retailPassengersPayload: RetailPassengerInput[] = retailPassengers.map((p) => {
-        const pCustom = Number(p.customPriceStr.replace(/\D/g, '')) || 0;
-        // Giá hợp đồng: nếu cấu hình riêng thì lấy giá riêng, ngược lại lấy giá gốc của chặng (minPrice)
-        const pFinalPrice = p.hasCustomPrice && pCustom > 0 ? pCustom : (p.minPrice || 0);
+        // Giá hợp đồng của từng khách lẻ giữ nguyên giá vốn có theo chặng
         return {
           name: p.name.trim() || undefined,
           phone: p.phone.trim(),
           pickupAddress: p.pickup,
           dropoffAddress: p.dropoff,
           seats: 1,
-          hasCustomPrice: p.hasCustomPrice,
-          price: pFinalPrice,
+          price: p.minPrice || 0,
           minPrice: p.minPrice ?? undefined,
           needVat: p.needVat,
           vatInfo: p.needVat
@@ -425,7 +407,7 @@ export default function ReturnTripPage() {
       try {
         const res = await createDriverReturnTrip({
           tripMode: 'RETAIL',
-          customPrice: finalRetailPrice,
+          customPrice: retailCustomPriceTotal,
           driverPhone: driverPhone.trim() || undefined,
           note: retailNote.trim() || undefined,
           retailPassengers: retailPassengersPayload,
@@ -659,15 +641,9 @@ export default function ReturnTripPage() {
 
                         <div className="grid grid-cols-1 gap-1 text-muted-foreground text-[11px]">
                           <div className="flex items-center gap-1">
-                            {p.hasCustomPrice ? (
-                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-primary border-primary/40">
-                                Giá riêng
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[10px] py-0 px-1.5">
-                                Giá gốc chặng
-                              </Badge>
-                            )}
+                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-emerald-600 border-emerald-600/40">
+                              Hợp đồng riêng
+                            </Badge>
                           </div>
                           <div className="flex items-start gap-1">
                             <span className="text-emerald-600 font-medium shrink-0">Đón:</span>
@@ -1301,11 +1277,12 @@ export default function ReturnTripPage() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Tổng giá cước chuyến đi:
+                    <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                      {isEstimatingRetailBase && <Loader2 className="h-3 w-3 animate-spin" />}
+                      Giá tối thiểu chuyến đi (theo Khách #1):
                     </span>
                     <span className="text-base font-bold text-primary">
-                      {fmtVnd(totalCalculatedRetailPrice)}
+                      {isEstimatingRetailBase ? 'Đang tính...' : fmtVnd(retailFloorPrice)}
                     </span>
                   </div>
                 </div>
@@ -1314,15 +1291,15 @@ export default function ReturnTripPage() {
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="retailTotalPrice" className="text-xs font-medium">
-                      Tổng giá cước chuyến đi (VNĐ) <span className="text-rose-500">*</span>
+                      Giá cước chuyến đi (Tài xế tự nhập) <span className="text-rose-500">*</span>
                     </Label>
-                    {totalCalculatedRetailPrice > 0 && (
+                    {retailFloorPrice != null && retailFloorPrice > 0 && (
                       <button
                         type="button"
-                        onClick={() => setRetailTotalPriceStr(totalCalculatedRetailPrice.toString())}
+                        onClick={() => setRetailTotalPriceStr(retailFloorPrice.toString())}
                         className="text-xs text-primary hover:underline"
                       >
-                        Điền tổng tiền ({fmtVnd(totalCalculatedRetailPrice)})
+                        Điền giá tối thiểu ({fmtVnd(retailFloorPrice)})
                       </button>
                     )}
                   </div>
@@ -1342,7 +1319,7 @@ export default function ReturnTripPage() {
                         setRetailTotalPriceStr(raw);
                       }}
                       className={`text-lg font-bold pr-10 ${
-                        totalRetailMinPrice > 0 && retailCustomPriceTotal < totalRetailMinPrice
+                        isRetailPriceBelowFloor
                           ? 'border-rose-500 focus-visible:ring-rose-500'
                           : ''
                       }`}
@@ -1352,17 +1329,17 @@ export default function ReturnTripPage() {
                     </span>
                   </div>
 
-                  {totalRetailMinPrice > 0 && retailCustomPriceTotal < totalRetailMinPrice && (
+                  {isRetailPriceBelowFloor && (
                     <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
                       <AlertCircle className="h-3.5 w-3.5" />
-                      Tổng giá nhập ({fmtVnd(retailCustomPriceTotal)}) thấp hơn tổng giá sàn ({fmtVnd(totalRetailMinPrice)}).
+                      Giá cước nhập ({fmtVnd(retailCustomPriceTotal)}) thấp hơn giá tối thiểu của chuyến ({fmtVnd(retailFloorPrice)} - theo 1 ghế Khách #1).
                     </p>
                   )}
 
-                  {totalRetailMinPrice > 0 && (
+                  {retailFloorPrice != null && retailFloorPrice > 0 && (
                     <div className="flex gap-2 pt-1 flex-wrap">
                       {[0, 20000, 50000, 100000, 200000].map((delta) => {
-                        const target = totalCalculatedRetailPrice + delta;
+                        const target = retailFloorPrice + delta;
                         return (
                           <Button
                             key={delta}
@@ -1372,7 +1349,7 @@ export default function ReturnTripPage() {
                             className="h-7 text-xs"
                             onClick={() => setRetailTotalPriceStr(target.toString())}
                           >
-                            {delta === 0 ? 'Bằng tổng tính' : `+${(delta / 1000).toFixed(0)}k (${(target / 1000).toFixed(0)}k)`}
+                            {delta === 0 ? 'Bằng giá sàn' : `+${(delta / 1000).toFixed(0)}k (${(target / 1000).toFixed(0)}k)`}
                           </Button>
                         );
                       })}
@@ -1382,36 +1359,37 @@ export default function ReturnTripPage() {
 
                 {/* Contract Price List */}
                 <div className="space-y-2 pt-2 border-t">
-                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                    Giá ghi nhận trên từng hợp đồng:
-                  </Label>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                      Giá ghi nhận trên từng hợp đồng:
+                    </Label>
+                    <span className="text-[11px] text-muted-foreground">Theo giá gốc từng chặng</span>
+                  </div>
                   <div className="rounded-md border divide-y bg-card text-xs">
-                    {retailPassengers.map((p, idx) => {
-                      const pCustom = Number(p.customPriceStr.replace(/\D/g, '')) || 0;
-                      const pEffective = p.hasCustomPrice && pCustom > 0 ? pCustom : (p.minPrice || 0);
-
-                      return (
-                        <div key={idx} className="p-2.5 flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">
-                              Khách #{idx + 1}: {p.name || p.phone || '(Chưa nhập)'}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {p.hasCustomPrice ? (
-                                <span className="text-primary font-medium">Giá riêng tự cấu hình</span>
-                              ) : (
-                                <span>Giá gốc theo chặng đón/trả</span>
-                              )}
-                            </div>
+                    {retailPassengers.map((p, idx) => (
+                      <div key={idx} className="p-2.5 flex items-center justify-between">
+                        <div>
+                          <div className="font-medium">
+                            Khách #{idx + 1}: {p.name || p.phone || '(Chưa nhập)'}
+                            {idx === 0 && (
+                              <span className="ml-1.5 text-[10px] text-primary bg-primary/10 px-1.5 py-0.5 rounded font-semibold">
+                                Base chuyến
+                              </span>
+                            )}
                           </div>
-                          <div className="text-right">
-                            <span className="font-bold text-sm text-emerald-600">
-                              {pEffective > 0 ? fmtVnd(pEffective) : '—'}
-                            </span>
+                          <div className="text-[11px] text-muted-foreground">
+                            {p.pickup.address && p.dropoff.address
+                              ? `${p.pickup.address.split(',')[0]} → ${p.dropoff.address.split(',')[0]}`
+                              : 'Chưa đủ điểm đón/trả'}
                           </div>
                         </div>
-                      );
-                    })}
+                        <div className="text-right">
+                          <span className="font-bold text-sm text-emerald-600">
+                            {p.minPrice != null && p.minPrice > 0 ? fmtVnd(p.minPrice) : '—'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -1519,12 +1497,6 @@ function RetailPassengerCard({
     };
   }, [pickup.lat, pickup.long, pickup.address, dropoff.lat, dropoff.long, dropoff.address, index]);
 
-  const pCustomPrice = Number(passenger.customPriceStr.replace(/\D/g, '')) || 0;
-  const isCustomBelowFloor =
-    passenger.hasCustomPrice &&
-    passenger.minPrice != null &&
-    pCustomPrice < passenger.minPrice;
-
   return (
     <Card className="border-primary/20 shadow-sm overflow-visible">
       <CardHeader className="pb-3 bg-muted/20 border-b">
@@ -1534,9 +1506,9 @@ function RetailPassengerCard({
               {index + 1}
             </span>
             <span>Khách lẻ #{index + 1}</span>
-            {passenger.hasCustomPrice && (
+            {index === 0 && (
               <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-primary border-primary/40">
-                Giá riêng
+                Khách cơ sở
               </Badge>
             )}
             {passenger.needVat && (
@@ -1622,113 +1594,18 @@ function RetailPassengerCard({
             <div className="rounded-md bg-muted/50 p-2.5 border text-xs flex items-center justify-between">
               <span className="text-muted-foreground flex items-center gap-1">
                 {passenger.isEstimating && <Loader2 className="h-3 w-3 animate-spin" />}
-                Giá gốc chặng này (1 ghế):
+                Giá hợp đồng chặng này (1 ghế):
               </span>
-              <span className="font-bold text-primary">
-                {passenger.isEstimating ? 'Đang tính...' : fmtVnd(passenger.minPrice)}
-              </span>
-            </div>
-          )}
-        </div>
-
-        {/* Individual Price Switch */}
-        <div className="pt-2 border-t space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-xs font-semibold flex items-center gap-1.5">
-                <DollarSign className="h-3.5 w-3.5 text-primary" />
-                Cấu hình giá riêng cho khách này
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                Gạt bật để đặt giá riêng; nếu tắt, giá hợp đồng mặc định là giá gốc theo chặng ({fmtVnd(passenger.minPrice)}).
-              </div>
-            </div>
-            <Switch
-              checked={passenger.hasCustomPrice}
-              onCheckedChange={(checked) => {
-                onUpdate({
-                  hasCustomPrice: checked,
-                  customPriceStr:
-                    checked && !passenger.customPriceStr && passenger.minPrice
-                      ? passenger.minPrice.toString()
-                      : passenger.customPriceStr,
-                });
-              }}
-            />
-          </div>
-
-          {passenger.hasCustomPrice ? (
-            <div className="space-y-2 rounded-md bg-muted/20 p-3 border">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-medium">
-                  Giá cước riêng của khách #{index + 1} (VNĐ) <span className="text-rose-500">*</span>
-                </Label>
-                {passenger.minPrice != null && (
-                  <button
-                    type="button"
-                    onClick={() => onUpdate({ customPriceStr: passenger.minPrice!.toString() })}
-                    className="text-xs text-primary hover:underline"
-                  >
-                    Điền sàn ({fmtVnd(passenger.minPrice)})
-                  </button>
+              <div className="text-right">
+                <span className="font-bold text-primary">
+                  {passenger.isEstimating ? 'Đang tính...' : fmtVnd(passenger.minPrice)}
+                </span>
+                {index === 0 && (
+                  <span className="block text-[10px] text-muted-foreground font-normal">
+                    (Dùng làm giá sàn tối thiểu của chuyến đi)
+                  </span>
                 )}
               </div>
-              <div className="relative">
-                <Input
-                  type="text"
-                  inputMode="numeric"
-                  placeholder="0"
-                  value={
-                    pCustomPrice > 0
-                      ? pCustomPrice.toLocaleString('vi-VN')
-                      : passenger.customPriceStr
-                  }
-                  onChange={(e) => {
-                    const raw = e.target.value.replace(/\D/g, '');
-                    onUpdate({ customPriceStr: raw });
-                  }}
-                  className={`text-base font-bold pr-8 h-9 ${
-                    isCustomBelowFloor ? 'border-rose-500 focus-visible:ring-rose-500' : ''
-                  }`}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-semibold">
-                  ₫
-                </span>
-              </div>
-
-              {isCustomBelowFloor && (
-                <p className="text-[11px] font-medium text-rose-500 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  Giá ({fmtVnd(pCustomPrice)}) không được thấp hơn giá sàn 1 ghế ({fmtVnd(passenger.minPrice)}).
-                </p>
-              )}
-
-              {passenger.minPrice != null && (
-                <div className="flex gap-1.5 pt-1 flex-wrap">
-                  {[0, 20000, 50000, 100000].map((delta) => {
-                    const target = passenger.minPrice! + delta;
-                    return (
-                      <Button
-                        key={delta}
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="h-6 text-[11px] px-2"
-                        onClick={() => onUpdate({ customPriceStr: target.toString() })}
-                      >
-                        {delta === 0 ? 'Bằng sàn' : `+${(delta / 1000).toFixed(0)}k`}
-                      </Button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-md bg-muted/40 p-2.5 text-xs text-muted-foreground flex items-center justify-between">
-              <span>Giá ghi nhận trên hợp đồng (giá gốc chặng):</span>
-              <span className="font-semibold text-foreground">
-                {fmtVnd(passenger.minPrice)}
-              </span>
             </div>
           )}
         </div>
