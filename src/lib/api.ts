@@ -1188,6 +1188,24 @@ export async function createAgentBooking(data: {
   return result.data || result;
 }
 
+export interface RetailPassengerInput {
+  name?: string;
+  phone: string;
+  pickupAddress: { address: string; lat: number; long: number };
+  dropoffAddress: { address: string; lat: number; long: number };
+  seats?: number;
+  hasCustomPrice?: boolean;
+  price?: number;
+  minPrice?: number;
+  needVat?: boolean;
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
+}
+
 export interface DriverReturnTripResult {
   id: string;
   code?: string;
@@ -1202,6 +1220,8 @@ export interface DriverReturnTripResult {
   shareLink?: string;
   requestedSeats?: number;
   passengerNames?: string[];
+  tripMode?: 'GROUP' | 'RETAIL';
+  retailPassengers?: RetailPassengerInput[];
   vatInfo?: {
     companyName?: string;
     taxCode?: string;
@@ -1212,18 +1232,22 @@ export interface DriverReturnTripResult {
 
 /**
  * Đặt chuyến chiều về: tài xế tự tạo cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
- * Giá cước tự nhập phải >= giá tối thiểu của 1 ghế (công thức định giá).
+ * Hỗ trợ 2 chế độ:
+ * - GROUP: Khách hàng đi chung (1 chặng đón/trả chung, xuất VAT gộp).
+ * - RETAIL: Khách lẻ (nhiều khách, đón/trả riêng, giá theo ghế, VAT riêng, hợp đồng riêng từng khách).
  */
 export async function createDriverReturnTrip(data: {
-  customerPhone: string;
+  tripMode?: 'GROUP' | 'RETAIL';
+  customerPhone?: string;
   customerName?: string;
-  pickupAddress: { address: string; lat: number; long: number };
-  dropoffAddress: { address: string; lat: number; long: number };
+  pickupAddress?: { address: string; lat: number; long: number };
+  dropoffAddress?: { address: string; lat: number; long: number };
   customPrice: number;
   driverPhone?: string;
   note?: string;
   requestedSeats?: number;
   passengerNames?: string[];
+  retailPassengers?: RetailPassengerInput[];
   vatInfo?: {
     companyName?: string;
     taxCode?: string;
@@ -1240,6 +1264,32 @@ export async function createDriverReturnTrip(data: {
     throw new Error(result.message || 'Không tạo được chuyến chiều về');
   }
   return result.data || result;
+}
+
+/**
+ * Tải hợp đồng điện tử PDF cho booking.
+ * Cho phép truyền passengerIndex để tải hợp đồng riêng của từng khách lẻ (đối với chuyến RETAIL).
+ */
+export async function downloadBookingContractPdf(bookingId: string, passengerIndex?: number): Promise<void> {
+  const query = passengerIndex !== undefined ? `?passengerIndex=${passengerIndex}` : '';
+  const res = await fetchWithAuth(`/bookings/${bookingId}/contract.pdf${query}`);
+  if (!res.ok) {
+    let errMessage = 'Không thể tải hợp đồng';
+    try {
+      const err = await res.json();
+      if (err?.message) errMessage = err.message;
+    } catch (_) {}
+    throw new Error(errMessage);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hop-dong-${bookingId}${passengerIndex !== undefined ? `-khach-${passengerIndex + 1}` : ''}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 // [DISABLED 2026-07-09] "admin ôm chuyến về operator" — endpoint BE (admin/:id/accept) đã tắt
