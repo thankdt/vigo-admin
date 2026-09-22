@@ -20,6 +20,11 @@ pipeline {
     timeout(time: 20, unit: 'MINUTES')
   }
 
+  triggers {
+    githubPush()
+    pollSCM('H/2 * * * *')
+  }
+
   environment {
     DEPLOY_DIR = '/home/vigojsc/development/projects/vigo-admin'
     GIT_REPO   = 'github.com/thankdt/vigo-admin.git'
