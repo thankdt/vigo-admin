@@ -1189,6 +1189,9 @@ export async function createAgentBooking(data: {
 }
 
 export interface RetailPassengerInput {
+  bookingId?: string;
+  bookingCode?: string;
+  shareLink?: string;
   name?: string;
   phone: string;
   pickupAddress: { address: string; lat: number; long: number };
@@ -1222,6 +1225,7 @@ export interface DriverReturnTripResult {
   passengerNames?: string[];
   tripMode?: 'GROUP' | 'RETAIL';
   retailPassengers?: RetailPassengerInput[];
+  createdBookings?: DriverReturnTripResult[];
   vatInfo?: {
     companyName?: string;
     taxCode?: string;

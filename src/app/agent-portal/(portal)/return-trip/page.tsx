@@ -45,6 +45,7 @@ import {
   FileText,
   Split,
   UserPlus,
+  Copy,
 } from 'lucide-react';
 
 interface AddressPoint {
@@ -433,9 +434,16 @@ export default function ReturnTripPage() {
         });
 
         setCreatedBooking(res);
+        const codes = res.createdBookings
+          ?.map((b) => b.code || b.id.slice(0, 8).toUpperCase())
+          .filter(Boolean);
+        const codesStr =
+          codes && codes.length > 0
+            ? codes.map((c) => `#${c}`).join(', ')
+            : `#${res.code || res.id.slice(0, 8).toUpperCase()}`;
         toast({
           title: 'Tự đặt chuyến thành công!',
-          description: `Chuyến xe #${res.code || res.id.slice(0, 8).toUpperCase()} với ${retailPassengers.length} khách lẻ đã được nhận thành công.`,
+          description: `Đã tạo ${res.createdBookings?.length || retailPassengers.length} chuyến xe lẻ riêng biệt (${codesStr}) cho tài xế.`,
         });
 
         if (typeof window !== 'undefined') {
@@ -483,6 +491,32 @@ export default function ReturnTripPage() {
     }
   };
 
+  const handleDownloadAllRetailContracts = async () => {
+    const list = createdBooking?.retailPassengers || [];
+    setDownloadingContractIndex('all');
+    try {
+      for (let i = 0; i < list.length; i++) {
+        const bId = list[i].bookingId || createdBooking?.id;
+        if (bId) {
+          await downloadBookingContractPdf(bId);
+        }
+      }
+      toast({
+        title: 'Tải hợp đồng thành công',
+        description: `Đã tải toàn bộ ${list.length} hợp đồng điện tử của các chuyến lẻ.`,
+      });
+    } catch (err: any) {
+      console.error('Download all contracts failed:', err);
+      toast({
+        variant: 'destructive',
+        title: 'Lỗi tải hợp đồng',
+        description: err.message || 'Không thể tải đủ hợp đồng lúc này.',
+      });
+    } finally {
+      setDownloadingContractIndex(null);
+    }
+  };
+
   const handleResetForm = () => {
     setCreatedBooking(null);
     setErrorMessage(null);
@@ -513,6 +547,13 @@ export default function ReturnTripPage() {
       createdBooking.tripMode === 'RETAIL' ||
       (Array.isArray(createdBooking.retailPassengers) && createdBooking.retailPassengers.length > 0);
 
+    const tripCodes =
+      isRetailTrip && createdBooking.createdBookings && createdBooking.createdBookings.length > 0
+        ? createdBooking.createdBookings
+            .map((b) => b.code || b.id.slice(0, 8).toUpperCase())
+            .join(', ')
+        : (createdBooking.code || createdBooking.id.slice(0, 8).toUpperCase());
+
     return (
       <div className="max-w-2xl mx-auto space-y-6">
         <Card className="border-green-500/30 bg-green-500/5 shadow-md">
@@ -525,22 +566,26 @@ export default function ReturnTripPage() {
             </CardTitle>
             <CardDescription className="text-sm">
               {isRetailTrip
-                ? `Chuyến xe khách lẻ ghép (${createdBooking.retailPassengers?.length} khách) đã được gán trực tiếp cho tài xế.`
+                ? `Đã tạo ${createdBooking.createdBookings?.length || createdBooking.retailPassengers?.length} chuyến xe lẻ riêng biệt và gán trực tiếp cho tài xế.`
                 : 'Chuyến xe đã được tự động nhận và xếp cho tài xế.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4 pt-2">
             <div className="rounded-lg border bg-card p-4 space-y-3 text-sm">
               <div className="flex justify-between items-center border-b pb-2">
-                <span className="text-muted-foreground">Mã chuyến đi:</span>
+                <span className="text-muted-foreground">
+                  {isRetailTrip ? 'Mã các chuyến lẻ:' : 'Mã chuyến đi:'}
+                </span>
                 <span className="font-mono font-bold text-base text-primary">
-                  {createdBooking.code || createdBooking.id.slice(0, 8)}
+                  {tripCodes}
                 </span>
               </div>
               <div className="flex justify-between items-center border-b pb-2">
                 <span className="text-muted-foreground">Hình thức:</span>
                 <Badge variant={isRetailTrip ? 'secondary' : 'outline'} className="font-medium">
-                  {isRetailTrip ? 'Khách lẻ ghép chuyến' : 'Bao xe'}
+                  {isRetailTrip
+                    ? `Khách lẻ (${createdBooking.createdBookings?.length || createdBooking.retailPassengers?.length} chuyến lẻ riêng biệt)`
+                    : 'Bao xe'}
                 </Badge>
               </div>
               <div className="flex justify-between items-center border-b pb-2">
@@ -625,12 +670,12 @@ export default function ReturnTripPage() {
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center justify-between">
                     <span className="font-semibold text-xs text-muted-foreground uppercase tracking-wide">
-                      Danh sách {createdBooking.retailPassengers.length} khách lẻ & hợp đồng riêng:
+                      Danh sách {createdBooking.retailPassengers.length} chuyến xe lẻ & hợp đồng riêng:
                     </span>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => handleDownloadContract(createdBooking.id)}
+                      onClick={handleDownloadAllRetailContracts}
                       disabled={downloadingContractIndex === 'all'}
                       className="h-7 text-xs gap-1.5"
                     >
@@ -639,68 +684,93 @@ export default function ReturnTripPage() {
                       ) : (
                         <Download className="h-3 w-3" />
                       )}
-                      Tải toàn bộ hợp đồng
+                      Tải toàn bộ {createdBooking.retailPassengers.length} hợp đồng
                     </Button>
                   </div>
 
                   <div className="space-y-2.5">
-                    {createdBooking.retailPassengers.map((p, idx) => (
-                      <div
-                        key={idx}
-                        className="rounded-lg border bg-muted/30 p-3 space-y-2 text-xs hover:border-primary/40 transition-colors"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-semibold text-sm text-foreground">
-                            Khách #{idx + 1}: {p.name || 'Khách hàng'} - {p.phone}
-                          </span>
-                          <span className="font-bold text-emerald-600 text-sm">
-                            {fmtVnd(p.price)}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-1 gap-1 text-muted-foreground text-[11px]">
-                          <div className="flex items-center gap-1">
-                            <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-emerald-600 border-emerald-600/40">
-                              Hợp đồng riêng
-                            </Badge>
-                          </div>
-                          <div className="flex items-start gap-1">
-                            <span className="text-emerald-600 font-medium shrink-0">Đón:</span>
-                            <span className="truncate">{p.pickupAddress?.address}</span>
-                          </div>
-                          <div className="flex items-start gap-1">
-                            <span className="text-rose-600 font-medium shrink-0">Trả:</span>
-                            <span className="truncate">{p.dropoffAddress?.address}</span>
-                          </div>
-                        </div>
-
-                        {p.needVat && p.vatInfo && (
-                          <div className="rounded bg-background/80 p-1.5 border text-[11px] space-y-0.5">
-                            <div className="font-medium text-foreground flex items-center gap-1">
-                              <Receipt className="h-3 w-3 text-primary" /> VAT: {p.vatInfo.companyName}
+                    {createdBooking.retailPassengers.map((p, idx) => {
+                      const passengerBookingId = p.bookingId || createdBooking.id;
+                      const passengerBookingCode =
+                        p.bookingCode || p.bookingId?.slice(0, 8).toUpperCase() || `${idx + 1}`;
+                      return (
+                        <div
+                          key={idx}
+                          className="rounded-lg border bg-muted/30 p-3 space-y-2 text-xs hover:border-primary/40 transition-colors"
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <Badge className="bg-primary/10 text-primary border-primary/20 text-xs font-mono font-bold">
+                                #{passengerBookingCode}
+                              </Badge>
+                              <span className="font-semibold text-sm text-foreground">
+                                {p.name || 'Khách hàng'} - {p.phone}
+                              </span>
                             </div>
-                            <div className="text-muted-foreground">MST: {p.vatInfo.taxCode}</div>
+                            <span className="font-bold text-emerald-600 text-sm">
+                              {fmtVnd(p.price)}
+                            </span>
                           </div>
-                        )}
 
-                        <div className="pt-1 flex justify-end">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={() => handleDownloadContract(createdBooking.id, idx)}
-                            disabled={downloadingContractIndex === idx}
-                            className="h-7 text-xs gap-1.5 font-medium"
-                          >
-                            {downloadingContractIndex === idx ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
+                          <div className="grid grid-cols-1 gap-1 text-muted-foreground text-[11px]">
+                            <div className="flex items-center gap-1">
+                              <Badge variant="outline" className="text-[10px] py-0 px-1.5 text-emerald-600 border-emerald-600/40">
+                                Chuyến lẻ độc lập
+                              </Badge>
+                            </div>
+                            <div className="flex items-start gap-1">
+                              <span className="text-emerald-600 font-medium shrink-0">Đón:</span>
+                              <span className="truncate">{p.pickupAddress?.address}</span>
+                            </div>
+                            <div className="flex items-start gap-1">
+                              <span className="text-rose-600 font-medium shrink-0">Trả:</span>
+                              <span className="truncate">{p.dropoffAddress?.address}</span>
+                            </div>
+                          </div>
+
+                          {p.needVat && p.vatInfo && (
+                            <div className="rounded bg-background/80 p-1.5 border text-[11px] space-y-0.5">
+                              <div className="font-medium text-foreground flex items-center gap-1">
+                                <Receipt className="h-3 w-3 text-primary" /> VAT: {p.vatInfo.companyName}
+                              </div>
+                              <div className="text-muted-foreground">MST: {p.vatInfo.taxCode}</div>
+                            </div>
+                          )}
+
+                          <div className="pt-1 flex items-center justify-between gap-2">
+                            {p.shareLink ? (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(p.shareLink || '');
+                                  toast({ title: `Đã sao chép link chuyến #${passengerBookingCode}` });
+                                }}
+                                className="h-7 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                              >
+                                <Copy className="h-3 w-3" /> Link chuyến
+                              </Button>
                             ) : (
-                              <Download className="h-3 w-3 text-primary" />
+                              <div />
                             )}
-                            Tải HĐ riêng khách #{idx + 1}
-                          </Button>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => handleDownloadContract(passengerBookingId)}
+                              disabled={downloadingContractIndex === idx || downloadingContractIndex === 'all'}
+                              className="h-7 text-xs gap-1.5 font-medium"
+                            >
+                              {downloadingContractIndex === idx ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : (
+                                <Download className="h-3 w-3 text-primary" />
+                              )}
+                              Tải HĐ chuyến #{passengerBookingCode}
+                            </Button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}
