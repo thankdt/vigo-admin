@@ -174,7 +174,7 @@ export default function ReturnTripPage() {
       pickup: { address: pickup.address, lat: pickup.lat, long: pickup.long },
       dropoff: { address: dropoff.address, lat: dropoff.lat, long: dropoff.long },
       serviceType: 'CARPOOL',
-      requestedSeats,
+      requestedSeats: 1, // Sàn tối thiểu của chuyến tự đặt luôn tính theo 1 ghế CARPOOL
     })
       .then((res) => {
         if (!active) return;
@@ -277,14 +277,14 @@ export default function ReturnTripPage() {
       if (!groupCustomPrice || groupCustomPrice <= 0) {
         setErrorMessage(
           groupMinPrice != null
-            ? `Vui lòng nhập giá cước cho chuyến đi (tối thiểu ${fmtVnd(groupMinPrice)}).`
+            ? `Vui lòng nhập giá cước cho chuyến đi (tối thiểu 1 ghế: ${fmtVnd(groupMinPrice)}).`
             : 'Vui lòng nhập giá cước cho chuyến đi.',
         );
         return;
       }
       if (groupMinPrice != null && groupCustomPrice < groupMinPrice) {
         setErrorMessage(
-          `Giá cước chuyến đi (${fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu (${fmtVnd(groupMinPrice)}).`,
+          `Giá cước chuyến đi (${fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu 1 ghế (${fmtVnd(groupMinPrice)}).`,
         );
         return;
       }
@@ -1198,12 +1198,12 @@ export default function ReturnTripPage() {
                       {groupCustomPrice <= 0 ? (
                         <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                          Giá cước chuyến đi chưa được nhập (tối thiểu {fmtVnd(groupMinPrice)}).
+                          Giá cước chuyến đi chưa được nhập (tối thiểu 1 ghế: {fmtVnd(groupMinPrice)}).
                         </p>
                       ) : groupCustomPrice < groupMinPrice ? (
                         <p className="text-xs font-medium text-rose-500 flex items-center gap-1 mt-1">
                           <AlertCircle className="h-3.5 w-3.5 shrink-0" />
-                          Giá cước chuyến đi ({fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu ({fmtVnd(groupMinPrice)}).
+                          Giá cước chuyến đi ({fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu 1 ghế ({fmtVnd(groupMinPrice)}).
                         </p>
                       ) : null}
                     </>
