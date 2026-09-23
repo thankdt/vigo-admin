@@ -1914,7 +1914,35 @@ export type HtxDriverRow = {
   tripCount: number;
   lifetimeIncome: number;
   lifetimeTax: number;
+  contractPdfUrl?: string | null;
+  contractSignatureUrl?: string | null;
+  contractSignedAt?: string | null;
+  htxApprovalStatus?: 'NONE' | 'PENDING_HTX' | 'HTX_APPROVED' | 'HTX_REJECTED' | string | null;
+  htxApprovedAt?: string | null;
+  htxSignatureInfo?: any;
 };
+
+export async function htxSignContract(driverId: string, icaData?: any): Promise<any> {
+  const response = await fetchWithAuth(`/transport-companies/contract/${driverId}/htx-sign`, {
+    method: 'POST',
+    body: JSON.stringify(icaData || {}),
+  });
+  return unwrap(response);
+}
+
+export async function htxRejectContract(driverId: string, reason?: string): Promise<any> {
+  const response = await fetchWithAuth(`/transport-companies/contract/${driverId}/htx-reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  return unwrap(response);
+}
+
+export async function getHtxContractPreview(driverId?: string): Promise<any> {
+  const q = driverId ? `?driverId=${driverId}` : '';
+  const response = await fetchWithAuth(`/transport-companies/contract/preview${q}`);
+  return unwrap(response);
+}
 
 export type HtxDashboard = {
   period: 'day' | 'month' | 'year';

@@ -226,6 +226,12 @@ export type Driver = {
   csCalledAt?: string | null;
   csCalledByName?: string | null;
   csNote?: string | null;
+  contractPdfUrl?: string | null;
+  contractSignatureUrl?: string | null;
+  contractSignedAt?: string | null;
+  htxApprovalStatus?: 'NONE' | 'PENDING_HTX' | 'HTX_APPROVED' | 'HTX_REJECTED' | string | null;
+  htxApprovedAt?: string | null;
+  htxSignatureInfo?: any;
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PROCESSING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';

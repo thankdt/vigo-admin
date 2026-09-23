@@ -1955,6 +1955,56 @@ export function DriversTable() {
             </div>
           )}
 
+          {/* HTX Contract & ICA Signature Info */}
+          {viewDriver && (
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold">Hợp đồng HTX & Ký điện tử ICA</h4>
+                {viewDriver.htxApprovalStatus === 'HTX_APPROVED' ? (
+                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5" /> HTX đã ký ICA
+                  </Badge>
+                ) : viewDriver.htxApprovalStatus === 'PENDING_HTX' ? (
+                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400">
+                    Chờ HTX ký ICA
+                  </Badge>
+                ) : viewDriver.htxApprovalStatus === 'HTX_REJECTED' ? (
+                  <Badge variant="destructive">HTX từ chối</Badge>
+                ) : (
+                  <Badge variant="secondary">Chưa nộp hợp đồng</Badge>
+                )}
+              </div>
+
+              {viewDriver.htxApprovedAt && (
+                <p className="text-xs text-muted-foreground">
+                  HTX đã ký duyệt: {formatVnDateTime(viewDriver.htxApprovedAt)}
+                  {viewDriver.htxSignatureInfo?.signerName && ` · Người ký: ${viewDriver.htxSignatureInfo.signerName}`}
+                </p>
+              )}
+
+              {viewDriver.contractPdfUrl && (
+                <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                  <div className="text-xs text-muted-foreground">
+                    File Hợp đồng PDF (kèm chữ ký Lái xe & HTX):
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      const url = viewDriver.contractPdfUrl!.startsWith('http')
+                        ? viewDriver.contractPdfUrl!
+                        : getImageUrl(viewDriver.contractPdfUrl!);
+                      window.open(url, '_blank');
+                    }}
+                  >
+                    Xem PDF
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Tự bọc tiêu đề + đường kẻ, tự ẩn khi tài khoản không có function
               'driver-reputation' (khác function 'drivers' gác trang này). */}
           {viewDriver && <DriverReputationSection driverId={viewDriver.id} />}
