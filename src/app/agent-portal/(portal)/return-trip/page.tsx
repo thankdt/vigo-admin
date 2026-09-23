@@ -635,14 +635,22 @@ export default function ReturnTripPage() {
                     </div>
                   </div>
 
-                  {createdBooking.vatInfo && (
+                  {createdBooking.vatInfo ? (
                     <div className="rounded-md bg-muted/50 p-2.5 text-xs space-y-1">
                       <div className="font-semibold flex items-center gap-1">
-                        <Receipt className="h-3.5 w-3.5" /> Hoá đơn VAT gộp:
+                        <Receipt className="h-3.5 w-3.5 text-primary" /> Hoá đơn VAT gộp:
                       </div>
                       <div>Công ty: {createdBooking.vatInfo.companyName}</div>
                       <div>MST: {createdBooking.vatInfo.taxCode}</div>
                       {createdBooking.vatInfo.invoiceEmail && <div>Email: {createdBooking.vatInfo.invoiceEmail}</div>}
+                    </div>
+                  ) : (
+                    <div className="rounded-md bg-muted/30 p-2 text-xs text-muted-foreground border flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Receipt className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                        <span>Hoá đơn VAT:</span>
+                      </span>
+                      <Badge variant="outline" className="text-[11px] font-normal">Xuất dạng Khách lẻ</Badge>
                     </div>
                   )}
 
@@ -728,12 +736,19 @@ export default function ReturnTripPage() {
                             </div>
                           </div>
 
-                          {p.needVat && p.vatInfo && (
+                          {p.needVat && p.vatInfo ? (
                             <div className="rounded bg-background/80 p-1.5 border text-[11px] space-y-0.5">
                               <div className="font-medium text-foreground flex items-center gap-1">
                                 <Receipt className="h-3 w-3 text-primary" /> VAT: {p.vatInfo.companyName}
                               </div>
                               <div className="text-muted-foreground">MST: {p.vatInfo.taxCode}</div>
+                            </div>
+                          ) : (
+                            <div className="rounded bg-background/40 p-1.5 border text-[11px] text-muted-foreground flex items-center justify-between">
+                              <span className="flex items-center gap-1">
+                                <Receipt className="h-3 w-3 text-muted-foreground" /> Hoá đơn VAT:
+                              </span>
+                              <Badge variant="outline" className="text-[10px] font-normal py-0 px-1">Xuất dạng Khách lẻ</Badge>
                             </div>
                           )}
 
@@ -1225,6 +1240,12 @@ export default function ReturnTripPage() {
                 <CardDescription className="text-xs">
                   Bật nếu khách hàng yêu cầu công ty xuất hoá đơn điện tử gộp cho toàn bộ cuốc xe.
                 </CardDescription>
+                <div className="mt-2.5 flex items-start gap-1.5 rounded-md bg-muted/40 p-2.5 text-xs text-muted-foreground border">
+                  <AlertCircle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <span>
+                    <strong className="text-foreground font-medium">Chú thích:</strong> Nếu không cấu hình thông tin xuất hoá đơn, hoá đơn sẽ tự động được xuất dưới dạng <strong>Khách lẻ</strong>.
+                  </span>
+                </div>
               </CardHeader>
               {groupNeedVat && (
                 <CardContent className="space-y-3 pt-0 border-t mt-3">
@@ -1737,6 +1758,13 @@ function RetailPassengerCard({
               checked={passenger.needVat}
               onCheckedChange={(checked) => onUpdate({ needVat: checked })}
             />
+          </div>
+
+          <div className="flex items-start gap-1.5 rounded-md bg-muted/40 p-2 text-[11px] text-muted-foreground border">
+            <AlertCircle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+            <span>
+              <strong className="text-foreground font-medium">Chú thích:</strong> Nếu không cấu hình thông tin xuất hoá đơn, hoá đơn sẽ tự động được xuất dưới dạng <strong>Khách lẻ</strong>.
+            </span>
           </div>
 
           {passenger.needVat && (
