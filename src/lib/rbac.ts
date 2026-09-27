@@ -81,6 +81,10 @@ export const SPECIAL_FUNCTIONS: { key: string; label: string }[] = [
     key: 'crm-compensate',
     label: 'Duyệt đền bù khách hàng (CẤP TIỀN THẬT)',
   },
+  {
+    key: 'loyalty-adjust',
+    label: 'Cộng/Trừ Vcoin tay cho khách (Vcoin đổi được voucher — CẤP/TRỪ TIỀN THẬT)',
+  },
 ];
 
 // 11 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
