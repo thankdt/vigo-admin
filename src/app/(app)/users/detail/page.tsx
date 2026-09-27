@@ -60,6 +60,8 @@ import { getImageUrl } from '@/lib/utils';
 // Dời helper về `src/lib/` là refactor RIÊNG (đụng 5 file), không nhét vào GĐ2.
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
 import { logCrmProfileView } from '@/lib/api';
+import { CustomerLoyaltyCard } from './components/customer-loyalty-card';
+import { tierLabel } from './loyalty-labels';
 import { CustomerMetricsCard } from './components/customer-metrics-card';
 import { CustomerOptoutCard } from './components/customer-optout-card';
 import { CustomerSourceCard } from './components/customer-source-card';
@@ -272,7 +274,7 @@ export default function UserDetailPage() {
                 ) : (
                   <Badge variant="secondary">Đã khoá</Badge>
                 )}
-                <Badge variant="outline">{user.loyaltyTier}</Badge>
+                <Badge variant="outline">{tierLabel(user.loyaltyTier)}</Badge>
               </div>
             </div>
           </div>
@@ -306,7 +308,7 @@ export default function UserDetailPage() {
             />
             <Field label="Email" value={user.email ?? '—'} />
             <Field label="Mã giới thiệu" value={user.referralCode ?? '—'} />
-            <Field label="Điểm tích luỹ" value={Number(user.loyaltyPoints ?? 0).toLocaleString('vi-VN')} />
+            <Field label="Vcoin" value={Number(user.rewardPoints ?? 0).toLocaleString('vi-VN')} />
             <Field label="Tổng chuyến đặt" value={Number(user.bookingCount ?? 0).toLocaleString('vi-VN')} />
             <Field label="Ngày tham gia" value={formatVnDateTime(user.createdAt)} />
             {isDeleted && (
@@ -411,6 +413,7 @@ export default function UserDetailPage() {
       */}
       {user.role === 'USER' && (
         <div key={user.id} className="space-y-6">
+          <CustomerLoyaltyCard userId={user.id} userName={user.fullName ?? user.phone} />
           <CustomerMetricsCard userId={user.id} />
           <CustomerSourceCard userId={user.id} />
           <CustomerTagsNotesCard userId={user.id} />

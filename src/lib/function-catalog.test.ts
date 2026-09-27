@@ -28,14 +28,15 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 36 menu + 11 settings + 1 đặc biệt = 48 unique keys', () => {
+  it('allFunctionKeys = 36 menu + 11 settings + 2 đặc biệt = 49 unique keys', () => {
     const keys = allFunctionKeys();
     // 2026-08-18 (CRM GĐ3-7): +crm-tickets, +crm-segments, +crm-campaigns, +crm-accounts,
     // +crm-insights (menu) và +crm-compensate (đặc biệt).
     // 2026-08-24 (merge main): +settings.pick-driver.
     // 2026-08-28: +pooling (màn quan sát gợi ý gom chuyến).
-    expect(keys).toHaveLength(48);
-    expect(new Set(keys).size).toBe(48);
+    // 2026-09-21: +loyalty-adjust (đặc biệt — cộng/trừ Vcoin tay, tách khỏi `users`).
+    expect(keys).toHaveLength(49);
+    expect(new Set(keys).size).toBe(49);
   });
 
   /**
@@ -64,6 +65,15 @@ describe('buildFunctionCatalog', () => {
   it('crm-compensate KHÔNG nằm trong nhóm menu (nó không có trang riêng)', () => {
     const menu = buildFunctionCatalog().find((g) => g.group.includes('menu'));
     expect(menu!.items.map((i) => i.key)).not.toContain('crm-compensate');
+  });
+
+  // 2026-09-21: loyalty-adjust tách khỏi `users` vì cộng/trừ Vcoin tay là cấp/trừ
+  // tiền thật (Vcoin đổi được voucher) — cùng lý do crm-compensate tách khỏi crm-tickets.
+  it('nhóm "Chức năng đặc biệt" chứa loyalty-adjust, nhãn cảnh báo tiền thật', () => {
+    const special = buildFunctionCatalog().find((g) => g.group.includes('đặc biệt'));
+    const item = special!.items.find((i) => i.key === 'loyalty-adjust');
+    expect(item).toBeDefined();
+    expect(item!.label).toMatch(/TIỀN THẬT/i);
   });
 });
 
