@@ -19,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover"
+import { vietnameseInsensitiveFilter } from "@/components/ui/combobox-filter"
 
 type ComboboxOption = {
     value: string;
@@ -83,7 +84,7 @@ export function Combobox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command>
+        <Command filter={vietnameseInsensitiveFilter}>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
             <CommandEmpty>{noResultsText}</CommandEmpty>

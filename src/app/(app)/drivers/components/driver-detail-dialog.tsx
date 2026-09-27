@@ -493,6 +493,53 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                 <p className="text-sm text-muted-foreground">Chưa cung cấp</p>
               )}
             </div>
+
+            <div className="space-y-2 border-t pt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold">Hợp đồng HTX & Ký điện tử ICA</h4>
+                {driver.htxApprovalStatus === 'HTX_APPROVED' ? (
+                  <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400 flex items-center gap-1">
+                    <CheckCircle2 className="h-3 w-3" /> HTX đã ký ICA
+                  </Badge>
+                ) : driver.htxApprovalStatus === 'PENDING_HTX' ? (
+                  <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-400">
+                    Chờ HTX ký ICA
+                  </Badge>
+                ) : driver.htxApprovalStatus === 'HTX_REJECTED' ? (
+                  <Badge variant="destructive">HTX từ chối</Badge>
+                ) : (
+                  <Badge variant="secondary">Chưa nộp hợp đồng</Badge>
+                )}
+              </div>
+
+              {driver.htxApprovedAt && (
+                <p className="text-xs text-muted-foreground">
+                  HTX đã ký duyệt: {formatVnDateTime(driver.htxApprovedAt)}
+                  {driver.htxSignatureInfo?.signerName && ` · Người ký: ${driver.htxSignatureInfo.signerName}`}
+                </p>
+              )}
+
+              {driver.contractPdfUrl && (
+                <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+                  <div className="text-xs text-muted-foreground">
+                    File Hợp đồng PDF (kèm chữ ký Lái xe & HTX):
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      const url = driver.contractPdfUrl!.startsWith('http')
+                        ? driver.contractPdfUrl!
+                        : getImageUrl(driver.contractPdfUrl!);
+                      window.open(url, '_blank');
+                    }}
+                  >
+                    Xem PDF
+                  </Button>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </DialogContent>

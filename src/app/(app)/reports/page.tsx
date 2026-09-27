@@ -1,167 +1,132 @@
 'use client';
 
 import * as React from 'react';
-import { PageHeader } from '@/components/page-header';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Bot, Loader2, Sparkles } from 'lucide-react';
-import { getExecutiveSummaryAction } from './actions';
-import { mockUsers } from '@/lib/data';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { getReportQuery, type ReportResult, type ReportSpec } from '@/lib/api';
+import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
+import { ReportPresetBar, REPORT_PRESETS } from './components/report-preset-bar';
+import { ReportTable, type ReportResultRow } from './components/report-table';
+import { ReportChart } from './components/report-chart';
+import { ReportDrilldown } from './components/report-drilldown';
+
+type DrillTarget = {
+  /**
+   * `spec` chụp lại NGAY LÚC BẤM — không phải tham chiếu tới `resultState.spec` sống.
+   * Nếu chỉ lưu `dims` rồi đọc `spec` từ state khác lúc render, drill-down đang mở
+   * có thể bị đổi kỳ ngầm dưới chân: bấm dòng lúc kỳ mới đang tải nền, giữ drill-down
+   * mở tới khi fetch xong — `resultState.spec` chuyển sang kỳ mới trong khi `dims` vẫn
+   * là của dòng thuộc kỳ cũ (key chỉ phụ thuộc `dims` nên không remount) → ghép sai kỳ.
+   * Chụp `spec` vào đây tại thời điểm bấm thì drill-down đang mở là ảnh chụp bất biến
+   * của đúng ô đã bấm, không thể bị state khác ghi đè.
+   */
+  spec: ReportSpec;
+  dims: Record<string, string>;
+  /** measure `created` của dòng vừa bấm — hiện cạnh tiêu đề drill-down để đối chiếu. */
+  totalCount: number | null;
+};
 
 export default function ReportsPage() {
-  const [reportType, setReportType] = React.useState('');
-  const [isGeneratingReport, setIsGeneratingReport] = React.useState(false);
-  const [isGeneratingSummary, setIsGeneratingSummary] = React.useState(false);
-  const [reportData, setReportData] = React.useState<any[] | null>(null);
-  const [summary, setSummary] = React.useState<string | null>(null);
   const { toast } = useToast();
+  const [range, setRange] = React.useState<DateRange>(PRESETS[0].range());
+  const [presetKey, setPresetKey] = React.useState(REPORT_PRESETS[0].key);
+  // BẤT BIẾN TRUNG TÂM: bảng luôn hiện `result` của ĐÚNG `spec` đã sinh ra nó — gắn
+  // chung một state để KHÔNG BAO GIỜ đọc `spec` (biến sống, đổi ngay khi người dùng
+  // chọn preset/khoảng ngày mới) cho một `result` còn đang là của kỳ TRƯỚC. Trước đây
+  // ReportDrilldown nhận `spec` sống trong khi bảng vẫn hiện `result` cũ (do
+  // `isLoading && !result` chỉ chặn màn hình lúc tải LẦN ĐẦU, không chặn lúc tải lại) —
+  // bấm dòng ngay lúc đang đổi kỳ thì bộ lọc gửi lên mang khoảng ngày MỚI ghép với dims
+  // của dòng thuộc kỳ CŨ, ra số sai hẳn.
+  const [resultState, setResultState] = React.useState<{ spec: ReportSpec; result: ReportResult } | null>(null);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [drillTarget, setDrillTarget] = React.useState<DrillTarget | null>(null);
 
-  const handleGenerateReport = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!reportType) {
-      toast({
-        title: "Thiếu thông tin",
-        description: "Vui lòng chọn loại báo cáo.",
-        variant: "destructive",
-      });
-      return;
-    }
-    setIsGeneratingReport(true);
-    setSummary(null);
-    // Simulate API call
-    setTimeout(() => {
-      // Using mock data for demonstration
-      setReportData(mockUsers);
-      setIsGeneratingReport(false);
-    }, 1500);
-  };
+  const spec: ReportSpec = React.useMemo(() => {
+    const preset = REPORT_PRESETS.find((p) => p.key === presetKey) ?? REPORT_PRESETS[0];
+    return { ...preset.spec, from: range.from, to: range.to };
+  }, [presetKey, range]);
 
-  const handleGenerateSummary = async () => {
-    if (!reportData) return;
-    setIsGeneratingSummary(true);
-    setSummary(null);
+  React.useEffect(() => {
+    let cancelled = false;
+    setIsLoading(true);
+    setDrillTarget(null);
+    getReportQuery(spec)
+      .then((r) => { if (!cancelled) setResultState({ spec, result: r }); })
+      .catch((err: any) => {
+        if (!cancelled) toast({ variant: 'destructive', title: 'Không tải được báo cáo', description: err.message });
+      })
+      .finally(() => { if (!cancelled) setIsLoading(false); });
+    return () => { cancelled = true; };
+  }, [spec, toast]);
 
-    const reportString = JSON.stringify(reportData, null, 2);
-    const result = await getExecutiveSummaryAction(reportString);
+  const result = resultState?.result ?? null;
 
-    if (result.error) {
-      toast({
-        title: "Tạo tóm tắt thất bại",
-        description: result.error,
-        variant: "destructive",
-      });
-    } else {
-      setSummary(result.summary);
-    }
-    setIsGeneratingSummary(false);
+  const measureLabels = React.useMemo(
+    () => Object.fromEntries(
+      (resultState?.result.columns ?? [])
+        .filter((c) => c.type === 'measure')
+        .map((c) => [c.key, c.label]),
+    ),
+    [resultState],
+  );
+
+  const handleRowClick = (row: ReportResultRow) => {
+    if (!resultState) return;
+    // Chụp spec của kết quả ĐANG HIỂN THỊ (đúng kỳ sinh ra dòng vừa bấm) ngay tại
+    // thời điểm bấm — xem ghi chú ở khai báo DrillTarget.
+    setDrillTarget({ spec: resultState.spec, dims: row.dims, totalCount: row.measures.created ?? null });
   };
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        title="Tạo báo cáo"
-        description="Tạo báo cáo tùy chỉnh và tóm tắt bằng AI."
-      />
-
-      <div className="grid gap-6 lg:grid-cols-3">
-        <Card className="lg:col-span-1">
-          <form onSubmit={handleGenerateReport}>
-            <CardHeader>
-              <CardTitle>Trình tạo báo cáo</CardTitle>
-              <CardDescription>Chọn tiêu chí để tạo báo cáo.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="report-type">Loại báo cáo</Label>
-                <Select value={reportType} onValueChange={setReportType}>
-                  <SelectTrigger id="report-type">
-                    <SelectValue placeholder="Chọn loại báo cáo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user_activity">Hoạt động người dùng</SelectItem>
-                    <SelectItem value="content_performance">Hiệu suất nội dung</SelectItem>
-                    <SelectItem value="system_health">Tình trạng hệ thống</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              {/* Add more filters here based on report type */}
-            </CardContent>
-            <CardFooter>
-              <Button type="submit" disabled={isGeneratingReport}>
-                {isGeneratingReport && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Tạo báo cáo
-              </Button>
-            </CardFooter>
-          </form>
-        </Card>
-
-        <div className="lg:col-span-2 space-y-6">
-          {reportData && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Báo cáo đã tạo</CardTitle>
-                <CardDescription>
-                  Hiển thị kết quả cho báo cáo "{reportType.replace(/_/g, ' ')}".
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Tên</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Vai trò</TableHead>
-                      <TableHead>Trạng thái</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportData.map((row, index) => (
-                      <TableRow key={index}>
-                        <TableCell>{row.name}</TableCell>
-                        <TableCell>{row.email}</TableCell>
-                        <TableCell>{row.role}</TableCell>
-                        <TableCell>{row.status}</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-               <CardFooter className="flex justify-end">
-                <Button onClick={handleGenerateSummary} disabled={isGeneratingSummary || !reportData}>
-                  {isGeneratingSummary ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Sparkles className="mr-2 h-4 w-4" />}
-                  Tạo tóm tắt tổng quan
-                </Button>
-              </CardFooter>
-            </Card>
-          )}
-
-          {isGeneratingSummary && (
-             <Card className="flex flex-col items-center justify-center p-8 text-center">
-              <Bot className="h-10 w-10 text-primary animate-bounce" />
-              <p className="mt-4 font-medium">AI đang phân tích dữ liệu...</p>
-              <p className="text-sm text-muted-foreground">Quá trình này có thể mất một lúc.</p>
-            </Card>
-          )}
-
-          {summary && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-primary" />
-                  Tóm tắt tổng quan bằng AI
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap font-sans">
-                {summary}
-              </CardContent>
-            </Card>
-          )}
-        </div>
+      <div>
+        <h1 className="text-2xl font-bold">Báo cáo</h1>
+        <p className="text-sm text-muted-foreground">
+          Số liệu chuyến đi theo tuyến, loại hình và nguyên nhân huỷ. Bấm một dòng để xem danh sách chuyến.
+        </p>
       </div>
+
+      <ReportPresetBar activeKey={presetKey} onSelect={setPresetKey} isLoading={isLoading} />
+      <FinanceFilter value={range} onChange={setRange} isLoading={isLoading} />
+
+      {result && result.meta.warnings.length > 0 ? (
+        <div className="space-y-1 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+          {result.meta.warnings.map((w, i) => (
+            <p key={i} className="flex gap-2">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{w}</span>
+            </p>
+          ))}
+        </div>
+      ) : null}
+
+      {isLoading && !result ? (
+        <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div>
+      ) : result && resultState ? (
+        <>
+          {result.meta.truncated ? (
+            <p className="text-sm text-muted-foreground">
+              Chỉ hiển thị {result.meta.rowCount} dòng đầu — hãy thu hẹp khoảng ngày để xem đủ.
+            </p>
+          ) : null}
+          <ReportTable result={result} onRowClick={handleRowClick} />
+          {drillTarget ? (
+            // key = danh tính của ô đang xem: bấm sang ô khác phải là một phiên
+            // drill-down MỚI (trang quay về 1), không kế thừa state của ô trước.
+            // spec = drillTarget.spec (ảnh CHỤP tại thời điểm bấm), KHÔNG phải
+            // `resultState.spec`/`spec` sống — nếu đọc state sống, giữ drill-down mở
+            // trong lúc kỳ mới tải xong nền sẽ ghép kỳ mới với dims của kỳ cũ.
+            <ReportDrilldown
+              key={JSON.stringify(drillTarget.dims)}
+              spec={drillTarget.spec}
+              dims={drillTarget.dims}
+              expectedTotal={drillTarget.totalCount}
+              onClose={() => setDrillTarget(null)}
+            />
+          ) : null}
+          <ReportChart spec={spec} measureLabels={measureLabels} />
+        </>
+      ) : null}
     </div>
   );
 }

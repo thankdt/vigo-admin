@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import type {} from '@/lib/types';
 import type { Booking} from '@/lib/types';
+import { currentAccountIfDiffers } from './account-snapshot';
 
 
 // Nhãn trạng thái chuyến — getStatusBadge bên dưới lẫn BookingsTable (tab, dialog
@@ -141,6 +142,26 @@ export function FirstTripBadge() {
     >
       Chuyến đầu
     </Badge>
+  );
+}
+
+/**
+ * Dòng phụ "TK: tên · SĐT" khi SĐT lưu trên chuyến khác SĐT hiện tại của tài khoản
+ * đặt chuyến (xem `currentAccountIfDiffers`). Không khác → không render gì.
+ */
+export function CurrentAccountLine({ booking, className }: {
+  booking: Pick<Booking, 'senderInfo' | 'customer'>;
+  className?: string;
+}) {
+  const account = currentAccountIfDiffers(booking);
+  if (!account) return null;
+  return (
+    <span
+      className={className ?? 'text-xs text-muted-foreground'}
+      title="SĐT lưu trên chuyến khác SĐT hiện tại của tài khoản đặt chuyến"
+    >
+      TK: {account.name} · {account.phone}
+    </span>
   );
 }
 

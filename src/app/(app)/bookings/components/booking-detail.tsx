@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag } from '@/lib/api';
-import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import { buildTripPassText } from './booking-pass-utils';
 import type {} from '@/lib/types';
@@ -787,6 +787,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   <div className="flex-1 text-sm">
                     <div className="font-semibold">{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</div>
                     <div className="text-muted-foreground">{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</div>
+                    <CurrentAccountLine booking={booking} className="block text-xs text-muted-foreground" />
                     {/* SĐT người đi cùng — chỉ hiện khi chuyến có (backend strip khỏi
                         feed/offer nên tài chưa nhận chuyến không thấy). */}
                     {booking.companionPhone && (

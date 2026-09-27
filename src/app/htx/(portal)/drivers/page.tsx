@@ -18,10 +18,13 @@ import {
   ChevronRight,
   ChevronsLeft,
   ChevronsRight,
+  FileText,
+  CheckCircle2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxListDrivers, htxToggleDriverActive, type HtxDriverRow } from '@/lib/api';
 import { getImageUrl } from '@/lib/utils';
+import { HtxContractDialog } from './components/htx-contract-dialog';
 import {
   DRIVER_ONLINE_HINT,
   driverOnlineState,
@@ -84,6 +87,9 @@ export default function HtxDriversPage() {
   const [search, setSearch] = React.useState('');
   const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('');
   const [activeFilter, setActiveFilter] = React.useState<ActiveFilter>('');
+
+  const [selectedContractDriver, setSelectedContractDriver] = React.useState<HtxDriverRow | null>(null);
+  const [isContractOpen, setIsContractOpen] = React.useState(false);
 
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(20);
@@ -209,19 +215,20 @@ export default function HtxDriversPage() {
               <TableHead className="text-right">Thuế TNCN</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead>Ngày tạo</TableHead>
+              <TableHead className="text-center">Hợp đồng HTX</TableHead>
               <TableHead className="text-right">Hoạt động</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={9} className="h-24 text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : drivers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-24 text-center">
+                <TableCell colSpan={9} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Car className="h-8 w-8 text-muted-foreground" />
                     <span className="text-muted-foreground">Không tìm thấy tài xế nào.</span>
@@ -255,6 +262,40 @@ export default function HtxDriversPage() {
                     <span className="text-sm text-muted-foreground">
                       {new Date(d.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {d.htxApprovalStatus === 'PENDING_HTX' ? (
+                      <Button
+                        size="sm"
+                        className="bg-amber-600 hover:bg-amber-700 text-white h-7 text-xs gap-1 shadow-sm"
+                        onClick={() => {
+                          setSelectedContractDriver(d);
+                          setIsContractOpen(true);
+                        }}
+                      >
+                        <FileText className="h-3.5 w-3.5" />
+                        Ký ICA
+                      </Button>
+                    ) : d.htxApprovalStatus === 'HTX_APPROVED' ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs border-green-600 text-green-700 dark:text-green-400 gap-1 hover:bg-green-50"
+                        onClick={() => {
+                          setSelectedContractDriver(d);
+                          setIsContractOpen(true);
+                        }}
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600" />
+                        Đã ký ICA
+                      </Button>
+                    ) : d.htxApprovalStatus === 'HTX_REJECTED' ? (
+                      <Badge variant="outline" className="border-red-400 text-red-600 text-xs">
+                        Từ chối
+                      </Badge>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">Chưa nộp</span>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-2">
@@ -307,6 +348,13 @@ export default function HtxDriversPage() {
           </div>
         </div>
       </Card>
+
+      <HtxContractDialog
+        driver={selectedContractDriver}
+        open={isContractOpen}
+        onOpenChange={setIsContractOpen}
+        onSuccess={load}
+      />
     </div>
   );
 }

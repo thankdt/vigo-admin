@@ -35,6 +35,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 // Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
 // ĐÁNH RƠI khi giải xung đột merge (nhánh GĐ1 bỏ khối gọi-khách khỏi cùng dòng import),
 // và vì next.config bật ignoreBuildErrors nên build vẫn xanh — chỉ nổ ReferenceError lúc
@@ -45,7 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
 import { buildTripPassText } from './booking-pass-utils';
-import { CANCELLED_BY_ROLE_LABEL, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -580,6 +581,15 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
     // bộ lọc đổi. Thiếu nó thì chọn filter xong bảng đứng im, không lỗi, không log.
   }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
 
+  const routeOptions = React.useMemo(
+    () => [
+      { value: 'ALL', label: 'Tất cả tuyến' },
+      { value: 'none', label: 'Chưa có tuyến' },
+      ...routes.map((r) => ({ value: String(r.id), label: r.name })),
+    ],
+    [routes],
+  );
+
   // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
   // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
   // if routes don't load.
@@ -844,21 +854,17 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               <SelectItem value="unreached">Không liên lạc được</SelectItem>
             </SelectContent>
           </Select>
-          <Select
-            value={selectedRouteId}
-            onValueChange={(val) => { setSelectedRouteId(val); setCurrentPage(1); }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Lọc theo tuyến" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Tất cả tuyến</SelectItem>
-              <SelectItem value="none">Chưa có tuyến</SelectItem>
-              {routes.map((r) => (
-                <SelectItem key={r.id} value={String(r.id)}>{r.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {/* Combobox có ô tìm để lọc nhanh khi danh sách tuyến dài. Chọn lại mục đang chọn
+              trả undefined (toggle bỏ chọn) → quy về 'ALL'. */}
+          <Combobox
+            options={routeOptions}
+            selectedValue={selectedRouteId}
+            onSelect={(val) => { setSelectedRouteId(val ?? 'ALL'); setCurrentPage(1); }}
+            placeholder="Lọc theo tuyến"
+            searchPlaceholder="Tìm tuyến..."
+            noResultsText="Không có tuyến phù hợp."
+            className="w-[220px]"
+          />
           <div className='relative'>
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -1021,6 +1027,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                           <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
                           {booking.isFirstBooking === true && <FirstTripBadge />}
                         </div>
+                        <CurrentAccountLine booking={booking} />
                         {booking.agentPhone && (
                           <span className='inline-flex items-center gap-1 text-xs text-purple-600 dark:text-purple-400'>
                             <Store className='h-3 w-3' /> Đặt hộ: {booking.agentPhone}

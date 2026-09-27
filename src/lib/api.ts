@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -8,8 +8,17 @@ import {
   type RecentRatingsQueryInput,
 } from '@/lib/driver-reputation-query';
 import { ApiError, buildApiError } from '@/lib/api-error';
+import {
+  buildReportParams,
+  type ReportSpec,
+  type ReportMeta,
+  type ReportResult,
+  type ReportSeries,
+  type ReportRowsResult,
+} from '@/lib/report-query';
 
 export { ApiError } from '@/lib/api-error';
+export type { ReportSpec, ReportMeta, ReportResult, ReportSeries, ReportRow, ReportRowsResult } from '@/lib/report-query';
 
 // Overridable per-environment. Dev (docker/next dev) sets
 // NEXT_PUBLIC_API_BASE_URL=https://api.vigodev.online; prod builds fall back to
@@ -613,6 +622,23 @@ export async function updateDriverRoutes(id: string, routeIds: number[]): Promis
   return json.data || json;
 }
 
+// Admin sets a driver's dispatch provinces (34 surviving provinces).
+export async function updateDriverProvinces(id: string, provinceIds: number[]): Promise<Driver> {
+  const response = await fetchWithAuth(`/drivers/admin/${id}/provinces`, {
+    method: 'PUT',
+    body: JSON.stringify({ provinceIds }),
+  });
+  const json = await response.json();
+  return json.data || json;
+}
+
+// Get surviving provinces (34 provinces after 2025 merger)
+export async function getSurvivingProvinces(): Promise<AdminUnit[]> {
+  const response = await fetchWithAuth('/drivers/provinces');
+  const json = await response.json();
+  return json.data || json;
+}
+
 // ── Điểm uy tín & đánh giá tài xế ────────────────────────────────────────────
 // ⚠️ Đường dẫn là `/admin/driver-reputation/...` (KHÁC mẫu `/drivers/admin/...`
 // ở trên) — theo đúng hợp đồng API, đừng "sửa cho đồng bộ".
@@ -758,7 +784,8 @@ export async function getBookings(params: {
   // Numeric route id → exact match; 'none' → bookings with no route stamped
   // (legacy + routing-miss). Caller passes the raw value through.
   routeId?: number | 'none';
-  // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone.
+  // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone
+  // OR the senderInfo snapshot name/phone (tên/SĐT lưu trên chuyến lúc đặt).
   q?: string;
   // Booking ID prefix match — BE casts UUID to text and matches 'q%'.
   bookingId?: string;
@@ -1165,6 +1192,114 @@ export async function createAgentBooking(data: {
   return result.data || result;
 }
 
+export interface RetailPassengerInput {
+  bookingId?: string;
+  bookingCode?: string;
+  shareLink?: string;
+  name?: string;
+  phone: string;
+  pickupAddress: { address: string; lat: number; long: number };
+  dropoffAddress: { address: string; lat: number; long: number };
+  seats?: number;
+  hasCustomPrice?: boolean;
+  price?: number;
+  minPrice?: number;
+  needVat?: boolean;
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
+}
+
+export interface DriverReturnTripResult {
+  id: string;
+  code?: string;
+  price: number;
+  status: string;
+  customerPhone?: string;
+  customerName?: string;
+  pickupAddress: { address: string; lat: number; long?: number; lng?: number };
+  dropoffAddress: { address: string; lat: number; long?: number; lng?: number };
+  driverId?: string;
+  minPrice?: number;
+  shareLink?: string;
+  requestedSeats?: number;
+  passengerNames?: string[];
+  tripMode?: 'GROUP' | 'RETAIL';
+  retailPassengers?: RetailPassengerInput[];
+  createdBookings?: DriverReturnTripResult[];
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
+}
+
+/**
+ * Tự đặt chuyến: tài xế tự đặt cuốc cho chính mình (hoặc chỉ định tài xế theo SĐT).
+ * Hỗ trợ 2 chế độ:
+ * - GROUP: Bao xe (1 chặng đón/trả chung, xuất VAT gộp).
+ * - RETAIL: Khách lẻ (nhiều khách, đón/trả riêng, cấu hình giá từng khách, VAT riêng, hợp đồng riêng từng khách).
+ */
+export async function createDriverReturnTrip(data: {
+  tripMode?: 'GROUP' | 'RETAIL';
+  customerPhone?: string;
+  customerName?: string;
+  pickupAddress?: { address: string; lat: number; long: number };
+  dropoffAddress?: { address: string; lat: number; long: number };
+  customPrice: number;
+  driverPhone?: string;
+  note?: string;
+  requestedSeats?: number;
+  passengerNames?: string[];
+  retailPassengers?: RetailPassengerInput[];
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
+}): Promise<DriverReturnTripResult> {
+  const response = await fetchWithAuth('/agent/bookings/return-trip', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.message || 'Không thể tự đặt chuyến');
+  }
+  return result.data || result;
+}
+
+/**
+ * Tải hợp đồng điện tử PDF cho booking.
+ * Cho phép truyền passengerIndex để tải hợp đồng riêng của từng khách lẻ (đối với chuyến RETAIL).
+ */
+export async function downloadBookingContractPdf(bookingId: string, passengerIndex?: number): Promise<void> {
+  const query = passengerIndex !== undefined ? `?passengerIndex=${passengerIndex}` : '';
+  const res = await fetchWithAuth(`/bookings/${bookingId}/contract.pdf${query}`);
+  if (!res.ok) {
+    let errMessage = 'Không thể tải hợp đồng';
+    try {
+      const err = await res.json();
+      if (err?.message) errMessage = err.message;
+    } catch (_) {}
+    throw new Error(errMessage);
+  }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `hop-dong-${bookingId}${passengerIndex !== undefined ? `-khach-${passengerIndex + 1}` : ''}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
 // [DISABLED 2026-07-09] "admin ôm chuyến về operator" — endpoint BE (admin/:id/accept) đã tắt
 // vì gán về tài khoản ảo, 0 commission => vỡ dòng tiền. Dùng reassign tài xế THẬT thay thế.
 /*
@@ -1302,6 +1437,50 @@ export async function updatePricing(id: number, data: { price: number; serviceTy
 
 export async function deletePricing(id: number): Promise<void> {
   await fetchWithAuth(`/master-data/pricing/${id}/delete`, {
+    method: 'POST',
+  });
+}
+
+// ── Điều chỉnh giá theo khu vực (Tỉnh / Huyện) ──────────────────────────────
+export async function getAreaPriceAdjustments(serviceType?: string): Promise<AreaPriceAdjustment[]> {
+  const query = new URLSearchParams();
+  if (serviceType && serviceType !== 'ALL') query.set('serviceType', serviceType);
+  const qs = query.toString();
+  const response = await fetchWithAuth(`/master-data/area-adjustments${qs ? '?' + qs : ''}`);
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function createAreaPriceAdjustment(data: {
+  adminUnitId: number;
+  serviceType?: string;
+  deltaAmount: number;
+  applyPerSeat?: boolean;
+  isActive?: boolean;
+  note?: string | null;
+}): Promise<AreaPriceAdjustment> {
+  const response = await fetchWithAuth('/master-data/area-adjustments', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function updateAreaPriceAdjustment(
+  id: number,
+  data: Partial<AreaPriceAdjustment>,
+): Promise<AreaPriceAdjustment> {
+  const response = await fetchWithAuth(`/master-data/area-adjustments/${id}`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function deleteAreaPriceAdjustment(id: number): Promise<void> {
+  await fetchWithAuth(`/master-data/area-adjustments/${id}/delete`, {
     method: 'POST',
   });
 }
@@ -1739,7 +1918,35 @@ export type HtxDriverRow = {
   tripCount: number;
   lifetimeIncome: number;
   lifetimeTax: number;
+  contractPdfUrl?: string | null;
+  contractSignatureUrl?: string | null;
+  contractSignedAt?: string | null;
+  htxApprovalStatus?: 'NONE' | 'PENDING_HTX' | 'HTX_APPROVED' | 'HTX_REJECTED' | string | null;
+  htxApprovedAt?: string | null;
+  htxSignatureInfo?: any;
 };
+
+export async function htxSignContract(driverId: string, icaData?: any): Promise<any> {
+  const response = await fetchWithAuth(`/transport-companies/contract/${driverId}/htx-sign`, {
+    method: 'POST',
+    body: JSON.stringify(icaData || {}),
+  });
+  return unwrap(response);
+}
+
+export async function htxRejectContract(driverId: string, reason?: string): Promise<any> {
+  const response = await fetchWithAuth(`/transport-companies/contract/${driverId}/htx-reject`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  return unwrap(response);
+}
+
+export async function getHtxContractPreview(driverId?: string): Promise<any> {
+  const q = driverId ? `?driverId=${driverId}` : '';
+  const response = await fetchWithAuth(`/transport-companies/contract/preview${q}`);
+  return unwrap(response);
+}
 
 export type HtxDashboard = {
   period: 'day' | 'month' | 'year';
@@ -2611,6 +2818,8 @@ export type AgentMe = {
   // Mức rút tối thiểu (BOK_004 nếu gửi thấp hơn). Hiện trước thay vì để người
   // dùng bấm rồi ăn lỗi.
   referralMinWithdrawal?: number;
+  phone?: string | null;
+  role?: string | null;
 };
 export type AgentWaypoint = { label?: string | null; address: string; lat: number; lng: number };
 export type AgentPassenger = {
@@ -4706,6 +4915,39 @@ export async function getPoolingLastScan(date: string): Promise<PoolLastScan | n
   // quét lần nào"), nên `?? result` sẽ rơi về chính cái VỎ `{success,data:null}`
   // — một object truthy — và màn hình in ra "undefined chuyến".
   return (result && typeof result === 'object' && 'data' in result ? result.data : result) ?? null;
+}
+
+// --- Báo cáo động (/admin/reports) ---
+
+export async function getReportMeta(): Promise<ReportMeta> {
+  const response = await fetchWithAuth('/admin/reports/meta');
+  const result = await response.json();
+  return result.data;
+}
+
+export async function getReportQuery(spec: ReportSpec): Promise<ReportResult> {
+  const response = await fetchWithAuth(`/admin/reports/query?${buildReportParams(spec).toString()}`);
+  const result = await response.json();
+  return result.data;
+}
+
+export async function getReportSeries(spec: ReportSpec): Promise<ReportSeries> {
+  const response = await fetchWithAuth(`/admin/reports/series?${buildReportParams(spec).toString()}`);
+  const result = await response.json();
+  return result.data;
+}
+
+export async function getReportRows(
+  spec: ReportSpec,
+  page: number,
+  pageSize: number,
+): Promise<ReportRowsResult> {
+  const qs = buildReportParams(spec);
+  qs.set('page', String(page));
+  qs.set('pageSize', String(pageSize));
+  const response = await fetchWithAuth(`/admin/reports/rows?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
 }
 
 // ─────────────────────────────────────────────────────────────────────

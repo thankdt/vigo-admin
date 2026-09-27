@@ -200,6 +200,11 @@ export type Driver = {
     id: number;
     name: string;
   }[];
+  // 2025 Admin Reform: Surviving provinces selected by the driver
+  provinces?: {
+    id: number;
+    name: string;
+  }[];
   transportCompanyId?: string;
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
@@ -221,6 +226,12 @@ export type Driver = {
   csCalledAt?: string | null;
   csCalledByName?: string | null;
   csNote?: string | null;
+  contractPdfUrl?: string | null;
+  contractSignatureUrl?: string | null;
+  contractSignedAt?: string | null;
+  htxApprovalStatus?: 'NONE' | 'PENDING_HTX' | 'HTX_APPROVED' | 'HTX_REJECTED' | string | null;
+  htxApprovedAt?: string | null;
+  htxSignatureInfo?: any;
 }
 
 export type BookingStatus = 'CREATED' | 'SEARCHING' | 'PROCESSING' | 'PENDING_MATCHING' | 'ACCEPTED' | 'ARRIVED' | 'PICKED_UP' | 'COMPLETED' | 'CANCELLED' | 'DELIVERY_FAILED' | 'SCHEDULED' | 'DELAYED_WAITING';
@@ -507,6 +518,8 @@ export type AdminUnit = {
   // True for synthetic POI rows (sân bay, ga tàu, điểm du lịch…). UI uses
   // this to keep the POI picker focused instead of listing every commune.
   isPoi?: boolean;
+  // Constituent old provinces (pre-2025 merger)
+  oldProvinces?: string[];
 };
 
 export type Route = {
@@ -538,6 +551,19 @@ export type RoutePricing = {
   adminUnit: AdminUnit;
   startDistrict?: AdminUnit; // Optional: Start District Entity
 }
+
+export type AreaPriceAdjustment = {
+  id: number;
+  adminUnitId: number;
+  adminUnit?: AdminUnit;
+  serviceType: 'CARPOOL' | 'RIDE' | 'ALL' | string;
+  deltaAmount: number;
+  applyPerSeat: boolean;
+  isActive: boolean;
+  note?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
 
 export type SystemConfig = {
   id: number;

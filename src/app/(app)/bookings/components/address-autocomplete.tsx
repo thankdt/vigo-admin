@@ -35,13 +35,17 @@ export function AddressAutocomplete({
 
   // Close dropdown on outside click
   React.useEffect(() => {
-    const handler = (e: MouseEvent) => {
+    const handler = (e: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setShowDropdown(false);
       }
     };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    document.addEventListener('touchstart', handler);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('touchstart', handler);
+    };
   }, []);
 
   // Sync external value changes
@@ -68,12 +72,13 @@ export function AddressAutocomplete({
       return;
     }
 
+    setShowDropdown(true);
+    setIsSearching(true);
+
     debounceRef.current = setTimeout(async () => {
-      setIsSearching(true);
       try {
         const data = await searchAddress(val.trim());
         setResults(Array.isArray(data) ? data : []);
-        setShowDropdown(true);
       } catch {
         setResults([]);
       } finally {
@@ -126,15 +131,15 @@ export function AddressAutocomplete({
         <Input
           value={query}
           onChange={handleInputChange}
-          onFocus={() => { if (results.length > 0 && !selected) setShowDropdown(true); }}
+          onFocus={() => { if ((results.length > 0 || query.trim().length >= 2) && !selected) setShowDropdown(true); }}
           placeholder={placeholder}
           className={cn('pl-8 pr-8', selected && 'text-foreground')}
           disabled={isResolving}
         />
-        {isResolving && (
+        {(isResolving || isSearching) && (
           <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
         )}
-        {selected && !isResolving && (
+        {selected && !isResolving && !isSearching && (
           <button
             type="button"
             onClick={handleClear}
@@ -145,18 +150,28 @@ export function AddressAutocomplete({
         )}
       </div>
 
-      {showDropdown && results.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-[200px] overflow-y-auto">
+      {showDropdown && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-[220px] overflow-y-auto">
           {isSearching && (
-            <div className="flex justify-center py-2">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span>Đang tìm địa điểm...</span>
             </div>
           )}
-          {results.map((item, idx) => (
+          {!isSearching && results.length === 0 && query.trim().length >= 2 && (
+            <div className="py-3 text-xs text-muted-foreground text-center">
+              Không tìm thấy địa điểm phù hợp
+            </div>
+          )}
+          {!isSearching && results.map((item, idx) => (
             <button
               key={item.place_id || idx}
               type="button"
-              className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors border-b last:border-b-0 flex items-start gap-2"
+              className="w-full text-left px-3 py-2.5 text-sm hover:bg-accent active:bg-accent/80 transition-colors border-b last:border-b-0 flex items-start gap-2"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleSelect(item);
+              }}
               onClick={() => handleSelect(item)}
             >
               <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 flex-shrink-0" />
