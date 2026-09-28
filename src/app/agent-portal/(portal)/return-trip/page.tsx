@@ -95,7 +95,7 @@ export default function ReturnTripPage() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const [tripMode, setTripMode] = React.useState<'GROUP' | 'RETAIL'>('GROUP');
+  const [tripMode, setTripMode] = React.useState<'GROUP' | 'RETAIL'>('RETAIL');
   const [me, setMe] = React.useState<AgentMe | null>(null);
   const [driverPhone, setDriverPhone] = React.useState('');
   const [isEditingDriverPhone, setIsEditingDriverPhone] = React.useState(false);
@@ -870,18 +870,18 @@ export default function ReturnTripPage() {
       >
         <TabsList className="grid w-full grid-cols-2 h-12 p-1 bg-muted/60">
           <TabsTrigger
-            value="GROUP"
-            className="text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow"
-          >
-            <Car className="h-4 w-4" />
-            Bao xe
-          </TabsTrigger>
-          <TabsTrigger
             value="RETAIL"
             className="text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow"
           >
             <Split className="h-4 w-4" />
             Khách lẻ (Nhiều khách)
+          </TabsTrigger>
+          <TabsTrigger
+            value="GROUP"
+            className="text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 data-[state=active]:bg-background data-[state=active]:text-primary data-[state=active]:shadow"
+          >
+            <Car className="h-4 w-4" />
+            Bao xe
           </TabsTrigger>
         </TabsList>
       </Tabs>

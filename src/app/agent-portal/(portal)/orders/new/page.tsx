@@ -34,8 +34,8 @@ function ModeToggle({ mode, onChange }: { mode: Mode; onChange: (m: Mode) => voi
   );
   return (
     <div className="flex gap-3">
-      {opt('rieng', 'Xe riêng', 'Bao trọn 1 xe, nhiều điểm, không ghép khách lạ', Car)}
       {opt('ghep', 'Ghép tuyến', 'Ghép chung xe, giá theo tuyến từng khách', Users)}
+      {opt('rieng', 'Xe riêng', 'Bao trọn 1 xe, nhiều điểm, không ghép khách lạ', Car)}
     </div>
   );
 }
@@ -59,8 +59,8 @@ export default function NewAgentOrderPage() {
     if (!AGENT_MULTI_STOP_ENABLED) router.replace(AGENT_PORTAL_HOME);
   }, [router]);
 
-  const [mode, setMode] = React.useState<Mode>('rieng');
-  const [billingMode, setBillingMode] = React.useState<'BAO' | 'GHEP'>('BAO');
+  const [mode, setMode] = React.useState<Mode>('ghep');
+  const [billingMode, setBillingMode] = React.useState<'BAO' | 'GHEP'>('GHEP');
   const [waypoints, setWaypoints] = React.useState<WP[]>([emptyWp(), emptyWp()]);
   const [passengers, setPassengers] = React.useState<PX[]>([emptyPx()]);
 
