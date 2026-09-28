@@ -1479,11 +1479,35 @@ export async function updateAreaPriceAdjustment(
   return result.data || result;
 }
 
+export async function bulkCreateAreaPriceAdjustments(data: {
+  adminUnitIds: number[];
+  serviceType?: string;
+  deltaAmount: number;
+  applyPerSeat?: boolean;
+  isActive?: boolean;
+  note?: string | null;
+}): Promise<AreaPriceAdjustment[]> {
+  const response = await fetchWithAuth('/master-data/area-adjustments/bulk', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
 export async function deleteAreaPriceAdjustment(id: number): Promise<void> {
   await fetchWithAuth(`/master-data/area-adjustments/${id}/delete`, {
     method: 'POST',
   });
 }
+
+export async function bulkDeleteAreaPriceAdjustments(ids: number[]): Promise<void> {
+  await fetchWithAuth('/master-data/area-adjustments/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+}
+
 
 
 // System Config APIs
