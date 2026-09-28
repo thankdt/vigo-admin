@@ -92,3 +92,60 @@ describe('CreateBookingDialog — chọn Loại xe cho CARPOOL (auto-switch bao 
 
   it.skip('DELIVERY không hiện Loại xe — vẫn hiện Ghi chú (regression) — BLOCKED: mở Select trong Dialog modal crash vitest, xem comment phía trên', () => {});
 });
+
+describe('CreateBookingDialog — Tự cấu hình giá cước (tối thiểu 150k, đã bao gồm thuế)', () => {
+  it('hiển thị công tắc "Tự cấu hình giá cước" và khi bật hiển thị ô nhập với mức tối thiểu 150.000₫', async () => {
+    const user = userEvent.setup();
+    render(<CreateBookingDialog onSuccess={() => {}} mode="agent" open={true} />);
+
+    // Kiểm tra có công tắc tự cấu hình giá cước
+    const toggle = screen.getByLabelText(/Tự cấu hình giá cước/i);
+    expect(toggle).toBeInTheDocument();
+    expect(toggle).not.toBeChecked();
+
+    // Bật công tắc
+    await user.click(toggle);
+    expect(toggle).toBeChecked();
+
+    // Hiện ô nhập giá cước và nhãn "Đã bao gồm thuế VAT"
+    expect(screen.getByLabelText(/Giá cước thoả thuận/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Đã bao gồm thuế VAT/i).length).toBeGreaterThan(0);
+
+    const priceInput = screen.getByLabelText(/Giá cước thoả thuận/i);
+    expect(priceInput).toHaveValue('150.000');
+  });
+
+  it('cảnh báo lỗi khi người dùng nhập giá < 150.000₫', async () => {
+    const user = userEvent.setup();
+    render(<CreateBookingDialog onSuccess={() => {}} mode="agent" open={true} />);
+
+    const toggle = screen.getByLabelText(/Tự cấu hình giá cước/i);
+    await user.click(toggle);
+
+    const priceInput = screen.getByLabelText(/Giá cước thoả thuận/i);
+    await user.clear(priceInput);
+    await user.type(priceInput, '100000');
+
+    expect(
+      screen.getByText(/Giá cước tự cấu hình tối thiểu là 150.000₫/i),
+    ).toBeInTheDocument();
+  });
+
+  it('chọn nút gợi ý nhanh cập nhật đúng giá cước', async () => {
+    const user = userEvent.setup();
+    render(<CreateBookingDialog onSuccess={() => {}} mode="agent" open={true} />);
+
+    const toggle = screen.getByLabelText(/Tự cấu hình giá cước/i);
+    await user.click(toggle);
+
+    const button200k = screen.getByRole('button', { name: '200.000₫' });
+    await user.click(button200k);
+
+    const priceInput = screen.getByLabelText(/Giá cước thoả thuận/i);
+    expect(priceInput).toHaveValue('200.000');
+    expect(
+      screen.queryByText(/Giá cước tự cấu hình tối thiểu là 150.000₫/i),
+    ).not.toBeInTheDocument();
+  });
+});
+

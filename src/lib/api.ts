@@ -1153,6 +1153,8 @@ export async function createAdminBooking(data: {
   // Voucher áp cho chuyến (tuỳ chọn). BE tính giảm giá, lưu lên booking và đếm
   // lượt dùng ở compl() — dùng lại y luồng khách tự đặt.
   promotionId?: number;
+  /** Giá cước tự cấu hình (đã bao gồm thuế VAT, tối thiểu 150.000₫) */
+  customPrice?: number;
 }): Promise<Booking> {
   const response = await fetchWithAuth('/bookings/admin/create', {
     method: 'POST',
@@ -1183,6 +1185,8 @@ export async function createAgentBooking(data: {
   scheduledFromTime?: string;
   scheduledToTime?: string;
   promotionId?: number;
+  /** Giá cước tự cấu hình (đã bao gồm thuế VAT, tối thiểu 150.000₫) */
+  customPrice?: number;
 }): Promise<Booking> {
   const response = await fetchWithAuth('/agent/bookings', {
     method: 'POST',

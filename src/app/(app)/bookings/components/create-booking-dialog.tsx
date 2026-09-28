@@ -123,6 +123,25 @@ export function CreateBookingDialog({
     ? Math.max(0, estimateOriginal - priceEstimate)
     : 0;
 
+  // Tự cấu hình giá cước (cho đại lý đặt hộ / admin)
+  const [isCustomPrice, setIsCustomPrice] = React.useState(false);
+  const [customPriceStr, setCustomPriceStr] = React.useState('');
+
+  const handleCustomPriceChange = (raw: string) => {
+    const cleanDigits = raw.replace(/\D/g, '');
+    if (!cleanDigits) {
+      setCustomPriceStr('');
+      return;
+    }
+    const num = Number(cleanDigits);
+    setCustomPriceStr(num.toLocaleString('vi-VN'));
+  };
+
+  const parsedCustomPrice = React.useMemo(() => {
+    if (!customPriceStr) return 0;
+    return Number(customPriceStr.replace(/\D/g, '')) || 0;
+  }, [customPriceStr]);
+
   // Promotion (voucher) — optional. Applied to both the estimate and the
   // created booking. Changing it invalidates a stale estimate.
   const [vouchers, setVouchers] = React.useState<Promotion[]>([]);
@@ -346,6 +365,8 @@ export function CreateBookingDialog({
     setDuplicateInfo(null);
     setPendingPromotionId(null);
     setVoucherDropped(false);
+    setIsCustomPrice(false);
+    setCustomPriceStr('');
   };
 
   // Cờ "đã áp bản nháp" chỉ được xoá khi dialog ĐÓNG, không xoá trong resetForm:
@@ -482,6 +503,22 @@ export function CreateBookingDialog({
       scheduledToIso = toIso(scheduledTo);
     }
 
+    // Giá cước tự cấu hình (nếu bật, tối thiểu 150.000₫, đã bao gồm thuế)
+    let customPriceToSend: number | undefined = undefined;
+    if (isCustomPrice) {
+      const cleanDigits = customPriceStr.replace(/\D/g, '');
+      const num = Number(cleanDigits);
+      if (!num || num < 150000) {
+        toast({
+          variant: 'destructive',
+          title: 'Giá cước không hợp lệ',
+          description: 'Giá cước tự cấu hình tối thiểu là 150.000₫ (đã bao gồm thuế VAT).',
+        });
+        return;
+      }
+      customPriceToSend = num;
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
@@ -524,6 +561,7 @@ export function CreateBookingDialog({
         scheduledFromTime: scheduledFromIso,
         scheduledToTime: scheduledToIso,
         promotionId: selectedPromotionId ?? undefined,
+        customPrice: customPriceToSend,
       };
       // đặt hộ: agent posts to /agent/bookings (agentUserId from JWT, no driver-assign);
       // admin keeps the driver pre-assign path.
@@ -924,13 +962,35 @@ export function CreateBookingDialog({
             ) : null}
           </div>
 
-          {/* Price estimate — tự động tính (debounce) khi đủ điểm đón/trả */}
+          {/* Price estimate / Custom price display */}
           <div className="rounded-lg border p-3">
             <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-              <Calculator className="h-4 w-4" /> Giá dự kiến
-              {estimating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              <Calculator className="h-4 w-4" /> {isCustomPrice ? 'Giá áp dụng' : 'Giá dự kiến'}
+              {!isCustomPrice && estimating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             </div>
-            {priceEstimate != null ? (
+            {isCustomPrice ? (
+              <div className="mt-1">
+                {parsedCustomPrice >= 150000 ? (
+                  <>
+                    {priceEstimate != null && (
+                      <div className="text-xs text-muted-foreground line-through">
+                        Giá hệ thống: {fmtVnd(priceEstimate)} đ
+                      </div>
+                    )}
+                    <div className="text-lg font-bold text-emerald-600">
+                      {fmtVnd(parsedCustomPrice)} đ
+                    </div>
+                    <div className="text-xs font-medium text-emerald-700 dark:text-emerald-400">
+                      Giá tự cấu hình (đã bao gồm thuế VAT)
+                    </div>
+                  </>
+                ) : (
+                  <div className="text-xs text-amber-600 mt-0.5 font-medium">
+                    Nhập giá cước thoả thuận tối thiểu 150.000₫ ở ô bên dưới.
+                  </div>
+                )}
+              </div>
+            ) : priceEstimate != null ? (
               <div className="mt-1">
                 {estimateSavings > 0 && (
                   <div className="text-xs text-muted-foreground line-through">{fmtVnd(estimateOriginal!)} đ</div>
@@ -948,6 +1008,82 @@ export function CreateBookingDialog({
                   ? 'Đang tính giá…'
                   : `Chọn điểm đón/trả${serviceType === 'RIDE' ? ' + loại xe' : ''} để tự tính giá.`}
               </p>
+            )}
+          </div>
+
+          {/* Tự cấu hình giá cước (cho đại lý đặt hộ / admin) */}
+          <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="cb-custom-price-toggle" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground cursor-pointer">
+                  <Calculator className="h-4 w-4 text-emerald-600" />
+                  Tự cấu hình giá cước
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Bật để tự nhập giá cước thoả thuận (tối thiểu 150.000₫, đã gồm thuế VAT).
+                </p>
+              </div>
+              <Switch
+                id="cb-custom-price-toggle"
+                checked={isCustomPrice}
+                onCheckedChange={(checked) => {
+                  setIsCustomPrice(checked);
+                  if (checked && !customPriceStr) {
+                    setCustomPriceStr('150.000');
+                  }
+                }}
+              />
+            </div>
+
+            {isCustomPrice && (
+              <div className="space-y-2 pt-1 border-t">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="cb-custom-price-input" className="text-xs font-medium">
+                    Giá cước thoả thuận (VNĐ) <span className="text-destructive">*</span>
+                  </Label>
+                  <span className="text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">Đã bao gồm thuế VAT</span>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="cb-custom-price-input"
+                    inputMode="numeric"
+                    placeholder="150.000"
+                    value={customPriceStr}
+                    onChange={(e) => handleCustomPriceChange(e.target.value)}
+                    className={cn(
+                      'text-base font-bold text-emerald-600 pr-10',
+                      parsedCustomPrice > 0 && parsedCustomPrice < 150000 && 'border-destructive text-destructive focus-visible:ring-destructive'
+                    )}
+                  />
+                  <span className="absolute right-3 top-2.5 text-sm font-semibold text-muted-foreground">₫</span>
+                </div>
+
+                {parsedCustomPrice > 0 && parsedCustomPrice < 150000 && (
+                  <p className="text-xs text-destructive font-medium">
+                    Giá cước tự cấu hình tối thiểu là 150.000₫ (đã gồm thuế).
+                  </p>
+                )}
+
+                {/* Gợi ý nhanh */}
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[11px] text-muted-foreground mr-1">Gợi ý nhanh:</span>
+                  {[150000, 200000, 250000, 300000, 500000].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setCustomPriceStr(amt.toLocaleString('vi-VN'))}
+                      className={cn(
+                        'text-xs px-2 py-0.5 rounded border transition-colors',
+                        parsedCustomPrice === amt
+                          ? 'border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300 font-semibold'
+                          : 'border-muted-foreground/30 hover:bg-muted text-muted-foreground'
+                      )}
+                    >
+                      {amt.toLocaleString('vi-VN')}₫
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
 
