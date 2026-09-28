@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { getAgentMe, AgentMe } from '@/lib/api';
-import { ListOrdered, Wallet, RotateCcw, PlusCircle, ArrowRight, BadgePercent } from 'lucide-react';
+import { ListOrdered, Wallet, PlusCircle, ArrowRight, BadgePercent } from 'lucide-react';
 import { CreateBookingDialog } from '@/app/(app)/bookings/components/create-booking-dialog';
 
 const fmtVnd = (n: number | null | undefined) => (n == null ? '—' : `${n.toLocaleString('vi-VN')}₫`);
@@ -47,58 +47,42 @@ export default function AgentDashboardPage() {
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        {/* Card Số Dư Ví */}
-        <Card
-          {...(inApp
-            ? {
-                role: 'button' as const,
-                tabIndex: 0,
-                'aria-label': 'Xem ví hoa hồng',
-                onClick: openCommissionWallet,
-                onKeyDown: (e: React.KeyboardEvent) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    openCommissionWallet();
-                  }
-                },
-                className:
-                  'cursor-pointer transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-              }
-            : {})}
-        >
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
-              <Wallet className="h-4 w-4" /> {me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng'}
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black tracking-tight">{me?.walletBalance != null ? fmtVnd(me.walletBalance) : '—'}</div>
-            <p className="text-xs text-muted-foreground mt-1.5 font-medium">
-              Số dư khả dụng để nhận cuốc và nhận tiền thưởng
+      {/* Card Số Dư Ví (duy nhất, không bị trùng lặp) */}
+      <Card
+        {...(inApp
+          ? {
+              role: 'button' as const,
+              tabIndex: 0,
+              'aria-label': 'Xem ví hoa hồng',
+              onClick: openCommissionWallet,
+              onKeyDown: (e: React.KeyboardEvent) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  openCommissionWallet();
+                }
+              },
+              className:
+                'cursor-pointer transition-colors hover:bg-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+            }
+          : {})}
+      >
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2 text-muted-foreground">
+            <Wallet className="h-4 w-4" /> {me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng'}
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-3xl font-black tracking-tight">{me?.walletBalance != null ? fmtVnd(me.walletBalance) : '—'}</div>
+          <p className="text-xs text-muted-foreground mt-1.5 font-medium">
+            Số dư khả dụng để nhận cuốc và nhận tiền thưởng / hoa hồng
+          </p>
+          {inApp && (
+            <p className="text-xs text-primary mt-2 font-semibold flex items-center gap-1">
+              Xem chi tiết ví <ArrowRight className="h-3 w-3" />
             </p>
-            {inApp && <p className="text-xs text-primary mt-2 font-semibold flex items-center gap-1">Xem chi tiết ví <ArrowRight className="h-3 w-3" /></p>}
-          </CardContent>
-        </Card>
-
-        {/* Card Mức Hoa Hồng Đặt Hộ To Rõ (thay thế Card Trạng Thái) */}
-        <Card className="bg-gradient-to-br from-emerald-500/10 via-teal-500/5 to-transparent border-emerald-500/20">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold flex items-center gap-2 text-emerald-700 dark:text-emerald-400">
-              <BadgePercent className="h-4 w-4 text-emerald-600 dark:text-emerald-400" /> Hoa hồng mỗi chuyến
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight flex items-baseline gap-2">
-              <span>{commissionRate}</span>
-              <span className="text-xs font-semibold text-emerald-700/80 dark:text-emerald-300/80">trên cước chuyến</span>
-            </div>
-            <p className="text-xs text-muted-foreground mt-1.5 font-medium">
-              Tính trên cước trước VAT của mỗi đơn hoàn thành, cộng tự động vào ví
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Nhóm nút thao tác to rõ, dễ nhìn, dễ bấm */}
       <div className="space-y-3 pt-2">
@@ -106,52 +90,30 @@ export default function AgentDashboardPage() {
           Thao tác đặt chuyến
         </h2>
 
-        {/* 2 Nút chính dạng Action Card to rõ */}
-        <div className="grid gap-3 sm:grid-cols-2">
-          {/* Tự đặt chuyến */}
-          <Link
-            href="/agent-portal/return-trip"
-            className="group relative flex items-center justify-between p-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 hover:border-primary/40 transition-all shadow-xs active:scale-[0.99]"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="h-12 w-12 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-md shrink-0">
-                <RotateCcw className="h-6 w-6" />
+        {/* Nút chính: Đặt hộ chuyến mới (To, rõ ràng, nổi bật) */}
+        <button
+          type="button"
+          onClick={() => setIsCreateOpen(true)}
+          className="group w-full relative flex items-center justify-between p-4 sm:p-5 rounded-2xl border-2 border-emerald-500/30 bg-gradient-to-r from-emerald-500/10 via-teal-500/5 to-transparent hover:from-emerald-500/15 hover:border-emerald-500/50 text-left transition-all shadow-xs active:scale-[0.99]"
+        >
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-emerald-600 text-white flex items-center justify-center shadow-md shrink-0">
+              <PlusCircle className="h-7 w-7" />
+            </div>
+            <div>
+              <div className="text-lg sm:text-xl font-bold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors flex items-center gap-2">
+                Đặt hộ chuyến mới
+                <span className="text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 px-2.5 py-0.5 rounded-full">
+                  +{commissionRate} hoa hồng
+                </span>
               </div>
-              <div>
-                <div className="text-base sm:text-lg font-bold text-foreground group-hover:text-primary transition-colors flex items-center gap-1.5">
-                  Tự đặt chuyến
-                  <span className="text-[10px] font-bold bg-primary/15 text-primary px-2 py-0.5 rounded-full">Khuyên dùng</span>
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                  Khách lẻ ghép xe hoặc bao xe, gán ngay cho bạn
-                </div>
+              <div className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                Tạo đơn xe ghép hoặc bao xe cho khách hàng để nhận hoa hồng ngay
               </div>
             </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
-          </Link>
-
-          {/* Đặt hộ chuyến mới */}
-          <button
-            type="button"
-            onClick={() => setIsCreateOpen(true)}
-            className="group relative flex items-center justify-between p-4 rounded-xl border-2 border-emerald-500/25 bg-emerald-500/5 hover:bg-emerald-500/10 hover:border-emerald-500/40 text-left transition-all shadow-xs active:scale-[0.99]"
-          >
-            <div className="flex items-center gap-3.5">
-              <div className="h-12 w-12 rounded-xl bg-emerald-600 text-white flex items-center justify-center shadow-md shrink-0">
-                <PlusCircle className="h-6 w-6" />
-              </div>
-              <div>
-                <div className="text-base sm:text-lg font-bold text-foreground group-hover:text-emerald-700 dark:group-hover:text-emerald-300 transition-colors">
-                  Đặt hộ chuyến mới
-                </div>
-                <div className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                  Tạo đơn cho khách nhận hoa hồng {commissionRate}
-                </div>
-              </div>
-            </div>
-            <ArrowRight className="h-5 w-5 text-muted-foreground group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
-          </button>
-        </div>
+          </div>
+          <ArrowRight className="h-6 w-6 text-muted-foreground group-hover:text-emerald-600 group-hover:translate-x-1 transition-all shrink-0 ml-2" />
+        </button>
 
         {/* 2 Nút phụ to rõ, dễ nhìn */}
         <div className="grid grid-cols-2 gap-3 pt-1">

@@ -24,5 +24,11 @@
  */
 export const AGENT_MULTI_STOP_ENABLED = false;
 
+/**
+ * Ẩn mục "Tự đặt chuyến" trên menu cổng đại lý (cổng đặt hộ).
+ * Màn `/agent-portal/return-trip` vẫn giữ nguyên để app tài xế mở trực tiếp qua webview.
+ */
+export const AGENT_RETURN_TRIP_ENABLED = false;
+
 /** Nơi đá người dùng về khi họ deep-link vào màn đang tắt. */
 export const AGENT_PORTAL_HOME = '/agent-portal/dashboard';

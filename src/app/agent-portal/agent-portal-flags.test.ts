@@ -26,11 +26,16 @@ describe('cờ cổng đại lý', () => {
     expect(item!.label).toBe('Đặt hộ mới');
   });
 
+  it('Tự đặt chuyến đang ẨN trên menu cổng đặt hộ', () => {
+    const item = ALL_NAV_ITEMS.find((i) => i.href === '/agent-portal/return-trip');
+    expect(item).toBeDefined();
+    expect(item!.enabled).toBe(false);
+  });
+
   it('các mục còn lại vẫn hiện đủ', () => {
     const hrefs = visibleNavItems().map((i) => i.href);
     expect(hrefs).toEqual([
       '/agent-portal/dashboard',
-      '/agent-portal/return-trip',
       // "Đơn của tôi" đọc listAgentBookings (bảng booking) — KHÔNG liên quan
       // multi_stop_order nên không được tắt theo.
       '/agent-portal/orders',
