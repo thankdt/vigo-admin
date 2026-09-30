@@ -66,7 +66,6 @@ interface RetailPassengerItem {
   minPrice: number | null;
   distanceKm: number | null;
   isEstimating: boolean;
-  customPriceStr: string;
   needVat: boolean;
   companyName: string;
   taxCode: string;
@@ -83,7 +82,6 @@ const createInitialRetailPassenger = (): RetailPassengerItem => ({
   minPrice: null,
   distanceKm: null,
   isEstimating: false,
-  customPriceStr: '',
   needVat: false,
   companyName: '',
   taxCode: '',
@@ -210,22 +208,19 @@ export default function ReturnTripPage() {
   const isRetailPriceBelowFloor =
     retailFloorPrice != null && (retailCustomPriceTotal <= 0 || retailCustomPriceTotal < retailFloorPrice);
 
+  // Auto-prefill tổng giá cước chuyến đi khi có giá sàn ước tính (nếu chưa nhập)
+  React.useEffect(() => {
+    if (retailFloorPrice != null && retailFloorPrice > 0 && !retailTotalPriceStr) {
+      setRetailTotalPriceStr(retailFloorPrice.toString());
+    }
+  }, [retailFloorPrice, retailTotalPriceStr]);
+
   const updateRetailPassenger = (index: number, updates: Partial<RetailPassengerItem>) => {
     setRetailPassengers((prev) => {
       const next = [...prev];
       if (index >= 0 && index < next.length) {
         next[index] = { ...next[index], ...updates };
       }
-
-      // Khi tài xế điền hoặc cập nhật giá của khách lẻ, tự động tính lại tổng cước chuyến đi
-      if (updates.customPriceStr !== undefined) {
-        const sum = next.reduce((acc, p) => {
-          const val = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
-          return acc + val;
-        }, 0);
-        setRetailTotalPriceStr(sum > 0 ? sum.toString() : '');
-      }
-
       return next;
     });
   };
@@ -244,15 +239,7 @@ export default function ReturnTripPage() {
 
   const removeRetailPassenger = (index: number) => {
     if (retailPassengers.length <= 1) return;
-    setRetailPassengers((prev) => {
-      const next = prev.filter((_, i) => i !== index);
-      const sum = next.reduce((acc, p) => {
-        const val = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
-        return acc + val;
-      }, 0);
-      setRetailTotalPriceStr(sum > 0 ? sum.toString() : '');
-      return next;
-    });
+    setRetailPassengers((prev) => prev.filter((_, i) => i !== index));
   };
 
   // ── Form Submissions ────────────────────────────────────────────────
@@ -376,12 +363,6 @@ export default function ReturnTripPage() {
             return;
           }
         }
-
-        const pPrice = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
-        if (pPrice <= 0) {
-          setErrorMessage(`Khách lẻ #${i + 1} chưa có giá cước hợp đồng. Vui lòng nhập giá cho khách.`);
-          return;
-        }
       }
 
       if (retailCustomPriceTotal <= 0) {
@@ -400,16 +381,25 @@ export default function ReturnTripPage() {
         return;
       }
 
-      const retailPassengersPayload: RetailPassengerInput[] = retailPassengers.map((p) => {
-        const pCustomPrice = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
-        const finalPrice = pCustomPrice > 0 ? pCustomPrice : (p.minPrice || 0);
+      const count = retailPassengers.length;
+      const basePerPassenger = Math.floor(retailCustomPriceTotal / count / 1000) * 1000;
+      let allocatedTotal = 0;
+
+      const retailPassengersPayload: RetailPassengerInput[] = retailPassengers.map((p, idx) => {
+        let pPrice = basePerPassenger;
+        if (idx === count - 1) {
+          pPrice = retailCustomPriceTotal - allocatedTotal;
+        } else {
+          allocatedTotal += basePerPassenger;
+        }
+
         return {
           name: p.name.trim() || undefined,
           phone: p.phone.trim(),
           pickupAddress: p.pickup,
           dropoffAddress: p.dropoff,
           seats: 1,
-          price: finalPrice,
+          price: pPrice,
           minPrice: p.minPrice ?? undefined,
           needVat: p.needVat,
           vatInfo: p.needVat
@@ -1445,46 +1435,6 @@ export default function ReturnTripPage() {
                   )}
                 </div>
 
-                {/* Contract Price List */}
-                <div className="space-y-2 pt-2 border-t">
-                  <div className="flex items-center justify-between">
-                    <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Giá ghi nhận trên từng hợp đồng:
-                    </Label>
-                    <span className="text-[11px] text-muted-foreground">Theo giá cấu hình từng khách</span>
-                  </div>
-                  <div className="rounded-md border divide-y bg-card text-xs">
-                    {retailPassengers.map((p, idx) => {
-                      const pCustom = Number(p.customPriceStr?.replace(/\D/g, '')) || 0;
-                      const displayPrice = pCustom > 0 ? pCustom : (p.minPrice || 0);
-                      return (
-                        <div key={idx} className="p-2.5 flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">
-                              Khách #{idx + 1}: {p.name || p.phone || '(Chưa nhập)'}
-                            </div>
-                            <div className="text-[11px] text-muted-foreground">
-                              {p.pickup.address && p.dropoff.address
-                                ? `${p.pickup.address.split(',')[0]} → ${p.dropoff.address.split(',')[0]}`
-                                : 'Chưa đủ điểm đón/trả'}
-                            </div>
-                          </div>
-                          <div className="text-right">
-                            <span className="font-bold text-sm text-emerald-600">
-                              {displayPrice > 0 ? fmtVnd(displayPrice) : '—'}
-                            </span>
-                            {pCustom > 0 && pCustom !== p.minPrice && (
-                              <span className="block text-[10px] text-muted-foreground">
-                                (Tự cấu hình)
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
                 <div className="space-y-1.5 pt-2 border-t">
                   <Label className="text-xs font-medium">Hình thức thanh toán</Label>
                   <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/20">
@@ -1674,46 +1624,6 @@ function RetailPassengerCard({
               onSelect={(data) => onUpdate({ dropoff: data })}
               onClear={() => onUpdate({ dropoff: emptyPoint() })}
             />
-          </div>
-
-          {/* Passenger Floor Price & Custom Price Input */}
-          <div className="rounded-md bg-muted/40 p-3 border space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs font-semibold flex items-center gap-1.5 text-foreground">
-                <DollarSign className="h-3.5 w-3.5 text-primary" />
-                Giá cước khách này (ghi nhận hợp đồng)
-              </Label>
-              {passenger.minPrice != null && passenger.minPrice > 0 && (
-                <button
-                  type="button"
-                  onClick={() => onUpdate({ customPriceStr: passenger.minPrice!.toString() })}
-                  className="text-[11px] text-primary hover:underline font-medium"
-                >
-                  Điền giá gợi ý ({fmtVnd(passenger.minPrice)})
-                </button>
-              )}
-            </div>
-
-            <div className="relative">
-              <Input
-                type="text"
-                inputMode="numeric"
-                placeholder={passenger.minPrice ? passenger.minPrice.toLocaleString('vi-VN') : '0'}
-                value={
-                  passenger.customPriceStr
-                    ? (Number(passenger.customPriceStr.replace(/\D/g, '')) || 0).toLocaleString('vi-VN')
-                    : ''
-                }
-                onChange={(e) => {
-                  const raw = e.target.value.replace(/\D/g, '');
-                  onUpdate({ customPriceStr: raw });
-                }}
-                className="h-9 font-bold pr-8 text-sm bg-background"
-              />
-              <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground font-semibold">
-                ₫
-              </span>
-            </div>
           </div>
         </div>
 
