@@ -268,7 +268,7 @@ export default function ReturnTripPage() {
       }
       if (groupCustomPrice < groupMinPrice) {
         setErrorMessage(
-          `Giá cước chuyến đi (${fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu (${fmtVnd(groupMinPrice)}). Quy tắc: 1 người tối thiểu 150.000₫, 2 người 200.000₫, từ 3 người trở lên 300.000₫.`,
+          `Giá cước chuyến đi (${fmtVnd(groupCustomPrice)}) không đủ giá trị tối thiểu (${fmtVnd(groupMinPrice)}).`,
         );
         return;
       }
@@ -371,7 +371,7 @@ export default function ReturnTripPage() {
 
       if (retailCustomPriceTotal < retailFloorPrice) {
         setErrorMessage(
-          `Giá cước chuyến đi (${fmtVnd(retailCustomPriceTotal)}) không đủ giá trị tối thiểu (${fmtVnd(retailFloorPrice)}). Quy tắc: 1 người tối thiểu 150.000₫, 2 người 200.000₫, từ 3 người trở lên 300.000₫.`,
+          `Giá cước chuyến đi (${fmtVnd(retailCustomPriceTotal)}) không đủ giá trị tối thiểu (${fmtVnd(retailFloorPrice)}).`,
         );
         return;
       }
@@ -839,7 +839,7 @@ export default function ReturnTripPage() {
           <Car className="h-6 w-6 text-primary" /> Tự đặt chuyến
         </h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Tài xế tự đặt cuốc cho chính mình với giá cước thoả thuận. Giá sàn tối thiểu: 1 người 150k, 2 người 200k, từ 3 người trở lên tối đa 300k.
+          Tài xế tự đặt cuốc cho chính mình với giá cước thoả thuận.
         </p>
       </div>
 
@@ -1116,9 +1116,6 @@ export default function ReturnTripPage() {
                         {fmtVnd(groupMinPrice)}
                       </span>
                     </div>
-                    <p className="text-[11px] text-muted-foreground">
-                      Quy tắc: 1 người tối thiểu 150.000₫, 2 người 200.000₫, từ 3 người trở lên 300.000₫ (tối đa tính 3 người, từ người thứ 4 không cộng thêm giá sàn).
-                    </p>
                   </div>
                 )}
               </CardContent>
@@ -1334,51 +1331,19 @@ export default function ReturnTripPage() {
               </CardContent>
             </Card>
 
-            {/* Retail Total Price & Contract Summary Card */}
+            {/* Retail Total Price */}
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <DollarSign className="h-4 w-4 text-primary" /> Tổng giá cước chuyến đi
                 </CardTitle>
-                <CardDescription className="text-xs">
-                  Giá tối thiểu: 1 người là 150.000₫, 2 người 200.000₫, từ 3 người trở lên tối đa 300.000₫ (người thứ 4 trở đi không tính thêm). Giá cước trên hợp đồng điện tử và hoá đơn VAT sẽ được chia đều theo số lượng khách.
-                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Total floor indicator */}
-                <div className="rounded-lg bg-muted/60 p-3.5 border text-sm space-y-2">
-                  <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Tổng số khách:</span>
-                    <span className="font-semibold text-foreground">
-                      {retailPassengers.length} khách (mỗi khách 1 ghế)
-                    </span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-medium text-muted-foreground">
-                      Giá sàn tối thiểu:
-                    </span>
-                    <span className="text-base font-bold text-primary">
-                      {fmtVnd(retailFloorPrice)}
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-muted-foreground">
-                    Quy tắc: 1 người tối thiểu 150.000₫, 2 người 200.000₫, từ 3 người trở lên 300.000₫ (tối đa tính 3 người, từ người thứ 4 không cộng thêm giá sàn).
-                  </p>
-                  {retailCustomPriceTotal > 0 && (
-                    <div className="pt-2 border-t border-muted/80 flex items-center justify-between text-xs text-emerald-600 dark:text-emerald-400 font-medium">
-                      <span>Giá trên HĐ & Hoá đơn mỗi khách:</span>
-                      <span className="font-bold">
-                        ~{fmtVnd(Math.round(retailCustomPriceTotal / (retailPassengers.length || 1)))}/người
-                      </span>
-                    </div>
-                  )}
-                </div>
-
                 {/* Overall price input */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="retailTotalPrice" className="text-xs font-medium">
-                      Giá cước chuyến đi (Tài xế tự nhập) <span className="text-rose-500">*</span>
+                      Giá cước chuyến đi <span className="text-rose-500">*</span>
                     </Label>
                     {retailFloorPrice > 0 && (
                       <button
