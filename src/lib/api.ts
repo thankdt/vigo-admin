@@ -3255,14 +3255,30 @@ export type AdminOverview = {
   realtime: { activeTrips: number; waitingCustomers: number; onlineDrivers: number; busyDrivers: number };
   today: { created: number; completed: number; cancelled: number; completionRate: number; newUsers: number };
   queues: { awaitingClaim: number; processing: number; driversPendingApproval: number; withdrawalsPending: number };
-  business: { completedTripsInPeriod: number; createdInPeriod: number; cancelledInPeriod: number };
-  supply: { totalDrivers: number; onlineDrivers: number; pendingApproval: number; newDriversInPeriod: number };
-  demand: { totalCustomers: number; newCustomersInPeriod: number; activeCustomersInPeriod: number };
+  // Field `?: number | null` = số "chuyến xe khách" (bao xe + đi chung, bỏ giao hàng/xe máy):
+  // backend cũ chưa có (undefined) hoặc bộ đếm lỗi (null) → UI hiện "—", KHÔNG hiện 0.
+  business: {
+    completedTripsInPeriod: number; createdInPeriod: number; cancelledInPeriod: number;
+    tripsInPeriod?: number | null; rideTripsInPeriod?: number | null; carpoolTripsInPeriod?: number | null;
+    completedPassengerTripsInPeriod?: number | null; cancelledPassengerTripsInPeriod?: number | null;
+    passengersServedInPeriod?: number | null;
+  };
+  supply: { totalDrivers: number; onlineDrivers: number; pendingApproval: number; newDriversInPeriod: number; activeDriversInPeriod?: number | null };
+  demand: { totalCustomers: number; newCustomersInPeriod: number; activeCustomersInPeriod: number; bookingCustomersInPeriod?: number | null };
 };
 
 export async function getAdminOverview(from: string, to: string): Promise<AdminOverview> {
   const qs = new URLSearchParams({ from, to });
   const response = await fetchWithAuth(`/admin/overview?${qs.toString()}`);
+  const result = await response.json();
+  return result.data;
+}
+
+// Chuỗi thời gian cho một ô ĐẾM của dashboard (quyền `dashboard`, không cần `finance`).
+// Cùng shape với getFinanceSeries để vẽ chung một biểu đồ.
+export async function getOverviewSeries(metric: string, from: string, to: string): Promise<FinanceSeries> {
+  const qs = new URLSearchParams({ metric, from, to });
+  const response = await fetchWithAuth(`/admin/overview/series?${qs.toString()}`);
   const result = await response.json();
   return result.data;
 }
