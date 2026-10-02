@@ -170,6 +170,9 @@ export type Driver = {
     year?: number;
     seats?: number;
     images?: string[];
+    registrationImages?: string[];
+    inspectionImages?: string[];
+    insuranceImages?: string[];
   };
   user?: {
     id: string;

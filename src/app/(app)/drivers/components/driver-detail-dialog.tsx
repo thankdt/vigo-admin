@@ -410,6 +410,33 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                     </p>
                   </div>
                 </div>
+                {safeImageArray(driver.vehicleRegistration.registrationImages).length > 0 && (
+                  <div className="space-y-2 pt-3">
+                    <Label className="text-xs text-muted-foreground">Ảnh đăng ký xe (Cà vẹt)</Label>
+                    <ImageThumbList
+                      urls={safeImageArray(driver.vehicleRegistration.registrationImages).map((img) => getImageUrl(img))}
+                      altPrefix="Registration"
+                    />
+                  </div>
+                )}
+                {safeImageArray(driver.vehicleRegistration.inspectionImages).length > 0 && (
+                  <div className="space-y-2 pt-3">
+                    <Label className="text-xs text-muted-foreground">Ảnh đăng kiểm xe</Label>
+                    <ImageThumbList
+                      urls={safeImageArray(driver.vehicleRegistration.inspectionImages).map((img) => getImageUrl(img))}
+                      altPrefix="Inspection"
+                    />
+                  </div>
+                )}
+                {safeImageArray(driver.vehicleRegistration.insuranceImages).length > 0 && (
+                  <div className="space-y-2 pt-3">
+                    <Label className="text-xs text-muted-foreground">Ảnh bảo hiểm xe</Label>
+                    <ImageThumbList
+                      urls={safeImageArray(driver.vehicleRegistration.insuranceImages).map((img) => getImageUrl(img))}
+                      altPrefix="Insurance"
+                    />
+                  </div>
+                )}
                 {safeImageArray(driver.vehicleRegistration.images).length > 0 && (
                   <div className="space-y-2 pt-3">
                     <Label className="text-xs text-muted-foreground">Ảnh xe</Label>
