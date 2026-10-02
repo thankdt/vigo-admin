@@ -1055,3 +1055,66 @@ export type TeamMemberRow = {
   completedTripsInRange: number;
   lastCompletedAt: string | null;
 };
+
+// ───────── PRICING MACRO 2-TIER (TỈNH -> XÃ) TYPES ─────────
+
+export type MacroAdjustmentType = 'DELTA_AMOUNT' | 'PERCENTAGE' | 'MIN_FLOOR' | 'MAX_CEILING';
+
+export type PricingMacroRule = {
+  id: number;
+  name: string;
+  isActive: boolean;
+  priority: number;
+  serviceType: string;
+  vehicleType: string;
+  originProvinceCode?: string | null;
+  originWardCode?: string | null;
+  destProvinceCode?: string | null;
+  destWardCode?: string | null;
+  adjustmentType: MacroAdjustmentType;
+  adjustmentValue: number;
+  applyPerSeat: boolean;
+  note?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+export type ProvinceOption = {
+  code: string;
+  name: string;
+};
+
+export type WardOption = {
+  code: string;
+  name: string;
+  provinceCode: string;
+};
+
+export type SimulatePricingMacroDto = {
+  pickupLat: number;
+  pickupLng: number;
+  dropoffLat: number;
+  dropoffLng: number;
+  serviceType?: string;
+  vehicleType?: string;
+  seats?: number;
+};
+
+export type SimulatePricingMacroResult = {
+  origin: {
+    wardCode: string;
+    wardName: string;
+    provinceCode: string;
+    provinceName: string;
+  } | null;
+  dest: {
+    wardCode: string;
+    wardName: string;
+    provinceCode: string;
+    provinceName: string;
+  } | null;
+  matchedRule: PricingMacroRule | null;
+  matchScore: number | null;
+  quote: any;
+};
+

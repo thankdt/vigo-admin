@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -5044,3 +5044,53 @@ export async function adminAdjustVcoin(
   });
   return unwrap<{ rewardPoints: number; duplicate: boolean }>(response);
 }
+
+// ───────── PRICING MACRO RULES APIS (2 CẤP TỈNH -> XÃ) ─────────
+
+export async function getPricingMacroRules(): Promise<PricingMacroRule[]> {
+  const response = await fetchWithAuth('/pricing/macro-rules');
+  return unwrap<PricingMacroRule[]>(response);
+}
+
+export async function getPricingMacroProvinces(): Promise<ProvinceOption[]> {
+  const response = await fetchWithAuth('/pricing/macro-rules/provinces');
+  return unwrap<ProvinceOption[]>(response);
+}
+
+export async function getPricingMacroWards(provinceCode?: string): Promise<WardOption[]> {
+  const qs = provinceCode ? `?provinceCode=${encodeURIComponent(provinceCode)}` : '';
+  const response = await fetchWithAuth(`/pricing/macro-rules/wards${qs}`);
+  return unwrap<WardOption[]>(response);
+}
+
+export async function createPricingMacroRule(data: Partial<PricingMacroRule>): Promise<PricingMacroRule> {
+  const response = await fetchWithAuth('/pricing/macro-rules', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return unwrap<PricingMacroRule>(response);
+}
+
+export async function updatePricingMacroRule(id: number, data: Partial<PricingMacroRule>): Promise<PricingMacroRule> {
+  const response = await fetchWithAuth(`/pricing/macro-rules/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return unwrap<PricingMacroRule>(response);
+}
+
+export async function deletePricingMacroRule(id: number): Promise<{ success: boolean }> {
+  const response = await fetchWithAuth(`/pricing/macro-rules/${id}`, {
+    method: 'DELETE',
+  });
+  return unwrap<{ success: boolean }>(response);
+}
+
+export async function simulatePricingMacro(data: SimulatePricingMacroDto): Promise<SimulatePricingMacroResult> {
+  const response = await fetchWithAuth('/pricing/macro-rules/simulate', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return unwrap<SimulatePricingMacroResult>(response);
+}
+
