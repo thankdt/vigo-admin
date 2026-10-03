@@ -395,6 +395,12 @@ export type Booking = {
       avatar?: string;
       avatarUrl?: string;
     };
+    isNew?: boolean;
+    completedTrips?: number;
+    displayStars?: number | null;
+    isHighCancel?: boolean;
+    isFrequentlyLate?: boolean;
+    hasViolation?: boolean;
   } | null;
   priceBreakdown?: PriceBreakdown | null;
   driverEarnings?: DriverEarnings;

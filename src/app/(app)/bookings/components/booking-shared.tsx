@@ -9,10 +9,9 @@
  * tách file này sinh ra để tránh.
  */
 import * as React from 'react';
+import { Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-// [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import type {} from '@/lib/types';
-import type { Booking} from '@/lib/types';
+import type { Booking } from '@/lib/types';
 import { currentAccountIfDiffers } from './account-snapshot';
 
 
@@ -193,3 +192,117 @@ export function formatVnShort(value?: string | null): string | null {
   const at = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
   return `${at('day')}/${at('month')} ${at('hour')}:${at('minute')}`;
 }
+
+/**
+ * Nhãn "Tài mới" — tài xế đã hoàn thành < 3 chuyến.
+ * Xanh dương nhạt, viền mảnh (đồng bộ bảng màu với FirstTripBadge của khách hàng).
+ */
+export function NewDriverBadge({ completedTrips }: { completedTrips?: number }) {
+  const title =
+    typeof completedTrips === 'number' && completedTrips > 0
+      ? `Tài mới: đã hoàn thành ${completedTrips} chuyến`
+      : 'Tài mới: chưa có chuyến hoàn thành nào';
+  return (
+    <Badge
+      variant="outline"
+      className="shrink-0 whitespace-nowrap border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50"
+      title={title}
+    >
+      Tài mới
+    </Badge>
+  );
+}
+
+/**
+ * Nhãn "Hay huỷ" — tài xế có vi phạm Rule A hoặc tỉ lệ huỷ 30 ngày >= 30%.
+ * Hổ phách/cam (cảnh báo vận hành).
+ */
+export function HighCancelBadge() {
+  return (
+    <Badge
+      className="shrink-0 whitespace-nowrap bg-amber-100 text-amber-800 hover:bg-amber-100 dark:bg-amber-900/50 dark:text-amber-300 text-[10px] px-1.5 py-0"
+      title="Tài xế có tỉ lệ huỷ cao (>= 30%) hoặc có vi phạm huỷ ép khách"
+    >
+      Hay huỷ
+    </Badge>
+  );
+}
+
+/**
+ * Nhãn "Hay trễ giờ" — tỉ lệ đúng giờ < 80% từ ít nhất 3 chuyến hẹn giờ đã tới điểm đón.
+ * Vàng cam (cảnh báo trễ hẹn).
+ */
+export function LateDriverBadge() {
+  return (
+    <Badge
+      className="shrink-0 whitespace-nowrap bg-orange-100 text-orange-800 hover:bg-orange-100 dark:bg-orange-900/50 dark:text-orange-300 text-[10px] px-1.5 py-0"
+      title="Tỉ lệ đúng giờ dưới 80%"
+    >
+      Hay trễ giờ
+    </Badge>
+  );
+}
+
+/**
+ * Nhãn "Có vi phạm" — tài xế từng bị phạt thu hoa hồng (driver_penalty),
+ * bị khoá tài khoản, cờ cọc hoặc đang tạm khoá nhận chuyến.
+ * Đỏ đậm (destructive).
+ */
+export function ViolationBadge() {
+  return (
+    <Badge
+      variant="destructive"
+      className="shrink-0 whitespace-nowrap text-[10px] px-1.5 py-0"
+      title="Tài xế từng bị phạt thu hoa hồng hoặc đang bị cảnh cáo/tạm khoá"
+    >
+      Có vi phạm
+    </Badge>
+  );
+}
+
+/**
+ * Hiển thị sao đánh giá của tài xế (nếu có dữ liệu công khai).
+ * Điểm < 4.0 tô màu đỏ để cảnh báo nhanh mà không cần thêm tag riêng.
+ */
+export function DriverRatingDisplay({ stars }: { stars: number }) {
+  const isLow = stars < 4.0;
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-xs font-semibold tabular-nums shrink-0 ${
+        isLow ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'
+      }`}
+      title={`Đánh giá trung bình: ${stars.toFixed(1)}★`}
+    >
+      <Star className={`h-3 w-3 ${isLow ? 'fill-red-500 text-red-500' : 'fill-amber-400 text-amber-400'}`} />
+      {stars.toFixed(1)}
+    </span>
+  );
+}
+
+/**
+ * Cụm badge cảnh báo và số sao của tài xế, hiển thị cạnh SĐT tài xế.
+ */
+export function DriverAlertBadges({ driver }: { driver?: Booking['driver'] }) {
+  if (!driver) return null;
+  const hasBadges =
+    driver.displayStars != null ||
+    driver.isNew === true ||
+    driver.isHighCancel === true ||
+    driver.isFrequentlyLate === true ||
+    driver.hasViolation === true;
+  if (!hasBadges) return null;
+  return (
+    <>
+      {driver.displayStars != null && (
+        <DriverRatingDisplay stars={driver.displayStars} />
+      )}
+      {driver.isNew === true && (
+        <NewDriverBadge completedTrips={driver.completedTrips} />
+      )}
+      {driver.isHighCancel === true && <HighCancelBadge />}
+      {driver.isFrequentlyLate === true && <LateDriverBadge />}
+      {driver.hasViolation === true && <ViolationBadge />}
+    </>
+  );
+}
+

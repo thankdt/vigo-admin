@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag } from '@/lib/api';
-import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import { buildTripPassText } from './booking-pass-utils';
 import type {} from '@/lib/types';
@@ -823,7 +823,10 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                     </div>
                     <div className="flex-1 text-sm">
                       <div className="font-semibold">{driverName}</div>
-                      <div className="text-muted-foreground">{booking.driver?.user?.phone ?? booking.driver?.phone ?? 'N/A'}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-muted-foreground">{booking.driver?.user?.phone ?? booking.driver?.phone ?? 'N/A'}</span>
+                        <DriverAlertBadges driver={booking.driver} />
+                      </div>
                     </div>
                   </div>
                 ) : (
