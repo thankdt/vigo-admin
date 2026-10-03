@@ -24,6 +24,7 @@ import { validateWindow, toIso, formatLocal } from './schedule-utils';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { isVehicleTypeApplicable, resolveRequestedVehicleType } from './vehicle-type-utils';
 import type { BookingDraft } from './duplicate-utils';
+import { VietnameseSchedulePicker } from './vietnamese-schedule-picker';
 
 interface CreateBookingDialogProps {
   onSuccess: () => void;
@@ -1107,29 +1108,17 @@ export function CreateBookingDialog({
               />
             </div>
             {isScheduled && (
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <Label htmlFor="cb-scheduled-from">Đón từ <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="cb-scheduled-from"
-                    type="datetime-local"
-                    value={scheduledFrom}
-                    min={minScheduledAt}
-                    // Đổi giờ đón (đầu khung) = đổi ngày tính phụ phí → xoá giá cũ, buộc tính lại.
-                    onChange={(e) => { setScheduledFrom(e.target.value); clearEstimate(); }}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="cb-scheduled-to">Đến <span className="text-destructive">*</span></Label>
-                  <Input
-                    id="cb-scheduled-to"
-                    type="datetime-local"
-                    value={scheduledTo}
-                    min={scheduledFrom || minScheduledAt}
-                    onChange={(e) => setScheduledTo(e.target.value)}
-                  />
-                </div>
-              </div>
+              <VietnameseSchedulePicker
+                scheduledFrom={scheduledFrom}
+                scheduledTo={scheduledTo}
+                minScheduledAt={minScheduledAt}
+                onChangeFrom={(v) => {
+                  setScheduledFrom(v);
+                  clearEstimate();
+                }}
+                onChangeTo={(v) => setScheduledTo(v)}
+                onClearEstimate={clearEstimate}
+              />
             )}
           </div>
 

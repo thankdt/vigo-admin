@@ -1200,6 +1200,19 @@ export default function ReturnTripPage() {
                     </Badge>
                   </div>
                 </div>
+
+                {groupCustomPrice > 0 && (
+                  <div className="rounded-lg bg-muted/50 border p-3 text-xs space-y-1">
+                    <div className="flex items-center justify-between text-muted-foreground font-medium">
+                      <span>Phí sàn (10%):</span>
+                      <span className="font-semibold text-foreground">{fmtVnd(Math.round(groupCustomPrice * 0.1))}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Tài xế thực nhận ước tính:</span>
+                      <span className="font-bold text-foreground">{fmtVnd(Math.max(0, groupCustomPrice - Math.round(groupCustomPrice * 0.1)))}</span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 
@@ -1409,6 +1422,19 @@ export default function ReturnTripPage() {
                     </Badge>
                   </div>
                 </div>
+
+                {retailCustomPriceTotal > 0 && (
+                  <div className="rounded-lg bg-muted/50 border p-3 text-xs space-y-1">
+                    <div className="flex items-center justify-between text-muted-foreground font-medium">
+                      <span>Phí sàn (10%):</span>
+                      <span className="font-semibold text-foreground">{fmtVnd(Math.round(retailCustomPriceTotal * 0.1))}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-muted-foreground">
+                      <span>Thu nhập ước tính tài xế:</span>
+                      <span className="font-bold text-foreground">{fmtVnd(Math.max(0, retailCustomPriceTotal - Math.round(retailCustomPriceTotal * 0.1)))}</span>
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
