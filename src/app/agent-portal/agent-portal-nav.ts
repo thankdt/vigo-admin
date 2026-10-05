@@ -17,7 +17,7 @@ export const ALL_NAV_ITEMS = [
   { href: '/agent-portal/return-trip', label: 'Tự đặt chuyến', icon: RotateCcw, enabled: AGENT_RETURN_TRIP_ENABLED },
   { href: '/agent-portal/orders/new', label: 'Đặt hộ mới', icon: PlusCircle, enabled: AGENT_MULTI_STOP_ENABLED },
   { href: '/agent-portal/orders', label: 'Đơn của tôi', icon: ListOrdered, enabled: true },
-  { href: '/agent-portal/wallet', label: 'Ví & Rút tiền', icon: Wallet, enabled: true },
+  { href: '/agent-portal/wallet', label: 'Tài khoản & Rút tiền', icon: Wallet, enabled: true },
 ];
 
 export const visibleNavItems = () => ALL_NAV_ITEMS.filter((i) => i.enabled);

@@ -75,14 +75,14 @@ const getReturnTripFloorPrice = (count: number) => {
 };
 
 /**
- * Tính toán các khoản khấu trừ ví và thu nhập thực nhận cho chuyến tự đặt:
+ * Tính toán các khoản khấu trừ tài khoản và thu nhập thực nhận cho chuyến tự đặt:
  * - Giá cước khách trả (totalPriceInclVat) đã bao gồm VAT 8%.
  * - Giá trước VAT: priceBeforeVat = Math.round(totalPriceInclVat / 1.08)
  * - Thuế VAT (8%): vatAmount = totalPriceInclVat - priceBeforeVat
  * - Phí sàn (10%): platformFee = Math.round(priceBeforeVat * 0.1)
  * - Thuế TNCN (1.5%): pitAmount = Math.round((priceBeforeVat - platformFee) * 0.015)
  * - Thuế giữ hộ (VAT + TNCN): taxTotal = vatAmount + pitAmount
- * - Tổng khấu trừ ví (~18%): totalDeduction = platformFee + taxTotal
+ * - Tổng khấu trừ tài khoản (~18%): totalDeduction = platformFee + taxTotal
  * - Thu nhập thực nhận của tài xế: driverEarnings = totalPriceInclVat - totalDeduction
  */
 const calculateReturnTripEarnings = (totalPriceInclVat: number) => {
@@ -1324,7 +1324,7 @@ export default function ReturnTripPage() {
                           <span className="font-medium text-foreground">{fmtVnd(est.taxTotal)}</span>
                         </div>
                         <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 font-medium">
-                          <span>Tổng trừ ví (~18%):</span>
+                          <span>Tổng trừ tài khoản (~18%):</span>
                           <span className="font-semibold">-{fmtVnd(est.totalDeduction)}</span>
                         </div>
                       </div>
@@ -1579,7 +1579,7 @@ export default function ReturnTripPage() {
                           <span className="font-medium text-foreground">{fmtVnd(est.taxTotal)}</span>
                         </div>
                         <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 font-medium">
-                          <span>Tổng trừ ví (~18%):</span>
+                          <span>Tổng trừ tài khoản (~18%):</span>
                           <span className="font-semibold">-{fmtVnd(est.totalDeduction)}</span>
                         </div>
                       </div>

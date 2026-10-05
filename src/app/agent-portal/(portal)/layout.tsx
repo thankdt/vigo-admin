@@ -14,10 +14,10 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import React from 'react';
 
-/** Số dư ví hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
+/** Số dư tài khoản hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
 function WalletChip({ me }: { me: AgentMe | null }) {
   if (me?.walletBalance == null) return null;
-  const label = me.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng';
+  const label = me.walletType === 'DRIVER_MAIN' ? 'Tài khoản tài xế' : 'Tài khoản hoa hồng';
   return (
     <div className="flex items-center gap-1.5 rounded-lg bg-indigo-50/90 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50 px-2.5 py-1 text-xs font-medium shadow-2xs">
       <Wallet className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
@@ -163,7 +163,7 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
             )}
           >
             <Wallet className="h-5 w-5" />
-            <span>Ví</span>
+            <span>Tài khoản</span>
           </Link>
           <Link
             href="/agent-portal/orders"
@@ -188,11 +188,11 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
             )}
           >
             <User className="h-5 w-5" />
-            <span>Tài khoản</span>
+            <span>Cá nhân</span>
           </button>
         </nav>
 
-        {/* Bottom sheet hiển thị thông tin tài khoản cho tab "Tài khoản" trên mobile */}
+        {/* Bottom sheet hiển thị thông tin tài khoản cho tab "Cá nhân" trên mobile */}
         <Sheet open={isAccountOpen} onOpenChange={setIsAccountOpen}>
           <SheetContent side="bottom" className="rounded-t-2xl px-5 py-6 max-h-[85vh] overflow-y-auto">
             <SheetHeader className="text-left pb-4 border-b">
@@ -216,9 +216,9 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Loại ví</span>
+                <span className="text-muted-foreground">Loại tài khoản</span>
                 <span className="font-semibold">
-                  {me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế (App tài xế)' : 'Ví hoa hồng'}
+                  {me?.walletType === 'DRIVER_MAIN' ? 'Tài khoản tài xế (App tài xế)' : 'Tài khoản hoa hồng'}
                 </span>
               </div>
               <div className="flex justify-between items-center py-1 border-b border-border/50">

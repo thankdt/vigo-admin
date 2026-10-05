@@ -80,7 +80,7 @@ export default function AgentDashboardPage() {
         <ArrowRight className="h-5 w-5 text-slate-400 group-hover:text-emerald-600 group-hover:translate-x-0.5 transition-all shrink-0 ml-2" />
       </button>
 
-      {/* 3. Card Ví tài xế dạng 2 cột chia đôi ngang siêu gọn */}
+      {/* 3. Card Tài khoản tài xế dạng 2 cột chia đôi ngang siêu gọn */}
       <div
         role="button"
         tabIndex={0}
@@ -93,11 +93,11 @@ export default function AgentDashboardPage() {
         }}
         className="cursor-pointer bg-card border border-border/80 rounded-2xl p-3.5 sm:p-4 shadow-2xs hover:border-emerald-500/30 transition-all flex items-center divide-x divide-border"
       >
-        {/* Nửa trái: Icon + Ví tài xế + Số tiền */}
+        {/* Nửa trái: Icon + Tài khoản tài xế + Số tiền */}
         <div className="pr-3 sm:pr-4 flex-1 min-w-0">
           <div className="flex items-center gap-1.5 text-xs text-muted-foreground font-medium">
             <Wallet className="h-3.5 w-3.5 shrink-0" />
-            <span>{me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng'}</span>
+            <span>{me?.walletType === 'DRIVER_MAIN' ? 'Tài khoản tài xế' : 'Tài khoản hoa hồng'}</span>
           </div>
           <div className="text-lg sm:text-xl font-black text-foreground tracking-tight mt-1 truncate">
             {me?.walletBalance != null ? fmtVnd(me.walletBalance) : '—'}
@@ -105,7 +105,7 @@ export default function AgentDashboardPage() {
         </div>
 
         {/* Nửa phải: Diễn giải + Mũi tên */}
-        <div className="pl-3 sm:pl-4 flex-1 min-w-0 flex items-center justify-between gap-1">
+        <div className="pl-3 sm:pr-4 flex-1 min-w-0 flex items-center justify-between gap-1">
           <p className="text-[11px] sm:text-xs text-muted-foreground leading-snug">
             Số dư khả dụng để nhận cước và nhận tiền thưởng / hoa hồng
           </p>
@@ -138,7 +138,7 @@ export default function AgentDashboardPage() {
           >
             <Link href="/agent-portal/wallet">
               <Wallet className="h-4 w-4 text-white shrink-0" />
-              <span>Ví & rút tiền</span>
+              <span>Tài khoản & rút tiền</span>
             </Link>
           </Button>
         </div>

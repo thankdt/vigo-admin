@@ -130,13 +130,13 @@ export default function AgentWalletPage() {
   const canWithdraw = me ? agentCanRequestWithdrawal(me) : false;
   const hasBank = !!me?.bankInfo?.accountNumber;
   const hasInFlight = list.some((w) => w.status === 'PENDING' || w.status === 'APPROVED');
-  const walletLabel = me?.walletType === 'DRIVER_MAIN' ? 'Ví tài xế' : 'Ví hoa hồng';
+  const walletLabel = me?.walletType === 'DRIVER_MAIN' ? 'Tài khoản tài xế' : 'Tài khoản hoa hồng';
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold flex items-center gap-2"><Wallet className="h-6 w-6 text-primary" /> Ví & Rút tiền</h1>
+      <h1 className="text-2xl font-bold flex items-center gap-2"><Wallet className="h-6 w-6 text-primary" /> Tài khoản & Rút tiền</h1>
 
-      {/* Số dư ví */}
+      {/* Số dư tài khoản */}
       <Card className="p-4 border-primary">
         <div className="text-xs text-muted-foreground">{walletLabel} — số dư khả dụng</div>
         <div className="text-2xl font-bold text-primary">{formatVND(me?.walletBalance ?? 0)}</div>
@@ -151,7 +151,7 @@ export default function AgentWalletPage() {
         {me?.walletType === 'DRIVER_MAIN' &&
           ((me?.referralBalance ?? 0) > 0 || (me?.referralHeld ?? 0) > 0) && (
             <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-3">
-              <div className="text-xs text-amber-900">Ví hoa hồng đặt hộ — RÚT ĐƯỢC</div>
+              <div className="text-xs text-amber-900">Tài khoản hoa hồng đặt hộ — RÚT ĐƯỢC</div>
               <div className="text-lg font-bold text-amber-900">{formatVND(me?.referralBalance ?? 0)}</div>
               {(me?.referralHeld ?? 0) > 0 && (
                 <div className="text-xs text-amber-800">
@@ -159,7 +159,7 @@ export default function AgentWalletPage() {
                 </div>
               )}
               <p className="mt-1 text-xs text-amber-800">
-                Đây là hoa hồng bạn kiếm được khi tài khoản chưa được duyệt. Số dư ví tài xế ở
+                Đây là hoa hồng bạn kiếm được khi tài khoản chưa được duyệt. Số dư tài khoản tài xế ở
                 trên dùng trong app tài xế, không rút ở đây.
               </p>
             </div>
@@ -266,7 +266,7 @@ export default function AgentWalletPage() {
           <Info className="mt-0.5 h-4 w-4 shrink-0" />
           <div>
             Tài khoản của bạn là <span className="font-medium">tài xế</span>. Hoa hồng đặt hộ được cộng thẳng vào
-            ví thưởng của bạn — theo dõi và sử dụng số dư này ngay trong <span className="font-medium">ứng dụng tài xế</span>.
+            tài khoản thưởng của bạn — theo dõi và sử dụng số dư này ngay trong <span className="font-medium">ứng dụng tài xế</span>.
           </div>
         </Card>
       )}
