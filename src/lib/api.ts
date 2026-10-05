@@ -57,7 +57,17 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  let token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  if (!token && typeof window !== 'undefined' && window.location?.search) {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      const queryToken = p.get('sso_token') || p.get('token');
+      if (queryToken) {
+        token = queryToken;
+        localStorage.setItem('access_token', queryToken);
+      }
+    } catch (_) {}
+  }
   const headers = new Headers(options.headers || {});
 
   if (token) {

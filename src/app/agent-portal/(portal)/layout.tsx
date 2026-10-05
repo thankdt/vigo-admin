@@ -41,6 +41,19 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      const ssoToken = searchParams.get('sso_token') || searchParams.get('token');
+      if (ssoToken) {
+        localStorage.setItem('access_token', ssoToken);
+        searchParams.delete('sso_token');
+        searchParams.delete('token');
+        const cleanSearch = searchParams.toString();
+        const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : '') + window.location.hash;
+        window.history.replaceState({}, '', cleanUrl);
+      }
+    } catch (_) {}
+
     if (!localStorage.getItem('access_token')) {
       router.replace('/agent-portal/login');
       return;

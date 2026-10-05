@@ -24,10 +24,22 @@ export default function AgentLoginPage() {
   const [isLoading, setIsLoading] = React.useState(false);
 
   React.useEffect(() => {
-    if (typeof window !== 'undefined' && localStorage.getItem('access_token')) {
-      getAgentMe()
-        .then(() => router.replace('/agent-portal/dashboard'))
-        .catch(() => {/* stale/non-agent token — stay on login */});
+    if (typeof window !== 'undefined') {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        const ssoToken = searchParams.get('sso_token') || searchParams.get('token');
+        if (ssoToken) {
+          localStorage.setItem('access_token', ssoToken);
+        }
+      } catch (_) {}
+
+      if (localStorage.getItem('access_token')) {
+        const searchParams = new URLSearchParams(window.location.search);
+        const target = searchParams.get('redirect') || '/agent-portal/dashboard';
+        getAgentMe()
+          .then(() => router.replace(target))
+          .catch(() => {/* stale/non-agent token — stay on login */});
+      }
     }
   }, [router]);
 
