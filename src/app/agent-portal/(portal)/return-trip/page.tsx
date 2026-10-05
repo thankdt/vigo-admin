@@ -11,6 +11,14 @@ import { Switch } from '@/components/ui/switch';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import { AddressAutocomplete } from '@/app/(app)/bookings/components/address-autocomplete';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -46,6 +54,9 @@ import {
   Split,
   UserPlus,
   Copy,
+  Info,
+  ShieldCheck,
+  ChevronRight,
 } from 'lucide-react';
 
 interface AddressPoint {
@@ -149,6 +160,7 @@ export default function ReturnTripPage() {
   const [me, setMe] = React.useState<AgentMe | null>(null);
   const [driverPhone, setDriverPhone] = React.useState('');
   const [isEditingDriverPhone, setIsEditingDriverPhone] = React.useState(false);
+  const [isAgreementOpen, setIsAgreementOpen] = React.useState(true);
 
   // ── GROUP MODE STATES ────────────────────────────────────────────────
   const [customerPhone, setCustomerPhone] = React.useState('');
@@ -880,6 +892,57 @@ export default function ReturnTripPage() {
   // ── MAIN FORM VIEW ───────────────────────────────────────────────────
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+      {/* Popup xác nhận thoả thuận chuyến đi */}
+      <Dialog open={isAgreementOpen} onOpenChange={setIsAgreementOpen}>
+        <DialogContent
+          className="max-w-[92vw] sm:max-w-md rounded-2xl p-5 sm:p-6 [&>button:last-child]:hidden"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="space-y-2 text-center sm:text-left">
+            <div className="h-11 w-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto sm:mx-0 shadow-2xs">
+              <ShieldCheck className="h-6 w-6" />
+            </div>
+            <DialogTitle className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 leading-snug">
+              Xác nhận thoả thuận chuyến đi
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground sr-only">
+              Quy định và thoả thuận đặt hộ chuyến đi theo yêu cầu khách hàng
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2.5 py-2 text-xs sm:text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800">
+              <p>
+                Tài xế xác nhận việc đặt hộ chuyến đi theo yêu cầu và sự đồng ý của khách hàng.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800">
+              <p>
+                Giá chuyến đi được tính dựa trên hành trình vận chuyển (điểm đi-điểm đến). Tài xế chịu trách nhiệm về mức giá thoả thuận với khách hàng.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/40 border border-slate-100 dark:border-slate-800">
+              <p>
+                Giá chuyến đi được ghi nhận trên Hợp đồng vận chuyển điện tử được xác lập giữa ĐVVT và khách hàng trước khi Tài xế bắt đầu chuyến đi.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="pt-2">
+            <Button
+              type="button"
+              onClick={() => setIsAgreementOpen(false)}
+              className="w-full h-11 text-base font-semibold bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl shadow-md transition-all active:scale-[0.99]"
+            >
+              Đồng ý
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
           <Car className="h-6 w-6 text-primary" /> Tự đặt chuyến
@@ -1272,6 +1335,26 @@ export default function ReturnTripPage() {
                     </div>
                   );
                 })()}
+
+                {/* Lưu ý thoả thuận giá & Hợp đồng vận chuyển */}
+                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 dark:bg-emerald-950/20 dark:border-emerald-900/50 p-3 text-xs space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1 flex-1">
+                      <p className="text-slate-700 dark:text-slate-300 leading-snug">
+                        Giá chuyến đi được tính dựa trên hành trình vận chuyển (điểm đi - điểm đến). Tài xế chịu trách nhiệm về mức giá thoả thuận với khách hàng.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAgreementOpen(true)}
+                        className="font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 underline inline-flex items-center gap-1 active:opacity-80"
+                      >
+                        <span>Xem lưu ý thoả thuận giá & Hợp đồng điện tử</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
 
@@ -1507,6 +1590,26 @@ export default function ReturnTripPage() {
                     </div>
                   );
                 })()}
+
+                {/* Lưu ý thoả thuận giá & Hợp đồng vận chuyển */}
+                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/70 dark:bg-emerald-950/20 dark:border-emerald-900/50 p-3 text-xs space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <Info className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div className="space-y-1 flex-1">
+                      <p className="text-slate-700 dark:text-slate-300 leading-snug">
+                        Giá chuyến đi được tính dựa trên hành trình vận chuyển (điểm đi - điểm đến). Tài xế chịu trách nhiệm về mức giá thoả thuận với khách hàng.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsAgreementOpen(true)}
+                        className="font-semibold text-emerald-700 dark:text-emerald-400 hover:text-emerald-800 dark:hover:text-emerald-300 underline inline-flex items-center gap-1 active:opacity-80"
+                      >
+                        <span>Xem lưu ý thoả thuận giá & Hợp đồng điện tử</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>
