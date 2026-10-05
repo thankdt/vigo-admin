@@ -63,6 +63,52 @@ const getReturnTripFloorPrice = (count: number) => {
   return capped <= 1 ? 150_000 : capped * 100_000;
 };
 
+/**
+ * Tính toán các khoản khấu trừ ví và thu nhập thực nhận cho chuyến tự đặt:
+ * - Giá cước khách trả (totalPriceInclVat) đã bao gồm VAT 8%.
+ * - Giá trước VAT: priceBeforeVat = Math.round(totalPriceInclVat / 1.08)
+ * - Thuế VAT (8%): vatAmount = totalPriceInclVat - priceBeforeVat
+ * - Phí sàn (10%): platformFee = Math.round(priceBeforeVat * 0.1)
+ * - Thuế TNCN (1.5%): pitAmount = Math.round((priceBeforeVat - platformFee) * 0.015)
+ * - Thuế giữ hộ (VAT + TNCN): taxTotal = vatAmount + pitAmount
+ * - Tổng khấu trừ ví (~18%): totalDeduction = platformFee + taxTotal
+ * - Thu nhập thực nhận của tài xế: driverEarnings = totalPriceInclVat - totalDeduction
+ */
+const calculateReturnTripEarnings = (totalPriceInclVat: number) => {
+  if (!totalPriceInclVat || totalPriceInclVat <= 0) {
+    return {
+      priceBeforeVat: 0,
+      vatAmount: 0,
+      platformFee: 0,
+      pitAmount: 0,
+      taxTotal: 0,
+      totalDeduction: 0,
+      driverEarnings: 0,
+    };
+  }
+
+  const finalPrice = Math.round(totalPriceInclVat);
+  const priceBeforeVat = Math.round(finalPrice / 1.08);
+  const vatAmount = finalPrice - priceBeforeVat;
+  const platformFee = Math.round(priceBeforeVat * 0.1);
+  const taxableEarnings = Math.max(0, priceBeforeVat - platformFee);
+  const pitAmount = Math.round(taxableEarnings * 0.015);
+  const taxTotal = vatAmount + pitAmount;
+  const totalDeduction = platformFee + taxTotal;
+  const driverEarnings = Math.max(0, finalPrice - totalDeduction);
+
+  return {
+    finalPrice,
+    priceBeforeVat,
+    vatAmount,
+    platformFee,
+    pitAmount,
+    taxTotal,
+    totalDeduction,
+    driverEarnings,
+  };
+};
+
 interface RetailPassengerItem {
   id: string;
   name: string;
@@ -1201,18 +1247,31 @@ export default function ReturnTripPage() {
                   </div>
                 </div>
 
-                {groupCustomPrice > 0 && (
-                  <div className="rounded-lg bg-muted/50 border p-3 text-xs space-y-1">
-                    <div className="flex items-center justify-between text-muted-foreground font-medium">
-                      <span>Phí sàn (10%):</span>
-                      <span className="font-semibold text-foreground">{fmtVnd(Math.round(groupCustomPrice * 0.1))}</span>
+                {groupCustomPrice > 0 && (() => {
+                  const est = calculateReturnTripEarnings(groupCustomPrice);
+                  return (
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-900/40 border p-3.5 text-xs space-y-2">
+                      <div className="space-y-1.5 pb-2 border-b border-dashed border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Phí sàn (10%):</span>
+                          <span className="font-medium text-foreground">{fmtVnd(est.platformFee)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Thuế giữ hộ (VAT 8% + TNCN 1.5%):</span>
+                          <span className="font-medium text-foreground">{fmtVnd(est.taxTotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 font-medium">
+                          <span>Tổng trừ ví (~18%):</span>
+                          <span className="font-semibold">-{fmtVnd(est.totalDeduction)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">Thu nhập ước tính tài xế:</span>
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmtVnd(est.driverEarnings)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Tài xế thực nhận ước tính:</span>
-                      <span className="font-bold text-foreground">{fmtVnd(Math.max(0, groupCustomPrice - Math.round(groupCustomPrice * 0.1)))}</span>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
 
@@ -1423,18 +1482,31 @@ export default function ReturnTripPage() {
                   </div>
                 </div>
 
-                {retailCustomPriceTotal > 0 && (
-                  <div className="rounded-lg bg-muted/50 border p-3 text-xs space-y-1">
-                    <div className="flex items-center justify-between text-muted-foreground font-medium">
-                      <span>Phí sàn (10%):</span>
-                      <span className="font-semibold text-foreground">{fmtVnd(Math.round(retailCustomPriceTotal * 0.1))}</span>
+                {retailCustomPriceTotal > 0 && (() => {
+                  const est = calculateReturnTripEarnings(retailCustomPriceTotal);
+                  return (
+                    <div className="rounded-xl bg-slate-50 dark:bg-slate-900/40 border p-3.5 text-xs space-y-2">
+                      <div className="space-y-1.5 pb-2 border-b border-dashed border-slate-200 dark:border-slate-800">
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Phí sàn (10%):</span>
+                          <span className="font-medium text-foreground">{fmtVnd(est.platformFee)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-muted-foreground">
+                          <span>Thuế giữ hộ (VAT 8% + TNCN 1.5%):</span>
+                          <span className="font-medium text-foreground">{fmtVnd(est.taxTotal)}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 font-medium">
+                          <span>Tổng trừ ví (~18%):</span>
+                          <span className="font-semibold">-{fmtVnd(est.totalDeduction)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between pt-0.5">
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">Thu nhập ước tính tài xế:</span>
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{fmtVnd(est.driverEarnings)}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center justify-between text-muted-foreground">
-                      <span>Thu nhập ước tính tài xế:</span>
-                      <span className="font-bold text-foreground">{fmtVnd(Math.max(0, retailCustomPriceTotal - Math.round(retailCustomPriceTotal * 0.1)))}</span>
-                    </div>
-                  </div>
-                )}
+                  );
+                })()}
               </CardContent>
             </Card>
           </div>
