@@ -73,7 +73,7 @@ const getReturnTripFloorPrice = (count: number) => {
  * - Thuế VAT (8%): vatAmount = totalPriceInclVat - priceBeforeVat
  * - Phí sàn (10%): platformFee = Math.round(priceBeforeVat * 0.1)
  * - Thuế TNCN (1.5%): pitAmount = Math.round((priceBeforeVat - platformFee) * 0.015)
- * - Thuế giữ hộ (VAT + TNCN): taxTotal = vatAmount + pitAmount
+ * - Thuế khấu trừ (VAT + TNCN): taxTotal = vatAmount + pitAmount
  * - Tổng khấu trừ tài khoản (~18%): totalDeduction = platformFee + taxTotal
  * - Thu nhập thực nhận của tài xế: driverEarnings = totalPriceInclVat - totalDeduction
  */
@@ -1264,12 +1264,8 @@ export default function ReturnTripPage() {
                           <span className="font-medium text-foreground">{fmtVnd(est.platformFee)}</span>
                         </div>
                         <div className="flex items-center justify-between text-muted-foreground">
-                          <span>Thuế giữ hộ (VAT 8% + TNCN 1.5%):</span>
+                          <span>Thuế khấu trừ (VAT 8% + TNCN 1.5%):</span>
                           <span className="font-medium text-foreground">{fmtVnd(est.taxTotal)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 font-medium">
-                          <span>Tổng trừ tài khoản (~18%):</span>
-                          <span className="font-semibold">-{fmtVnd(est.totalDeduction)}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between pt-0.5">
@@ -1519,12 +1515,8 @@ export default function ReturnTripPage() {
                           <span className="font-medium text-foreground">{fmtVnd(est.platformFee)}</span>
                         </div>
                         <div className="flex items-center justify-between text-muted-foreground">
-                          <span>Thuế giữ hộ (VAT 8% + TNCN 1.5%):</span>
+                          <span>Thuế khấu trừ (VAT 8% + TNCN 1.5%):</span>
                           <span className="font-medium text-foreground">{fmtVnd(est.taxTotal)}</span>
-                        </div>
-                        <div className="flex items-center justify-between text-amber-700 dark:text-amber-400 font-medium">
-                          <span>Tổng trừ tài khoản (~18%):</span>
-                          <span className="font-semibold">-{fmtVnd(est.totalDeduction)}</span>
                         </div>
                       </div>
                       <div className="flex items-center justify-between pt-0.5">
