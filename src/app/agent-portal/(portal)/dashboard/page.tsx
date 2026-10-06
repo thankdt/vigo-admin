@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { getAgentMe, AgentMe } from '@/lib/api';
 import { ListOrdered, Wallet, PlusCircle, ArrowRight, BadgePercent, ChevronRight } from 'lucide-react';
 import { CreateBookingDialog } from '@/app/(app)/bookings/components/create-booking-dialog';
+import { TripAgreementDialog } from '../../components/trip-agreement-dialog';
 
 const fmtVnd = (n: number | null | undefined) => (n == null ? '—' : `${n.toLocaleString('vi-VN')}₫`);
 
@@ -14,6 +15,7 @@ export default function AgentDashboardPage() {
   const router = useRouter();
   const [me, setMe] = React.useState<AgentMe | null>(null);
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+  const [isAgreementOpen, setIsAgreementOpen] = React.useState(true);
   // Trong app (webview đặt hộ) app inject bridge `VigoApp`. Có bridge → card hoa hồng bấm được
   // để thoát webview về màn ví hoa hồng native (khách: affiliate, tài xế: ví thưởng). Trên web
   // thuần không có bridge → card điều hướng sang trang ví web.
@@ -40,6 +42,9 @@ export default function AgentDashboardPage() {
 
   return (
     <div className="space-y-3.5 max-w-lg mx-auto">
+      {/* Popup xác nhận thoả thuận chuyến đi */}
+      <TripAgreementDialog open={isAgreementOpen} onOpenChange={setIsAgreementOpen} />
+
       {/* 1. Banner Chính sách hoa hồng: thu gọn tối đa diện tích, thanh ngang thanh lịch */}
       <div className="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/25 border border-emerald-200/80 dark:border-emerald-800/40 shadow-2xs">
         <BadgePercent className="h-7 w-7 text-emerald-600 dark:text-emerald-400 shrink-0" />
