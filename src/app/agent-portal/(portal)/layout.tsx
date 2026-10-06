@@ -6,12 +6,9 @@ import {
   SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter,
   SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger,
 } from '@/components/ui/sidebar';
-import { LogOut, Wallet, Home, History, User } from 'lucide-react';
+import { LogOut, Wallet } from 'lucide-react';
 import { getAgentMe, type AgentMe } from '@/lib/api';
 import { visibleNavItems } from '../agent-portal-nav';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import React from 'react';
 
 /** Số dư tài khoản hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
@@ -37,7 +34,6 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
   const router = useRouter();
   const [authorized, setAuthorized] = React.useState(false);
   const [me, setMe] = React.useState<AgentMe | null>(null);
-  const [isAccountOpen, setIsAccountOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -136,121 +132,8 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
           </div>
         </header>
 
-        {/* Nội dung trang: padding gọn trên mobile (p-3 sm:p-6), chừa pb-20 cho bottom nav */}
-        <main className="p-3 sm:p-6 pb-20 sm:pb-6 max-w-5xl mx-auto w-full">{children}</main>
-
-        {/* Mobile Bottom Navigation Bar: Cố định ở đáy màn hình theo thiết kế */}
-        <nav className="fixed bottom-0 left-0 right-0 z-30 flex h-14 items-center justify-around border-t bg-background/95 px-2 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden shadow-sm">
-          <Link
-            href="/agent-portal/dashboard"
-            className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[11px] font-medium transition-colors',
-              pathname === '/agent-portal/dashboard'
-                ? 'text-teal-600 font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Home className="h-5 w-5" />
-            <span>Trang chủ</span>
-          </Link>
-          <Link
-            href="/agent-portal/wallet"
-            className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[11px] font-medium transition-colors',
-              pathname.startsWith('/agent-portal/wallet')
-                ? 'text-teal-600 font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <Wallet className="h-5 w-5" />
-            <span>Tài khoản</span>
-          </Link>
-          <Link
-            href="/agent-portal/orders"
-            className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[11px] font-medium transition-colors',
-              pathname.startsWith('/agent-portal/orders')
-                ? 'text-teal-600 font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <History className="h-5 w-5" />
-            <span>Lịch sử</span>
-          </Link>
-          <button
-            type="button"
-            onClick={() => setIsAccountOpen(true)}
-            className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-0.5 py-1 text-[11px] font-medium transition-colors',
-              isAccountOpen
-                ? 'text-teal-600 font-semibold'
-                : 'text-muted-foreground hover:text-foreground'
-            )}
-          >
-            <User className="h-5 w-5" />
-            <span>Cá nhân</span>
-          </button>
-        </nav>
-
-        {/* Bottom sheet hiển thị thông tin tài khoản cho tab "Cá nhân" trên mobile */}
-        <Sheet open={isAccountOpen} onOpenChange={setIsAccountOpen}>
-          <SheetContent side="bottom" className="rounded-t-2xl px-5 py-6 max-h-[85vh] overflow-y-auto">
-            <SheetHeader className="text-left pb-4 border-b">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-teal-100 dark:bg-teal-900/50 text-teal-700 dark:text-teal-300 flex items-center justify-center font-bold text-base">
-                  {me?.displayName ? me.displayName.slice(0, 2).toUpperCase() : 'ĐL'}
-                </div>
-                <div>
-                  <SheetTitle className="text-lg font-bold">{me?.displayName ?? 'Đại lý ViiGO'}</SheetTitle>
-                  <SheetDescription className="text-xs text-muted-foreground mt-0.5">
-                    {me?.walletType === 'DRIVER_MAIN' ? 'Tài xế kiêm đại lý đặt hộ' : 'Đại lý đối tác'}
-                  </SheetDescription>
-                </div>
-              </div>
-            </SheetHeader>
-            <div className="py-4 space-y-3 text-sm">
-              <div className="flex justify-between items-center py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Hoa hồng đặt hộ</span>
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">
-                  {me?.commissionPercent != null ? `${me.commissionPercent}%` : '10%'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Loại tài khoản</span>
-                <span className="font-semibold">
-                  {me?.walletType === 'DRIVER_MAIN' ? 'Tài khoản tài xế (App tài xế)' : 'Tài khoản hoa hồng'}
-                </span>
-              </div>
-              <div className="flex justify-between items-center py-1 border-b border-border/50">
-                <span className="text-muted-foreground">Số dư hiện tại</span>
-                <span className="font-bold text-foreground">
-                  {me?.walletBalance != null ? `${me.walletBalance.toLocaleString('vi-VN')}₫` : '0₫'}
-                </span>
-              </div>
-              {me?.bankInfo && (
-                <div className="flex justify-between items-center py-1 border-b border-border/50">
-                  <span className="text-muted-foreground">Tài khoản nhận tiền</span>
-                  <span className="font-semibold text-right text-xs">
-                    {me.bankInfo.bankName} - {me.bankInfo.accountNumber}
-                  </span>
-                </div>
-              )}
-            </div>
-            <div className="pt-2">
-              <Button
-                variant="destructive"
-                className="w-full flex items-center justify-center gap-2 h-11 rounded-xl"
-                onClick={() => {
-                  setIsAccountOpen(false);
-                  handleLogout();
-                }}
-              >
-                <LogOut className="h-4 w-4" />
-                <span>Đăng xuất</span>
-              </Button>
-            </div>
-          </SheetContent>
-        </Sheet>
+        {/* Nội dung trang: padding gọn trên mobile (p-3 sm:p-6) */}
+        <main className="p-3 sm:p-6 max-w-5xl mx-auto w-full">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );
