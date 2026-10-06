@@ -224,8 +224,8 @@ export function CreateBookingDialog({
 
   // Scheduled-trip state. Pickup WINDOW [from, to] — raw <input
   // type="datetime-local"> values (no timezone suffix). Converted to ISO at
-  // submit. Default to from=+30m / to=+60m when the operator toggles on.
-  const [isScheduled, setIsScheduled] = React.useState(false);
+  // submit. Default to from=+30m / to=+60m when the operator toggles on (or in agent mode).
+  const [isScheduled, setIsScheduled] = React.useState(mode === 'agent');
   const [scheduledFrom, setScheduledFrom] = React.useState('');
   const [scheduledTo, setScheduledTo] = React.useState('');
 
@@ -360,9 +360,18 @@ export function CreateBookingDialog({
     setSelectedDriverId(null);
     setDriverSearch('');
     setIncludeBusy(false);
-    setIsScheduled(false);
-    setScheduledFrom('');
-    setScheduledTo('');
+    setIsScheduled(mode === 'agent');
+    if (mode === 'agent') {
+      const from = new Date();
+      from.setMinutes(from.getMinutes() + 30);
+      const to = new Date();
+      to.setMinutes(to.getMinutes() + 60);
+      setScheduledFrom(formatLocal(from));
+      setScheduledTo(formatLocal(to));
+    } else {
+      setScheduledFrom('');
+      setScheduledTo('');
+    }
     setDuplicateInfo(null);
     setPendingPromotionId(null);
     setVoucherDropped(false);
@@ -390,7 +399,7 @@ export function CreateBookingDialog({
     setCoPassengers(initial.coPassengers);
     setCompanionPhone(initial.companionPhone);
     setNote(initial.note);
-    setIsScheduled(initial.isScheduled);
+    setIsScheduled(mode === 'agent' ? true : initial.isScheduled);
     setScheduledFrom(initial.scheduledFrom);
     setScheduledTo(initial.scheduledTo);
     // Tài xế và giá KHÔNG chép: chuyến mới tự dispatch, giá tự tính lại.
@@ -447,9 +456,9 @@ export function CreateBookingDialog({
   const minScheduledAt = React.useMemo(() => formatLocal(new Date()), [open, isScheduled]);
 
   // Default the window to from=+30m / to=+60m when the operator first toggles
-  // scheduling on, so they only have to bump it forward.
+  // scheduling on (or when dialog opens in agent mode), so they only have to bump it forward.
   React.useEffect(() => {
-    if (isScheduled && !scheduledFrom) {
+    if ((isScheduled || mode === 'agent') && !scheduledFrom) {
       const from = new Date();
       from.setMinutes(from.getMinutes() + 30);
       const to = new Date();
@@ -457,7 +466,7 @@ export function CreateBookingDialog({
       setScheduledFrom(formatLocal(from));
       setScheduledTo(formatLocal(to));
     }
-  }, [isScheduled, scheduledFrom]);
+  }, [open, isScheduled, scheduledFrom, mode]);
 
   const handleSubmit = async () => {
     // Validation
@@ -492,9 +501,25 @@ export function CreateBookingDialog({
       });
       return;
     }
-    // Pickup window [from, to] — undefined for an immediate trip.
+    // Pickup window [from, to] — bắt buộc với cổng đặt hộ (agent), tuỳ chọn với admin.
     let scheduledFromIso: string | undefined, scheduledToIso: string | undefined;
-    if (isScheduled) {
+    if (mode === 'agent') {
+      if (!scheduledFrom || !scheduledTo) {
+        toast({
+          variant: 'destructive',
+          title: 'Thiếu thời gian hẹn giờ',
+          description: 'Vui lòng chọn khoảng thời gian hẹn giờ đón khách (bắt buộc cho chuyến đặt hộ).',
+        });
+        return;
+      }
+      const v = validateWindow(scheduledFrom, scheduledTo);
+      if (!v.ok) {
+        toast({ variant: 'destructive', title: 'Lỗi thời gian hẹn giờ', description: v.error });
+        return;
+      }
+      scheduledFromIso = toIso(scheduledFrom);
+      scheduledToIso = toIso(scheduledTo);
+    } else if (isScheduled) {
       const v = validateWindow(scheduledFrom, scheduledTo);
       if (!v.ok) {
         toast({ variant: 'destructive', title: 'Lỗi', description: v.error });
@@ -1095,19 +1120,28 @@ export function CreateBookingDialog({
                 <Label htmlFor="cb-scheduled-toggle" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground cursor-pointer">
                   <Clock className="h-4 w-4" />
                   Hẹn giờ
+                  {mode === 'agent' && (
+                    <Badge variant="secondary" className="text-[11px] font-semibold text-teal-700 bg-teal-50 dark:bg-teal-950/60 dark:text-teal-300 border-teal-200 dark:border-teal-800">
+                      Bắt buộc
+                    </Badge>
+                  )}
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Bật để đặt khoảng giờ đón [từ → đến]. Tài xế nhận thông báo trước 10 phút.
+                  {mode === 'agent'
+                    ? 'Chọn khoảng giờ đón [từ → đến]. Tài xế nhận thông báo trước 10 phút.'
+                    : 'Bật để đặt khoảng giờ đón [từ → đến]. Tài xế nhận thông báo trước 10 phút.'}
                 </p>
               </div>
-              <Switch
-                id="cb-scheduled-toggle"
-                checked={isScheduled}
-                // Đổi đi-ngay ↔ đặt-lịch làm đổi ngày cơ sở tính phụ phí → xoá giá cũ.
-                onCheckedChange={(v) => { setIsScheduled(v); clearEstimate(); }}
-              />
+              {mode !== 'agent' && (
+                <Switch
+                  id="cb-scheduled-toggle"
+                  checked={isScheduled}
+                  // Đổi đi-ngay ↔ đặt-lịch làm đổi ngày cơ sở tính phụ phí → xoá giá cũ.
+                  onCheckedChange={(v) => { setIsScheduled(v); clearEstimate(); }}
+                />
+              )}
             </div>
-            {isScheduled && (
+            {(mode === 'agent' || isScheduled) && (
               <VietnameseSchedulePicker
                 scheduledFrom={scheduledFrom}
                 scheduledTo={scheduledTo}
