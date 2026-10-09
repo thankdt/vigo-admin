@@ -482,6 +482,35 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
               </div>
             </div>
 
+            <div className="space-y-2 border-t pt-4">
+              <h4 className="font-semibold">Khu vực hoạt động</h4>
+              {driver.provinces && driver.provinces.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {driver.provinces.map((p) => (
+                    <Badge
+                      key={p.id}
+                      variant="secondary"
+                      className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800"
+                    >
+                      {p.name}
+                    </Badge>
+                  ))}
+                </div>
+              ) : driver.routes && driver.routes.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5">
+                  {driver.routes.map((r) => (
+                    <Badge key={r.id} variant="outline">
+                      {r.name}
+                    </Badge>
+                  ))}
+                </div>
+              ) : driver.fixedRoute?.name ? (
+                <Badge variant="outline">{driver.fixedRoute.name}</Badge>
+              ) : (
+                <p className="text-sm text-muted-foreground italic">Chưa đăng ký</p>
+              )}
+            </div>
+
             <div className="space-y-3 border-t pt-4">
               <h4 className="font-semibold">Lịch sử duyệt / từ chối</h4>
               {/* Đơn vị vận tải là trang ADMIN → hiện ghi chú nội bộ. Cổng HTX

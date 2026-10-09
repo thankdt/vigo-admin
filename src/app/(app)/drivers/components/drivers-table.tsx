@@ -878,7 +878,7 @@ export function DriversTable() {
                 <TableHead>Phương tiện</TableHead>
                 <TableHead>Đơn vị vận tải</TableHead>
                 <TableHead className="text-right">Số dư ví</TableHead>
-                <TableHead>Tỉnh / Tuyến</TableHead>
+                <TableHead>Khu vực hoạt động</TableHead>
                 {showStatusCol && (
                   <TableHead>{activeTab === 'all' ? 'Trạng thái' : 'Online'}</TableHead>
                 )}
@@ -1005,8 +1005,11 @@ export function DriversTable() {
                     <TableCell>
                       {/* 2025: Tỉnh hoạt động (34 tỉnh sáp nhập), fallback về Tuyến cũ */}
                       {driver.provinces && driver.provinces.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {driver.provinces.slice(0, 2).map((p) => (
+                        <div
+                          className="flex flex-wrap gap-1"
+                          title={driver.provinces.map((p) => p.name).join(', ')}
+                        >
+                          {driver.provinces.slice(0, 3).map((p) => (
                             <span
                               key={p.id}
                               className="inline-flex items-center rounded-md bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800 px-1.5 py-0.5 text-xs font-medium"
@@ -1014,12 +1017,11 @@ export function DriversTable() {
                               {p.name}
                             </span>
                           ))}
-                          {driver.provinces.length > 2 && (
+                          {driver.provinces.length > 3 && (
                             <span
                               className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
-                              title={driver.provinces.map((p) => p.name).join(', ')}
                             >
-                              +{driver.provinces.length - 2}
+                              +{driver.provinces.length - 3}
                             </span>
                           )}
                         </div>
@@ -1876,7 +1878,7 @@ export function DriversTable() {
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-semibold">Tỉnh hoạt động (Sau sáp nhập 2025)</h4>
+                  <h4 className="font-semibold">Khu vực hoạt động (Tỉnh)</h4>
                   <p className="text-xs text-muted-foreground">Tài xế nhận các chuyến đón hoặc trả tại các tỉnh này</p>
                 </div>
                 {editingProvinces === null ? (
