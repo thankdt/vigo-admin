@@ -1,6 +1,7 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
 import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
+import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
   buildRecentRatingsQuery,
@@ -399,9 +400,12 @@ export async function getDrivers(params: {
   csNeverWorked?: 'true';
   csWorkedFrom?: string;
   csWorkedTo?: string;
+  // Trạng thái online như badge (`driverOnlineState`). Server echo `meta.onlineState` khi
+  // đã áp dụng — BE cũ bỏ qua param im lặng, xem `onlineFilterWarning`.
+  onlineState?: DriverOnlineState;
   sort?: 'name' | 'isApproved' | 'createdAt' | 'csLastCallAt';
   order?: 'asc' | 'desc';
-} = {}): Promise<GetApiResponse<Driver>> {
+} = {}): Promise<GetApiResponse<Driver> & { meta?: { onlineState?: string; presenceUnavailable?: boolean } }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
@@ -421,6 +425,7 @@ export async function getDrivers(params: {
   if (params.csNeverWorked) query.set('csNeverWorked', params.csNeverWorked);
   if (params.csWorkedFrom) query.set('csWorkedFrom', params.csWorkedFrom);
   if (params.csWorkedTo) query.set('csWorkedTo', params.csWorkedTo);
+  if (params.onlineState) query.set('onlineState', params.onlineState);
   if (params.sort) query.set('sort', params.sort);
   if (params.order) query.set('order', params.order);
 
