@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { sendAgentLoginOtp, agentLoginOtp, getAgentMe } from '@/lib/api';
+import { stripUrlTokens } from '../strip-url-tokens';
 import React from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, ArrowLeft } from 'lucide-react';
@@ -25,19 +26,12 @@ export default function AgentLoginPage() {
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-      try {
-        const searchParams = new URLSearchParams(window.location.search);
-        const ssoToken = searchParams.get('sso_token') || searchParams.get('token');
-        if (ssoToken) {
-          localStorage.setItem('access_token', ssoToken);
-        }
-      } catch (_) {}
-
+      // Token chỉ đến từ localStorage, KHÔNG từ URL (xem stripUrlTokens). Đích cố định, không
+      // đọc ?redirect= — chống chuyển hướng ra trang ngoài sau đăng nhập.
+      stripUrlTokens();
       if (localStorage.getItem('access_token')) {
-        const searchParams = new URLSearchParams(window.location.search);
-        const target = searchParams.get('redirect') || '/agent-portal/dashboard';
         getAgentMe()
-          .then(() => router.replace(target))
+          .then(() => router.replace('/agent-portal/dashboard'))
           .catch(() => {/* stale/non-agent token — stay on login */});
       }
     }

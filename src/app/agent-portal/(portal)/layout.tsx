@@ -9,6 +9,7 @@ import {
 import { LogOut, Wallet } from 'lucide-react';
 import { getAgentMe, type AgentMe } from '@/lib/api';
 import { visibleNavItems } from '../agent-portal-nav';
+import { stripUrlTokens } from '../strip-url-tokens';
 import React from 'react';
 
 /** Số dư tài khoản hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
@@ -37,18 +38,7 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
 
   React.useEffect(() => {
     if (typeof window === 'undefined') return;
-    try {
-      const searchParams = new URLSearchParams(window.location.search);
-      const ssoToken = searchParams.get('sso_token') || searchParams.get('token');
-      if (ssoToken) {
-        localStorage.setItem('access_token', ssoToken);
-        searchParams.delete('sso_token');
-        searchParams.delete('token');
-        const cleanSearch = searchParams.toString();
-        const cleanUrl = window.location.pathname + (cleanSearch ? `?${cleanSearch}` : '') + window.location.hash;
-        window.history.replaceState({}, '', cleanUrl);
-      }
-    } catch (_) {}
+    stripUrlTokens();
 
     if (!localStorage.getItem('access_token')) {
       router.replace('/agent-portal/login');
