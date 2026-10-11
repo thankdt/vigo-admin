@@ -17,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { DriverNoteSelect } from './driver-note-select';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen, Clock, PlayCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -101,66 +102,10 @@ function safeImageArray(images: any): string[] {
 type SortKey = 'name' | 'isApproved' | 'createdAt' | 'csLastCallAt';
 type TableTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false' | 'needsReview';
 
-/** Ghi chú CSKH của tài xế (csNote) trong dialog chi tiết — cùng dữ liệu với cột "Ghi chú" ở danh sách. */
-export function DriverCsNoteEditor({
-  driverId,
-  initial,
-  onSaved,
-}: {
-  driverId: string;
-  initial: string;
-  onSaved: (csNote: string | null) => void;
-}) {
-  const { toast } = useToast();
-  const [value, setValue] = React.useState(initial);
-  const [saving, setSaving] = React.useState(false);
-  const dirty = value.trim() !== initial.trim();
-
-  const save = async () => {
-    setSaving(true);
-    try {
-      const trimmed = value.trim();
-      const updated = await updateDriverCsStatus(driverId, { csNote: trimmed });
-      onSaved(updated?.csNote ?? (trimmed || null));
-      toast({ title: 'Đã lưu ghi chú' });
-    } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Không lưu được ghi chú', description: err.message });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="border-t pt-4 space-y-2">
-      <h4 className="font-semibold">Ghi chú CSKH</h4>
-      <p className="text-xs text-muted-foreground">
-        Hiện ở cột "Ghi chú" và thành tag cạnh tài xế ở danh sách chuyến đi. Chỉ admin thấy.
-      </p>
-      <Textarea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        placeholder="Ghi chú về tài xế…"
-        rows={3}
-        maxLength={2000}
-        disabled={saving}
-      />
-      <div className="flex justify-end">
-        <Button size="sm" onClick={save} disabled={saving || !dirty}>
-          {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Lưu ghi chú
-        </Button>
-      </div>
-    </div>
-  );
-}
-
 export function DriversTable() {
   const [drivers, setDrivers] = React.useState<Driver[]>([]);
   // CSKH: theo dõi đã gọi điện + ghi chú (cập nhật optimistic từng dòng, khỏi refetch cả list).
   const [csBusyId, setCsBusyId] = React.useState<string | null>(null);
-  const [editingNoteId, setEditingNoteId] = React.useState<string | null>(null);
-  const [noteDraft, setNoteDraft] = React.useState('');
-  const [savingNote, setSavingNote] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const { toast } = useToast();
@@ -863,18 +808,16 @@ export function DriversTable() {
     }
   };
 
-  const saveCsNote = async (driver: Driver) => {
-    setSavingNote(true);
+  const saveCsNote = async (driver: Driver, note: string | null) => {
     try {
-      const trimmed = noteDraft.trim();
-      const updated = await updateDriverCsStatus(driver.id, { csNote: trimmed });
+      const updated = await updateDriverCsStatus(driver.id, { csNote: note ?? '' });
       // Giá trị ĐÍCH do client quyết (như toggleCsCalled) — không phụ thuộc shape response.
-      patchDriverRow(driver.id, { csNote: updated?.csNote ?? (trimmed || null) });
-      setEditingNoteId(null);
+      patchDriverRow(driver.id, { csNote: updated?.csNote ?? note });
+      return updated?.csNote ?? note;
     } catch (err: any) {
+      // 403 khi chọn chuỗi ngoài danh mục (không quyền) cũng hiện message tiếng Việt từ BE.
       toast({ variant: 'destructive', title: 'Không lưu được ghi chú', description: err.message });
-    } finally {
-      setSavingNote(false);
+      return undefined;
     }
   };
 
@@ -1175,47 +1118,14 @@ export function DriversTable() {
                         )}
                       </div>
                     </TableCell>
-                    {/* CSKH: ghi chú nội bộ — click để sửa inline. */}
+                    {/* CSKH: ghi chú nội bộ — chọn từ danh mục (quyền driver-note-presets mới thêm/sửa/xoá mục). */}
                     <TableCell onClick={(e) => e.stopPropagation()} className="min-w-[240px] max-w-[320px] align-top">
-                      {editingNoteId === driver.id ? (
-                        <div className="flex items-center gap-1">
-                          <Input
-                            value={noteDraft}
-                            onChange={(e) => setNoteDraft(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') saveCsNote(driver);
-                              if (e.key === 'Escape') setEditingNoteId(null);
-                            }}
-                            disabled={savingNote}
-                            autoFocus
-                            placeholder="Ghi chú..."
-                            className="h-8 min-w-0 flex-1 text-sm"
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 shrink-0"
-                            onClick={() => saveCsNote(driver)}
-                            disabled={savingNote}
-                            aria-label="Lưu ghi chú"
-                          >
-                            {savingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckIcon className="h-4 w-4" />}
-                          </Button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => { setNoteDraft(driver.csNote || ''); setEditingNoteId(driver.id); }}
-                          className="group flex w-full items-start gap-1 text-left text-sm"
-                        >
-                          {driver.csNote ? (
-                            <span className="line-clamp-2 whitespace-pre-wrap break-words">{driver.csNote}</span>
-                          ) : (
-                            <span className="italic text-muted-foreground/60">+ Ghi chú</span>
-                          )}
-                          <Pencil className="mt-0.5 h-3 w-3 shrink-0 opacity-0 group-hover:opacity-60" />
-                        </button>
-                      )}
+                      <DriverNoteSelect
+                        value={driver.csNote ?? null}
+                        onChange={async (note) => {
+                          await saveCsNote(driver, note);
+                        }}
+                      />
                     </TableCell>
                     <TableCell onClick={(e) => e.stopPropagation()}>
                       <DropdownMenu>
@@ -2122,15 +2032,21 @@ export function DriversTable() {
           )}
 
           {viewDriver && (
-            <DriverCsNoteEditor
-              key={viewDriver.id}
-              driverId={viewDriver.id}
-              initial={viewDriver.csNote ?? ''}
-              onSaved={(csNote) => {
-                patchDriverRow(viewDriver.id, { csNote });
-                setViewDriver((v) => (v && v.id === viewDriver.id ? { ...v, csNote } : v));
-              }}
-            />
+            <div className="border-t pt-4 space-y-2">
+              <h4 className="font-semibold">Ghi chú tài xế (hiện ở danh sách chuyến đi)</h4>
+              <p className="text-xs text-muted-foreground">
+                Chọn một ghi chú có sẵn. Không phải nhật ký "Ghi nhận" bên dưới. Chỉ admin thấy.
+              </p>
+              <DriverNoteSelect
+                key={viewDriver.id}
+                value={viewDriver.csNote ?? null}
+                onChange={async (note) => {
+                  const csNote = await saveCsNote(viewDriver, note);
+                  if (csNote === undefined) return;
+                  setViewDriver((v) => (v && v.id === viewDriver.id ? { ...v, csNote } : v));
+                }}
+              />
+            </div>
           )}
 
           {viewDriver && (
