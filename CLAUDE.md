@@ -146,9 +146,10 @@ Chốt cứng (làm 1 lần trên MỖI máy):
 Thói quen khi làm việc:
 - **1 việc = 1 session, xong thì `/clear`.** Đo được 223 lượt/181 phút chạy một
   mạch — số lượt nhân context lên tuyến tính, không phải cộng.
-- **Chọn model theo phân loại 0.5.b**: nhóm CAO → Opus; cơ học/nhỏ (rename, sửa
-  copy, chạy test, đọc log, bump version) → Sonnet (`/model`). Mặc định mở session
-  bằng Sonnet, nâng lên Opus khi chạm vùng CAO.
+- **Model mặc định = `opusplan`** (đã set trong `.claude/settings.json`, dùng chung cả team):
+  Opus khi ở plan mode (lập plan/spec, review nhóm CAO theo 0.5.b), tự chuyển Sonnet khi
+  thực thi code. Việc cơ học/nhỏ (rename, sửa copy, chạy test, đọc log, bump version) có
+  thể `/model sonnet` cho rẻ hơn; vùng CAO (tiền/auth/migration) giữ Opus.
 - **Không đổ file to vào context**: đọc bằng `sed -n 'a,bp'` / `grep -n`, đừng
   `cat` cả file, đừng đọc full report. File handoff của sub-agent (0.5.g) phải
   ≤ ~150 dòng và session chính chỉ đọc phần KẾT LUẬN. (Đo được 1 lần đọc file
