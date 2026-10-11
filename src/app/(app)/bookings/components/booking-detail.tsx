@@ -449,11 +449,32 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
       setCallNote('');
       setCallReason('');
       // Cập nhật trạng thái tại chỗ + reload lịch sử; báo danh sách ngoài refetch cột.
-      setBooking((prev) => (prev ? { ...prev, customerCallStatus: status } : prev));
+      // Vá CẢ cột theo pha (cùng `rowIsBeforePhase` như nút bên dưới): chỉ vá
+      // customerCallStatus thì badge đổi mà nút vẫn là "Nhận gọi" → bấm lại bị backend
+      // chặn vì việc đã có người giữ (chính mình) → ghi chú không lưu được.
+      setBooking((prev) =>
+        prev
+          ? {
+              ...prev,
+              customerCallStatus: status,
+              ...(rowIsBeforePhase(prev) ? { callBeforeStatus: status } : { callAfterStatus: status }),
+            }
+          : prev,
+      );
       await loadCallHistory();
       onCallRecorded?.();
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không lưu được', description: err.message });
+      // Nhận bị từ chối = dữ liệu trên màn đã cũ (người khác/chính mình đã nhận) → tải lại
+      // để nút chuyển sang ghi kết quả. Giữ nguyên ghi chú đang gõ để khỏi phải gõ lại.
+      if (status === 'CLAIMED') {
+        try {
+          setBooking(await getBookingDetails(booking.id));
+          await loadCallHistory();
+        } catch {
+          // Phần phụ — tải lại hỏng thì giữ màn cũ, toast lỗi ở trên đã đủ.
+        }
+      }
     } finally {
       setCallSaving(null);
     }
