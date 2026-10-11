@@ -280,11 +280,29 @@ export function DriverRatingDisplay({ stars }: { stars: number }) {
 }
 
 /**
+ * Tag ghi chú CSKH của tài xế (cùng nội dung ô "Ghi chú" ở trang Tài xế).
+ * Hiện nguyên văn; quá dài thì cắt "…" bằng CSS, hover (title) xem đủ.
+ */
+export function DriverNoteBadge({ note }: { note: string }) {
+  return (
+    <Badge
+      variant="outline"
+      className="min-w-0 max-w-[16rem] bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800 text-[10px] px-1.5 py-0 font-normal"
+      title={note}
+    >
+      <span className="truncate">{note}</span>
+    </Badge>
+  );
+}
+
+/**
  * Cụm badge cảnh báo và số sao của tài xế, hiển thị cạnh SĐT tài xế.
  */
 export function DriverAlertBadges({ driver }: { driver?: Booking['driver'] }) {
   if (!driver) return null;
+  const note = typeof driver.csNote === 'string' ? driver.csNote.trim() : '';
   const hasBadges =
+    note.length > 0 ||
     driver.displayStars != null ||
     driver.isNew === true ||
     driver.isHighCancel === true ||
@@ -302,6 +320,7 @@ export function DriverAlertBadges({ driver }: { driver?: Booking['driver'] }) {
       {driver.isHighCancel === true && <HighCancelBadge />}
       {driver.isFrequentlyLate === true && <LateDriverBadge />}
       {driver.hasViolation === true && <ViolationBadge />}
+      {note.length > 0 && <DriverNoteBadge note={note} />}
     </>
   );
 }
