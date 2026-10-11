@@ -57,17 +57,9 @@ const processQueue = (error: any, token: string | null = null) => {
 };
 
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {
-  let token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-  if (!token && typeof window !== 'undefined' && window.location?.search) {
-    try {
-      const p = new URLSearchParams(window.location.search);
-      const queryToken = p.get('sso_token') || p.get('token');
-      if (queryToken) {
-        token = queryToken;
-        localStorage.setItem('access_token', queryToken);
-      }
-    } catch (_) {}
-  }
+  // KHÔNG nhận token qua URL (?token= / ?sso_token=): link chứa token của kẻ xấu sẽ đăng
+  // nhập nạn nhân vào tài khoản kẻ xấu (login CSRF). SSO webview ghi thẳng vào localStorage.
+  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
   const headers = new Headers(options.headers || {});
 
   if (token) {
