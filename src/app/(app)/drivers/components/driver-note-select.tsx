@@ -9,7 +9,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 import { createDriverNotePreset, type DriverNotePreset } from '@/lib/api';
 import { DriverNoteManageDialog } from './driver-note-manage-dialog';
-import { buildNoteOptions, loadDriverNotePresets } from './driver-note-presets-cache';
+import {
+  buildNoteOptions,
+  loadDriverNotePresets,
+  refreshDriverNotePresets,
+  subscribeDriverNotePresets,
+} from './driver-note-presets-cache';
 
 export { buildNoteOptions, loadDriverNotePresets };
 
@@ -54,6 +59,8 @@ export function DriverNoteSelect({
 
   React.useEffect(() => {
     void reload();
+    // Dòng khác đổi danh mục → đọc lại từ cache đã làm mới (không thêm request).
+    return subscribeDriverNotePresets(() => void reload());
   }, [reload]);
 
   const commit = async (note: string | null) => {
@@ -123,7 +130,7 @@ export function DriverNoteSelect({
                 setBusy(true);
                 try {
                   const created = await createDriverNotePreset(newLabel.trim());
-                  await reload(true);
+                  await refreshDriverNotePresets();
                   setAddOpen(false);
                   await onChange(created.label);
                 } catch (err: any) {
@@ -140,7 +147,7 @@ export function DriverNoteSelect({
       </Dialog>
 
       {canManage && (
-        <DriverNoteManageDialog open={manageOpen} onOpenChange={setManageOpen} onChanged={() => void reload(true)} />
+        <DriverNoteManageDialog open={manageOpen} onOpenChange={setManageOpen} onChanged={() => void reload()} />
       )}
     </>
   );

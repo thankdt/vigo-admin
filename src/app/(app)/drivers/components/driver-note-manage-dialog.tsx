@@ -11,7 +11,7 @@ import {
   renameDriverNotePreset,
   type DriverNotePreset,
 } from '@/lib/api';
-import { loadDriverNotePresets } from './driver-note-presets-cache';
+import { loadDriverNotePresets, refreshDriverNotePresets } from './driver-note-presets-cache';
 
 /**
  * Quản lý danh mục ghi chú tài xế (đổi tên / xoá / thêm). Chỉ mở cho người có quyền
@@ -49,10 +49,11 @@ export function DriverNoteManageDialog({
     };
   }, [open, toast]);
 
-  const run = async (title: string, fn: () => Promise<void>) => {
+  const run = async (title: string, fn: () => Promise<{ from: string; to: string } | void>) => {
     setBusy(true);
     try {
-      await fn();
+      const rename = await fn();
+      await refreshDriverNotePresets(rename ? { rename } : {}).catch(() => {});
       onChanged?.();
     } catch (err: any) {
       toast({ variant: 'destructive', title, description: err.message });
@@ -90,6 +91,7 @@ export function DriverNoteManageDialog({
                         const { [p.id]: _drop, ...rest } = d;
                         return rest;
                       });
+                      return { from: p.label, to: updated?.label ?? draft.trim() };
                     })
                   }
                 >

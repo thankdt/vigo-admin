@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { DriverNoteSelect } from './driver-note-select';
+import { subscribeDriverNotePresets } from './driver-note-presets-cache';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen, Clock, PlayCircle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -782,6 +783,20 @@ export function DriversTable() {
   // Vá 1 dòng tài xế tại chỗ (optimistic) — dùng cho tick "đã gọi" / lưu ghi chú CSKH.
   const patchDriverRow = (id: string, patch: Partial<Driver>) =>
     setDrivers((prev) => prev.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+
+  // Đổi tên ghi chú ở danh mục: BE đã cập nhật csNote của mọi tài xế đang dùng; vá nốt
+  // các dòng đang hiển thị để không hiện "(tự nhập) <tên cũ>" cho tới khi tải lại.
+  React.useEffect(
+    () =>
+      subscribeDriverNotePresets(({ rename }) => {
+        if (!rename) return;
+        const swap = <T extends { csNote?: string | null }>(d: T): T =>
+          d.csNote === rename.from ? { ...d, csNote: rename.to } : d;
+        setDrivers((prev) => prev.map(swap));
+        setViewDriver((v) => (v ? swap(v) : v));
+      }),
+    [],
+  );
 
   const toggleCsCalled = async (driver: Driver) => {
     // Giá trị ĐÍCH do client quyết, không phụ thuộc shape response. Trước đây hàm này

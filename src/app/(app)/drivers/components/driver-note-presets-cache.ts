@@ -32,3 +32,22 @@ export function buildNoteOptions(presets: DriverNotePreset[], value: string | nu
   }
   return opts;
 }
+
+// ── Đồng bộ giữa các ô chọn: mỗi dòng của danh sách giữ state riêng, nên khi 1 dòng đổi
+// danh mục thì các dòng còn lại phải được báo để đọc lại (nếu không chúng giữ danh sách cũ
+// và chọn lại nhãn đã đổi tên/xoá). `rename` cho bảng vá csNote của các dòng đang hiển thị.
+export type PresetChange = { rename?: { from: string; to: string } };
+const listeners = new Set<(c: PresetChange) => void>();
+
+export function subscribeDriverNotePresets(fn: (c: PresetChange) => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** Đọc lại danh mục MỘT lần (force) rồi báo mọi ô chọn / bảng. */
+export async function refreshDriverNotePresets(change: PresetChange = {}): Promise<void> {
+  await loadDriverNotePresets(true);
+  listeners.forEach((fn) => fn(change));
+}

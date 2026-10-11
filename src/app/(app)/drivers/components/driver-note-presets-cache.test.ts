@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getDriverNotePresets } from '@/lib/api';
-import { buildNoteOptions, loadDriverNotePresets, resetDriverNotePresetsCache } from './driver-note-presets-cache';
+import {
+  buildNoteOptions,
+  loadDriverNotePresets,
+  refreshDriverNotePresets,
+  resetDriverNotePresetsCache,
+  subscribeDriverNotePresets,
+} from './driver-note-presets-cache';
 
 vi.mock('@/lib/api', () => ({ getDriverNotePresets: vi.fn() }));
 
@@ -41,5 +47,25 @@ describe('loadDriverNotePresets', () => {
     await expect(loadDriverNotePresets()).rejects.toThrow('boom');
     vi.mocked(getDriverNotePresets).mockResolvedValueOnce([P('A')]);
     await expect(loadDriverNotePresets()).resolves.toEqual([P('A')]);
+  });
+});
+
+describe('refreshDriverNotePresets / subscribe', () => {
+  it('đọc lại danh mục đúng 1 lần rồi báo mọi người nghe, kèm rename', async () => {
+    resetDriverNotePresetsCache();
+    vi.mocked(getDriverNotePresets).mockReset().mockResolvedValue([P('B')]);
+    const a = vi.fn();
+    const b = vi.fn();
+    const offA = subscribeDriverNotePresets(a);
+    const offB = subscribeDriverNotePresets(b);
+    await refreshDriverNotePresets({ rename: { from: 'A', to: 'B' } });
+    expect(getDriverNotePresets).toHaveBeenCalledTimes(1);
+    expect(a).toHaveBeenCalledWith({ rename: { from: 'A', to: 'B' } });
+    expect(b).toHaveBeenCalledTimes(1);
+    offA();
+    await refreshDriverNotePresets();
+    expect(a).toHaveBeenCalledTimes(1);
+    expect(b).toHaveBeenCalledTimes(2);
+    offB();
   });
 });
