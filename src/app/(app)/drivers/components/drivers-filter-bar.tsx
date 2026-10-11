@@ -10,6 +10,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { getRoutes } from '@/lib/api';
 import type { Route } from '@/lib/types';
 import { DRIVER_CALL_TYPE_LABEL, DRIVER_CALL_TYPE_ORDER } from '@/lib/cskh-call-labels';
+import { DRIVER_ONLINE_LABEL, type DriverOnlineState } from '@/lib/driver-presence';
 
 export type DriverFilters = {
   name: string;
@@ -32,6 +33,8 @@ export type DriverFilters = {
   // CSKH: khoảng NGÀY LÀM VIỆC gần nhất (VN YYYY-MM-DD; '' = không lọc).
   csWorkedFrom: string;
   csWorkedTo: string;
+  // Trạng thái online như badge ('' = tất cả). Chỉ áp dụng ở tab Đã duyệt / Tất cả.
+  onlineState: '' | DriverOnlineState;
 };
 
 export const EMPTY_FILTERS: DriverFilters = {
@@ -46,19 +49,27 @@ export const EMPTY_FILTERS: DriverFilters = {
   csNeverWorked: false,
   csWorkedFrom: '',
   csWorkedTo: '',
+  onlineState: '',
 };
 
 export function hasAnyFilter(f: DriverFilters): boolean {
   return Boolean(
     f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName ||
     f.unconfirmedTransportCompany || f.csCalled || f.csLastCallType || f.csNeverWorked ||
-    f.csWorkedFrom || f.csWorkedTo,
+    f.csWorkedFrom || f.csWorkedTo || f.onlineState,
   );
 }
 
 const ALL_ROUTES_VALUE = '__all__';
 const ALL_CS_VALUE = '__all_cs__';
 const ALL_CS_TYPE_VALUE = '__all_cs_type__';
+const ALL_ONLINE_VALUE = '__all_online__';
+// Thứ tự theo mức "cần xử lý" của vận hành; nhãn lấy từ nguồn chung để khớp badge.
+const ONLINE_STATE_ORDER: DriverOnlineState[] = ['online', 'busy', 'idle', 'stale', 'unknown', 'offline'];
+const ONLINE_OPTIONS = [
+  { value: ALL_ONLINE_VALUE, label: 'Online: tất cả' },
+  ...ONLINE_STATE_ORDER.map((s) => ({ value: s, label: DRIVER_ONLINE_LABEL[s] })),
+];
 // Nhãn suy từ nguồn chung (src/lib/cskh-call-labels.ts) — trước đây chép tay ở đây và
 // ở driver-detail-dialog, sửa chữ một nơi là lệch nơi kia.
 const CS_TYPE_OPTIONS = [
@@ -81,9 +92,12 @@ function IconInput({
 export function DriversFilterBar({
   value,
   onChange,
+  showOnlineState = false,
 }: {
   value: DriverFilters;
   onChange: (next: DriverFilters) => void;
+  /** Hiện ô lọc trạng thái online (tab Đã duyệt / Tất cả). */
+  showOnlineState?: boolean;
 }) {
   const [routes, setRoutes] = React.useState<Route[]>([]);
 
@@ -107,7 +121,7 @@ export function DriversFilterBar({
 
   return (
     <div className="space-y-3 pb-4">
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+      <div className={`grid grid-cols-1 gap-3 ${showOnlineState ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <IconInput
           icon={User}
           placeholder="Tên tài xế..."
@@ -126,6 +140,18 @@ export function DriversFilterBar({
           value={value.plate}
           onChange={(e) => setField('plate', e.target.value)}
         />
+        {showOnlineState && (
+          <Combobox
+            options={ONLINE_OPTIONS}
+            selectedValue={value.onlineState || ALL_ONLINE_VALUE}
+            onSelect={(v) =>
+              setField('onlineState', !v || v === ALL_ONLINE_VALUE ? '' : (v as DriverOnlineState))
+            }
+            placeholder="Online: tất cả"
+            searchPlaceholder="Lọc trạng thái..."
+            noResultsText="Không có."
+          />
+        )}
       </div>
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Combobox

@@ -28,6 +28,7 @@ import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTra
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
+import { onlineFilterApplies, onlineFilterWarning, onlineStateParam, type OnlineFilterWarning } from './drivers-online-filter';
 import type { Driver, TransportCompany, Route, AdminUnit } from '@/lib/types';
 import {
   DRIVER_ONLINE_HINT,
@@ -114,6 +115,8 @@ export function DriversTable() {
   const [sortConfig, setSortConfig] = React.useState<{ key: SortKey; direction: 'ascending' | 'descending' } | null>(null);
   const [filters, setFilters] = React.useState<DriverFilters>(EMPTY_FILTERS);
   const [activeTab, setActiveTab] = React.useState<TableTab>('pending');
+  // Cảnh báo khi lọc online không đáng tin: BE chưa hỗ trợ (trả danh sách KHÔNG lọc) hoặc Redis lỗi.
+  const [onlineWarning, setOnlineWarning] = React.useState<OnlineFilterWarning | null>(null);
   const [needsReviewCount, setNeedsReviewCount] = React.useState<number>(0);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; driver: Driver | null, action: 'approve' | 'reject' }>({ open: false, driver: null, action: 'approve' });
@@ -520,6 +523,7 @@ export function DriversTable() {
     setIsLoading(true);
     setError(null);
     try {
+      const onlineState = onlineStateParam(tab, f.onlineState);
       const apiParams: Parameters<typeof getDrivers>[0] = {
         page,
         limit,
@@ -534,6 +538,7 @@ export function DriversTable() {
         csNeverWorked: f.csNeverWorked ? 'true' : undefined,
         csWorkedFrom: f.csWorkedFrom || undefined,
         csWorkedTo: f.csWorkedTo || undefined,
+        onlineState,
       };
       if (sort) {
         apiParams.sort = sort.key;
@@ -548,6 +553,7 @@ export function DriversTable() {
       const response = await getDrivers(apiParams);
       if (gen !== fetchGenRef.current) return;
       setDrivers(response.data);
+      setOnlineWarning(onlineFilterWarning(onlineState, response.meta));
       const total = response.meta?.total ?? 0;
       const apiLimit = response.meta?.limit ?? limit;
       setTotalItems(total);
@@ -555,6 +561,7 @@ export function DriversTable() {
     } catch (err: any) {
       if (gen !== fetchGenRef.current) return;
       setError(err.message);
+      setOnlineWarning(null);
       toast({
         variant: 'destructive',
         title: 'Không thể tải danh sách tài xế',
@@ -592,6 +599,10 @@ export function DriversTable() {
   const handleTabChange = (value: string) => {
     setActiveTab(value as TableTab);
     setCurrentPage(1);
+    // Tab không có ô lọc online → bỏ giá trị cũ, nếu không nó vẫn bật nút "Xóa lọc" dù không thấy.
+    if (!onlineFilterApplies(value) && filters.onlineState) {
+      setFilters({ ...filters, onlineState: '' });
+    }
   };
 
   const handleFiltersChange = (next: DriverFilters) => {
@@ -857,7 +868,17 @@ export function DriversTable() {
         <DriversFilterBar
           value={filters}
           onChange={handleFiltersChange}
+          showOnlineState={onlineFilterApplies(activeTab)}
         />
+
+        {onlineWarning && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            {onlineWarning === 'unsupported'
+              ? 'Backend chưa hỗ trợ lọc trạng thái online — danh sách bên dưới CHƯA được lọc.'
+              : 'Không đọc được tín hiệu ứng dụng tài xế lúc này — kết quả lọc online không đáng tin.'}
+          </div>
+        )}
 
         {activeTab === 'needsReview' && (
           <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
