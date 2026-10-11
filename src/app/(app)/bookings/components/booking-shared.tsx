@@ -287,10 +287,10 @@ export function DriverNoteBadge({ note }: { note: string }) {
   return (
     <Badge
       variant="outline"
-      className="min-w-0 max-w-[16rem] bg-sky-50 text-sky-800 border-sky-200 dark:bg-sky-900/30 dark:text-sky-300 dark:border-sky-800 text-[10px] px-1.5 py-0 font-normal"
+      className="min-w-0 max-w-[16rem] border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50"
       title={note}
     >
-      <span className="truncate">{note}</span>
+      <span className="block truncate">{note}</span>
     </Badge>
   );
 }
