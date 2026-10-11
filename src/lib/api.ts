@@ -8,6 +8,7 @@ import {
   type RecentRatingsQueryInput,
 } from '@/lib/driver-reputation-query';
 import { ApiError, buildApiError } from '@/lib/api-error';
+import { redirectTo } from '@/lib/redirect';
 import {
   buildReportParams,
   type ReportSpec,
@@ -32,9 +33,11 @@ export const API_BASE_URL =
 function loginPathForCurrentArea(): string {
   if (typeof window === 'undefined') return '/';
   const p = window.location.pathname;
-  if (p.startsWith('/kol-portal')) return '/kol-portal/login';
-  if (p.startsWith('/agent-portal')) return '/agent-portal/login';
-  if (p.startsWith('/htx')) return '/htx/login';
+  // Khớp theo ranh giới segment: '/htx-reconciliation' là route admin, không phải portal HTX.
+  const inArea = (prefix: string) => p === prefix || p.startsWith(prefix + '/');
+  if (inArea('/kol-portal')) return '/kol-portal/login';
+  if (inArea('/agent-portal')) return '/agent-portal/login';
+  if (inArea('/htx')) return '/htx/login';
   return '/';
 }
 
@@ -131,7 +134,7 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
             );
             localStorage.removeItem('access_token');
             localStorage.removeItem('refresh_token');
-            window.location.href = loginPathForCurrentArea();
+            redirectTo(loginPathForCurrentArea());
             // Return a never-resolving promise to prevent further error propagation during redirect
             return new Promise<Response>(() => {});
           } finally {
@@ -140,7 +143,9 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
         } else {
           localStorage.removeItem('access_token');
           localStorage.removeItem('refresh_token');
-          window.location.href = '/';
+          // Không có refresh token — vd webview "Đặt hộ" của app chỉ ghi access_token.
+          // Về login của khu vực hiện tại, không phải login admin.
+          redirectTo(loginPathForCurrentArea());
           // Return a never-resolving promise to prevent further error propagation during redirect
           return new Promise<Response>(() => {});
         }
