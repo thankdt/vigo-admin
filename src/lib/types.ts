@@ -404,6 +404,9 @@ export type Booking = {
     isHighCancel?: boolean;
     isFrequentlyLate?: boolean;
     hasViolation?: boolean;
+    // Ghi chú CSKH của tài xế (= `Driver.csNote`, nhập ở trang Tài xế). Backend chỉ gắn ở
+    // danh sách chuyến admin; additive nên undefined nếu backend chưa deploy.
+    csNote?: string | null;
   } | null;
   priceBreakdown?: PriceBreakdown | null;
   driverEarnings?: DriverEarnings;

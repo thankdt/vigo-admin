@@ -85,6 +85,10 @@ export const SPECIAL_FUNCTIONS: { key: string; label: string }[] = [
     key: 'loyalty-adjust',
     label: 'Cộng/Trừ Vcoin tay cho khách (Vcoin đổi được voucher — CẤP/TRỪ TIỀN THẬT)',
   },
+  {
+    key: 'driver-note-presets',
+    label: 'Quản lý danh sách ghi chú tài xế (thêm / đổi tên / xoá mục)',
+  },
 ];
 
 // 11 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).

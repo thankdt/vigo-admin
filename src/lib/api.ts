@@ -447,6 +447,38 @@ export async function updateDriverCsStatus(
   return result.data || result;
 }
 
+// ── Danh mục ghi chú tài xế (spec 2026-10-12). Đọc: quyền `drivers`; thêm/đổi tên/xoá: quyền
+// RIÊNG `driver-note-presets`. Xoá mục đang có tài xế dùng → 409 (message tiếng Việt từ BE).
+export type DriverNotePreset = { id: string; label: string; sortOrder: number };
+
+export async function getDriverNotePresets(): Promise<DriverNotePreset[]> {
+  const response = await fetchWithAuth('/drivers/admin/note-presets');
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function createDriverNotePreset(label: string): Promise<DriverNotePreset> {
+  const response = await fetchWithAuth('/drivers/admin/note-presets', {
+    method: 'POST',
+    body: JSON.stringify({ label }),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function renameDriverNotePreset(id: string, label: string): Promise<DriverNotePreset> {
+  const response = await fetchWithAuth(`/drivers/admin/note-presets/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ label }),
+  });
+  const result = await response.json();
+  return result.data || result;
+}
+
+export async function deleteDriverNotePreset(id: string): Promise<void> {
+  await fetchWithAuth(`/drivers/admin/note-presets/${encodeURIComponent(id)}`, { method: 'DELETE' });
+}
+
 export async function approveDriver(id: string, enabledServices: string[], note?: string): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/approve`, {
     method: 'POST',
