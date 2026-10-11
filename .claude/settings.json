@@ -50,5 +50,6 @@
         "~/.ssh/"
       ]
     }
-  }
+  },
+  "model": "opusplan"
 }
