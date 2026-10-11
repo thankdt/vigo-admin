@@ -28,15 +28,16 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 36 menu + 11 settings + 2 đặc biệt = 49 unique keys', () => {
+  it('allFunctionKeys = 36 menu + 11 settings + 3 đặc biệt = 50 unique keys', () => {
     const keys = allFunctionKeys();
     // 2026-08-18 (CRM GĐ3-7): +crm-tickets, +crm-segments, +crm-campaigns, +crm-accounts,
     // +crm-insights (menu) và +crm-compensate (đặc biệt).
     // 2026-08-24 (merge main): +settings.pick-driver.
     // 2026-08-28: +pooling (màn quan sát gợi ý gom chuyến).
     // 2026-09-21: +loyalty-adjust (đặc biệt — cộng/trừ Vcoin tay, tách khỏi `users`).
-    expect(keys).toHaveLength(49);
-    expect(new Set(keys).size).toBe(49);
+    // 2026-10-12: +driver-note-presets (đặc biệt — thêm/đổi tên/xoá mục ghi chú tài xế).
+    expect(keys).toHaveLength(50);
+    expect(new Set(keys).size).toBe(50);
   });
 
   /**
