@@ -120,6 +120,34 @@ describe('BookingsTable — badge cảnh báo và số sao của tài xế', () 
     expect(await screen.findByText(/^có vi phạm$/i)).toBeInTheDocument();
   });
 
+  it('hiện ghi chú CSKH của tài xế dạng tag, title = nội dung đầy đủ', async () => {
+    const longNote = 'Hay đón khách trễ, nhớ gọi trước 15 phút và nhắc mang theo biển xe '.repeat(2).trim();
+    vi.mocked(getBookings).mockResolvedValue(
+      listOf({
+        ...baseBooking,
+        driver: { ...baseBooking.driver!, csNote: `  ${longNote}  ` },
+      } as Booking) as any,
+    );
+    render(<BookingsTable />);
+
+    const text = await screen.findByText(longNote);
+    expect(text.closest('[title]')?.getAttribute('title')).toBe(longNote);
+  });
+
+  it('không hiện tag ghi chú khi csNote rỗng / chỉ khoảng trắng', async () => {
+    vi.mocked(getBookings).mockResolvedValue(
+      listOf({
+        ...baseBooking,
+        driver: { ...baseBooking.driver!, csNote: '   ' },
+      } as Booking) as any,
+    );
+    render(<BookingsTable />);
+
+    await screen.findByText('0912345678');
+    expect(document.querySelector('[title="   "]')).toBeNull();
+    expect(screen.queryByText(/^\s+$/)).toBeNull();
+  });
+
   it('hiện sao đánh giá displayStars cạnh SĐT tài xế (màu đỏ khi < 4.0)', async () => {
     vi.mocked(getBookings).mockResolvedValue(
       listOf(
