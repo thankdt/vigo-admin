@@ -287,7 +287,7 @@ export function DriverNoteBadge({ note }: { note: string }) {
   return (
     <Badge
       variant="outline"
-      className="min-w-0 max-w-[16rem] border-blue-300 bg-blue-50 text-[10px] px-1.5 py-0 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950/50"
+      className="min-w-0 max-w-[16rem] border-violet-300 bg-violet-50 text-[10px] px-1.5 py-0 text-violet-700 hover:bg-violet-50 dark:border-violet-800 dark:bg-violet-950/50 dark:text-violet-300 dark:hover:bg-violet-950/50"
       title={note}
     >
       <span className="block truncate">{note}</span>
