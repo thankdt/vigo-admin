@@ -6,7 +6,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AdminUnitsManager } from "./components/admin-units-manager";
 import { RoutesManager } from "./components/routes-manager";
 import { RoutePricingManager } from "./components/route-pricing-manager";
-import { AreaPriceAdjustmentsManager } from "./components/area-price-adjustments-manager";
 import { PricingMacroManager } from "./components/pricing-macro-manager";
 
 export default function MasterDataPage() {
@@ -17,12 +16,11 @@ export default function MasterDataPage() {
         description="Quản lý đơn vị hành chính, tuyến đường, bảng giá và điều chỉnh giá khu vực."
       />
       <Tabs defaultValue="admin-units" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="admin-units">Đơn vị hành chính</TabsTrigger>
           <TabsTrigger value="routes">Tuyến đường</TabsTrigger>
           <TabsTrigger value="route-pricing">Bảng giá</TabsTrigger>
-          <TabsTrigger value="area-adjustments">Điều chỉnh Khu vực</TabsTrigger>
-          <TabsTrigger value="macro-rules">Macro Định Giá (Tỉnh → Xã)</TabsTrigger>
+          <TabsTrigger value="area-adjustments">Điều chỉnh khu vực</TabsTrigger>
         </TabsList>
 
         <TabsContent value="admin-units">
@@ -38,10 +36,6 @@ export default function MasterDataPage() {
         </TabsContent>
 
         <TabsContent value="area-adjustments">
-          <AreaPriceAdjustmentsManager />
-        </TabsContent>
-
-        <TabsContent value="macro-rules">
           <PricingMacroManager />
         </TabsContent>
       </Tabs>

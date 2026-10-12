@@ -28,8 +28,6 @@ import {
   Edit,
   Search,
   MapPin,
-  Sparkles,
-  Calculator,
   RefreshCw,
   Compass,
 } from 'lucide-react';
@@ -40,14 +38,12 @@ import {
   createPricingMacroRule,
   updatePricingMacroRule,
   deletePricingMacroRule,
-  simulatePricingMacro,
 } from '@/lib/api';
 import type {
   PricingMacroRule,
   ProvinceOption,
   WardOption,
   MacroAdjustmentType,
-  SimulatePricingMacroResult,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -105,16 +101,6 @@ export function PricingMacroManager() {
   const [deleteRuleId, setDeleteRuleId] = React.useState<number | null>(null);
   const [deleting, setDeleting] = React.useState(false);
 
-  // Simulator State
-  const [simPickupLat, setSimPickupLat] = React.useState<string>('21.2187'); // Sân bay Nội Bài
-  const [simPickupLng, setSimPickupLng] = React.useState<string>('105.8042');
-  const [simDropoffLat, setSimDropoffLat] = React.useState<string>('20.5375'); // Phủ Lý, Hà Nam
-  const [simDropoffLng, setSimDropoffLng] = React.useState<string>('105.9135');
-  const [simServiceType, setSimServiceType] = React.useState<string>('CARPOOL');
-  const [simVehicleType, setSimVehicleType] = React.useState<string>('ALL');
-  const [simSeats, setSimSeats] = React.useState<number>(1);
-  const [simulating, setSimulating] = React.useState(false);
-  const [simResult, setSimResult] = React.useState<SimulatePricingMacroResult | null>(null);
 
   // Load initial rules and provinces
   const loadData = React.useCallback(async () => {
@@ -312,41 +298,6 @@ export function PricingMacroManager() {
     }
   };
 
-  const handleRunSimulation = async () => {
-    const pLat = parseFloat(simPickupLat);
-    const pLng = parseFloat(simPickupLng);
-    const dLat = parseFloat(simDropoffLat);
-    const dLng = parseFloat(simDropoffLng);
-
-    if (isNaN(pLat) || isNaN(pLng) || isNaN(dLat) || isNaN(dLng)) {
-      toast({ title: 'Toạ độ không hợp lệ', variant: 'destructive' });
-      return;
-    }
-
-    setSimulating(true);
-    try {
-      const res = await simulatePricingMacro({
-        pickupLat: pLat,
-        pickupLng: pLng,
-        dropoffLat: dLat,
-        dropoffLng: dLng,
-        serviceType: simServiceType,
-        vehicleType: simVehicleType,
-        seats: simSeats,
-      });
-      setSimResult(res);
-      toast({ title: 'Mô phỏng thành công' });
-    } catch (err: any) {
-      toast({
-        title: 'Mô phỏng thất bại',
-        description: err.message || 'Không thể tính giá',
-        variant: 'destructive',
-      });
-    } finally {
-      setSimulating(false);
-    }
-  };
-
   // Helper name lookups
   const getProvinceName = (code?: string | null) => {
     if (!code) return 'Toàn quốc';
@@ -392,7 +343,7 @@ export function PricingMacroManager() {
         <div>
           <h2 className="text-xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
             <Compass className="w-5 h-5 text-indigo-600" />
-            Macro Định Giá 2 Cấp (Tỉnh → Xã)
+            Điều chỉnh khu vực
           </h2>
           <p className="text-sm text-slate-500">
             Cấu hình bộ quy tắc tăng/giảm giá tự động dựa trên toạ độ điểm đón/trả theo 34 tỉnh và 3.321 xã mới.
@@ -410,264 +361,13 @@ export function PricingMacroManager() {
         </div>
       </div>
 
-      {/* ───────── PRICE SIMULATOR CARD ───────── */}
-      <Card className="border-indigo-100 bg-gradient-to-br from-indigo-50/40 via-white to-sky-50/30 shadow-sm">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="p-1.5 bg-indigo-100 text-indigo-700 rounded-md">
-                <Calculator className="w-4 h-4" />
-              </div>
-              <CardTitle className="text-base font-semibold text-slate-800">
-                Price Simulator (Công cụ kiểm tra & thử nghiệm tính giá)
-              </CardTitle>
-            </div>
-            <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs">
-              Ranh giới Polygon 3.321 Xã
-            </Badge>
-          </div>
-          <CardDescription className="text-xs text-slate-500">
-            Nhập toạ độ GPS (lat, lng) điểm đón và trả khách để kiểm tra nhận diện đơn vị hành chính và rule nào được kích hoạt.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Quick preset buttons */}
-          <div className="flex flex-wrap items-center gap-2 text-xs">
-            <span className="text-slate-500 font-medium">Toạ độ mẫu:</span>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-6 text-xs px-2 bg-white"
-              onClick={() => {
-                setSimPickupLat('21.2187');
-                setSimPickupLng('105.8042'); // Sân bay Nội Bài
-                setSimDropoffLat('20.5375');
-                setSimDropoffLng('105.9135'); // TP Phủ Lý (Hà Nam)
-              }}
-            >
-              Sân bay Nội Bài → TP Phủ Lý (Hà Nam)
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-6 text-xs px-2 bg-white"
-              onClick={() => {
-                setSimPickupLat('21.0285');
-                setSimPickupLng('105.8542'); // Hoàn Kiếm, Hà Nội
-                setSimDropoffLat('20.8449');
-                setSimDropoffLng('106.6881'); // Lê Chân, Hải Phòng
-              }}
-            >
-              Hà Nội → Hải Phòng
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="h-6 text-xs px-2 bg-white"
-              onClick={() => {
-                setSimPickupLat('20.9419');
-                setSimPickupLng('106.0594'); // Yên Mỹ, Hưng Yên
-                setSimDropoffLat('21.0031');
-                setSimDropoffLng('105.8202'); // Đống Đa, Hà Nội
-              }}
-            >
-              Hưng Yên → Đống Đa (HN)
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-700">Điểm đón (Lat, Lng)</Label>
-              <div className="grid grid-cols-2 gap-1.5">
-                <Input
-                  className="h-8 text-xs font-mono"
-                  placeholder="Lat"
-                  value={simPickupLat}
-                  onChange={(e) => setSimPickupLat(e.target.value)}
-                />
-                <Input
-                  className="h-8 text-xs font-mono"
-                  placeholder="Lng"
-                  value={simPickupLng}
-                  onChange={(e) => setSimPickupLng(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-700">Điểm trả (Lat, Lng)</Label>
-              <div className="grid grid-cols-2 gap-1.5">
-                <Input
-                  className="h-8 text-xs font-mono"
-                  placeholder="Lat"
-                  value={simDropoffLat}
-                  onChange={(e) => setSimDropoffLat(e.target.value)}
-                />
-                <Input
-                  className="h-8 text-xs font-mono"
-                  placeholder="Lng"
-                  value={simDropoffLng}
-                  onChange={(e) => setSimDropoffLng(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-700">Dịch vụ & Ghế</Label>
-              <div className="grid grid-cols-2 gap-1.5">
-                <Select value={simServiceType} onValueChange={setSimServiceType}>
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CARPOOL">Ghép xe</SelectItem>
-                    <SelectItem value="CONVENIENT">Bao xe</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Input
-                  className="h-8 text-xs"
-                  type="number"
-                  min={1}
-                  max={7}
-                  value={simSeats}
-                  onChange={(e) => setSimSeats(parseInt(e.target.value, 10) || 1)}
-                  placeholder="Số ghế"
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold text-slate-700">Loại xe</Label>
-              <Select value={simVehicleType} onValueChange={setSimVehicleType}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Mọi loại xe</SelectItem>
-                  <SelectItem value="4SEATS">Xe 4 chỗ</SelectItem>
-                  <SelectItem value="7SEATS">Xe 7 chỗ</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="flex items-end">
-              <Button
-                className="w-full h-8 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
-                onClick={handleRunSimulation}
-                disabled={simulating}
-              >
-                {simulating ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />
-                ) : (
-                  <Sparkles className="w-3.5 h-3.5 mr-1" />
-                )}
-                Thử nghiệm tính giá
-              </Button>
-            </div>
-          </div>
-
-          {/* SIMULATION RESULT DISPLAY */}
-          {simResult && (
-            <div className="mt-3 p-3 bg-white border border-indigo-100 rounded-lg shadow-sm space-y-2 text-xs">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                {/* Origin Resolution */}
-                <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-emerald-600" />
-                    Điểm đón nhận diện
-                  </div>
-                  {simResult.origin ? (
-                    <div className="mt-1">
-                      <div className="font-semibold text-slate-800">{simResult.origin.wardName}</div>
-                      <div className="text-slate-500">{simResult.origin.provinceName} (mã: {simResult.origin.provinceCode})</div>
-                    </div>
-                  ) : (
-                    <div className="text-amber-600 mt-1">Không khớp ranh giới xã</div>
-                  )}
-                </div>
-
-                {/* Dest Resolution */}
-                <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase flex items-center gap-1">
-                    <MapPin className="w-3 h-3 text-red-600" />
-                    Điểm trả nhận diện
-                  </div>
-                  {simResult.dest ? (
-                    <div className="mt-1">
-                      <div className="font-semibold text-slate-800">{simResult.dest.wardName}</div>
-                      <div className="text-slate-500">{simResult.dest.provinceName} (mã: {simResult.dest.provinceCode})</div>
-                    </div>
-                  ) : (
-                    <div className="text-amber-600 mt-1">Không khớp ranh giới xã</div>
-                  )}
-                </div>
-
-                {/* Matched Macro Rule */}
-                <div className="p-2 bg-slate-50 rounded border border-slate-100">
-                  <div className="text-[11px] font-semibold text-slate-500 uppercase flex items-center gap-1">
-                    <Sparkles className="w-3 h-3 text-indigo-600" />
-                    Quy tắc Macro khớp
-                  </div>
-                  {simResult.matchedRule ? (
-                    <div className="mt-1">
-                      <div className="font-semibold text-indigo-700">{simResult.matchedRule.name}</div>
-                      <div className="text-slate-500">
-                        Score: {simResult.matchScore} • {formatAdjustment(simResult.matchedRule.adjustmentType, Number(simResult.matchedRule.adjustmentValue), simResult.matchedRule.applyPerSeat)}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-slate-400 mt-1">Không có macro rule phù hợp</div>
-                  )}
-                </div>
-              </div>
-
-              {/* Price Quote Breakdown */}
-              {simResult.quote && (
-                <div className="p-2.5 bg-indigo-50/60 rounded border border-indigo-100 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <span className="text-slate-500">Quãng đường: </span>
-                      <span className="font-semibold">{simResult.quote.distanceKm} km</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500">Giá gốc km: </span>
-                      <span className="font-semibold">
-                        {new Intl.NumberFormat('vi-VN').format(simResult.quote.breakdown?.basePrice || 0)} đ
-                      </span>
-                    </div>
-                    {simResult.quote.breakdown?.macroDeltaAmount !== 0 && (
-                      <div>
-                        <span className="text-slate-500">Điều chỉnh macro: </span>
-                        <span className={cn('font-bold', (simResult.quote.breakdown?.macroDeltaAmount || 0) > 0 ? 'text-amber-600' : 'text-emerald-600')}>
-                          {(simResult.quote.breakdown?.macroDeltaAmount || 0) > 0 ? '+' : ''}
-                          {new Intl.NumberFormat('vi-VN').format(simResult.quote.breakdown?.macroDeltaAmount || 0)} đ
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <span className="text-slate-500 mr-2">Tổng tiền:</span>
-                    <span className="text-base font-bold text-indigo-700">
-                      {new Intl.NumberFormat('vi-VN').format(simResult.quote.finalPrice || 0)} đ
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* ───────── RULES LIST TABLE ───────── */}
       <Card>
         <CardHeader className="pb-3">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
               <CardTitle className="text-base font-semibold text-slate-800">
-                Danh sách Quy tắc Macro ({filteredRules.length})
+                Danh sách Quy tắc Điều chỉnh Khu vực ({filteredRules.length})
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
                 Hệ thống tự động ưu tiên rule có độ ưu tiên cao hơn, hoặc rule khớp chi tiết tới cấp Xã/Phường.
