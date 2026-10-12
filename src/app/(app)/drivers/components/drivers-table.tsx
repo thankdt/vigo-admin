@@ -677,7 +677,7 @@ export function DriversTable() {
   // online status on the "Đã duyệt" tab (all approved).
   const showStatusCol = activeTab === 'all' || activeTab === 'true';
   // +3 cột CSKH: Ngày làm việc + Đã gọi điện + Ghi chú (luôn hiện).
-  const colCount = (showStatusCol ? 8 : 7) + 3;
+  const colCount = (showStatusCol ? 8 : 7) + 2;
 
   const openConfirmationDialog = (driver: Driver, action: 'approve' | 'reject') => {
     setDialogState({ open: true, driver, action });
@@ -917,12 +917,6 @@ export function DriversTable() {
                   <TableHead>{activeTab === 'all' ? 'Trạng thái' : 'Online'}</TableHead>
                 )}
                 <TableHead>
-                  <Button variant="ghost" onClick={() => requestSort('createdAt')}>
-                    Ngày tạo
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </TableHead>
-                <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('csLastCallAt')}>
                     Ngày làm việc
                     <ArrowUpDown className="ml-2 h-4 w-4" />
@@ -1089,11 +1083,6 @@ export function DriversTable() {
                         {activeTab === 'all' ? getStatusBadge(driver) : getOnlineBadge(driver)}
                       </TableCell>
                     )}
-                    <TableCell>
-                      <span className="text-sm text-muted-foreground">
-                        {driver.createdAt ? new Date(driver.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                      </span>
-                    </TableCell>
                     {/* Ngày làm việc CSKH gần nhất (từ lịch sử làm việc) — CSKH quét nhanh ai lâu chưa xử lý. */}
                     <TableCell>
                       {driver.csLastCallAt ? (
