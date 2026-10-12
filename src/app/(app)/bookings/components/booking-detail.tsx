@@ -946,84 +946,91 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   "Ghi chú" của khách phía trên (không lộ cho tài/khách). Chỉ hiện ở
                   chi tiết chuyến ĐÃ TẠO — form Tạo chuyến không có khối này. */}
               <Card className="p-3 space-y-2 border-blue-300/60 bg-blue-50/50 dark:border-blue-900/50 dark:bg-blue-950/20">
-                <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300">
-                    Gọi check khách <span className="normal-case font-normal text-muted-foreground">(nội bộ)</span>
-                  </div>
-                  <CustomerCallBadge status={booking.customerCallStatus} />
-                  {booking.customerCallCheckedBy && (
-                    <span className="text-[11px] text-muted-foreground">
-                      {booking.customerCallCheckedBy.fullName || booking.customerCallCheckedBy.phone || 'Admin'}
-                      {booking.customerCallCheckedAt ? ` · ${formatVnDateTime(booking.customerCallCheckedAt)}` : ''}
-                    </span>
-                  )}
-                </div>
-                {/* Lý do chuẩn hoá — danh mục lấy từ backend (system_config CSKH_CALL_REASONS)
-                    nên ops sửa được, không hardcode ở FE. Không bắt buộc chọn. */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="shrink-0 text-xs text-muted-foreground">Lý do:</span>
-                  <Select value={callReason} onValueChange={setCallReason} disabled={!!callSaving}>
-                    <SelectTrigger className="h-8 w-[240px] text-sm">
-                      <SelectValue placeholder="Chọn lý do (không bắt buộc)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {reasonOptions.map((r) => (
-                        <SelectItem key={r} value={r}>{r}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {callReason && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2 text-xs"
-                      onClick={() => setCallReason('')}
-                    >
-                      Bỏ chọn
-                    </Button>
-                  )}
-                </div>
-                <Textarea
-                  value={callNote}
-                  onChange={(e) => setCallNote(e.target.value)}
-                  placeholder="Ghi chú cuộc gọi cho admin khác (vd: khách xác nhận đúng địa chỉ)..."
-                  rows={2}
-                  className="text-sm"
-                  disabled={!!callSaving}
-                />
-                {/*
-                  Chưa gọi → chỉ nút "Nhận gọi". Sau khi có người nhận (hoặc đã resolve)
-                  → hiện 2 nút kết quả (đổi lại được nếu bấm nhầm — event append-only).
-
-                  🚨 Suy pha theo DÒNG bằng `rowIsBeforePhase`, dùng CHUNG hàm với hàng đợi
-                  (sửa 2026-08-18). Bản trước đọc `booking.customerCallStatus` — cột "lần
-                  gọi mới nhất" DÙNG CHUNG cho cả hai pha. Chuyến đã gọi TRƯỚC xong
-                  (customerCallStatus='CALLED') rồi hoàn thành, giờ cần gọi SAU với
-                  callAfterStatus = null: dialog nhảy thẳng sang 2 nút kết quả, tức là đi
-                  đường dialog thì BỎ QUA hẳn bước nhận việc. Hệ quả: không có bản ghi
-                  CLAIMED nên tab "Đang có người giữ" không bao giờ thấy việc này, và trong
-                  lúc người đó đang gọi thì nó vẫn nằm ở tab "Cần gọi sau" của mọi người
-                  khác → người thứ hai nhận và gọi lại đúng khách đó.
-                */}
-                <div className="flex flex-wrap gap-2">
-                  {!(rowIsBeforePhase(booking) ? booking.callBeforeStatus : booking.callAfterStatus) ? (
-                    <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CLAIMED')}>
-                      {callSaving === 'CLAIMED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                      Nhận gọi
-                    </Button>
-                  ) : (
+                {(() => {
+                  const isBefore = rowIsBeforePhase(booking);
+                  const phaseStatus = isBefore
+                    ? (booking.callBeforeStatus || booking.customerCallStatus)
+                    : (booking.callAfterStatus || null);
+                  return (
                     <>
-                      <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CALLED')}>
-                        {callSaving === 'CALLED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                        Đã gọi được
-                      </Button>
-                      <Button size="sm" variant="outline" className="border border-input" disabled={!!callSaving} onClick={() => handleRecordCall('UNREACHED')}>
-                        {callSaving === 'UNREACHED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
-                        Không liên lạc được
-                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-xs font-semibold uppercase tracking-wider text-blue-700 dark:text-blue-300">
+                          Gọi check khách <span className="normal-case font-normal text-muted-foreground">(nội bộ)</span>
+                        </div>
+                        <CustomerCallBadge status={phaseStatus} />
+                        {booking.customerCallCheckedBy && (
+                          <span className="text-[11px] text-muted-foreground">
+                            {booking.customerCallCheckedBy.fullName || booking.customerCallCheckedBy.phone || 'Admin'}
+                            {booking.customerCallCheckedAt ? ` · ${formatVnDateTime(booking.customerCallCheckedAt)}` : ''}
+                          </span>
+                        )}
+                      </div>
+                      {/* Lý do chuẩn hoá — danh mục lấy từ backend (system_config CSKH_CALL_REASONS)
+                          nên ops sửa được, không hardcode ở FE. Không bắt buộc chọn. */}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="shrink-0 text-xs text-muted-foreground">Lý do:</span>
+                        <Select value={callReason} onValueChange={setCallReason} disabled={!!callSaving}>
+                          <SelectTrigger className="h-8 w-[240px] text-sm">
+                            <SelectValue placeholder="Chọn lý do (không bắt buộc)" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {reasonOptions.map((r) => (
+                              <SelectItem key={r} value={r}>{r}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        {callReason && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs"
+                            onClick={() => setCallReason('')}
+                          >
+                            Bỏ chọn
+                          </Button>
+                        )}
+                      </div>
+                      <Textarea
+                        value={callNote}
+                        onChange={(e) => setCallNote(e.target.value)}
+                        placeholder="Ghi chú cuộc gọi cho admin khác (vd: khách xác nhận đúng địa chỉ)..."
+                        rows={2}
+                        className="text-sm"
+                        disabled={!!callSaving}
+                      />
+                      <div className="flex flex-wrap gap-2">
+                        {!phaseStatus ? (
+                          <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CLAIMED')}>
+                            {callSaving === 'CLAIMED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                            Nhận gọi
+                          </Button>
+                        ) : (
+                          <>
+                            <Button size="sm" disabled={!!callSaving} onClick={() => handleRecordCall('CALLED')}>
+                              {callSaving === 'CALLED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                              Đã gọi được
+                            </Button>
+                            <Button size="sm" variant="outline" className="border border-input" disabled={!!callSaving} onClick={() => handleRecordCall('UNREACHED')}>
+                              {callSaving === 'UNREACHED' && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                              Không liên lạc được
+                            </Button>
+                            {(callNote.trim() || callReason) && (
+                              <Button
+                                size="sm"
+                                variant="secondary"
+                                disabled={!!callSaving}
+                                onClick={() => handleRecordCall(phaseStatus)}
+                              >
+                                {callSaving === phaseStatus && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+                                Lưu ghi chú
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </>
-                  )}
-                </div>
+                  );
+                })()}
                 {callHistory.length > 0 && (
                   <ul className="space-y-1.5 pt-1">
                     {callHistory.slice(0, 5).map((e) => (

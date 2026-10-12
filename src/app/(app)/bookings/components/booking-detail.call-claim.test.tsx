@@ -77,4 +77,37 @@ describe('BookingDetail — nhận gọi check khách', () => {
     expect(getBookingDetails).toHaveBeenCalledTimes(2);
     await waitFor(() => expect(screen.getByPlaceholderText(/ghi chú cuộc gọi/i)).toHaveValue('khách xác nhận'));
   });
+
+  it('mở chuyến đã có customerCallStatus=CLAIMED nhưng callBeforeStatus=null -> hiện ngay 2 nút kết quả, không hiện "Nhận gọi"', async () => {
+    vi.mocked(getBookingDetails).mockResolvedValue({
+      ...baseBooking,
+      customerCallStatus: 'CLAIMED',
+      callBeforeStatus: null,
+    } as Booking);
+    render(<BookingDetail bookingId="b1" onClose={() => {}} />);
+
+    expect(await screen.findByRole('button', { name: /đã gọi được/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /nhận gọi/i })).not.toBeInTheDocument();
+  });
+
+  it('khi đã nhận việc và gõ ghi chú -> hiện nút "Lưu ghi chú", bấm lưu gọi API với trạng thái hiện tại', async () => {
+    vi.mocked(getBookingDetails).mockResolvedValue({
+      ...baseBooking,
+      customerCallStatus: 'CLAIMED',
+      callBeforeStatus: 'CLAIMED',
+    } as Booking);
+    render(<BookingDetail bookingId="b1" onClose={() => {}} />);
+
+    const note = await screen.findByPlaceholderText(/ghi chú cuộc gọi/i);
+    await userEvent.type(note, 'khách hẹn gọi lại sau 15p');
+
+    const saveBtn = await screen.findByRole('button', { name: /lưu ghi chú/i });
+    expect(saveBtn).toBeInTheDocument();
+
+    await userEvent.click(saveBtn);
+    expect(recordBookingCustomerCall).toHaveBeenCalledWith('b1', expect.objectContaining({
+      status: 'CLAIMED',
+      note: 'khách hẹn gọi lại sau 15p',
+    }));
+  });
 });
