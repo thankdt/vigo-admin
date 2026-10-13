@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -5144,6 +5144,30 @@ export async function deletePricingMacroRule(id: number): Promise<{ success: boo
     method: 'DELETE',
   });
   return unwrap<{ success: boolean }>(response);
+}
+
+/**
+ * Tạo hàng loạt luật macro: tích origins × dests (≤500 tổ hợp), một transaction ở backend.
+ * Tổ hợp đã có luật cùng khoá bị BỎ QUA (không ghi đè) và trả về trong `skipped`.
+ * Cần backend có `POST /pricing/macro-rules/bulk` (backend lên PROD TRƯỚC admin).
+ */
+export async function bulkCreatePricingMacroRules(
+  data: BulkCreatePricingMacroRulesRequest,
+): Promise<BulkCreatePricingMacroRulesResult> {
+  const response = await fetchWithAuth('/pricing/macro-rules/bulk', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return unwrap<BulkCreatePricingMacroRulesResult>(response);
+}
+
+/** Xoá hàng loạt luật macro theo id (≤500 mỗi lần). Trả id đã xoá và id không tồn tại. */
+export async function bulkDeletePricingMacroRules(ids: number[]): Promise<BulkDeletePricingMacroRulesResult> {
+  const response = await fetchWithAuth('/pricing/macro-rules/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+  return unwrap<BulkDeletePricingMacroRulesResult>(response);
 }
 
 export async function simulatePricingMacro(data: SimulatePricingMacroDto): Promise<SimulatePricingMacroResult> {
