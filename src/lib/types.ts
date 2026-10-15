@@ -1171,6 +1171,40 @@ export type WardOption = {
   provinceCode: string;
 };
 
+/** Điểm đặc biệt (sân bay…) — `GET pricing/special-zones`. Polygon KHÔNG có API (chỉ nạp bằng migration). */
+export type SpecialZone = {
+  code: string;
+  name: string;
+  provinceCode: string;
+  provinceName: string | null;
+  /** Loại vùng (vd 'AIRPORT'); giữ string vì DB có thể chứa loại màn chưa biết. */
+  kind: string;
+  active: boolean;
+};
+
+/** Một hàng đồng giá — `wardCode` null = hàng mặc định cho cả tỉnh của vùng. Giá null = không áp cho loại đó. */
+export type SpecialZoneFlatPrice = {
+  id: number;
+  zoneCode: string;
+  wardCode: string | null;
+  wardName: string | null;
+  pricePerSeatGhep: number | null;
+  priceCar4: number | null;
+  priceCar7: number | null;
+  note: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** Body `PUT pricing/special-zones/:code/flat-prices` — ghi đè CẢ hàng; 4 khoá đầu BẮT BUỘC có mặt (null được). */
+export type UpsertSpecialZoneFlatPriceRequest = {
+  wardCode: string | null;
+  pricePerSeatGhep: number | null;
+  priceCar4: number | null;
+  priceCar7: number | null;
+  note?: string | null;
+};
+
 export type SimulatePricingMacroDto = {
   pickupLat: number;
   pickupLng: number;

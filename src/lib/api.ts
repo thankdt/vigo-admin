@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -5038,6 +5038,42 @@ export async function bulkDeletePricingMacroRules(ids: number[]): Promise<BulkDe
 export async function getPricingMacroBandWarnings(): Promise<MacroBandWarnings> {
   const response = await fetchWithAuth('/pricing/macro-rules/band-warnings');
   return unwrap<MacroBandWarnings>(response);
+}
+
+// ───────── ĐIỂM ĐẶC BIỆT (SÂN BAY) & ĐỒNG GIÁ — cần quyền `master-data` ─────────
+
+export async function getSpecialZones(): Promise<SpecialZone[]> {
+  const response = await fetchWithAuth('/pricing/special-zones');
+  return unwrap<SpecialZone[]>(response);
+}
+
+export async function getSpecialZoneFlatPrices(zoneCode: string): Promise<SpecialZoneFlatPrice[]> {
+  const response = await fetchWithAuth(`/pricing/special-zones/${encodeURIComponent(zoneCode)}/flat-prices`);
+  return unwrap<SpecialZoneFlatPrice[]>(response);
+}
+
+/** Upsert theo (vùng, phường) hoặc (vùng, cả tỉnh khi `wardCode` null). Ghi đè CẢ hàng. */
+export async function upsertSpecialZoneFlatPrice(
+  zoneCode: string,
+  data: UpsertSpecialZoneFlatPriceRequest,
+): Promise<SpecialZoneFlatPrice> {
+  const response = await fetchWithAuth(`/pricing/special-zones/${encodeURIComponent(zoneCode)}/flat-prices`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return unwrap<SpecialZoneFlatPrice>(response);
+}
+
+/** `wardCode` null = xoá hàng mặc định cả tỉnh (đường dẫn `default`). */
+export async function deleteSpecialZoneFlatPrice(
+  zoneCode: string,
+  wardCode: string | null,
+): Promise<{ success: boolean }> {
+  const key = wardCode === null ? 'default' : encodeURIComponent(wardCode);
+  const response = await fetchWithAuth(`/pricing/special-zones/${encodeURIComponent(zoneCode)}/flat-prices/${key}`, {
+    method: 'DELETE',
+  });
+  return unwrap<{ success: boolean }>(response);
 }
 
 export async function simulatePricingMacro(data: SimulatePricingMacroDto): Promise<SimulatePricingMacroResult> {
