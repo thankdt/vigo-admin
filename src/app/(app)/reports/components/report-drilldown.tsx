@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { getReportRows, type ReportRow, type ReportSpec } from '@/lib/api';
 import { statusLabelMap, CANCELLED_BY_ROLE_LABEL } from '../../bookings/components/booking-shared';
 import { formatVnDate } from '@/lib/format-vn';
+import { drilldownTitle } from './report-dims';
 
 const PAGE_SIZE = 100;
 
@@ -57,7 +58,7 @@ export function ReportDrilldown({
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium">
-            Chuyến trong ô: {Object.entries(dims).map(([, v]) => v).join(' · ')}
+            Chuyến trong ô: {drilldownTitle(dims)}
             {expectedTotal != null ? (
               <span className="ml-2 font-normal text-muted-foreground">
                 — Tổng theo bảng: {expectedTotal.toLocaleString('vi-VN')} chuyến

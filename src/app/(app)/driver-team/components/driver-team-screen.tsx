@@ -4,10 +4,9 @@ import * as React from 'react';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import {
-  getRoutes,
   getTeamOwners,
-  getTeamRouteDrivers,
-  getTeamRoutes,
+  getTeamProvinceDrivers,
+  getTeamProvinces,
   getTeamSubsidySummary,
   getTeamSummary,
   patchTeamMember,
@@ -18,10 +17,17 @@ import type {
   TeamDriverRow,
   TeamMemberRow,
   TeamOwner,
-  TeamRouteRow,
+  TeamProvinceRow,
   TeamSummary,
 } from '@/lib/types';
-import { STAGE_ORDER, stageLabel } from '@/lib/driver-team-labels';
+import {
+  buildProvinceOptions,
+  PROVINCE_BUCKET_NOTE_FALLBACK,
+  provinceKeyOf,
+  STAGE_ORDER,
+  stageLabel,
+  UNKNOWN_PROVINCE_KEY,
+} from '@/lib/driver-team-labels';
 import { patchDriverAcrossGroups, type DriverGroups } from '@/lib/driver-team-sync';
 import { applyBulk, type BulkBody } from '@/lib/driver-team-bulk';
 import { buildExportRows, EXPORT_HEADER } from '@/lib/driver-team-export';
@@ -39,7 +45,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { FinanceFilter, PRESETS, type DateRange } from '../../finance/components/finance-filter';
-import { RouteAccordion } from './route-accordion';
+import { ProvinceAccordion } from './province-accordion';
 import { DriverTeamDrawer } from './driver-team-drawer';
 import { TeamMembersTable } from './team-members-table';
 
@@ -61,8 +67,8 @@ export type TeamFilters = {
   stage: string;
   ownerAdminUserId: string;
   q: string;
-  /** ALL | 'none' | id tuyến dạng chuỗi. Lọc client-side trên danh sách đã tải. */
-  routeId: string;
+  /** ALL | 'none' (chưa xác định tỉnh) | mã tỉnh. Lọc client-side trên danh sách đã tải. */
+  provinceCode: string;
   minTrips: string;
 };
 
@@ -112,19 +118,19 @@ export function DriverTeamScreen() {
     stage: ALL,
     ownerAdminUserId: ALL,
     q: '',
-    routeId: ALL,
+    provinceCode: ALL,
     minTrips: '',
   });
-  const [routes, setRoutes] = React.useState<TeamRouteRow[]>([]);
-  const [unassigned, setUnassigned] = React.useState<TeamRouteRow | null>(null);
+  const [provinces, setProvinces] = React.useState<TeamProvinceRow[]>([]);
+  const [unknown, setUnknown] = React.useState<TeamProvinceRow | null>(null);
+  const [bucketNote, setBucketNote] = React.useState<string | null>(null);
   const [summary, setSummary] = React.useState<TeamSummary | null>(null);
   const [owners, setOwners] = React.useState<TeamOwner[]>([]);
-  const [allRoutes, setAllRoutes] = React.useState<{ id: number; name: string }[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [detailDriver, setDetailDriver] = React.useState<TeamDriverRow | null>(null);
   const [exporting, setExporting] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
-  // groups (tài xế đã tải theo từng nhóm tuyến) và open SỐNG Ở ĐÂY: accordion, drawer
+  // groups (tài xế đã tải theo từng nhóm tỉnh) và open SỐNG Ở ĐÂY: accordion, drawer
   // và hành động hàng loạt đều ghi vào cùng một chỗ, nếu không sẽ có hai bản trạng
   // thái lệch nhau.
   const [groups, setGroups] = React.useState<DriverGroups>({});
@@ -134,7 +140,7 @@ export function DriverTeamScreen() {
     let cancelled = false;
     setLoading(true);
     Promise.all([
-      getTeamRoutes({
+      getTeamProvinces({
         ...range,
         driverQ: filters.q || undefined,
       }),
@@ -142,18 +148,19 @@ export function DriverTeamScreen() {
     ])
       .then(([r, s]) => {
         if (cancelled) return;
-        const list = r.routes ?? [];
-        setRoutes(list);
-        setUnassigned(r.unassigned ?? null);
+        const list = r.provinces ?? [];
+        setProvinces(list);
+        setUnknown(r.unknown ?? null);
+        setBucketNote(r.bucketNote ?? null);
         setSummary(s);
-        // Đang tìm tài xế → tự bung ĐÚNG những tuyến có người khớp. Đây là mảnh
+        // Đang tìm tài xế → tự bung ĐÚNG những tỉnh có người khớp. Đây là mảnh
         // khiến việc tìm theo tên dùng được: gõ một cái tên là thấy ngay người đó
-        // chạy những tuyến nào, không phải mở thủ công từng tuyến một.
+        // chạy những tỉnh nào, không phải mở thủ công từng tỉnh một.
         if (filters.q) {
           setOpen(
-            list
+            [...list, ...(r.unknown ? [r.unknown] : [])]
               .filter((x) => (x.matchedDriverCount ?? 0) > 0)
-              .map((x) => (x.routeId === null ? 'none' : String(x.routeId))),
+              .map(provinceKeyOf),
           );
         }
       })
@@ -171,22 +178,24 @@ export function DriverTeamScreen() {
   }, [range, filters.q, toast]);
 
   React.useEffect(() => {
-    // Hai nguồn phụ hỏng KHÔNG được làm sập cả màn.
+    // Nguồn phụ hỏng KHÔNG được làm sập cả màn.
     getTeamOwners()
       .then(setOwners)
       .catch(() => setOwners([]));
-    getRoutes()
-      .then((rs) => setAllRoutes(rs.map((r) => ({ id: r.id, name: r.name }))))
-      .catch(() => setAllRoutes([]));
   }, []);
 
-  // Đội tài (tab phẳng) tải riêng, không chia state với `groups` (theo tuyến) —
+  // Danh mục tỉnh cho ô lọc "Tỉnh" và ô "Tỉnh được phân công" ở drawer: lấy luôn từ cấp 1 (backend trả
+  // MỌI tỉnh, kể cả 0 chuyến) — khỏi gọi endpoint danh mục khác mà người chỉ có quyền driver-team sẽ
+  // nhận 403. Sắp theo tên: thứ tự cấp 1 là theo số tài/số chuyến nên đổi theo khoảng ngày.
+  const provinceOptions = React.useMemo(() => buildProvinceOptions(provinces), [provinces]);
+
+  // Đội tài (tab phẳng) tải riêng, không chia state với `groups` (theo tỉnh) —
   // đổi tick này để báo TeamMembersTable tải lại sau khi lưu ở drawer, nếu không
   // bảng phẳng sẽ hiện stage/mức hoa hồng/người phụ trách CŨ tới khi đổi bộ lọc.
   const [memberRefreshTick, setMemberRefreshTick] = React.useState(0);
 
   // Hai thẻ "Doanh thu bỏ qua" / "Lỗ tiền mặt (bù HTX)" — TÁCH state riêng khỏi
-  // effect routes+summary ở trên (không cần tải lại toàn bộ tuyến mỗi lần đổi %
+  // effect provinces+summary ở trên (không cần tải lại toàn bộ tỉnh mỗi lần đổi %
   // hoa hồng), nhưng PHẢI tải lại khi `memberRefreshTick` đổi — nếu không, sau khi
   // sửa % ở ngăn kéo, hai thẻ vẫn hiện số cũ và người dùng tưởng chưa lưu được.
   const [subsidy, setSubsidy] = React.useState<{ forgone: number; cashLoss: number } | null>(
@@ -219,7 +228,7 @@ export function DriverTeamScreen() {
 
   const handleOpenMember = React.useCallback((driverId: string, member: TeamMemberRow) => {
     // Tab Đội tài không có sẵn TeamDriverRow (shape khác TeamMemberRow — thiếu
-    // tripsOnRoute/isBanned/...) nhưng DriverTeamDrawer chỉ đọc fullName/phone từ
+    // tripsInProvince/isBanned/...) nhưng DriverTeamDrawer chỉ đọc fullName/phone từ
     // prop `driver` cho phần header, phần còn lại tự tải qua getTeamDriverDetail
     // ngay khi mở — nên chỉ cần điền đủ field bắt buộc, phần không có thì để mặc
     // định "chưa biết" thay vì bịa.
@@ -228,9 +237,9 @@ export function DriverTeamScreen() {
       fullName: member.fullName,
       phone: member.phone,
       transportCompanyName: null,
-      tripsOnRoute: 0,
-      tripsAllRoutes: 0,
-      shareOfRoute: 0,
+      tripsInProvince: 0,
+      tripsAll: 0,
+      shareOfProvince: 0,
       lastCompletedAt: member.lastCompletedAt,
       firstCompletedAt: null,
       isApproved: true,
@@ -282,49 +291,48 @@ export function DriverTeamScreen() {
   };
 
   /**
-   * Lọc tuyến làm CLIENT-SIDE: cấp 1 trả về TẤT CẢ tuyến trong một lần (~27 dòng,
-   * không phân trang), nên lọc tại chỗ vừa khớp chính xác theo routeId vừa không
+   * Lọc tỉnh làm CLIENT-SIDE: cấp 1 trả về TẤT CẢ tỉnh trong một lần (~35 dòng,
+   * không phân trang), nên lọc tại chỗ vừa khớp chính xác theo mã tỉnh vừa không
    * phải gọi lại API mỗi lần đổi lựa chọn.
    */
-  const visibleRoutes = React.useMemo(() => {
-    if (filters.routeId === ALL) return routes;
-    if (filters.routeId === 'none') return [];
-    return routes.filter((r) => String(r.routeId) === filters.routeId);
-  }, [routes, filters.routeId]);
+  const visibleProvinces = React.useMemo(() => {
+    if (filters.provinceCode === ALL) return provinces;
+    if (filters.provinceCode === UNKNOWN_PROVINCE_KEY) return [];
+    return provinces.filter((p) => p.provinceCode === filters.provinceCode);
+  }, [provinces, filters.provinceCode]);
 
-  const visibleUnassigned =
-    filters.routeId === ALL || filters.routeId === 'none' ? unassigned : null;
+  const visibleUnknown =
+    filters.provinceCode === ALL || filters.provinceCode === UNKNOWN_PROVINCE_KEY ? unknown : null;
 
-  const allRouteRows = React.useMemo(
-    () => (visibleUnassigned ? [...visibleRoutes, visibleUnassigned] : visibleRoutes),
-    [visibleRoutes, visibleUnassigned],
+  const allProvinceRows = React.useMemo(
+    () => (visibleUnknown ? [...visibleProvinces, visibleUnknown] : visibleProvinces),
+    [visibleProvinces, visibleUnknown],
   );
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const items: { routeName: string; driver: TeamDriverRow }[] = [];
+      const items: { provinceName: string; driver: TeamDriverRow }[] = [];
 
       if (selected.size > 0) {
         // Có tick → xuất ĐÚNG dòng đã tick, không gọi thêm API.
         for (const [key, rows] of Object.entries(groups)) {
-          const routeName =
-            allRouteRows.find((r) => (r.routeId === null ? 'none' : String(r.routeId)) === key)
-              ?.routeName ?? key;
+          const provinceName =
+            allProvinceRows.find((r) => provinceKeyOf(r) === key)?.provinceName ?? key;
           for (const d of rows) {
-            if (selected.has(d.driverId)) items.push({ routeName, driver: d });
+            if (selected.has(d.driverId)) items.push({ provinceName, driver: d });
           }
         }
       } else {
-        for (const r of allRouteRows) {
-          const key = r.routeId === null ? ('none' as const) : r.routeId;
+        for (const r of allProvinceRows) {
+          const key = provinceKeyOf(r);
           let page = 1;
           for (;;) {
-            // PHẢI truyền nguyên bộ lọc đang áp. Xuất toàn bộ mọi tuyến trong khi
+            // PHẢI truyền nguyên bộ lọc đang áp. Xuất toàn bộ mọi tỉnh trong khi
             // người dùng đang lọc "Trong team, phụ trách = A" là sai nguy hiểm: họ
-            // nhận file của tất cả mọi người, bị cắt ngẫu nhiên ở tuyến thứ n, kèm
+            // nhận file của tất cả mọi người, bị cắt ngẫu nhiên ở tỉnh thứ n, kèm
             // cảnh báo cắt dòng càng làm họ tin file đúng.
-            const res = await getTeamRouteDrivers(key, {
+            const res = await getTeamProvinceDrivers(key, {
               from: range.from,
               to: range.to,
               stage:
@@ -340,7 +348,7 @@ export function DriverTeamScreen() {
               page,
               limit: 200,
             });
-            items.push(...res.data.map((d) => ({ routeName: r.routeName, driver: d })));
+            items.push(...res.data.map((d) => ({ provinceName: r.provinceName, driver: d })));
             if (
               page >= res.meta.totalPages ||
               res.data.length === 0 ||
@@ -417,13 +425,13 @@ export function DriverTeamScreen() {
         constraint #3 task-16: khoảng ngày áp cho cả hai, nhưng tab "Đội tài" chỉ
         đổi cột "chuyến trong kỳ", không lọc bớt người (ghi rõ trong chính tab đó).
       */}
-      <Tabs defaultValue="routes" className="space-y-6">
+      <Tabs defaultValue="provinces" className="space-y-6">
         <TabsList>
-          <TabsTrigger value="routes">Theo tuyến</TabsTrigger>
+          <TabsTrigger value="provinces">Theo tỉnh</TabsTrigger>
           <TabsTrigger value="members">Đội tài</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="routes" className="space-y-6">
+        <TabsContent value="provinces" className="space-y-6">
           {/* Bấm một tầng là lọc luôn xuống tầng đó — thẻ ở đây là lối vào việc cần làm,
               không phải số để ngắm. Chú thích gom xuống MỘT dòng dưới hàng thay vì rải trên
               từng thẻ, để 7 thẻ cùng chiều cao. */}
@@ -466,34 +474,36 @@ export function DriverTeamScreen() {
               title="Cần gọi lại hôm nay"
               value={summary?.followUpDueToday ?? '—'}
               onClick={() =>
-                setOpen(allRouteRows.map((r) => (r.routeId === null ? 'none' : String(r.routeId))))
+                setOpen(allProvinceRows.map(provinceKeyOf))
               }
             />
           </div>
 
           <p className="-mt-3 text-xs text-muted-foreground">
             Bấm một thẻ để lọc xuống tầng đó. Thẻ &quot;Từ chối / Loại&quot; mở nhóm Từ chối.
-            &quot;Cần gọi lại hôm nay&quot; mở mọi tuyến và không phụ thuộc khoảng ngày đang chọn.
+            &quot;Cần gọi lại hôm nay&quot; mở mọi tỉnh và không phụ thuộc khoảng ngày đang chọn.
           </p>
 
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Tuyến</Label>
+              <Label className="text-xs text-muted-foreground">Tỉnh</Label>
               <Select
-                value={filters.routeId}
-                onValueChange={(v) => setFilters((f) => ({ ...f, routeId: v }))}
+                value={filters.provinceCode}
+                onValueChange={(v) => setFilters((f) => ({ ...f, provinceCode: v }))}
               >
                 <SelectTrigger className="w-60">
-                  <SelectValue placeholder="Mọi tuyến" />
+                  <SelectValue placeholder="Mọi tỉnh" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL}>Mọi tuyến</SelectItem>
-                  {routes.map((r) => (
-                    <SelectItem key={String(r.routeId)} value={String(r.routeId)}>
-                      {r.routeName}
+                  <SelectItem value={ALL}>Mọi tỉnh</SelectItem>
+                  {provinceOptions.map((p) => (
+                    <SelectItem key={p.code} value={p.code}>
+                      {p.name}
                     </SelectItem>
                   ))}
-                  {unassigned ? <SelectItem value="none">Không gắn tuyến</SelectItem> : null}
+                  {unknown ? (
+                    <SelectItem value={UNKNOWN_PROVINCE_KEY}>{unknown.provinceName}</SelectItem>
+                  ) : null}
                 </SelectContent>
               </Select>
             </div>
@@ -564,8 +574,8 @@ export function DriverTeamScreen() {
 
           {filters.q ? (
             <p className="text-xs text-muted-foreground">
-              Đã tự mở những tuyến có tài xế khớp — mỗi tuyến gắn nhãn số tài khớp. Muốn lọc
-              bớt tuyến thì dùng ô &quot;Tên tuyến&quot;.
+              Đã tự mở những tỉnh có tài xế khớp — mỗi tỉnh gắn nhãn số tài khớp. Muốn lọc
+              bớt tỉnh thì dùng ô &quot;Tỉnh&quot;.
             </p>
           ) : null}
 
@@ -607,9 +617,9 @@ export function DriverTeamScreen() {
               <Loader2 className="h-6 w-6 animate-spin" />
             </div>
           ) : (
-            <RouteAccordion
-              routes={visibleRoutes}
-              unassigned={visibleUnassigned}
+            <ProvinceAccordion
+              provinces={visibleProvinces}
+              unknown={visibleUnknown}
               range={range}
               filters={filters}
               allValue={ALL}
@@ -623,6 +633,12 @@ export function DriverTeamScreen() {
               onSelectDriver={setDetailDriver}
             />
           )}
+
+          {/* Luật đếm: chuyến X↔Y nằm ở CẢ X và Y nên cộng các dòng lớn hơn tổng chuyến —
+              nói thẳng điều này kẻo người đọc cộng dồn rồi tưởng số sai. */}
+          <p className="text-xs text-muted-foreground">
+            {bucketNote ?? PROVINCE_BUCKET_NOTE_FALLBACK}
+          </p>
         </TabsContent>
 
         <TabsContent value="members">
@@ -639,7 +655,7 @@ export function DriverTeamScreen() {
         driver={detailDriver}
         range={range}
         owners={owners}
-        allRoutes={allRoutes}
+        provinceOptions={provinceOptions}
         onClose={() => setDetailDriver(null)}
         onSaved={handleSaved}
       />

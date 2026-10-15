@@ -46,7 +46,7 @@ import { Badge } from '@/components/ui/badge';
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
 import { buildTripPassText } from './booking-pass-utils';
-import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, statusLabelMap, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, ProvincePairLine, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -55,6 +55,8 @@ import {
   driverOnlineState,
 } from '@/lib/driver-presence';
 import { getImageUrl } from '@/lib/utils';
+import { useProvinceOptions } from '@/hooks/use-province-options';
+import { GEO_FILTER_ALL, geoFilterParams, legacyRouteFilterOptions, provinceFilterOptions } from './geo-filter';
 import { CreateBookingDialog } from './create-booking-dialog';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
@@ -92,6 +94,9 @@ type FetchArgs = {
   bookingId: string;
   page: number;
   limit: number;
+  /** Mã tỉnh gis | 'none' | 'ALL'. Điểm đón HOẶC điểm trả thuộc tỉnh. */
+  provinceFilter: string;
+  /** LEGACY: id tuyến cũ | 'ALL'. Chỉ lọc được chuyến tạo trước khi bỏ tuyến. */
   routeFilter: string;
   sort: { key: SortKey; direction: 'ascending' | 'descending' };
   tripKind: TripKind;
@@ -434,11 +439,11 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [activeTab, setActiveTab] = React.useState<string>('ALL');
   // Outer trip-type tab. Default 'all' = same landing view as before (no scheduled filter).
   const [tripKind, setTripKind] = React.useState<TripKind>('all');
-  // 'ALL' = no route filter; 'none' = trips with no route stamped (debug
-  // bucket: legacy + routing-miss); numeric string = exact match. UI keeps
-  // it as string so the Select's value/onValueChange contract is clean —
-  // we cast back to number | 'none' when calling the API.
-  const [selectedRouteId, setSelectedRouteId] = React.useState<string>('ALL');
+  // Lọc theo TỈNH (bỏ tuyến 10/2026): 'ALL' = không lọc; 'none' = chuyến thiếu mã tỉnh (tín hiệu
+  // soát lỗi); còn lại là mã gis. BE khớp điểm ĐÓN HOẶC điểm TRẢ — chưa có lọc riêng đón/trả.
+  const [selectedProvinceCode, setSelectedProvinceCode] = React.useState<string>(GEO_FILTER_ALL);
+  // LEGACY: lọc theo tuyến cũ, chỉ ra được chuyến lịch sử (chuyến mới không có routeId).
+  const [selectedRouteId, setSelectedRouteId] = React.useState<string>(GEO_FILTER_ALL);
   // Lọc "gọi check khách": 'ALL' = không lọc; called/unreached/uncalled = trạng thái.
   // Lọc riêng từng pha. Dùng đồng thời được: "đã gọi trước" + "chưa gọi sau" = danh
   // sách chuyến CSKH còn nợ cuộc gọi hậu mãi.
@@ -456,6 +461,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // màn admin gạt cờ, giấu đi thì chuyến gạt nhầm biến mất khỏi tầm mắt.
   const [duplicateFilter, setDuplicateFilter] = React.useState<DuplicateTripFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
+  const { options: provinceOptions, names: provinceNames } = useProvinceOptions();
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -480,7 +486,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // const [isAccepting, setIsAccepting] = React.useState(false);
 
 
-  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address, callBefore, duplicateFilter }: FetchArgs) => {
+  const fetchBookings = React.useCallback(async ({ tab, search, bookingId, page, limit, provinceFilter, routeFilter, sort, tripKind, dateFrom, dateTo, testFilter, address, callBefore, duplicateFilter }: FetchArgs) => {
     setIsLoading(true);
     setError(null);
     try {
@@ -518,14 +524,9 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       if (bookingId) {
         params.bookingId = bookingId;
       }
-      // 'ALL' = unset → no filter; 'none' passes through as the sentinel the
-      // backend understands; everything else parses to numeric routeId.
-      if (routeFilter === 'none') {
-        params.routeId = 'none';
-      } else if (routeFilter !== 'ALL') {
-        const parsed = Number(routeFilter);
-        if (Number.isFinite(parsed)) params.routeId = parsed;
-      }
+      // Tỉnh (provinceCode, kể cả sentinel 'none') + tuyến cũ (routeId, chỉ lịch sử): 'ALL' bỏ hẳn
+      // param để màn này vẫn chạy khi backend chưa deploy bộ lọc tỉnh.
+      Object.assign(params, geoFilterParams(provinceFilter, routeFilter));
       // Trip-type: 'all' omits the param (no filter); the other two map to the boolean.
       if (tripKind === 'scheduled') params.scheduled = true;
       else if (tripKind === 'regular') params.scheduled = false;
@@ -568,31 +569,23 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   // "bộ lọc tự tắt", không lỗi, không log. eslint exhaustive-deps KHÔNG chặn được vì
   // next.config bật ignoreDuringBuilds.
   const reload = React.useCallback(() => {
-    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter, duplicateFilter });
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
+    fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, provinceFilter: selectedProvinceCode, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter, duplicateFilter });
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedProvinceCode, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter, duplicateFilter });
+      fetchBookings({ tab: activeTab, search: searchTerm, bookingId: bookingIdTerm, page: currentPage, limit: pageSize, provinceFilter: selectedProvinceCode, routeFilter: selectedRouteId, sort: sortConfig, tripKind, dateFrom, dateTo, testFilter, address: addressTerm, callBefore: callBeforeFilter, duplicateFilter });
     }, 500); // Debounce search
 
     return () => clearTimeout(timer);
     // ⚠️ testFilter PHẢI có trong deps: đây (không phải reload) mới là chỗ fetch khi
     // bộ lọc đổi. Thiếu nó thì chọn filter xong bảng đứng im, không lỗi, không log.
-  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
+  }, [fetchBookings, activeTab, searchTerm, bookingIdTerm, currentPage, pageSize, selectedProvinceCode, selectedRouteId, sortConfig, tripKind, dateFrom, dateTo, testFilter, addressTerm, callBeforeFilter, duplicateFilter]);
 
-  const routeOptions = React.useMemo(
-    () => [
-      { value: 'ALL', label: 'Tất cả tuyến' },
-      { value: 'none', label: 'Chưa có tuyến' },
-      ...routes.map((r) => ({ value: String(r.id), label: r.name })),
-    ],
-    [routes],
-  );
+  const provinceFilterChoices = React.useMemo(() => provinceFilterOptions(provinceOptions), [provinceOptions]);
+  const routeOptions = React.useMemo(() => legacyRouteFilterOptions(routes), [routes]);
 
-  // Fetch routes once on mount for the Lọc theo tuyến dropdown. Soft-fail
-  // to an empty list — the filter just collapses to "Tất cả / Chưa có tuyến"
-  // if routes don't load.
+  // Tuyến cũ chỉ nạp để lọc LỊCH SỬ. Soft-fail về rỗng — khi đó bộ lọc tuyến cũ tự ẩn.
   React.useEffect(() => {
     let cancelled = false;
     getRoutes()
@@ -663,7 +656,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   }
 
   const handleCopyPass = async (booking: Booking) => {
-    const text = buildTripPassText(booking);
+    const text = buildTripPassText(booking, provinceNames);
     try {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -854,17 +847,30 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               <SelectItem value="unreached">Không liên lạc được</SelectItem>
             </SelectContent>
           </Select>
-          {/* Combobox có ô tìm để lọc nhanh khi danh sách tuyến dài. Chọn lại mục đang chọn
-              trả undefined (toggle bỏ chọn) → quy về 'ALL'. */}
+          {/* Combobox có ô tìm để lọc nhanh trong 34 tỉnh. Chọn lại mục đang chọn trả undefined
+              (toggle bỏ chọn) → quy về 'ALL'. Lọc theo điểm ĐÓN HOẶC điểm TRẢ của chuyến. */}
           <Combobox
-            options={routeOptions}
-            selectedValue={selectedRouteId}
-            onSelect={(val) => { setSelectedRouteId(val ?? 'ALL'); setCurrentPage(1); }}
-            placeholder="Lọc theo tuyến"
-            searchPlaceholder="Tìm tuyến..."
-            noResultsText="Không có tuyến phù hợp."
+            options={provinceFilterChoices}
+            selectedValue={selectedProvinceCode}
+            onSelect={(val) => { setSelectedProvinceCode(val ?? GEO_FILTER_ALL); setCurrentPage(1); }}
+            placeholder="Lọc theo tỉnh (đón/trả)"
+            searchPlaceholder="Tìm tỉnh..."
+            noResultsText="Không có tỉnh phù hợp."
             className="w-[220px]"
           />
+          {/* LEGACY: chỉ hiện khi còn dữ liệu tuyến cũ. Chuyến tạo sau khi bỏ tuyến không có
+              routeId nên bộ lọc này không bao giờ ra chúng — dùng bộ lọc tỉnh ở trên. */}
+          {routes.length > 0 && (
+            <Combobox
+              options={routeOptions}
+              selectedValue={selectedRouteId}
+              onSelect={(val) => { setSelectedRouteId(val ?? GEO_FILTER_ALL); setCurrentPage(1); }}
+              placeholder="Tuyến cũ (chỉ lịch sử)"
+              searchPlaceholder="Tìm tuyến cũ..."
+              noResultsText="Không có tuyến phù hợp."
+              className="w-[220px]"
+            />
+          )}
           <div className='relative'>
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
@@ -930,7 +936,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               <TableRow>
                 <TableHead>Khách hàng</TableHead>
                 <TableHead>Tài xế</TableHead>
-                <TableHead>Tuyến đường</TableHead>
+                <TableHead>Hành trình</TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('price')}>
                     Giá
@@ -1050,6 +1056,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     </TableCell>
                     <TableCell className='max-w-xs'>
                       <div className="flex flex-col">
+                        {/* Cặp tỉnh đón → trả (thay tên tuyến đã bỏ). */}
+                        <ProvincePairLine booking={booking} names={provinceNames} className='truncate text-xs font-semibold text-muted-foreground' />
                         <span className='truncate'><span className='font-medium'>Điểm đón:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span>
                         <span className='truncate'><span className='font-medium'>Điểm trả:</span> {typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span>
                       </div>

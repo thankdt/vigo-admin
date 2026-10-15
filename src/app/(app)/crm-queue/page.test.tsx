@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import CrmQueuePage from './page';
+import { resetProvinceOptionsCache } from '@/hooks/use-province-options';
 import type { Booking } from '@/lib/types';
 
 /**
@@ -15,6 +16,7 @@ import type { Booking } from '@/lib/types';
 
 const getBookings = vi.fn();
 const recordBookingCustomerCall = vi.fn();
+const getProvinceOptions = vi.fn();
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>();
@@ -22,6 +24,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...actual,
     getBookings: (...a: any[]) => getBookings(...a),
     recordBookingCustomerCall: (...a: any[]) => recordBookingCustomerCall(...a),
+    // Cột "Hành trình" nạp tên tỉnh qua hook dùng chung. Không mock thì `...actual` để lọt
+    // hàm THẬT — test sẽ gọi mạng tới API.
+    getProvinceOptions: (...a: any[]) => getProvinceOptions(...a),
     getCustomerCallReasons: vi.fn(async () => ['Khách đổi ý', 'Khách không nghe máy']),
   };
 });
@@ -84,6 +89,12 @@ const page = (data: Booking[], over: Record<string, unknown> = {}) => ({
 beforeEach(() => {
   getBookings.mockReset().mockResolvedValue(page([]));
   recordBookingCustomerCall.mockReset().mockResolvedValue(undefined);
+  // Hook tên tỉnh nhớ kết quả cho cả phiên — xoá để ca nào cũng bắt đầu từ trạng thái chưa nạp.
+  resetProvinceOptionsCache();
+  getProvinceOptions.mockReset().mockResolvedValue([
+    { code: '01', name: 'Nội đô Hà Nội' },
+    { code: '31', name: 'Hải Phòng' },
+  ]);
   toast.mockReset();
 });
 
@@ -238,6 +249,84 @@ describe('CrmQueuePage — ranh giới quyền', () => {
     for (const cam of [/tạo chuyến/i, /đổi trạng thái/i, /điều tài/i, /gán tài xế/i, /huỷ chuyến/i]) {
       expect(within(table).queryByRole('button', { name: cam })).not.toBeInTheDocument();
     }
+  });
+});
+
+/**
+ * Bỏ tuyến → tỉnh (10/2026): chuyến mới KHÔNG còn `route` nên cột "Tuyến" cũ (`route?.name`) là
+ * gạch ngang ở mọi dòng mới. Cột nay là "Hành trình" = cặp tỉnh đón → trả theo mã gis của chuyến
+ * (payload `/bookings/admin/list` mang sẵn `pickupProvinceCode`/`dropoffProvinceCode`); chuyến
+ * LỊCH SỬ chưa có mã tỉnh mới rơi về tên tuyến cũ.
+ */
+describe('CrmQueuePage — cột "Hành trình" (cặp tỉnh thay tuyến)', () => {
+  /** Ô thứ 2 (sau "Khách") của dòng dữ liệu đầu tiên. */
+  const journeyCell = async () => {
+    await screen.findByText('Khách A');
+    return within(screen.getAllByRole('row')[1]).getAllByRole('cell')[1];
+  };
+
+  it('đổi tiêu đề cột "Tuyến" thành "Hành trình"', async () => {
+    getBookings.mockResolvedValue(page([mkBooking()]));
+    render(<CrmQueuePage />);
+
+    expect(await screen.findByRole('columnheader', { name: 'Hành trình' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Tuyến' })).not.toBeInTheDocument();
+  });
+
+  it('chuyến mới (không route) hiện "Nội đô Hà Nội → Hải Phòng" theo mã tỉnh, không phải gạch ngang', async () => {
+    getBookings.mockResolvedValue(
+      page([mkBooking({ route: null, routeId: null, pickupProvinceCode: '01', dropoffProvinceCode: '31' })]),
+    );
+    render(<CrmQueuePage />);
+
+    // Tên tỉnh nạp bất đồng bộ sau khi hàng đã hiện — findBy chờ tới khi nhãn đủ tên.
+    expect(await screen.findByText('Nội đô Hà Nội → Hải Phòng')).toBeInTheDocument();
+  });
+
+  it('cặp tỉnh có THỨ TỰ: chiều về là "Hải Phòng → Nội đô Hà Nội"', async () => {
+    getBookings.mockResolvedValue(
+      page([mkBooking({ route: null, pickupProvinceCode: '31', dropoffProvinceCode: '01' })]),
+    );
+    render(<CrmQueuePage />);
+
+    expect(await screen.findByText('Hải Phòng → Nội đô Hà Nội')).toBeInTheDocument();
+  });
+
+  it('có cả mã tỉnh lẫn tuyến cũ (chuyến lịch sử đã backfill): hiện cặp tỉnh, không hiện tên tuyến', async () => {
+    getBookings.mockResolvedValue(
+      page([mkBooking({ pickupProvinceCode: '01', dropoffProvinceCode: '31' })]), // route mặc định "Hà Nội — Hải Phòng"
+    );
+    render(<CrmQueuePage />);
+
+    expect(await screen.findByText('Nội đô Hà Nội → Hải Phòng')).toBeInTheDocument();
+    expect(screen.queryByText('Hà Nội — Hải Phòng')).not.toBeInTheDocument();
+  });
+
+  it('chuyến lịch sử CHƯA có mã tỉnh rơi về tên tuyến cũ', async () => {
+    getBookings.mockResolvedValue(page([mkBooking()])); // route "Hà Nội — Hải Phòng", không có mã tỉnh
+    render(<CrmQueuePage />);
+
+    expect(await journeyCell()).toHaveTextContent('Hà Nội — Hải Phòng');
+  });
+
+  it('không có mã tỉnh lẫn tuyến: gạch ngang, hàng vẫn render đủ', async () => {
+    getBookings.mockResolvedValue(page([mkBooking({ route: null })]));
+    render(<CrmQueuePage />);
+
+    const cell = await journeyCell();
+    expect(cell).toHaveTextContent(/^—$/);
+    expect(screen.getByRole('button', { name: /nhận gọi/i })).toBeInTheDocument();
+  });
+
+  it('danh sách tỉnh tải lỗi: "01" vẫn có nhãn, mã khác hiện "Mã tỉnh <mã>" — không vỡ trang', async () => {
+    getProvinceOptions.mockRejectedValue(new Error('mạng hỏng'));
+    getBookings.mockResolvedValue(
+      page([mkBooking({ route: null, pickupProvinceCode: '01', dropoffProvinceCode: '31' })]),
+    );
+    render(<CrmQueuePage />);
+
+    expect(await screen.findByText('Nội đô Hà Nội → Mã tỉnh 31')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /nhận gọi/i })).toBeInTheDocument();
   });
 });
 

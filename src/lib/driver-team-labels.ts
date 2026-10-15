@@ -1,4 +1,4 @@
-import type { DriverTeamStage, TeamDriverRow, TeamRouteRow } from './types';
+import type { DriverTeamStage, TeamDriverRow, TeamProvinceRow } from './types';
 
 export const STAGE_ORDER: DriverTeamStage[] = [
   'CONTACTED',
@@ -69,12 +69,108 @@ export function driverWarning(row: TeamDriverRow): string | null {
 }
 
 /**
- * Tuyến CÓ khách đặt nhưng KHÔNG tài nào chạy xong = cần tuyển gấp.
+ * Tỉnh CÓ khách đặt nhưng KHÔNG tài nào chạy xong = cần tuyển gấp.
  * Cố ý KHÔNG dùng tỉ lệ completedTrips/totalBookings: hai số đó đếm theo hai mốc
  * thời gian khác nhau (spec §5.1) nên tỉ lệ giữa chúng vô nghĩa.
+ * Hàng "Chưa xác định tỉnh" (provinceCode null) KHÔNG phải nơi để tuyển tài — nó là tín hiệu
+ * soát dữ liệu chuyến thiếu mã tỉnh, nên không bao giờ gắn nhãn "thiếu tài".
  */
-export function routeNeedsDrivers(row: TeamRouteRow): boolean {
-  return row.totalBookings > 0 && row.driverCount === 0;
+export function provinceNeedsDrivers(
+  row: Pick<TeamProvinceRow, 'provinceCode' | 'totalBookings' | 'driverCount'>,
+): boolean {
+  return row.provinceCode !== null && row.totalBookings > 0 && row.driverCount === 0;
+}
+
+/** Khoá nhóm cấp 2 / accordion: mã tỉnh, hoặc 'none' cho hàng "Chưa xác định tỉnh". */
+export const UNKNOWN_PROVINCE_KEY = 'none';
+
+export function provinceKeyOf(row: Pick<TeamProvinceRow, 'provinceCode'>): string {
+  return row.provinceCode ?? UNKNOWN_PROVINCE_KEY;
+}
+
+/**
+ * Câu giải thích luật đếm theo tỉnh — dùng khi backend không trả `bucketNote`. Nội dung khớp
+ * PROVINCE_BUCKET_NOTE của backend (driver-team-province.util.ts).
+ */
+export const PROVINCE_BUCKET_NOTE_FALLBACK =
+  'Mỗi chuyến được đếm ở mọi tỉnh tài xế phải có để chạy chuyến đó: chuyến X↔Y nằm ở CẢ X và Y, ' +
+  'chuyến Hà Nội↔X chỉ nằm ở X, chuyến trong Hà Nội nằm ở "Nội đô Hà Nội". ' +
+  'Vì vậy cộng các dòng có thể LỚN HƠN tổng số chuyến — đừng cộng dồn các dòng để ra tổng.';
+
+/** Nhãn một mã tỉnh khi không có tên (mã ngoài danh mục vẫn hiện, không biến mất). */
+export function unknownProvinceCodeLabel(code: string): string {
+  return `Mã tỉnh ${code}`;
+}
+
+/**
+ * Tên các tỉnh được giao của một thành viên, theo thứ tự `assignedProvinceCodes`. Tên thiếu (backend
+ * cũ không trả `assignedProvinceNames`, hoặc lệch độ dài) thì rơi về "Mã tỉnh XX" chứ không bỏ trống.
+ */
+export function assignedProvinceLabels(m: {
+  assignedProvinceCodes?: string[];
+  assignedProvinceNames?: string[];
+}): string[] {
+  const names = m.assignedProvinceNames ?? [];
+  return (m.assignedProvinceCodes ?? []).map((c, i) => names[i] || unknownProvinceCodeLabel(c));
+}
+
+/** Một lựa chọn tỉnh: mã gis + tên hiển thị. */
+export type ProvinceOption = { code: string; name: string };
+
+/**
+ * Lựa chọn tỉnh cho ô lọc "Tỉnh" và ô "Tỉnh được phân công", sắp theo TÊN tiếng Việt. KHÔNG dựa vào
+ * thứ tự backend trả: mặc định nó sắp theo số tài → số chuyến nên đổi theo khoảng ngày, ô chọn nhảy
+ * lung tung và khó tìm tỉnh. Hàng "Chưa xác định tỉnh" (provinceCode null) không phải một tỉnh nên
+ * không vào đây — màn hình tự thêm riêng ở cuối ô lọc.
+ */
+export function buildProvinceOptions(
+  rows: readonly Pick<TeamProvinceRow, 'provinceCode' | 'provinceName'>[],
+): ProvinceOption[] {
+  const out: ProvinceOption[] = [];
+  for (const r of rows) {
+    if (r.provinceCode !== null) out.push({ code: r.provinceCode, name: r.provinceName });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name, 'vi') || a.code.localeCompare(b.code));
+}
+
+/**
+ * Cấp 1 còn chứa mã có số liệu mà danh mục 34 tỉnh KHÔNG có; backend gắn cho chúng đúng nhãn dự phòng
+ * "Mã tỉnh XX" (= `unknownProvinceCodeLabel`). Giao mã đó cho tài là 400 VAL_001 nên không được đưa
+ * vào ô chọn tỉnh được giao. Tỉnh thật luôn mang tên thật.
+ */
+export function isCatalogProvince(p: ProvinceOption): boolean {
+  return p.name !== unknownProvinceCodeLabel(p.code);
+}
+
+/**
+ * Tập `assignedProvinceCodes` gửi PATCH. Backend (`validProvinceCodes`) trả 400 VAL_001 và TỪ CHỐI cả
+ * request nếu có BẤT KỲ mã nào ngoài danh mục — nên mã "mồ côi" (đã giao từ trước, nay không còn
+ * trong danh mục) KHÔNG được gửi lại, nếu không mọi lần lưu tỉnh của tài đó đều 400 và không gỡ nổi.
+ *  - `selected`: tập vừa chọn ở ô chọn (hoặc tập còn hợp lệ khi chỉ gỡ mã mồ côi).
+ *  - `assigned`: tập đang giao, có thể chứa mã mồ côi.
+ *  - `catalog`: mã backend nhận. RỖNG = chưa tải được danh mục → không lọc gì, tin backend; nếu coi
+ *    MỌI mã là mồ côi thì một lần lưu sẽ xoá sạch phân công.
+ * Trả về `codes` (gửi đi, bỏ trùng, giữ thứ tự) và `dropped` (mã bị bỏ — nơi gọi phải báo người dùng).
+ */
+export function buildAssignedProvincePatch(
+  selected: readonly string[],
+  assigned: readonly string[],
+  catalog: ReadonlySet<string>,
+): { codes: string[]; dropped: string[] } {
+  const known = (c: string) => catalog.size === 0 || catalog.has(c);
+  return {
+    codes: [...new Set(selected)].filter(known),
+    dropped: [...new Set([...assigned, ...selected])].filter((c) => !known(c)),
+  };
+}
+
+/** Tách tập đang giao thành mã thuộc danh mục / mã ngoài danh mục (cùng luật với PATCH ở trên). */
+export function splitAssignedByCatalog(
+  assigned: readonly string[],
+  catalog: ReadonlySet<string>,
+): { inCatalog: string[]; outside: string[] } {
+  const { codes, dropped } = buildAssignedProvincePatch(assigned, assigned, catalog);
+  return { inCatalog: codes, outside: dropped };
 }
 
 /** Ngày VN của một mốc, độc lập timezone trình duyệt. */

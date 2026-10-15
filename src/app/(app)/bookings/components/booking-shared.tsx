@@ -13,6 +13,7 @@ import { Star } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import type { Booking } from '@/lib/types';
 import { currentAccountIfDiffers } from './account-snapshot';
+import { provincePairLabel, type ProvinceNameMap } from '@/lib/province-labels';
 
 
 // Nhãn trạng thái chuyến — getStatusBadge bên dưới lẫn BookingsTable (tab, dialog
@@ -325,3 +326,16 @@ export function DriverAlertBadges({ driver }: { driver?: Booking['driver'] }) {
   );
 }
 
+/**
+ * Cặp tỉnh ĐÓN → TRẢ của chuyến (thay tên tuyến đã bỏ). Chuyến cũ chưa backfill mã tỉnh → không
+ * hiện gì, để hàng không có dòng rỗng.
+ */
+export function ProvincePairLine({ booking, names, className }: {
+  booking: Pick<Booking, 'pickupProvinceCode' | 'dropoffProvinceCode'>;
+  names: ProvinceNameMap;
+  className?: string;
+}) {
+  const pair = provincePairLabel(booking.pickupProvinceCode, booking.dropoffProvinceCode, names);
+  if (!pair) return null;
+  return <span className={className} data-testid="province-pair">{pair}</span>;
+}

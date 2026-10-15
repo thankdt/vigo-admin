@@ -14,6 +14,8 @@ import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { useToast } from '@/hooks/use-toast';
 import { getImageUrl } from '@/lib/utils';
 import type { Driver } from '@/lib/types';
+import { driverLacksProvince } from './driver-provinces';
+import { NoProvinceWarning } from './driver-province-warning';
 import { DRIVER_CALL_TYPE_LABEL, DRIVER_CALL_TYPE_ORDER } from '@/lib/cskh-call-labels';
 import {
   getDriverApprovalHistory,
@@ -496,19 +498,10 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
                     </Badge>
                   ))}
                 </div>
-              ) : driver.routes && driver.routes.length > 0 ? (
-                <div className="flex flex-wrap gap-1.5">
-                  {driver.routes.map((r) => (
-                    <Badge key={r.id} variant="outline">
-                      {r.name}
-                    </Badge>
-                  ))}
-                </div>
-              ) : driver.fixedRoute?.name ? (
-                <Badge variant="outline">{driver.fixedRoute.name}</Badge>
               ) : (
-                <p className="text-sm text-muted-foreground italic">Chưa đăng ký</p>
+                <p className="text-sm text-muted-foreground italic">Chưa chọn tỉnh nào.</p>
               )}
+              {driverLacksProvince(driver) && <NoProvinceWarning variant="alert" />}
             </div>
 
             <div className="space-y-3 border-t pt-4">

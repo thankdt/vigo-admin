@@ -26,12 +26,23 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getRoutes, updateDriverRoutes, getSurvivingProvinces, updateDriverProvinces, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, updateDriverCsStatus } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getSurvivingProvinces, updateDriverProvinces, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, updateDriverCsStatus } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
 import { onlineFilterApplies, onlineFilterWarning, onlineStateParam, type OnlineFilterWarning } from './drivers-online-filter';
-import type { Driver, TransportCompany, Route, AdminUnit } from '@/lib/types';
+import {
+  buildProvinceSelection,
+  currentProvinceCodes,
+  driverLacksProvince,
+  provinceFilterUnsupported,
+  provinceOptionLabel,
+  provincesFromCodes,
+  provinceSaveErrorMessage,
+  selectableProvinces,
+} from './driver-provinces';
+import { NoProvinceWarning } from './driver-province-warning';
+import type { Driver, TransportCompany, AdminUnit } from '@/lib/types';
 import {
   DRIVER_ONLINE_HINT,
   DRIVER_ONLINE_LABEL,
@@ -116,6 +127,7 @@ export function DriversTable() {
   const [activeTab, setActiveTab] = React.useState<TableTab>('pending');
   // Cảnh báo khi lọc online không đáng tin: BE chưa hỗ trợ (trả danh sách KHÔNG lọc) hoặc Redis lỗi.
   const [onlineWarning, setOnlineWarning] = React.useState<OnlineFilterWarning | null>(null);
+  const [provinceFilterWarning, setProvinceFilterWarning] = React.useState(false);
   const [needsReviewCount, setNeedsReviewCount] = React.useState<number>(0);
 
   const [dialogState, setDialogState] = React.useState<{ open: boolean; driver: Driver | null, action: 'approve' | 'reject' }>({ open: false, driver: null, action: 'approve' });
@@ -311,109 +323,81 @@ export function DriversTable() {
   const [uploadingHtx, setUploadingHtx] = React.useState(false);
   const htxFileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Edit-routes state (multi-route). null = not editing; number[] = staged route ids.
-  const [editingRoutes, setEditingRoutes] = React.useState<number[] | null>(null);
-  const [savingRoutes, setSavingRoutes] = React.useState(false);
-  const [allRoutes, setAllRoutes] = React.useState<Route[]>([]);
-  const [loadingRoutes, setLoadingRoutes] = React.useState(false);
-
-  // Enter route-edit mode: seed from the driver's current routes (M2M, else
-  // legacy fixedRoute) and lazy-load the full route list for the picker.
-  const startEditRoutes = async () => {
-    if (!viewDriver) return;
-    const current =
-      viewDriver.routes && viewDriver.routes.length > 0
-        ? viewDriver.routes.map((r) => r.id)
-        : viewDriver.fixedRouteId
-          ? [viewDriver.fixedRouteId]
-          : [];
-    setEditingRoutes(current);
-    if (allRoutes.length === 0) {
-      setLoadingRoutes(true);
-      try {
-        setAllRoutes(await getRoutes());
-      } catch (e: any) {
-        toast({ variant: 'destructive', title: 'Không tải được danh sách tuyến', description: e?.message });
-      } finally {
-        setLoadingRoutes(false);
-      }
-    }
-  };
-
-  const handleSaveRoutes = async () => {
-    if (!viewDriver || editingRoutes === null) return;
-    // Clearing all routes parks the driver off dispatch — warn explicitly.
-    if (editingRoutes.length === 0) {
-      const ok = window.confirm(
-        'Gỡ hết tuyến sẽ khiến tài xế KHÔNG nhận được chuyến nào cho tới khi gán lại. Tiếp tục?',
-      );
-      if (!ok) return;
-    }
-    setSavingRoutes(true);
-    try {
-      await updateDriverRoutes(viewDriver.id, editingRoutes);
-      // Reflect the new routes locally from the picked ids + loaded names so the
-      // dialog updates instantly without depending on the response shape.
-      const picked = allRoutes
-        .filter((r) => editingRoutes.includes(r.id))
-        .map((r) => ({ id: r.id, name: r.name }));
-      setViewDriver({
-        ...viewDriver,
-        routes: picked,
-        fixedRouteId: editingRoutes[0] ?? undefined,
-        fixedRoute: picked[0] ? { id: picked[0].id, name: picked[0].name } : undefined,
-      });
-      setEditingRoutes(null);
-      toast({ title: 'Đã cập nhật tuyến' });
-      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
-      refreshNeedsReviewCount();
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Không cập nhật được tuyến', description: e?.message });
-    } finally {
-      setSavingRoutes(false);
-    }
-  };
-
-  // Edit-provinces state (34 surviving provinces after 2025 merger).
-  const [editingProvinces, setEditingProvinces] = React.useState<number[] | null>(null);
+  // Edit-provinces state (34 tỉnh sau sáp nhập). null = không sửa; string[] = mã gis đang chọn.
+  const [editingProvinces, setEditingProvinces] = React.useState<string[] | null>(null);
   const [savingProvinces, setSavingProvinces] = React.useState(false);
   const [allProvinces, setAllProvinces] = React.useState<AdminUnit[]>([]);
   const [loadingProvinces, setLoadingProvinces] = React.useState(false);
 
+  // Trạng thái sửa / chờ của hộp thoại chi tiết (tỉnh, dịch vụ, tên, xe, form duyệt-từ chối) chỉ có
+  // nghĩa với ĐÚNG tài đang mở: ô sửa dở của tài A mà rơi vào hộp thoại của tài B rồi Lưu là ghi đè
+  // im lặng B (PUT tỉnh thay CẢ tập). Mỗi lần ĐỔI tài hoặc đóng hộp thoại — kể cả đường KHÔNG qua
+  // onOpenChange (khoá, tạm khoá, duyệt, ví, gán HTX gọi setViewDriver(null) thẳng) — bỏ hết các
+  // trạng thái đó (đúng tập onOpenChange reset) và đổi token để lần nạp danh mục tỉnh còn dang dở
+  // thấy token lệch mà bỏ kết quả. Khoá theo ID, KHÔNG theo object: lưu tại chỗ
+  // (`setViewDriver({ ...viewDriver, ...updated })`) giữ id nên không đóng ô đang sửa.
+  // `resetDetailAction` khai báo bên dưới: effect chạy sau render nên nó đã khởi tạo.
+  const provinceEditTokenRef = React.useRef(0);
+  const viewDriverId = viewDriver?.id ?? null;
+  React.useEffect(() => {
+    provinceEditTokenRef.current += 1;
+    setEditingProvinces(null);
+    setEditingServices(null);
+    setEditingName(false);
+    setEditingVehicle(false);
+    resetDetailAction();
+  }, [viewDriverId]);
+
+  // Vào chế độ sửa SAU khi đã có danh mục: không có danh mục thì không dò được mã và lưu sẽ
+  // gửi tập rỗng — tức xoá hết tỉnh của tài.
   const startEditProvinces = async () => {
     if (!viewDriver) return;
-    const current = (viewDriver.provinces ?? []).map((p) => p.id);
-    setEditingProvinces(current);
-    if (allProvinces.length === 0) {
+    const token = provinceEditTokenRef.current;
+    let catalog = allProvinces;
+    if (catalog.length === 0) {
       setLoadingProvinces(true);
       try {
-        setAllProvinces(await getSurvivingProvinces());
+        catalog = selectableProvinces(await getSurvivingProvinces());
+        setAllProvinces(catalog);
       } catch (e: any) {
         toast({ variant: 'destructive', title: 'Không tải được danh sách tỉnh', description: e?.message });
+        return;
       } finally {
         setLoadingProvinces(false);
       }
+      if (catalog.length === 0) {
+        toast({ variant: 'destructive', title: 'Không tải được danh sách tỉnh', description: 'Backend chưa trả mã tỉnh (gisCode).' });
+        return;
+      }
     }
+    // Đã đóng hộp thoại / sang tài khác trong lúc nạp danh mục: bỏ kết quả. `viewDriver` ở trên là
+    // bản chụp của tài LÚC BẤM — ghi nó bây giờ là gán mã tỉnh của tài cũ cho tài đang xem.
+    if (token !== provinceEditTokenRef.current) return;
+    setEditingProvinces(currentProvinceCodes(viewDriver.provinces, catalog));
   };
 
   const handleSaveProvinces = async () => {
     if (!viewDriver || editingProvinces === null) return;
+    // Gỡ hết tỉnh = tài không bật được Sẵn sàng — hỏi lại trước khi ghi.
+    if (editingProvinces.length === 0) {
+      const ok = window.confirm(
+        'Gỡ hết tỉnh sẽ khiến tài xế KHÔNG bật được Sẵn sàng và không nhận được chuyến mới cho tới khi chọn lại. Tiếp tục?',
+      );
+      if (!ok) return;
+    }
     setSavingProvinces(true);
     try {
-      await updateDriverProvinces(viewDriver.id, editingProvinces);
-      const picked = allProvinces
-        .filter((p) => editingProvinces.includes(p.id))
-        .map((p) => ({ id: p.id, name: p.name }));
+      await updateDriverProvinces(viewDriver.id, buildProvinceSelection(editingProvinces, allProvinces));
       setViewDriver({
         ...viewDriver,
-        provinces: picked,
+        provinces: provincesFromCodes(editingProvinces, allProvinces),
       });
       setEditingProvinces(null);
       toast({ title: 'Đã cập nhật tỉnh hoạt động' });
       fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
       refreshNeedsReviewCount();
-    } catch (e: any) {
-      toast({ variant: 'destructive', title: 'Không cập nhật được tỉnh', description: e?.message });
+    } catch (e) {
+      toast({ variant: 'destructive', title: 'Không cập nhật được tỉnh', description: provinceSaveErrorMessage(e) });
     } finally {
       setSavingProvinces(false);
     }
@@ -529,7 +513,7 @@ export function DriversTable() {
         name: f.name || undefined,
         phone: f.phone || undefined,
         plate: f.plate || undefined,
-        fixedRouteId: f.fixedRouteId || undefined,
+        provinceCode: f.provinceCode || undefined,
         transportCompanyName: f.transportCompanyName || undefined,
         unconfirmedTransportCompany: f.unconfirmedTransportCompany ? 'true' : undefined,
         csCalled: f.csCalled || undefined,
@@ -553,6 +537,7 @@ export function DriversTable() {
       if (gen !== fetchGenRef.current) return;
       setDrivers(response.data);
       setOnlineWarning(onlineFilterWarning(onlineState, response.meta));
+      setProvinceFilterWarning(provinceFilterUnsupported(apiParams.provinceCode, response.meta));
       const total = response.meta?.total ?? 0;
       const apiLimit = response.meta?.limit ?? limit;
       setTotalItems(total);
@@ -561,6 +546,7 @@ export function DriversTable() {
       if (gen !== fetchGenRef.current) return;
       setError(err.message);
       setOnlineWarning(null);
+      setProvinceFilterWarning(false);
       toast({
         variant: 'destructive',
         title: 'Không thể tải danh sách tài xế',
@@ -893,6 +879,13 @@ export function DriversTable() {
           </div>
         )}
 
+        {provinceFilterWarning && (
+          <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            Backend chưa hỗ trợ lọc theo tỉnh — danh sách bên dưới CHƯA được lọc.
+          </div>
+        )}
+
         {activeTab === 'needsReview' && (
           <div className="mb-4 flex items-center gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-200">
             <AlertTriangle className="h-4 w-4" />
@@ -1037,7 +1030,7 @@ export function DriversTable() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {/* 2025: Tỉnh hoạt động (34 tỉnh sáp nhập), fallback về Tuyến cũ */}
+                      {/* Tỉnh hoạt động (34 tỉnh sáp nhập). Tuyến đã bỏ, không còn fallback. */}
                       {driver.provinces && driver.provinces.length > 0 ? (
                         <div
                           className="flex flex-wrap gap-1"
@@ -1059,29 +1052,10 @@ export function DriversTable() {
                             </span>
                           )}
                         </div>
-                      ) : driver.routes && driver.routes.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {driver.routes.slice(0, 2).map((r) => (
-                            <span
-                              key={r.id}
-                              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium"
-                            >
-                              {r.name}
-                            </span>
-                          ))}
-                          {driver.routes.length > 2 && (
-                            <span
-                              className="inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground"
-                              title={driver.routes.map((r) => r.name).join(', ')}
-                            >
-                              +{driver.routes.length - 2}
-                            </span>
-                          )}
-                        </div>
-                      ) : driver.fixedRoute?.name ? (
-                        <span className="text-sm font-medium">{driver.fixedRoute.name}</span>
+                      ) : driverLacksProvince(driver) ? (
+                        <NoProvinceWarning />
                       ) : (
-                        <span className="text-sm text-muted-foreground">Chưa đăng ký</span>
+                        <span className="text-sm text-muted-foreground">Chưa chọn tỉnh</span>
                       )}
                     </TableCell>
                     {showStatusCol && (
@@ -1348,7 +1322,7 @@ export function DriversTable() {
           ⚠️ CÓ BẢN SONG SONG: component DriverDetailDialog trong driver-detail-dialog.tsx
           (bản B, read-only) dùng ở trang "Đơn vị vận tải". Sửa field HIỂN THỊ ở bản này
           nhớ sửa cả bản B — đã quên 2 lần (5ffe97d: timeline CSKH; ô "Số ghế"). */}
-      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); setEditingVehicle(false); } }}>
+      <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); setEditingVehicle(false); setEditingProvinces(null); } }}>
         <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Chi tiết tài xế</DialogTitle>
@@ -1822,59 +1796,7 @@ export function DriversTable() {
             </div>
           )}
 
-          {/* Routes (multi-route) in detail dialog */}
-          {viewDriver && (
-            <div className="space-y-2 border-t pt-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-semibold">Tuyến đường</h4>
-                {editingRoutes === null ? (
-                  <Button variant="ghost" size="sm" onClick={startEditRoutes}>Sửa</Button>
-                ) : (
-                  <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" disabled={savingRoutes} onClick={() => setEditingRoutes(null)}>Hủy</Button>
-                    <Button size="sm" disabled={savingRoutes || loadingRoutes} onClick={handleSaveRoutes}>
-                      {savingRoutes && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-                      Lưu
-                    </Button>
-                  </div>
-                )}
-              </div>
-              {editingRoutes === null ? (
-                <div className="flex flex-wrap gap-2">
-                  {viewDriver.routes && viewDriver.routes.length > 0 ? (
-                    viewDriver.routes.map((r) => <Badge key={r.id} variant="outline">{r.name}</Badge>)
-                  ) : viewDriver.fixedRoute?.name ? (
-                    <Badge variant="outline">{viewDriver.fixedRoute.name}</Badge>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic">Chưa đăng ký tuyến nào.</p>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-2 pt-1">
-                  {loadingRoutes ? (
-                    <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Đang tải tuyến…</p>
-                  ) : (
-                    <MultiSelectComboBox
-                      options={allRoutes.map((r) => ({ value: String(r.id), label: r.name }))}
-                      selectedValues={editingRoutes.map(String)}
-                      onSelectedValuesChange={(vals) => setEditingRoutes(vals.map(Number))}
-                      placeholder="Chọn tuyến…"
-                      searchPlaceholder="Tìm tuyến…"
-                      noResultsText="Không có tuyến phù hợp"
-                    />
-                  )}
-                  {editingRoutes.length === 0 && (
-                    <p className="text-sm text-destructive flex items-center gap-1">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      Gỡ hết tuyến: tài xế sẽ KHÔNG nhận được chuyến nào cho tới khi gán lại.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Provinces (34 surviving provinces after 2025 merger) in detail dialog */}
+          {/* Tỉnh hoạt động (34 tỉnh sau sáp nhập) trong hộp thoại chi tiết */}
           {viewDriver && (
             <div className="space-y-2 border-t pt-4">
               <div className="flex items-center justify-between">
@@ -1883,11 +1805,14 @@ export function DriversTable() {
                   <p className="text-xs text-muted-foreground">Tài xế nhận các chuyến đón hoặc trả tại các tỉnh này</p>
                 </div>
                 {editingProvinces === null ? (
-                  <Button variant="ghost" size="sm" onClick={startEditProvinces}>Sửa</Button>
+                  <Button variant="ghost" size="sm" disabled={loadingProvinces} onClick={startEditProvinces}>
+                    {loadingProvinces && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+                    Sửa
+                  </Button>
                 ) : (
                   <div className="flex items-center gap-2">
                     <Button variant="ghost" size="sm" disabled={savingProvinces} onClick={() => setEditingProvinces(null)}>Hủy</Button>
-                    <Button size="sm" disabled={savingProvinces || loadingProvinces} onClick={handleSaveProvinces}>
+                    <Button size="sm" disabled={savingProvinces} onClick={handleSaveProvinces}>
                       {savingProvinces && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
                       Lưu
                     </Button>
@@ -1895,39 +1820,35 @@ export function DriversTable() {
                 )}
               </div>
               {editingProvinces === null ? (
-                <div className="flex flex-wrap gap-2">
+                <div className="space-y-2">
                   {viewDriver.provinces && viewDriver.provinces.length > 0 ? (
-                    viewDriver.provinces.map((p) => (
-                      <Badge key={p.id} variant="secondary" className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                        {p.name}
-                      </Badge>
-                    ))
+                    <div className="flex flex-wrap gap-2">
+                      {viewDriver.provinces.map((p) => (
+                        <Badge key={p.id} variant="secondary" className="bg-blue-50 dark:bg-blue-950 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+                          {p.name}
+                        </Badge>
+                      ))}
+                    </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground italic">Chưa đăng ký tỉnh nào (đang dùng fallback theo tuyến cũ).</p>
+                    <p className="text-sm text-muted-foreground italic">Chưa chọn tỉnh nào.</p>
                   )}
+                  {driverLacksProvince(viewDriver) && <NoProvinceWarning variant="alert" />}
                 </div>
               ) : (
                 <div className="space-y-2 pt-1">
-                  {loadingProvinces ? (
-                    <p className="text-sm text-muted-foreground flex items-center gap-2"><Loader2 className="h-3 w-3 animate-spin" /> Đang tải danh sách tỉnh…</p>
-                  ) : (
-                    <MultiSelectComboBox
-                      options={allProvinces.map((p) => {
-                        const mergedOld = p.oldProvinces?.filter(
-                          (o) => !p.name.toLowerCase().includes(o.toLowerCase()),
-                        );
-                        const label =
-                          mergedOld && mergedOld.length > 0
-                            ? `${p.name} (gồm ${p.oldProvinces!.join(', ')})`
-                            : p.name;
-                        return { value: String(p.id), label };
-                      })}
-                      selectedValues={editingProvinces.map(String)}
-                      onSelectedValuesChange={(vals) => setEditingProvinces(vals.map(Number))}
-                      placeholder="Chọn tỉnh hoạt động…"
-                      searchPlaceholder="Tìm tỉnh…"
-                      noResultsText="Không tìm thấy tỉnh phù hợp"
-                    />
+                  <MultiSelectComboBox
+                    options={allProvinces.map((p) => ({ value: p.gisCode as string, label: provinceOptionLabel(p) }))}
+                    selectedValues={editingProvinces}
+                    onSelectedValuesChange={setEditingProvinces}
+                    placeholder="Chọn tỉnh hoạt động…"
+                    searchPlaceholder="Tìm tỉnh…"
+                    noResultsText="Không tìm thấy tỉnh phù hợp"
+                  />
+                  {editingProvinces.length === 0 && (
+                    <p className="text-sm text-destructive flex items-center gap-1">
+                      <AlertTriangle className="h-3.5 w-3.5" />
+                      Gỡ hết tỉnh: tài xế sẽ KHÔNG bật được Sẵn sàng và không nhận được chuyến mới cho tới khi chọn lại.
+                    </p>
                   )}
                 </div>
               )}

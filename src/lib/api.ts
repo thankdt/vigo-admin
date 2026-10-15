@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -10,6 +10,7 @@ import {
 } from '@/lib/driver-reputation-query';
 import { ApiError, buildApiError } from '@/lib/api-error';
 import { redirectTo } from '@/lib/redirect';
+import { parseProvinceOptions } from '@/lib/province-labels';
 import {
   buildReportParams,
   type ReportSpec,
@@ -391,7 +392,8 @@ export async function getDrivers(params: {
   plate?: string;
   transportCompanyId?: string;
   transportCompanyName?: string;
-  fixedRouteId?: string;
+  // Mã tỉnh gis (2 số) trong `driver_service_provinces`. Server echo `meta.provinceCode`.
+  provinceCode?: string;
   needsReview?: 'true' | 'false';
   unconfirmedTransportCompany?: 'true' | 'false';
   csCalled?: 'true' | 'false';
@@ -405,7 +407,7 @@ export async function getDrivers(params: {
   onlineState?: DriverOnlineState;
   sort?: 'name' | 'isApproved' | 'createdAt' | 'csLastCallAt';
   order?: 'asc' | 'desc';
-} = {}): Promise<GetApiResponse<Driver> & { meta?: { onlineState?: string; presenceUnavailable?: boolean } }> {
+} = {}): Promise<GetApiResponse<Driver> & { meta?: { onlineState?: string; provinceCode?: string; presenceUnavailable?: boolean } }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
@@ -417,7 +419,7 @@ export async function getDrivers(params: {
   if (params.plate) query.set('plate', params.plate);
   if (params.transportCompanyId) query.set('transportCompanyId', params.transportCompanyId);
   if (params.transportCompanyName) query.set('transportCompanyName', params.transportCompanyName);
-  if (params.fixedRouteId) query.set('fixedRouteId', params.fixedRouteId);
+  if (params.provinceCode) query.set('provinceCode', params.provinceCode);
   if (params.needsReview) query.set('needsReview', params.needsReview);
   if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
   if (params.csCalled) query.set('csCalled', params.csCalled);
@@ -655,32 +657,39 @@ export async function updateDriverProfile(
   return json.data || json;
 }
 
-// Admin sets a driver's dispatch routes (multi-route). Pass [] to clear all
-// (driver becomes undispatchable until re-assigned).
-export async function updateDriverRoutes(id: string, routeIds: number[]): Promise<Driver> {
-  const response = await fetchWithAuth(`/drivers/admin/${id}/routes`, {
-    method: 'PUT',
-    body: JSON.stringify({ routeIds }),
-  });
-  const json = await response.json();
-  return json.data || json;
-}
-
-// Admin sets a driver's dispatch provinces (34 surviving provinces).
-export async function updateDriverProvinces(id: string, provinceIds: number[]): Promise<Driver> {
+// Admin đặt tỉnh hoạt động của tài (PUT /drivers/admin/:id/provinces).
+// `provinceCodes` (mã gis) là khoá chính: thắng `provinceIds` khi có cả hai. `provinceIds` (id tỉnh
+// cũ) gửi kèm cho ảnh backend cũ lúc rollback — ảnh đó chỉ hiểu `provinceIds`. Backend trả 400
+// VAL_003 nếu thiếu CẢ HAI trường; mảng rỗng là lệnh "gỡ hết tỉnh" (tài không bật được Sẵn sàng).
+export async function updateDriverProvinces(
+  id: string,
+  selection: { provinceCodes: string[]; provinceIds?: number[] },
+): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/provinces`, {
     method: 'PUT',
-    body: JSON.stringify({ provinceIds }),
+    body: JSON.stringify(selection),
   });
   const json = await response.json();
   return json.data || json;
 }
 
-// Get surviving provinces (34 provinces after 2025 merger)
+// Get surviving provinces (34 provinces after 2025 merger). Mỗi mục có `id` (tỉnh cũ) + `gisCode`.
 export async function getSurvivingProvinces(): Promise<AdminUnit[]> {
   const response = await fetchWithAuth('/drivers/provinces');
   const json = await response.json();
   return json.data || json;
+}
+
+/**
+ * Danh sách 34 tỉnh (mã gis) cho bộ lọc/nhãn tỉnh của chuyến. Lấy từ `/drivers/provinces` — cùng
+ * nguồn với màn tài xế; backend để route này KHÔNG có guard nào nên không đòi quyền master-data
+ * như `/pricing/macro-rules/provinces`. Backend trả `gisCode` + `name` ('01' = "Nội đô Hà Nội");
+ * dòng thiếu `gisCode` (backend cũ) bị bỏ — mã `code` cũ KHÔNG phải mã gis.
+ */
+export async function getProvinceOptions(): Promise<ProvinceOption[]> {
+  const response = await fetchWithAuth('/drivers/provinces');
+  const json = await response.json();
+  return parseProvinceOptions(json.data ?? json);
 }
 
 // ── Điểm uy tín & đánh giá tài xế ────────────────────────────────────────────
@@ -825,9 +834,13 @@ export async function getBookings(params: {
   customerId?: string;
   driverId?: string;
   processingState?: 'unclaimed' | 'claimed';
-  // Numeric route id → exact match; 'none' → bookings with no route stamped
-  // (legacy + routing-miss). Caller passes the raw value through.
-  routeId?: number | 'none';
+  // LEGACY (bỏ tuyến 10/2026): chuyến mới KHÔNG còn routeId, nên tham số này chỉ còn lọc
+  // được chuyến LỊCH SỬ tạo trước khi bỏ tuyến. Numeric route id → exact match.
+  routeId?: number;
+  // Lọc theo TỈNH (mã gis, '01'…): chuyến có điểm ĐÓN HOẶC điểm TRẢ thuộc tỉnh đó. 'none' =
+  // chuyến còn thiếu mã tỉnh ở ít nhất một đầu (tín hiệu soát lỗi). BE bỏ qua giá trị sai dạng
+  // và chưa deploy thì bỏ qua cả tham số — không bao giờ 400.
+  provinceCode?: string;
   // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone
   // OR the senderInfo snapshot name/phone (tên/SĐT lưu trên chuyến lúc đặt).
   q?: string;
@@ -893,6 +906,7 @@ export async function getBookings(params: {
     ...(params.driverId && { driverId: params.driverId }),
     ...(params.processingState && { processingState: params.processingState }),
     ...(params.routeId !== undefined && { routeId: String(params.routeId) }),
+    ...(params.provinceCode && { provinceCode: params.provinceCode }),
     ...(params.q && { q: params.q }),
     ...(params.bookingId && { bookingId: params.bookingId }),
     ...(params.sortBy && { sortBy: params.sortBy }),
@@ -3628,35 +3642,42 @@ export async function getTeamSummary(range: { from: string; to: string }): Promi
 }
 
 /**
- * Cấp 1. Shape trả về là {routes, unassigned, range} — cố ý KHÔNG phải {data, meta}:
- * TransformInterceptor của backend thấy cặp data+meta sẽ dựng lại response và VỨT
- * mọi field khác, làm `unassigned` biến mất im lặng.
+ * Cấp 1 theo TỈNH (thay trục tuyến). Shape trả về là {provinces, unknown, range, bucketNote} —
+ * cố ý KHÔNG phải {data, meta}: TransformInterceptor của backend thấy cặp data+meta sẽ dựng lại
+ * response và VỨT mọi field khác, làm `unknown` biến mất im lặng.
+ *
+ * `provinces` luôn gồm MỌI tỉnh trong danh mục (kể cả 0 chuyến); `unknown` là hàng "Chưa xác định
+ * tỉnh". Chuyến X↔Y nằm ở cả X và Y — đừng cộng các dòng để ra tổng chuyến.
  */
-export async function getTeamRoutes(params: {
+export async function getTeamProvinces(params: {
   from: string;
   to: string;
   sort?: string;
   order?: string;
-  /** Lọc theo TÊN TUYẾN — bớt dòng ở cấp 1. */
+  /** Lọc theo TÊN (hoặc mã) TỈNH — bớt dòng ở cấp 1. */
   q?: string;
   /**
-   * Tìm theo TÊN/SĐT TÀI XẾ. KHÔNG lọc bớt tuyến — chỉ để backend đếm
-   * matchedDriverCount mỗi tuyến, FE tự bung đúng những tuyến có người khớp.
+   * Tìm theo TÊN/SĐT TÀI XẾ. KHÔNG lọc bớt tỉnh — chỉ để backend đếm
+   * matchedDriverCount mỗi tỉnh, FE tự bung đúng những tỉnh có người khớp.
    */
   driverQ?: string;
-}): Promise<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }> {
+}): Promise<{ provinces: TeamProvinceRow[]; unknown: TeamProvinceRow | null; bucketNote?: string }> {
   const q = new URLSearchParams({ from: params.from, to: params.to });
   if (params.sort) q.set('sort', params.sort);
   if (params.order) q.set('order', params.order);
   if (params.q) q.set('q', params.q);
   if (params.driverQ) q.set('driverQ', params.driverQ);
-  return unwrap<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }>(
-    await fetchWithAuth(`/admin/driver-team/routes?${q}`),
+  return unwrap<{ provinces: TeamProvinceRow[]; unknown: TeamProvinceRow | null; bucketNote?: string }>(
+    await fetchWithAuth(`/admin/driver-team/provinces?${q}`),
   );
 }
 
-export async function getTeamRouteDrivers(
-  routeId: number | 'none',
+/**
+ * Cấp 2 theo TỈNH. `provinceCode` = mã gis 2 chữ số, hoặc 'none' = nhóm chưa xác định tỉnh
+ * (giữ NGUYÊN chuỗi 'none' trong path).
+ */
+export async function getTeamProvinceDrivers(
+  provinceCode: string,
   params: {
     from: string;
     to: string;
@@ -3682,8 +3703,9 @@ export async function getTeamRouteDrivers(
   if (params.order) q.set('order', params.order);
   if (params.page) q.set('page', String(params.page));
   if (params.limit) q.set('limit', String(params.limit));
-  // routeId giữ NGUYÊN 'none' — nhóm booking không gắn tuyến.
-  const res = await fetchWithAuth(`/admin/driver-team/routes/${routeId}/drivers?${q}`);
+  const res = await fetchWithAuth(
+    `/admin/driver-team/provinces/${encodeURIComponent(provinceCode)}/drivers?${q}`,
+  );
   const body = await res.json();
   return {
     data: body.data ?? [],
@@ -3711,7 +3733,8 @@ export async function patchTeamMember(
   driverId: string,
   body: {
     stage?: DriverTeamStage;
-    assignedRouteIds?: number[];
+    /** Tỉnh giao cho tài (mã gis). `[]` = bỏ hết; mã ngoài danh mục → backend 400. */
+    assignedProvinceCodes?: string[];
     ownerAdminUserId?: string | null;
     nextFollowUpAt?: string | null;
     note?: string;
@@ -3728,7 +3751,7 @@ export async function patchTeamMember(
 /**
  * Danh sách thành viên đội (cấp phẳng, đi thẳng từ driver_team_member). Shape trả
  * về là {members} — cố ý KHÔNG phải {data, meta}: TransformInterceptor của backend
- * thấy cặp data+meta sẽ dựng lại response và VỨT mọi field khác (xem getTeamRoutes
+ * thấy cặp data+meta sẽ dựng lại response và VỨT mọi field khác (xem getTeamProvinces
  * ở trên, cùng bẫy). unwrap() vẫn đúng ở đây vì body chỉ có {success, data}.
  */
 export async function getTeamMembers(params: {
@@ -4753,6 +4776,8 @@ export type PoolRejectReason =
   | 'DAT_LAI'
   | 'LECH_GIO'
   | 'QUA_GHE'
+  // Khác cặp (tỉnh đón, tỉnh trả) CÓ THỨ TỰ với chuyến chủ, hoặc một bên chưa có mã tỉnh.
+  | 'KHAC_CAP_TINH'
   | 'DON_LECH_HANH_LANG'
   | 'TRA_LECH_HANH_LANG'
   | 'NGUOC_CHIEU';
@@ -4769,7 +4794,11 @@ export interface PoolPassenger {
   bookingId: string;
   isAnchor: boolean;
   customerName: string | null;
-  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  /**
+   * Cặp tỉnh ĐÓN → TRẢ của chuyến ("Hà Nội → Hải Phòng"), BE dựng từ mã tỉnh gis — KHÔNG phải tên
+   * một tuyến (giữ tên khoá `routeName` cho tương thích). null khi thiếu mã/tên tỉnh ở một đầu.
+   * Cả nhóm cùng một cặp (cổng KHAC_CAP_TINH).
+   */
   routeName: string | null;
   customerPhone: string | null;
   pickupAddress: string | null;
@@ -4819,12 +4848,10 @@ export interface PoolSuggestions {
 export async function getPoolingSuggestions(params: {
   /** Ngày VN, YYYY-MM-DD. */
   date: string;
-  routeId?: number;
   corridorKm?: number;
   windowHours?: number;
 }): Promise<PoolSuggestions> {
   const query = new URLSearchParams({ date: params.date });
-  if (params.routeId) query.set('routeId', String(params.routeId));
   if (params.corridorKm) query.set('corridorKm', String(params.corridorKm));
   if (params.windowHours) query.set('windowHours', String(params.windowHours));
 
@@ -5038,6 +5065,42 @@ export async function bulkDeletePricingMacroRules(ids: number[]): Promise<BulkDe
 export async function getPricingMacroBandWarnings(): Promise<MacroBandWarnings> {
   const response = await fetchWithAuth('/pricing/macro-rules/band-warnings');
   return unwrap<MacroBandWarnings>(response);
+}
+
+// ───────── ĐIỂM ĐẶC BIỆT (SÂN BAY) & ĐỒNG GIÁ — cần quyền `master-data` ─────────
+
+export async function getSpecialZones(): Promise<SpecialZone[]> {
+  const response = await fetchWithAuth('/pricing/special-zones');
+  return unwrap<SpecialZone[]>(response);
+}
+
+export async function getSpecialZoneFlatPrices(zoneCode: string): Promise<SpecialZoneFlatPrice[]> {
+  const response = await fetchWithAuth(`/pricing/special-zones/${encodeURIComponent(zoneCode)}/flat-prices`);
+  return unwrap<SpecialZoneFlatPrice[]>(response);
+}
+
+/** Upsert theo (vùng, phường) hoặc (vùng, cả tỉnh khi `wardCode` null). Ghi đè CẢ hàng. */
+export async function upsertSpecialZoneFlatPrice(
+  zoneCode: string,
+  data: UpsertSpecialZoneFlatPriceRequest,
+): Promise<SpecialZoneFlatPrice> {
+  const response = await fetchWithAuth(`/pricing/special-zones/${encodeURIComponent(zoneCode)}/flat-prices`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+  return unwrap<SpecialZoneFlatPrice>(response);
+}
+
+/** `wardCode` null = xoá hàng mặc định cả tỉnh (đường dẫn `default`). */
+export async function deleteSpecialZoneFlatPrice(
+  zoneCode: string,
+  wardCode: string | null,
+): Promise<{ success: boolean }> {
+  const key = wardCode === null ? 'default' : encodeURIComponent(wardCode);
+  const response = await fetchWithAuth(`/pricing/special-zones/${encodeURIComponent(zoneCode)}/flat-prices/${key}`, {
+    method: 'DELETE',
+  });
+  return unwrap<{ success: boolean }>(response);
 }
 
 export async function simulatePricingMacro(data: SimulatePricingMacroDto): Promise<SimulatePricingMacroResult> {

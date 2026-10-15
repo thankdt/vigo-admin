@@ -30,7 +30,7 @@ describe('getTeamMembers', () => {
         success: true,
         data: {
           members: [
-            { driverId: 'd1', fullName: 'Tài A', phone: '0900000000', stage: 'JOINED', commissionRate: 0.1, ownerAdminUserId: null, ownerName: null, assignedRouteIds: [], assignedRouteNames: [], nextFollowUpAt: null, stageChangedAt: null, createdAt: '2026-08-01T00:00:00.000Z', completedTripsInRange: 3, lastCompletedAt: null },
+            { driverId: 'd1', fullName: 'Tài A', phone: '0900000000', stage: 'JOINED', commissionRate: 0.1, ownerAdminUserId: null, ownerName: null, assignedProvinceCodes: [], assignedProvinceNames: [], nextFollowUpAt: null, stageChangedAt: null, createdAt: '2026-08-01T00:00:00.000Z', completedTripsInRange: 3, lastCompletedAt: null },
           ],
         },
       }),

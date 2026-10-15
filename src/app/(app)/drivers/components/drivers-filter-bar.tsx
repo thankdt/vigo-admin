@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
-import { getRoutes } from '@/lib/api';
-import type { Route } from '@/lib/types';
+import { getSurvivingProvinces } from '@/lib/api';
+import type { AdminUnit } from '@/lib/types';
+import { provinceOptionLabel, selectableProvinces } from './driver-provinces';
 import { DRIVER_CALL_TYPE_LABEL, DRIVER_CALL_TYPE_ORDER } from '@/lib/cskh-call-labels';
 import { DRIVER_ONLINE_LABEL, type DriverOnlineState } from '@/lib/driver-presence';
 
@@ -16,8 +17,8 @@ export type DriverFilters = {
   name: string;
   phone: string;
   plate: string;
-  // ID of the registered route the driver signed up to drive. '' = all routes.
-  fixedRouteId: string;
+  // Mã tỉnh gis (2 số) tài đang hoạt động. '' = tất cả tỉnh.
+  provinceCode: string;
   // Free-text search against both registered transportCompany.name and the
   // driver's self-declared customTransportCompanyName.
   transportCompanyName: string;
@@ -41,7 +42,7 @@ export const EMPTY_FILTERS: DriverFilters = {
   name: '',
   phone: '',
   plate: '',
-  fixedRouteId: '',
+  provinceCode: '',
   transportCompanyName: '',
   unconfirmedTransportCompany: false,
   csCalled: '',
@@ -54,13 +55,13 @@ export const EMPTY_FILTERS: DriverFilters = {
 
 export function hasAnyFilter(f: DriverFilters): boolean {
   return Boolean(
-    f.name || f.phone || f.plate || f.fixedRouteId || f.transportCompanyName ||
+    f.name || f.phone || f.plate || f.provinceCode || f.transportCompanyName ||
     f.unconfirmedTransportCompany || f.csCalled || f.csLastCallType || f.csNeverWorked ||
     f.csWorkedFrom || f.csWorkedTo || f.onlineState,
   );
 }
 
-const ALL_ROUTES_VALUE = '__all__';
+const ALL_PROVINCES_VALUE = '__all__';
 const ALL_CS_VALUE = '__all_cs__';
 const ALL_CS_TYPE_VALUE = '__all_cs_type__';
 const ALL_ONLINE_VALUE = '__all_online__';
@@ -99,11 +100,11 @@ export function DriversFilterBar({
   /** Hiện ô lọc trạng thái online (tab Đã duyệt / Tất cả). */
   showOnlineState?: boolean;
 }) {
-  const [routes, setRoutes] = React.useState<Route[]>([]);
+  const [provinces, setProvinces] = React.useState<AdminUnit[]>([]);
 
   React.useEffect(() => {
-    getRoutes()
-      .then(setRoutes)
+    getSurvivingProvinces()
+      .then((list) => setProvinces(selectableProvinces(list)))
       .catch(() => { /* dropdown stays empty if it fails; user can still use other filters */ });
   }, []);
 
@@ -111,12 +112,12 @@ export function DriversFilterBar({
     onChange({ ...value, [key]: v });
   };
 
-  const routeOptions = React.useMemo(
+  const provinceOptions = React.useMemo(
     () => [
-      { value: ALL_ROUTES_VALUE, label: 'Tất cả tuyến' },
-      ...routes.map((r) => ({ value: String(r.id), label: r.name })),
+      { value: ALL_PROVINCES_VALUE, label: 'Tất cả tỉnh' },
+      ...provinces.map((p) => ({ value: p.gisCode as string, label: provinceOptionLabel(p) })),
     ],
-    [routes],
+    [provinces],
   );
 
   return (
@@ -155,12 +156,12 @@ export function DriversFilterBar({
       </div>
       <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Combobox
-          options={routeOptions}
-          selectedValue={value.fixedRouteId || ALL_ROUTES_VALUE}
-          onSelect={(v) => setField('fixedRouteId', !v || v === ALL_ROUTES_VALUE ? '' : v)}
-          placeholder="Tất cả tuyến"
-          searchPlaceholder="Tìm tuyến..."
-          noResultsText="Không có tuyến phù hợp."
+          options={provinceOptions}
+          selectedValue={value.provinceCode || ALL_PROVINCES_VALUE}
+          onSelect={(v) => setField('provinceCode', !v || v === ALL_PROVINCES_VALUE ? '' : v)}
+          placeholder="Tất cả tỉnh"
+          searchPlaceholder="Tìm tỉnh..."
+          noResultsText="Không có tỉnh phù hợp."
         />
         <IconInput
           icon={Building2}
