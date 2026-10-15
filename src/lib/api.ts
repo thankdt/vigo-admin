@@ -10,6 +10,7 @@ import {
 } from '@/lib/driver-reputation-query';
 import { ApiError, buildApiError } from '@/lib/api-error';
 import { redirectTo } from '@/lib/redirect';
+import { parseProvinceOptions } from '@/lib/province-labels';
 import {
   buildReportParams,
   type ReportSpec,
@@ -683,6 +684,18 @@ export async function getSurvivingProvinces(): Promise<AdminUnit[]> {
   return json.data || json;
 }
 
+/**
+ * Danh sách 34 tỉnh (mã gis) cho bộ lọc/nhãn tỉnh của chuyến. Lấy từ `/drivers/provinces` — cùng
+ * nguồn với màn tài xế; backend để route này KHÔNG có guard nào nên không đòi quyền master-data
+ * như `/pricing/macro-rules/provinces`. Backend trả `gisCode` + `name` ('01' = "Nội đô Hà Nội");
+ * dòng thiếu `gisCode` (backend cũ) bị bỏ — mã `code` cũ KHÔNG phải mã gis.
+ */
+export async function getProvinceOptions(): Promise<ProvinceOption[]> {
+  const response = await fetchWithAuth('/drivers/provinces');
+  const json = await response.json();
+  return parseProvinceOptions(json.data ?? json);
+}
+
 // ── Điểm uy tín & đánh giá tài xế ────────────────────────────────────────────
 // ⚠️ Đường dẫn là `/admin/driver-reputation/...` (KHÁC mẫu `/drivers/admin/...`
 // ở trên) — theo đúng hợp đồng API, đừng "sửa cho đồng bộ".
@@ -825,9 +838,13 @@ export async function getBookings(params: {
   customerId?: string;
   driverId?: string;
   processingState?: 'unclaimed' | 'claimed';
-  // Numeric route id → exact match; 'none' → bookings with no route stamped
-  // (legacy + routing-miss). Caller passes the raw value through.
-  routeId?: number | 'none';
+  // LEGACY (bỏ tuyến 10/2026): chuyến mới KHÔNG còn routeId, nên tham số này chỉ còn lọc
+  // được chuyến LỊCH SỬ tạo trước khi bỏ tuyến. Numeric route id → exact match.
+  routeId?: number;
+  // Lọc theo TỈNH (mã gis, '01'…): chuyến có điểm ĐÓN HOẶC điểm TRẢ thuộc tỉnh đó. 'none' =
+  // chuyến còn thiếu mã tỉnh ở ít nhất một đầu (tín hiệu soát lỗi). BE bỏ qua giá trị sai dạng
+  // và chưa deploy thì bỏ qua cả tham số — không bao giờ 400.
+  provinceCode?: string;
   // Free-text search — BE LIKE %q% on customer name/phone OR driver name/phone
   // OR the senderInfo snapshot name/phone (tên/SĐT lưu trên chuyến lúc đặt).
   q?: string;
@@ -893,6 +910,7 @@ export async function getBookings(params: {
     ...(params.driverId && { driverId: params.driverId }),
     ...(params.processingState && { processingState: params.processingState }),
     ...(params.routeId !== undefined && { routeId: String(params.routeId) }),
+    ...(params.provinceCode && { provinceCode: params.provinceCode }),
     ...(params.q && { q: params.q }),
     ...(params.bookingId && { bookingId: params.bookingId }),
     ...(params.sortBy && { sortBy: params.sortBy }),
@@ -4753,6 +4771,8 @@ export type PoolRejectReason =
   | 'DAT_LAI'
   | 'LECH_GIO'
   | 'QUA_GHE'
+  // Khác cặp (tỉnh đón, tỉnh trả) CÓ THỨ TỰ với chuyến chủ, hoặc một bên chưa có mã tỉnh.
+  | 'KHAC_CAP_TINH'
   | 'DON_LECH_HANH_LANG'
   | 'TRA_LECH_HANH_LANG'
   | 'NGUOC_CHIEU';
@@ -4769,7 +4789,11 @@ export interface PoolPassenger {
   bookingId: string;
   isAnchor: boolean;
   customerName: string | null;
-  /** Tuyến hệ thống xếp cho chuyến. Khác tuyến chuyến chủ = ghép theo hành lang. */
+  /**
+   * Cặp tỉnh ĐÓN → TRẢ của chuyến ("Hà Nội → Hải Phòng"), BE dựng từ mã tỉnh gis — KHÔNG phải tên
+   * một tuyến (giữ tên khoá `routeName` cho tương thích). null khi thiếu mã/tên tỉnh ở một đầu.
+   * Cả nhóm cùng một cặp (cổng KHAC_CAP_TINH).
+   */
   routeName: string | null;
   customerPhone: string | null;
   pickupAddress: string | null;
@@ -4819,12 +4843,10 @@ export interface PoolSuggestions {
 export async function getPoolingSuggestions(params: {
   /** Ngày VN, YYYY-MM-DD. */
   date: string;
-  routeId?: number;
   corridorKm?: number;
   windowHours?: number;
 }): Promise<PoolSuggestions> {
   const query = new URLSearchParams({ date: params.date });
-  if (params.routeId) query.set('routeId', String(params.routeId));
   if (params.corridorKm) query.set('corridorKm', String(params.corridorKm));
   if (params.windowHours) query.set('windowHours', String(params.windowHours));
 

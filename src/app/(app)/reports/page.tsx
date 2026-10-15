@@ -82,7 +82,7 @@ export default function ReportsPage() {
       <div>
         <h1 className="text-2xl font-bold">Báo cáo</h1>
         <p className="text-sm text-muted-foreground">
-          Số liệu chuyến đi theo tuyến, loại hình và nguyên nhân huỷ. Bấm một dòng để xem danh sách chuyến.
+          Số liệu chuyến đi theo cặp tỉnh, loại hình và nguyên nhân huỷ. Bấm một dòng để xem danh sách chuyến.
         </p>
       </div>
 

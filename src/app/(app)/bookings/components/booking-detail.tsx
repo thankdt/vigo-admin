@@ -21,7 +21,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag } from '@/lib/api';
-import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, getStatusBadge, TestTripBadge } from './booking-shared';
+import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, getStatusBadge, ProvincePairLine, TestTripBadge } from './booking-shared';
+import { useProvinceOptions } from '@/hooks/use-province-options';
+import { provincePairLabel } from '@/lib/province-labels';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
 import { buildTripPassText } from './booking-pass-utils';
 import type {} from '@/lib/types';
@@ -376,6 +378,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
   onDuplicateFlagChanged?: () => void,
 }) {
   const [booking, setBooking] = React.useState<Booking | null>(null);
+  const { names: provinceNames } = useProvinceOptions();
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const { toast } = useToast();
@@ -587,7 +590,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
 
   const handleCopyPass = async () => {
     if (!booking) return;
-    const text = buildTripPassText(booking);
+    const text = buildTripPassText(booking, provinceNames);
     try {
       if (navigator?.clipboard?.writeText) {
         await navigator.clipboard.writeText(text);
@@ -879,11 +882,17 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
               {/* Addresses */}
               <Card className="p-3 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Tuyến đường</div>
-                  {booking.route?.name ? (
-                    <Badge variant="outline" className="text-xs font-medium">{booking.route.name}</Badge>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Hành trình</div>
+                  {provincePairLabel(booking.pickupProvinceCode, booking.dropoffProvinceCode, provinceNames) ? (
+                    <Badge variant="outline" className="text-xs font-medium">
+                      <ProvincePairLine booking={booking} names={provinceNames} />
+                    </Badge>
                   ) : (
-                    <span className="text-[11px] text-muted-foreground">Chưa gắn tuyến</span>
+                    <span className="text-[11px] text-muted-foreground">Chưa có mã tỉnh</span>
+                  )}
+                  {/* Tuyến cũ: chỉ có ở chuyến tạo TRƯỚC khi bỏ tuyến — dữ liệu lịch sử, không dùng để điều phối. */}
+                  {booking.route?.name && (
+                    <span className="text-[11px] text-muted-foreground">Tuyến cũ: {booking.route.name}</span>
                   )}
                 </div>
                 <div className="space-y-2">

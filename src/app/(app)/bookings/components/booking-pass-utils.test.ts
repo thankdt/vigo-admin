@@ -80,4 +80,41 @@ describe('buildTripPassText', () => {
     expect(text).not.toContain('0912345678');
     expect(text).not.toContain('Trần Văn A');
   });
+
+  describe('hành trình theo cặp tỉnh (bỏ tuyến 10/2026)', () => {
+    const base = {
+      id: 'BK1',
+      customerId: 'c',
+      status: 'SEARCHING',
+      pickupAddress: 'A',
+      dropoffAddress: 'B',
+      price: 100000,
+      createdAt: '2026-10-01T01:00:00.000Z',
+    } as unknown as Booking;
+    const names = { '31': 'Hải Phòng' };
+
+    it('cặp tỉnh thay tên tuyến, kèm km', () => {
+      const text = buildTripPassText(
+        { ...base, pickupProvinceCode: '01', dropoffProvinceCode: '31', distanceKm: 120 } as Booking,
+        names,
+      );
+      expect(text).toContain('🛣 Hành trình: Nội đô Hà Nội → Hải Phòng (120.0 km)');
+      expect(text).not.toContain('Tuyến đường');
+    });
+
+    it('cặp tỉnh THẮNG tên tuyến cũ khi cả hai cùng có', () => {
+      const text = buildTripPassText(
+        { ...base, pickupProvinceCode: '31', dropoffProvinceCode: '01', route: { id: 1, name: 'Tuyến cũ X' } } as Booking,
+        names,
+      );
+      expect(text).toContain('🛣 Hành trình: Hải Phòng → Nội đô Hà Nội');
+      expect(text).not.toContain('Tuyến cũ X');
+    });
+
+    it('chưa có tỉnh, chỉ có km: dòng khoảng cách như cũ', () => {
+      const text = buildTripPassText({ ...base, distanceKm: 10 } as Booking);
+      expect(text).toContain('📏 Khoảng cách: 10.0 km');
+      expect(text).not.toContain('Hành trình');
+    });
+  });
 });

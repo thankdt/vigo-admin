@@ -412,11 +412,14 @@ export type Booking = {
   driverEarnings?: DriverEarnings;
   finalPriceVAT?: number;
   distanceKm?: number;
-  // Defined route this trip priced against. null = legacy booking from
-  // before the routeId column existed, or runtime fell through to km-based
-  // pricing because nothing in defined_routes matched.
+  // LEGACY (bỏ tuyến 10/2026): tuyến của chuyến TẠO TRƯỚC khi bỏ tuyến. Chuyến mới luôn null —
+  // trục địa lý hiện là cặp tỉnh bên dưới. Chỉ hiển thị như dữ liệu lịch sử.
   routeId?: number | null;
   route?: { id: number; name: string } | null;
+  // Snapshot địa lý gis (34 tỉnh) hai đầu chuyến, BE stamp lúc tạo từ toạ độ. null/thiếu = chuyến
+  // cũ chưa backfill hoặc BE chưa deploy — luôn xử lý tường minh. '01' = Nội đô Hà Nội.
+  pickupProvinceCode?: string | null;
+  dropoffProvinceCode?: string | null;
   // Vi-now: customer shows a 6-digit code to a nearby driver to claim the
   // trip directly, bypassing dispatch. Admin needs to spot these at a
   // glance because the customer journey + UI flow differ from a normal
