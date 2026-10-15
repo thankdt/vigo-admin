@@ -25,6 +25,8 @@ import {
   toSelectors,
   vehicleLabel,
   type MacroEndpoint,
+  isLegacyAdjustmentType,
+  summarizeWarnings,
 } from './macro-bulk';
 
 const HN: MacroEndpoint = { provinceCode: '01', label: 'Hà Nội' };
@@ -270,5 +272,34 @@ describe('macro-bulk — hiển thị mức điều chỉnh và ô nhập số',
     expect(adjustmentValueRange('MAX_CEILING').step).toBe(1);
     // và kiểm tra JS khớp: 2.5% hợp lệ
     expect(adjustmentValueError('PERCENTAGE', 2.5)).toBeNull();
+  });
+});
+
+describe('macro-bulk — loại điều chỉnh đã ngừng áp dụng', () => {
+  it('chỉ MIN_FLOOR / MAX_CEILING là "cũ"; cộng/trừ tiền và % thì không', () => {
+    expect(isLegacyAdjustmentType('MIN_FLOOR')).toBe(true);
+    expect(isLegacyAdjustmentType('MAX_CEILING')).toBe(true);
+    expect(isLegacyAdjustmentType('DELTA_AMOUNT')).toBe(false);
+    expect(isLegacyAdjustmentType('PERCENTAGE')).toBe(false);
+  });
+});
+
+describe('macro-bulk — tóm tắt cảnh báo của backend', () => {
+  const w = (m: string, i = 1) => ({ code: 'XUNG_DOT_CUNG_CAP', message: m, ruleId: i });
+
+  it('không có / không phải mảng → 0 cảnh báo', () => {
+    expect(summarizeWarnings(undefined)).toEqual({ count: 0, lines: [], more: 0 });
+    expect(summarizeWarnings(null)).toEqual({ count: 0, lines: [], more: 0 });
+    expect(summarizeWarnings([])).toEqual({ count: 0, lines: [], more: 0 });
+  });
+
+  it('cắt ở `max` dòng và ghi số còn lại', () => {
+    const r = summarizeWarnings([w('a'), w('b'), w('c'), w('d'), w('e')], 3);
+    expect(r).toEqual({ count: 5, lines: ['a', 'b', 'c'], more: 2 });
+  });
+
+  it('bỏ phần tử rác (thiếu message) thay vì làm vỡ giao diện', () => {
+    const r = summarizeWarnings([w('a'), { code: 'X', ruleId: null } as never, null as never]);
+    expect(r).toEqual({ count: 1, lines: ['a'], more: 0 });
   });
 });
