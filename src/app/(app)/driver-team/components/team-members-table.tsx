@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { getTeamMembers } from '@/lib/api';
 import type { TeamMemberRow, TeamOwner } from '@/lib/types';
 import {
+  assignedProvinceLabels,
   commissionRateLabel,
   isFollowUpOverdue,
   stageBadgeClass,
@@ -69,7 +70,7 @@ export function TeamMembersTable({
   owners: TeamOwner[];
   // Nhận cả DÒNG (không chỉ id): tên/SĐT đã có sẵn trong bảng, truyền xuống để
   // drawer hiện được ngay "đang xem ai" trong lúc chờ tải chi tiết đầy đủ —
-  // giống cách RouteAccordion truyền TeamDriverRow cho onSelectDriver.
+  // giống cách ProvinceAccordion truyền TeamDriverRow cho onSelectDriver.
   onOpenDriver: (driverId: string, member: TeamMemberRow) => void;
   // Đổi giá trị này (vd sau khi lưu ở drawer) để tải lại danh sách — bảng tự
   // fetch nên KHÔNG tự biết khi nào dữ liệu ở nơi khác vừa đổi.
@@ -78,7 +79,7 @@ export function TeamMembersTable({
   const { toast } = useToast();
   const [filters, setFilters] = React.useState<TeamMemberFilters>({
     // Mặc định "Trong team": tab này để QUẢN người đã có, người đang được chăm
-    // sóc (Đã liên hệ/Đã mời) thường quản lý từ tab "Theo tuyến" hơn. Vẫn chọn
+    // sóc (Đã liên hệ/Đã mời) thường quản lý từ tab "Theo tỉnh" hơn. Vẫn chọn
     // được mọi trạng thái khác qua bộ lọc.
     stage: 'JOINED',
     ownerAdminUserId: ALL,
@@ -228,7 +229,7 @@ export function TeamMembersTable({
                 <TableHead>Trạng thái</TableHead>
                 <TableHead>% hoa hồng</TableHead>
                 <TableHead>Người phụ trách</TableHead>
-                <TableHead>Tuyến phụ trách</TableHead>
+                <TableHead>Tỉnh phụ trách</TableHead>
                 <TableHead>Hẹn gọi lại</TableHead>
                 <TableHead>Ngày vào team</TableHead>
                 <TableHead className="text-right">Chuyến trong kỳ</TableHead>
@@ -266,7 +267,7 @@ export function TeamMembersTable({
                     </TableCell>
                     <TableCell className="text-sm">{m.ownerName ?? '—'}</TableCell>
                     <TableCell className="text-sm">
-                      {m.assignedRouteNames.length > 0 ? m.assignedRouteNames.join(', ') : '—'}
+                      {assignedProvinceLabels(m).join(', ') || '—'}
                     </TableCell>
                     <TableCell className="text-sm">
                       <span

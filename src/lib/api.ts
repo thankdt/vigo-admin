@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -3646,35 +3646,42 @@ export async function getTeamSummary(range: { from: string; to: string }): Promi
 }
 
 /**
- * Cấp 1. Shape trả về là {routes, unassigned, range} — cố ý KHÔNG phải {data, meta}:
- * TransformInterceptor của backend thấy cặp data+meta sẽ dựng lại response và VỨT
- * mọi field khác, làm `unassigned` biến mất im lặng.
+ * Cấp 1 theo TỈNH (thay trục tuyến). Shape trả về là {provinces, unknown, range, bucketNote} —
+ * cố ý KHÔNG phải {data, meta}: TransformInterceptor của backend thấy cặp data+meta sẽ dựng lại
+ * response và VỨT mọi field khác, làm `unknown` biến mất im lặng.
+ *
+ * `provinces` luôn gồm MỌI tỉnh trong danh mục (kể cả 0 chuyến); `unknown` là hàng "Chưa xác định
+ * tỉnh". Chuyến X↔Y nằm ở cả X và Y — đừng cộng các dòng để ra tổng chuyến.
  */
-export async function getTeamRoutes(params: {
+export async function getTeamProvinces(params: {
   from: string;
   to: string;
   sort?: string;
   order?: string;
-  /** Lọc theo TÊN TUYẾN — bớt dòng ở cấp 1. */
+  /** Lọc theo TÊN (hoặc mã) TỈNH — bớt dòng ở cấp 1. */
   q?: string;
   /**
-   * Tìm theo TÊN/SĐT TÀI XẾ. KHÔNG lọc bớt tuyến — chỉ để backend đếm
-   * matchedDriverCount mỗi tuyến, FE tự bung đúng những tuyến có người khớp.
+   * Tìm theo TÊN/SĐT TÀI XẾ. KHÔNG lọc bớt tỉnh — chỉ để backend đếm
+   * matchedDriverCount mỗi tỉnh, FE tự bung đúng những tỉnh có người khớp.
    */
   driverQ?: string;
-}): Promise<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }> {
+}): Promise<{ provinces: TeamProvinceRow[]; unknown: TeamProvinceRow | null; bucketNote?: string }> {
   const q = new URLSearchParams({ from: params.from, to: params.to });
   if (params.sort) q.set('sort', params.sort);
   if (params.order) q.set('order', params.order);
   if (params.q) q.set('q', params.q);
   if (params.driverQ) q.set('driverQ', params.driverQ);
-  return unwrap<{ routes: TeamRouteRow[]; unassigned: TeamRouteRow | null }>(
-    await fetchWithAuth(`/admin/driver-team/routes?${q}`),
+  return unwrap<{ provinces: TeamProvinceRow[]; unknown: TeamProvinceRow | null; bucketNote?: string }>(
+    await fetchWithAuth(`/admin/driver-team/provinces?${q}`),
   );
 }
 
-export async function getTeamRouteDrivers(
-  routeId: number | 'none',
+/**
+ * Cấp 2 theo TỈNH. `provinceCode` = mã gis 2 chữ số, hoặc 'none' = nhóm chưa xác định tỉnh
+ * (giữ NGUYÊN chuỗi 'none' trong path).
+ */
+export async function getTeamProvinceDrivers(
+  provinceCode: string,
   params: {
     from: string;
     to: string;
@@ -3700,8 +3707,9 @@ export async function getTeamRouteDrivers(
   if (params.order) q.set('order', params.order);
   if (params.page) q.set('page', String(params.page));
   if (params.limit) q.set('limit', String(params.limit));
-  // routeId giữ NGUYÊN 'none' — nhóm booking không gắn tuyến.
-  const res = await fetchWithAuth(`/admin/driver-team/routes/${routeId}/drivers?${q}`);
+  const res = await fetchWithAuth(
+    `/admin/driver-team/provinces/${encodeURIComponent(provinceCode)}/drivers?${q}`,
+  );
   const body = await res.json();
   return {
     data: body.data ?? [],
@@ -3729,7 +3737,8 @@ export async function patchTeamMember(
   driverId: string,
   body: {
     stage?: DriverTeamStage;
-    assignedRouteIds?: number[];
+    /** Tỉnh giao cho tài (mã gis). `[]` = bỏ hết; mã ngoài danh mục → backend 400. */
+    assignedProvinceCodes?: string[];
     ownerAdminUserId?: string | null;
     nextFollowUpAt?: string | null;
     note?: string;
@@ -3746,7 +3755,7 @@ export async function patchTeamMember(
 /**
  * Danh sách thành viên đội (cấp phẳng, đi thẳng từ driver_team_member). Shape trả
  * về là {members} — cố ý KHÔNG phải {data, meta}: TransformInterceptor của backend
- * thấy cặp data+meta sẽ dựng lại response và VỨT mọi field khác (xem getTeamRoutes
+ * thấy cặp data+meta sẽ dựng lại response và VỨT mọi field khác (xem getTeamProvinces
  * ở trên, cùng bẫy). unwrap() vẫn đúng ở đây vì body chỉ có {success, data}.
  */
 export async function getTeamMembers(params: {

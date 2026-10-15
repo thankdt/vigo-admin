@@ -45,6 +45,6 @@ export async function applyBulk(
   return { ok, failed, skipped };
 }
 
-// KHÔNG viết `matchingRouteKeys` để "tự bung nhóm khớp": groups chỉ chứa nhóm ĐANG
+// KHÔNG viết `matchingProvinceKeys` để "tự bung nhóm khớp": groups chỉ chứa nhóm ĐANG
 // MỞ, nên hàm đó chỉ trả về key của nhóm đã mở sẵn — không mở thêm được gì. Muốn
-// làm thật phải để backend đếm số tài khớp theo từng tuyến. Xem spec §6.4.
+// làm thật phải để backend đếm số tài khớp theo từng tỉnh. Xem spec §6.4.

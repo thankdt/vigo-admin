@@ -1,13 +1,13 @@
 import type { DriverTeamStage, TeamDriverRow, TeamMemberState } from './types';
 
-/** Nhóm cấp 2 đã tải, khoá là routeId dạng chuỗi ('none' cho nhóm không gắn tuyến). */
+/** Nhóm cấp 2 đã tải, khoá là mã tỉnh ('none' cho nhóm chưa xác định tỉnh). */
 export type DriverGroups = Record<string, TeamDriverRow[]>;
 
 /**
- * Trạng thái pipeline gắn theo TÀI XẾ, nhưng một tài chạy nhiều tuyến sẽ hiện ở
+ * Trạng thái pipeline gắn theo TÀI XẾ, nhưng một tài chạy nhiều tỉnh sẽ hiện ở
  * nhiều nhóm accordion. Sau khi PATCH phải lan sang MỌI nhóm đang mở — nếu chỉ
  * cập nhật nhóm vừa bấm thì hai nhóm sẽ hiện hai trạng thái khác nhau của cùng
- * một người. Số liệu chuyến là của từng cặp (tài × tuyến) nên giữ nguyên.
+ * một người. Số liệu chuyến là của từng cặp (tài × tỉnh) nên giữ nguyên.
  */
 export function patchDriverAcrossGroups(
   groups: DriverGroups,

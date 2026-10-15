@@ -12,8 +12,8 @@ const member = (o: Partial<TeamMemberRow> = {}): TeamMemberRow => ({
   commissionRate: null,
   ownerAdminUserId: null,
   ownerName: null,
-  assignedRouteIds: [],
-  assignedRouteNames: [],
+  assignedProvinceCodes: [],
+  assignedProvinceNames: [],
   nextFollowUpAt: null,
   stageChangedAt: null,
   createdAt: '2026-08-01T00:00:00.000Z',
@@ -105,5 +105,25 @@ describe('buildMemberExportRows', () => {
   it('số cột mỗi dòng khớp header', () => {
     const { rows } = buildMemberExportRows([member()]);
     expect(rows[0]).toHaveLength(MEMBER_EXPORT_HEADER.length);
+  });
+
+  it('cột "Tỉnh phụ trách" xuất tên tỉnh được giao, ngăn cách bằng dấu phẩy', () => {
+    const { rows } = buildMemberExportRows([
+      member({
+        assignedProvinceCodes: ['01', '31'],
+        assignedProvinceNames: ['Nội đô Hà Nội', 'Hải Phòng'],
+      }),
+    ]);
+    const idx = MEMBER_EXPORT_HEADER.indexOf('Tỉnh phụ trách');
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(rows[0][idx]).toBe('Nội đô Hà Nội, Hải Phòng');
+  });
+
+  it('backend cũ không có field tỉnh → ô rỗng, không crash', () => {
+    const m = member();
+    delete m.assignedProvinceCodes;
+    delete m.assignedProvinceNames;
+    const { rows } = buildMemberExportRows([m]);
+    expect(rows[0][MEMBER_EXPORT_HEADER.indexOf('Tỉnh phụ trách')]).toBe('');
   });
 });

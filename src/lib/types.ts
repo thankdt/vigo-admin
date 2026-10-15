@@ -953,7 +953,11 @@ export type DriverTeamEventType = 'STAGE_CHANGE' | 'CALL' | 'NOTE' | 'ASSIGN' | 
 
 export type TeamMemberState = {
   stage: DriverTeamStage;
-  assignedRouteIds: number[];
+  /**
+   * Tỉnh admin giao cho tài (mã gis 2 chữ số, '01' = Nội đô Hà Nội). Thay `assignedRouteIds`
+   * (tuyến đã bỏ — backend luôn trả `[]`). Optional để backend cũ chưa có field không làm vỡ màn.
+   */
+  assignedProvinceCodes?: string[];
   ownerAdminUserId: string | null;
   ownerAdminName: string | null;
   nextFollowUpAt: string | null;
@@ -963,10 +967,13 @@ export type TeamMemberState = {
   commissionRate?: number | null;
 };
 
-/** Một dòng cấp 1. routeId null = hàng gộp "Không gắn tuyến". */
-export type TeamRouteRow = {
-  routeId: number | null;
-  routeName: string;
+/**
+ * Một dòng cấp 1 theo TỈNH. provinceCode null = hàng "Chưa xác định tỉnh". Chuyến X↔Y được đếm ở CẢ
+ * dòng X lẫn dòng Y nên cộng các dòng ra số LỚN HƠN tổng chuyến (xem `bucketNote` của response).
+ */
+export type TeamProvinceRow = {
+  provinceCode: string | null;
+  provinceName: string;
   driverCount: number;
   /** Đếm theo completedAt. KHÁC mốc với totalBookings — đừng chia cho nhau. */
   completedTrips: number;
@@ -975,20 +982,22 @@ export type TeamRouteRow = {
   lastCompletedAt: string | null;
   contactedCount: number;
   joinedCount: number;
-  /** Số tài KHỚP từ khoá tìm tài xế trên tuyến này; 0 khi không tìm kiếm. */
+  /** Số tài KHỚP từ khoá tìm tài xế ở tỉnh này; 0 khi không tìm kiếm. */
   matchedDriverCount: number;
 };
 
-/** Một dòng cấp 2 — cặp (tài × tuyến). */
+/** Một dòng cấp 2 — cặp (tài × tỉnh). */
 export type TeamDriverRow = {
   driverId: string;
   fullName: string | null;
   phone: string | null;
   transportCompanyName: string | null;
-  tripsOnRoute: number;
-  tripsAllRoutes: number;
+  /** Số chuyến của tài TRONG tỉnh đang xem. */
+  tripsInProvince: number;
+  /** Tổng chuyến của tài trong kỳ, mỗi chuyến một lần (không phải tổng các tỉnh). */
+  tripsAll: number;
   /** 0..1, backend tính sẵn. */
-  shareOfRoute: number;
+  shareOfProvince: number;
   lastCompletedAt: string | null;
   /** Chuyến đầu tiên TRONG KỲ đang lọc, không phải chuyến đầu tiên từng chạy. */
   firstCompletedAt: string | null;
@@ -1026,20 +1035,25 @@ export type DriverTeamEvent = {
   createdAt: string;
 };
 
-export type TeamRouteRun = {
-  routeId: number | null;
-  name: string | null;
-  /** true = tuyến đã xoá mềm → hiện "Tuyến đã xoá (#id)" thay vì tên. */
-  routeDeleted?: boolean;
+/** Chuyến hoàn thành trong kỳ của một tài ở một tỉnh (chuyến X↔Y nằm ở cả X và Y). */
+export type TeamProvinceRun = {
+  /** null = chuyến chưa xác định tỉnh. */
+  provinceCode: string | null;
+  provinceName: string;
   trips: number;
 };
 
 export type DriverTeamDetail = {
   team: TeamMemberState | null;
   events: DriverTeamEvent[];
-  routesRun: TeamRouteRun[];
-  /** Tuyến tài ĐĂNG KÝ — đối chiếu với routesRun để thấy chỗ lệch. */
-  registeredRouteIds: number[];
+  /** Tỉnh thực chạy trong kỳ. Backend cũ chưa có field này → coi như rỗng. */
+  provincesRun?: TeamProvinceRun[];
+  /** Tỉnh tài ĐĂNG KÝ hoạt động (driver_service_provinces) — đối chiếu với provincesRun. */
+  registeredProvinceCodes?: string[];
+  /** Cùng độ dài + thứ tự với registeredProvinceCodes. */
+  registeredProvinceNames?: string[];
+  /** Câu giải thích luật đếm theo tỉnh, do backend trả kèm. */
+  bucketNote?: string;
 };
 
 export type TeamOwner = { id: string; fullName: string | null; phone: string | null };
@@ -1058,9 +1072,10 @@ export type TeamMemberRow = {
   commissionRate: number | null;
   ownerAdminUserId: string | null;
   ownerName: string | null;
-  assignedRouteIds: number[];
-  /** Cùng độ dài + cùng thứ tự với assignedRouteIds. Tuyến xoá mềm → "Tuyến đã xoá (#id)". */
-  assignedRouteNames: string[];
+  /** Tỉnh được giao (mã gis). Optional: backend cũ chỉ có assignedRouteIds/Names (luôn rỗng giờ). */
+  assignedProvinceCodes?: string[];
+  /** Cùng độ dài + cùng thứ tự với assignedProvinceCodes ('01' = "Nội đô Hà Nội"). */
+  assignedProvinceNames?: string[];
   nextFollowUpAt: string | null;
   stageChangedAt: string | null;
   createdAt: string;
