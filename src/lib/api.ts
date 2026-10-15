@@ -392,7 +392,8 @@ export async function getDrivers(params: {
   plate?: string;
   transportCompanyId?: string;
   transportCompanyName?: string;
-  fixedRouteId?: string;
+  // Mã tỉnh gis (2 số) trong `driver_service_provinces`. Server echo `meta.provinceCode`.
+  provinceCode?: string;
   needsReview?: 'true' | 'false';
   unconfirmedTransportCompany?: 'true' | 'false';
   csCalled?: 'true' | 'false';
@@ -406,7 +407,7 @@ export async function getDrivers(params: {
   onlineState?: DriverOnlineState;
   sort?: 'name' | 'isApproved' | 'createdAt' | 'csLastCallAt';
   order?: 'asc' | 'desc';
-} = {}): Promise<GetApiResponse<Driver> & { meta?: { onlineState?: string; presenceUnavailable?: boolean } }> {
+} = {}): Promise<GetApiResponse<Driver> & { meta?: { onlineState?: string; provinceCode?: string; presenceUnavailable?: boolean } }> {
   const query = new URLSearchParams({
     page: params.page?.toString() || '1',
     limit: params.limit?.toString() || '20',
@@ -418,7 +419,7 @@ export async function getDrivers(params: {
   if (params.plate) query.set('plate', params.plate);
   if (params.transportCompanyId) query.set('transportCompanyId', params.transportCompanyId);
   if (params.transportCompanyName) query.set('transportCompanyName', params.transportCompanyName);
-  if (params.fixedRouteId) query.set('fixedRouteId', params.fixedRouteId);
+  if (params.provinceCode) query.set('provinceCode', params.provinceCode);
   if (params.needsReview) query.set('needsReview', params.needsReview);
   if (params.unconfirmedTransportCompany) query.set('unconfirmedTransportCompany', params.unconfirmedTransportCompany);
   if (params.csCalled) query.set('csCalled', params.csCalled);
@@ -656,28 +657,23 @@ export async function updateDriverProfile(
   return json.data || json;
 }
 
-// Admin sets a driver's dispatch routes (multi-route). Pass [] to clear all
-// (driver becomes undispatchable until re-assigned).
-export async function updateDriverRoutes(id: string, routeIds: number[]): Promise<Driver> {
-  const response = await fetchWithAuth(`/drivers/admin/${id}/routes`, {
-    method: 'PUT',
-    body: JSON.stringify({ routeIds }),
-  });
-  const json = await response.json();
-  return json.data || json;
-}
-
-// Admin sets a driver's dispatch provinces (34 surviving provinces).
-export async function updateDriverProvinces(id: string, provinceIds: number[]): Promise<Driver> {
+// Admin đặt tỉnh hoạt động của tài (PUT /drivers/admin/:id/provinces).
+// `provinceCodes` (mã gis) là khoá chính: thắng `provinceIds` khi có cả hai. `provinceIds` (id tỉnh
+// cũ) gửi kèm cho ảnh backend cũ lúc rollback — ảnh đó chỉ hiểu `provinceIds`. Backend trả 400
+// VAL_003 nếu thiếu CẢ HAI trường; mảng rỗng là lệnh "gỡ hết tỉnh" (tài không bật được Sẵn sàng).
+export async function updateDriverProvinces(
+  id: string,
+  selection: { provinceCodes: string[]; provinceIds?: number[] },
+): Promise<Driver> {
   const response = await fetchWithAuth(`/drivers/admin/${id}/provinces`, {
     method: 'PUT',
-    body: JSON.stringify({ provinceIds }),
+    body: JSON.stringify(selection),
   });
   const json = await response.json();
   return json.data || json;
 }
 
-// Get surviving provinces (34 provinces after 2025 merger)
+// Get surviving provinces (34 provinces after 2025 merger). Mỗi mục có `id` (tỉnh cũ) + `gisCode`.
 export async function getSurvivingProvinces(): Promise<AdminUnit[]> {
   const response = await fetchWithAuth('/drivers/provinces');
   const json = await response.json();

@@ -121,6 +121,13 @@ export type TransportCompany = {
   updatedAt?: string;
 }
 
+/** Một tỉnh hoạt động của tài. `gisCode` (mã gis 2 số, '01' = Nội đô Hà Nội) vắng ở backend cũ. */
+export type DriverProvince = {
+  id: number;
+  name: string;
+  gisCode?: string;
+};
+
 export type Driver = {
   id: string;
   name?: string;
@@ -188,26 +195,22 @@ export type Driver = {
   // Ảnh giấy xác nhận HTX (admin upload hộ). 1 ảnh, S3 key; rỗng = chưa có.
   htxConfirmationImage?: string;
   enabledDropoffDistricts?: number[];
-  fixedRouteId?: number;
   enabledServices?: string[];
   isSubmittedForApproval?: boolean;
   createdAt?: string;
+  /** @deprecated Tuyến đã bỏ: backend vẫn trả khoá này nhưng rỗng. Đừng đọc cho vùng hoạt động. */
   fixedRoute?: {
     id: number;
     name: string;
   };
-  // Multi-route: backend started returning the M2M `routes` collection
-  // alongside the legacy `fixedRoute`. Old admin code only reads
-  // `fixedRoute`; new components prefer `routes` and fall back when empty.
+  /** @deprecated Tuyến đã bỏ: backend vẫn trả khoá này nhưng luôn rỗng. */
   routes?: {
     id: number;
     name: string;
   }[];
-  // 2025 Admin Reform: Surviving provinces selected by the driver
-  provinces?: {
-    id: number;
-    name: string;
-  }[];
+  // Tỉnh hoạt động (34 tỉnh sau sáp nhập), nguồn `driver_service_provinces`. Tài đã duyệt mà
+  // mảng này rỗng thì KHÔNG bật được "Sẵn sàng" (DRV_PROVINCE_REQUIRED). Undefined = backend cũ.
+  provinces?: DriverProvince[];
   transportCompanyId?: string;
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
@@ -535,6 +538,8 @@ export type AdminUnit = {
   isPoi?: boolean;
   // Constituent old provinces (pre-2025 merger)
   oldProvinces?: string[];
+  // Mã tỉnh gis (2 số) — chỉ có ở GET /drivers/provinces của backend mới.
+  gisCode?: string;
 };
 
 export type Route = {
