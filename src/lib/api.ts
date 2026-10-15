@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, RoutePricing, AreaPriceAdjustment, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamRouteRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -1390,8 +1390,8 @@ export async function createAdminUnit(data: {
  * BẮT BUỘC truyền `limit`: backend `GET /master-data/routes` mặc định `limit = 20`
  * (master-data.controller.ts). Trước đây hàm này không gửi param nào nên admin CHỈ
  * bao giờ nhận 20 tuyến — prod đang có 27, tức 7 tuyến vô hình ở mọi nơi dùng hàm
- * này (quản lý tuyến, combobox chọn tuyến ở bảng giá, bộ lọc tài xế, bộ lọc chuyến),
- * và nút phân trang trong routes-manager vĩnh viễn disabled vì `27 → 20 ≤ 50`.
+ * này (combobox chọn tuyến, bộ lọc tài xế, bộ lọc chuyến — các màn quản lý tuyến/bảng giá
+ * theo tuyến đã gỡ cùng spec bỏ-tuyến).
  *
  * Mặc định 1000 để mọi call-site cũ tự khỏi bệnh mà không phải sửa. Số tuyến là dữ
  * liệu danh mục (hàng chục, không phải hàng vạn) nên tải hết một lần là hợp lý.
@@ -1410,38 +1410,6 @@ export async function getRoutes(
   return result.data;
 }
 
-export async function createRoute(data: { name: string; districtIds: number[], basePolyline?: string, imageKey?: string }): Promise<Route> {
-  const response = await fetchWithAuth('/master-data/routes', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return response.json();
-}
-
-export async function updateRoute(id: number, data: { name: string, districtIds: number[], basePolyline?: string, imageKey?: string }): Promise<Route> {
-  const response = await fetchWithAuth(`/master-data/routes/${id}`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return response.json();
-}
-
-export async function deleteRoute(id: number): Promise<{ success: boolean; affectedDrivers: number }> {
-  const response = await fetchWithAuth(`/master-data/routes/${id}/delete`, {
-    method: 'POST',
-  });
-  const json = await response.json();
-  return json?.data ?? json;
-}
-
-export async function restoreRoute(id: number): Promise<Route> {
-  const response = await fetchWithAuth(`/master-data/routes/${id}/restore`, {
-    method: 'POST',
-  });
-  const json = await response.json();
-  return json?.data ?? json;
-}
-
 export type RouteUsage = {
   routeId: number;
   routeName: string;
@@ -1449,114 +1417,6 @@ export type RouteUsage = {
   driverCount: number;
   pricingCount: number;
 };
-
-export async function getRouteUsage(id: number): Promise<RouteUsage> {
-  const response = await fetchWithAuth(`/master-data/routes/${id}/usage`);
-  const json = await response.json();
-  return json?.data ?? json;
-}
-
-
-export async function getPricingByRoute(routeId: number, serviceType?: string, vehicleType?: string): Promise<RoutePricing[]> {
-  const query = new URLSearchParams();
-  if (serviceType) query.set('serviceType', serviceType);
-  if (vehicleType) query.set('vehicleType', vehicleType);
-  const queryStr = query.toString();
-  const response = await fetchWithAuth(`/master-data/pricing/${routeId}${queryStr ? '?' + queryStr : ''}`);
-  const result = await response.json();
-  return result.data;
-}
-
-export async function createPricing(data: { routeId: number; adminUnitId: number; startDistrictId?: number | null; price: number; priority?: number; serviceType?: string; vehicleType?: string }): Promise<RoutePricing> {
-  const response = await fetchWithAuth('/master-data/pricing', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return response.json();
-}
-
-export async function updatePricing(id: number, data: { price: number; serviceType?: string; vehicleType?: string }): Promise<RoutePricing> {
-  const response = await fetchWithAuth(`/master-data/pricing/${id}`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  return response.json();
-}
-
-export async function deletePricing(id: number): Promise<void> {
-  await fetchWithAuth(`/master-data/pricing/${id}/delete`, {
-    method: 'POST',
-  });
-}
-
-// ── Điều chỉnh giá theo khu vực (Tỉnh / Huyện) ──────────────────────────────
-export async function getAreaPriceAdjustments(serviceType?: string): Promise<AreaPriceAdjustment[]> {
-  const query = new URLSearchParams();
-  if (serviceType && serviceType !== 'ALL') query.set('serviceType', serviceType);
-  const qs = query.toString();
-  const response = await fetchWithAuth(`/master-data/area-adjustments${qs ? '?' + qs : ''}`);
-  const result = await response.json();
-  return result.data || result;
-}
-
-export async function createAreaPriceAdjustment(data: {
-  adminUnitId: number;
-  serviceType?: string;
-  deltaAmount: number;
-  applyPerSeat?: boolean;
-  isActive?: boolean;
-  note?: string | null;
-}): Promise<AreaPriceAdjustment> {
-  const response = await fetchWithAuth('/master-data/area-adjustments', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  return result.data || result;
-}
-
-export async function updateAreaPriceAdjustment(
-  id: number,
-  data: Partial<AreaPriceAdjustment>,
-): Promise<AreaPriceAdjustment> {
-  const response = await fetchWithAuth(`/master-data/area-adjustments/${id}`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  return result.data || result;
-}
-
-export async function bulkCreateAreaPriceAdjustments(data: {
-  adminUnitIds: number[];
-  serviceType?: string;
-  deltaAmount: number;
-  applyPerSeat?: boolean;
-  isActive?: boolean;
-  note?: string | null;
-}): Promise<AreaPriceAdjustment[]> {
-  const response = await fetchWithAuth('/master-data/area-adjustments/bulk', {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
-  const result = await response.json();
-  return result.data || result;
-}
-
-export async function deleteAreaPriceAdjustment(id: number): Promise<void> {
-  await fetchWithAuth(`/master-data/area-adjustments/${id}/delete`, {
-    method: 'POST',
-  });
-}
-
-export async function bulkDeleteAreaPriceAdjustments(ids: number[]): Promise<void> {
-  await fetchWithAuth('/master-data/area-adjustments/bulk-delete', {
-    method: 'POST',
-    body: JSON.stringify({ ids }),
-  });
-}
-
-
 
 // System Config APIs
 export async function getSystemConfigs(): Promise<SystemConfig[]> {
@@ -5123,20 +4983,21 @@ export async function getPricingMacroWards(provinceCode?: string): Promise<WardO
   return unwrap<WardOption[]>(response);
 }
 
-export async function createPricingMacroRule(data: Partial<PricingMacroRule>): Promise<PricingMacroRule> {
+/** Backend mới trả kèm `warnings` (cảnh báo không chặn); backend cũ không có field này. */
+export async function createPricingMacroRule(data: Partial<PricingMacroRule>): Promise<SavedPricingMacroRule> {
   const response = await fetchWithAuth('/pricing/macro-rules', {
     method: 'POST',
     body: JSON.stringify(data),
   });
-  return unwrap<PricingMacroRule>(response);
+  return unwrap<SavedPricingMacroRule>(response);
 }
 
-export async function updatePricingMacroRule(id: number, data: Partial<PricingMacroRule>): Promise<PricingMacroRule> {
+export async function updatePricingMacroRule(id: number, data: Partial<PricingMacroRule>): Promise<SavedPricingMacroRule> {
   const response = await fetchWithAuth(`/pricing/macro-rules/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),
   });
-  return unwrap<PricingMacroRule>(response);
+  return unwrap<SavedPricingMacroRule>(response);
 }
 
 export async function deletePricingMacroRule(id: number): Promise<{ success: boolean }> {
@@ -5144,6 +5005,39 @@ export async function deletePricingMacroRule(id: number): Promise<{ success: boo
     method: 'DELETE',
   });
   return unwrap<{ success: boolean }>(response);
+}
+
+/**
+ * Tạo hàng loạt luật macro: tích origins × dests (≤500 tổ hợp), một transaction ở backend.
+ * Tổ hợp đã có luật cùng khoá bị BỎ QUA (không ghi đè) và trả về trong `skipped`.
+ * Cần backend có `POST /pricing/macro-rules/bulk` (backend lên PROD TRƯỚC admin).
+ */
+export async function bulkCreatePricingMacroRules(
+  data: BulkCreatePricingMacroRulesRequest,
+): Promise<BulkCreatePricingMacroRulesResult> {
+  const response = await fetchWithAuth('/pricing/macro-rules/bulk', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+  return unwrap<BulkCreatePricingMacroRulesResult>(response);
+}
+
+/** Xoá hàng loạt luật macro theo id (≤500 mỗi lần). Trả id đã xoá và id không tồn tại. */
+export async function bulkDeletePricingMacroRules(ids: number[]): Promise<BulkDeletePricingMacroRulesResult> {
+  const response = await fetchWithAuth('/pricing/macro-rules/bulk-delete', {
+    method: 'POST',
+    body: JSON.stringify({ ids }),
+  });
+  return unwrap<BulkDeletePricingMacroRulesResult>(response);
+}
+
+/**
+ * Luật % đang bật lọt ngoài băng chặn kết quả (`PRICING_MACRO_RESULT_*`): báo giá khớp các luật đó có thể bị
+ * PRC_002 (không bán). Cần quyền `master-data`; backend cũ không có route này (lỗi ⇒ nơi gọi bỏ qua).
+ */
+export async function getPricingMacroBandWarnings(): Promise<MacroBandWarnings> {
+  const response = await fetchWithAuth('/pricing/macro-rules/band-warnings');
+  return unwrap<MacroBandWarnings>(response);
 }
 
 export async function simulatePricingMacro(data: SimulatePricingMacroDto): Promise<SimulatePricingMacroResult> {

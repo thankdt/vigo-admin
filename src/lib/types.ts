@@ -1067,7 +1067,18 @@ export type TeamMemberRow = {
 
 // ───────── PRICING MACRO 2-TIER (TỈNH -> XÃ) TYPES ─────────
 
+/**
+ * `MIN_FLOOR`/`MAX_CEILING` chỉ còn để ĐỌC/hiển thị luật cũ: backend không còn áp và từ chối tạo mới
+ * (spec bỏ-tuyến §5). Form tạo/sửa chỉ được đưa ra DELTA_AMOUNT và PERCENTAGE.
+ */
 export type MacroAdjustmentType = 'DELTA_AMOUNT' | 'PERCENTAGE' | 'MIN_FLOOR' | 'MAX_CEILING';
+
+/** Cảnh báo KHÔNG chặn của backend khi lưu luật (xung đột cùng cặp tỉnh, % lọt băng chặn, rút gọn). */
+export type MacroRuleWarning = {
+  code: 'XUNG_DOT_CUNG_CAP' | 'XUNG_DOT_KHAC_CAP' | 'PHAN_TRAM_NGOAI_BANG' | 'RUT_GON' | string;
+  message: string;
+  ruleId: number | null;
+};
 
 export type PricingMacroRule = {
   id: number;
@@ -1083,9 +1094,70 @@ export type PricingMacroRule = {
   adjustmentType: MacroAdjustmentType;
   adjustmentValue: number;
   applyPerSeat: boolean;
+  /** Luật hai chiều: khớp cả hướng ngược (trả→đón). Backend cũ không có field này (coi như false). */
+  isBidirectional?: boolean;
   note?: string | null;
   createdAt?: string;
   updatedAt?: string;
+};
+
+/** Một đầu của tổ hợp tạo hàng loạt: tỉnh và/hoặc phường/xã. Bỏ trống cả hai = "bất kỳ". */
+export type MacroEndSelector = {
+  provinceCode?: string | null;
+  wardCode?: string | null;
+};
+
+export type BulkCreatePricingMacroRulesRequest = {
+  namePrefix: string;
+  isActive?: boolean;
+  priority?: number;
+  serviceType?: string;
+  vehicleType?: string;
+  adjustmentType: MacroAdjustmentType;
+  adjustmentValue: number;
+  applyPerSeat?: boolean;
+  isBidirectional?: boolean;
+  note?: string | null;
+  /** Bỏ trống = mọi điểm đón (không được trống cả hai bên). */
+  origins?: MacroEndSelector[];
+  dests?: MacroEndSelector[];
+};
+
+/** Tổ hợp BỊ BỎ QUA khi tạo hàng loạt (không ghi đè luật đang có). */
+export type BulkMacroSkippedItem = {
+  origin: MacroEndSelector;
+  dest: MacroEndSelector;
+  reason: 'TRUNG_KHOA' | 'TRUNG_TRONG_YEU_CAU';
+  message: string;
+  blockedBy?: {
+    id: number | null;
+    name: string;
+    isActive: boolean;
+    isBidirectional: boolean;
+    adjustmentType: MacroAdjustmentType;
+    adjustmentValue: number;
+  };
+};
+
+export type BulkCreatePricingMacroRulesResult = {
+  created: PricingMacroRule[];
+  skipped: BulkMacroSkippedItem[];
+  /** Chỉ có ở backend mới (thêm field, không đổi shape cũ). */
+  warnings?: MacroRuleWarning[];
+};
+
+/** Luật vừa lưu + cảnh báo không chặn (backend cũ không trả `warnings`). */
+export type SavedPricingMacroRule = PricingMacroRule & { warnings?: MacroRuleWarning[] };
+
+/** `GET /pricing/macro-rules/band-warnings`: luật % đang bật lọt ngoài băng chặn kết quả. */
+export type MacroBandWarnings = {
+  band: { minRatio?: number; maxRatio?: number; minAbsolute?: number; maxAbsolute?: number };
+  warnings: MacroRuleWarning[];
+};
+
+export type BulkDeletePricingMacroRulesResult = {
+  deleted: number[];
+  missing: number[];
 };
 
 export type ProvinceOption = {
@@ -1124,6 +1196,8 @@ export type SimulatePricingMacroResult = {
   } | null;
   matchedRule: PricingMacroRule | null;
   matchScore: number | null;
+  /** FORWARD = đón→trả như luật nhập; REVERSE = hướng đảo của luật hai chiều. */
+  matchedOrientation?: 'FORWARD' | 'REVERSE' | null;
   quote: any;
 };
 

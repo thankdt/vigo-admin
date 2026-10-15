@@ -30,6 +30,8 @@ import {
   MapPin,
   RefreshCw,
   Compass,
+  ArrowLeftRight,
+  ListPlus,
 } from 'lucide-react';
 import {
   getPricingMacroRules,
@@ -38,12 +40,35 @@ import {
   createPricingMacroRule,
   updatePricingMacroRule,
   deletePricingMacroRule,
+  bulkDeletePricingMacroRules,
+  getPricingMacroBandWarnings,
 } from '@/lib/api';
+import {
+  FORM_SERVICE_VALUES,
+  FORM_VEHICLE_VALUES,
+  MACRO_BULK_DELETE_MAX,
+  MACRO_VALUE_LIMITS,
+  adjustmentValueError,
+  adjustmentValueHint,
+  adjustmentValueRange,
+  bidirectionalNotHonored,
+  chunk,
+  formServiceValue,
+  formVehicleValue,
+  formatMacroAdjustment,
+  isLegacyAdjustmentType,
+  priorityError,
+  serviceLabel,
+  summarizeWarnings,
+  vehicleLabel,
+} from '@/lib/macro-bulk';
+import { MacroBulkDialog } from './macro-bulk-dialog';
 import type {
   PricingMacroRule,
   ProvinceOption,
   WardOption,
   MacroAdjustmentType,
+  MacroBandWarnings,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -79,7 +104,7 @@ export function PricingMacroManager() {
     destWardCode: string;
     adjustmentType: MacroAdjustmentType;
     adjustmentValue: number;
-    applyPerSeat: boolean;
+    isBidirectional: boolean;
     note: string;
   }>({
     name: '',
@@ -93,9 +118,19 @@ export function PricingMacroManager() {
     destWardCode: '',
     adjustmentType: 'DELTA_AMOUNT',
     adjustmentValue: 0,
-    applyPerSeat: true,
+    // Spec bỏ-tuyến §5: luật MỚI mặc định HAI chiều (backend lưu `isBidirectional !== false`).
+    isBidirectional: true,
     note: '',
   });
+
+  // Băng chặn kết quả: luật % đang bật lọt ngoài biên (báo giá khớp có thể bị PRC_002). Không chặn thao tác.
+  const [bandWarnings, setBandWarnings] = React.useState<MacroBandWarnings | null>(null);
+
+  // Chọn nhiều + tạo/xoá hàng loạt
+  const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set());
+  const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
+  const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
+  const [bulkDeleting, setBulkDeleting] = React.useState(false);
 
   // Delete State
   const [deleteRuleId, setDeleteRuleId] = React.useState<number | null>(null);
@@ -112,6 +147,12 @@ export function PricingMacroManager() {
       ]);
       setRules(fetchedRules || []);
       setProvinces(fetchedProvinces || []);
+      // Cảnh báo băng chặn: phụ — lỗi (backend cũ / thiếu quyền master-data) thì bỏ qua, không làm hỏng danh sách.
+      getPricingMacroBandWarnings()
+        .then((b) => setBandWarnings(b ?? null))
+        .catch(() => setBandWarnings(null));
+      const alive = new Set((fetchedRules || []).map((r) => r.id));
+      setSelectedIds((prev) => new Set(Array.from(prev).filter((id) => alive.has(id))));
     } catch (err: any) {
       toast({
         title: 'Lỗi tải dữ liệu Macro',
@@ -178,7 +219,7 @@ export function PricingMacroManager() {
       destWardCode: '',
       adjustmentType: 'DELTA_AMOUNT',
       adjustmentValue: 0,
-      applyPerSeat: true,
+      isBidirectional: true,
       note: '',
     });
     setOriginWards([]);
@@ -192,15 +233,16 @@ export function PricingMacroManager() {
       name: rule.name,
       isActive: rule.isActive,
       priority: rule.priority,
-      serviceType: rule.serviceType || 'ALL',
-      vehicleType: rule.vehicleType || 'ALL',
+      // Luật tạo từ API/bulk có thể mang dạng chuẩn (RIDE, CAR_4...): quy về giá trị của ô chọn.
+      serviceType: formServiceValue(rule.serviceType),
+      vehicleType: formVehicleValue(rule.vehicleType),
       originProvinceCode: rule.originProvinceCode || '',
       originWardCode: rule.originWardCode || '',
       destProvinceCode: rule.destProvinceCode || '',
       destWardCode: rule.destWardCode || '',
       adjustmentType: rule.adjustmentType,
       adjustmentValue: Number(rule.adjustmentValue),
-      applyPerSeat: rule.applyPerSeat,
+      isBidirectional: rule.isBidirectional === true,
       note: rule.note || '',
     });
 
@@ -225,6 +267,14 @@ export function PricingMacroManager() {
       toast({ title: 'Vui lòng nhập tên quy tắc', variant: 'destructive' });
       return;
     }
+    // Báo sớm giá trị ngoài biên (backend vẫn là nơi chốt, cùng một bộ số).
+    const earlyError =
+      adjustmentValueError(formData.adjustmentType, Number(formData.adjustmentValue)) ||
+      priorityError(Number(formData.priority) || 0);
+    if (earlyError) {
+      toast({ title: 'Giá trị chưa hợp lệ', description: earlyError, variant: 'destructive' });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -240,16 +290,32 @@ export function PricingMacroManager() {
         destWardCode: formData.destWardCode || null,
         adjustmentType: formData.adjustmentType,
         adjustmentValue: Number(formData.adjustmentValue) || 0,
-        applyPerSeat: formData.applyPerSeat,
+        // Backend luôn nhân theo ghế và từ chối `applyPerSeat=false`: gửi true cho khớp mọi phiên bản.
+        applyPerSeat: true,
+        isBidirectional: formData.isBidirectional,
         note: formData.note ? formData.note.trim() : null,
       };
 
-      if (editingRule) {
-        await updatePricingMacroRule(editingRule.id, payload);
-        toast({ title: 'Cập nhật quy tắc macro thành công' });
+      const saved = editingRule
+        ? await updatePricingMacroRule(editingRule.id, payload)
+        : await createPricingMacroRule(payload);
+
+      if (bidirectionalNotHonored(formData.isBidirectional, saved)) {
+        // Backend cũ bỏ qua field lặng lẽ: quy tắc đã lưu nhưng chỉ MỘT chiều.
+        toast({
+          title: 'Máy chủ chưa hỗ trợ quy tắc hai chiều',
+          description: 'Quy tắc đã lưu nhưng chỉ áp dụng MỘT chiều. Cần cập nhật backend trước.',
+          variant: 'destructive',
+        });
       } else {
-        await createPricingMacroRule(payload);
-        toast({ title: 'Tạo quy tắc macro thành công' });
+        const w = summarizeWarnings(saved.warnings);
+        toast({
+          title: editingRule ? 'Cập nhật quy tắc macro thành công' : 'Tạo quy tắc macro thành công',
+          description:
+            w.count > 0
+              ? `Có ${w.count} cảnh báo (không chặn): ${w.lines.join(' · ')}${w.more ? ` · … và ${w.more} cảnh báo khác` : ''}`
+              : undefined,
+        });
       }
 
       setDialogOpen(false);
@@ -298,6 +364,45 @@ export function PricingMacroManager() {
     }
   };
 
+  const toggleRow = (id: number) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    let deleted = 0;
+    let missing = 0;
+    try {
+      // Backend nhận tối đa MACRO_BULK_DELETE_MAX id mỗi lần.
+      for (const part of chunk(ids, MACRO_BULK_DELETE_MAX)) {
+        const res = await bulkDeletePricingMacroRules(part);
+        deleted += res.deleted.length;
+        missing += res.missing.length;
+      }
+      toast({
+        title: `Đã xoá ${deleted} quy tắc`,
+        description: missing ? `${missing} quy tắc không còn tồn tại.` : undefined,
+      });
+      setSelectedIds(new Set());
+    } catch (err: any) {
+      toast({
+        title: 'Lỗi xoá hàng loạt',
+        description: `${err?.message || 'Không thể xoá quy tắc'}${deleted ? ` (đã xoá được ${deleted} trước khi lỗi)` : ''}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkDeleting(false);
+      setBulkDeleteOpen(false);
+      loadData();
+    }
+  };
+
   // Helper name lookups
   const getProvinceName = (code?: string | null) => {
     if (!code) return 'Toàn quốc';
@@ -317,24 +422,16 @@ export function PricingMacroManager() {
     );
   }, [rules, search, provinces]);
 
-  const formatAdjustment = (type: MacroAdjustmentType, value: number, applyPerSeat: boolean) => {
-    const seatSuffix = applyPerSeat ? '/ghế' : '';
-    if (type === 'DELTA_AMOUNT') {
-      const sign = value > 0 ? '+' : '';
-      return `${sign}${new Intl.NumberFormat('vi-VN').format(value)} đ${seatSuffix}`;
-    }
-    if (type === 'PERCENTAGE') {
-      const sign = value > 0 ? '+' : '';
-      return `${sign}${value}%`;
-    }
-    if (type === 'MIN_FLOOR') {
-      return `Sàn: ${new Intl.NumberFormat('vi-VN').format(value)} đ`;
-    }
-    if (type === 'MAX_CEILING') {
-      return `Trần: ${new Intl.NumberFormat('vi-VN').format(value)} đ`;
-    }
-    return `${value}`;
-  };
+  const formatAdjustment = formatMacroAdjustment;
+
+  // Vùng chọn là TOÀN CỤC (không bị bộ lọc tìm kiếm cắt): hộp xác nhận xoá phải cho thấy chính xác
+  // những quy tắc nào sẽ bị xoá, kể cả những dòng đang bị bộ lọc ẩn đi.
+  const selectedRules = React.useMemo(() => rules.filter((r) => selectedIds.has(r.id)), [rules, selectedIds]);
+  const hiddenSelectedCount = React.useMemo(() => {
+    const visible = new Set(filteredRules.map((r) => r.id));
+    return selectedRules.filter((r) => !visible.has(r.id)).length;
+  }, [selectedRules, filteredRules]);
+  const BULK_DELETE_LIST_MAX = 8;
 
   return (
     <div className="space-y-6">
@@ -354,12 +451,39 @@ export function PricingMacroManager() {
             <RefreshCw className={cn('w-4 h-4 mr-1', loading && 'animate-spin')} />
             Làm mới
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setBulkDialogOpen(true)}>
+            <ListPlus className="w-4 h-4 mr-1" />
+            Tạo hàng loạt
+          </Button>
           <Button size="sm" onClick={openCreateDialog} className="bg-indigo-600 hover:bg-indigo-700 text-white">
             <PlusCircle className="w-4 h-4 mr-1" />
             Thêm quy tắc
           </Button>
         </div>
       </div>
+
+      {bandWarnings && bandWarnings.warnings.length > 0 && (
+        <div role="alert" data-testid="band-warnings" className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="font-semibold">
+            {bandWarnings.warnings.length} quy tắc % đang bật có thể làm báo giá bị từ chối
+          </div>
+          <div className="mt-0.5">
+            Giá sau điều chỉnh nằm ngoài băng cho phép
+            {bandWarnings.band?.minRatio != null && bandWarnings.band?.maxRatio != null
+              ? ` (tỉ lệ ${bandWarnings.band.minRatio}–${bandWarnings.band.maxRatio} × giá nền)`
+              : ''}
+            : báo giá khớp các quy tắc này sẽ bị từ chối (khách không đặt được chuyến). Hãy sửa mức % hoặc điều chỉnh băng.
+          </div>
+          <ul className="list-disc pl-5 mt-1 space-y-0.5">
+            {bandWarnings.warnings.slice(0, 5).map((w, i) => (
+              <li key={i}>{w.message}</li>
+            ))}
+          </ul>
+          {bandWarnings.warnings.length > 5 && (
+            <div className="mt-1 text-amber-700">… và {bandWarnings.warnings.length - 5} cảnh báo khác.</div>
+          )}
+        </div>
+      )}
 
       {/* ───────── RULES LIST TABLE ───────── */}
       <Card>
@@ -370,9 +494,23 @@ export function PricingMacroManager() {
                 Danh sách Quy tắc Điều chỉnh Khu vực ({filteredRules.length})
               </CardTitle>
               <CardDescription className="text-xs text-slate-500">
-                Hệ thống tự động ưu tiên rule có độ ưu tiên cao hơn, hoặc rule khớp chi tiết tới cấp Xã/Phường.
+                Mỗi chuyến chỉ áp dụng MỘT quy tắc: quy tắc khớp chi tiết nhất thắng (xã/phường › tỉnh › đúng dịch vụ ›
+                đúng loại xe). Chỉ khi chi tiết như nhau thì độ ưu tiên cao hơn thắng. Giá sau quy tắc phải nằm trong
+                biên cho phép, nếu vượt thì báo giá bị từ chối (khách không đặt được chuyến).
               </CardDescription>
             </div>
+            <div className="flex w-full sm:w-auto items-center gap-2">
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs text-red-600 border-red-200 hover:bg-red-50"
+                  onClick={() => setBulkDeleteOpen(true)}
+                >
+                  <Trash2 className="w-3.5 h-3.5 mr-1" />
+                  Xoá đã chọn ({selectedIds.size})
+                </Button>
+              )}
             <div className="w-full sm:w-64">
               <div className="relative">
                 <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
@@ -384,12 +522,29 @@ export function PricingMacroManager() {
                 />
               </div>
             </div>
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80 text-xs">
+                <TableHead className="w-8">
+                  <Checkbox
+                    aria-label="Chọn tất cả quy tắc đang hiển thị"
+                    checked={filteredRules.length > 0 && filteredRules.every((r) => selectedIds.has(r.id))}
+                    onCheckedChange={(c) =>
+                      setSelectedIds((prev) => {
+                        const next = new Set(prev);
+                        for (const r of filteredRules) {
+                          if (c) next.add(r.id);
+                          else next.delete(r.id);
+                        }
+                        return next;
+                      })
+                    }
+                  />
+                </TableHead>
                 <TableHead className="w-12 text-center">Ưu tiên</TableHead>
                 <TableHead className="min-w-[200px]">Tên quy tắc</TableHead>
                 <TableHead>Điểm đón (Tỉnh / Xã)</TableHead>
@@ -403,14 +558,14 @@ export function PricingMacroManager() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10">
+                  <TableCell colSpan={9} className="text-center py-10">
                     <Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-600 mb-2" />
                     <span className="text-xs text-slate-500">Đang tải danh sách macro rules...</span>
                   </TableCell>
                 </TableRow>
               ) : filteredRules.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center py-10 text-slate-400 text-xs">
+                  <TableCell colSpan={9} className="text-center py-10 text-slate-400 text-xs">
                     Chưa có quy tắc macro nào. Bấm "Thêm quy tắc" để bắt đầu cấu hình.
                   </TableCell>
                 </TableRow>
@@ -418,11 +573,29 @@ export function PricingMacroManager() {
                 filteredRules.map((rule) => {
                   return (
                     <TableRow key={rule.id} className="text-xs hover:bg-slate-50/50">
+                      <TableCell>
+                        <Checkbox
+                          aria-label={`Chọn quy tắc ${rule.name}`}
+                          checked={selectedIds.has(rule.id)}
+                          onCheckedChange={() => toggleRow(rule.id)}
+                        />
+                      </TableCell>
                       <TableCell className="text-center font-bold text-slate-600">
                         {rule.priority}
                       </TableCell>
                       <TableCell>
-                        <div className="font-semibold text-slate-800">{rule.name}</div>
+                        <div className="font-semibold text-slate-800 flex items-center gap-1.5 flex-wrap">
+                          {rule.name}
+                          {rule.isBidirectional && (
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] h-4 px-1 bg-indigo-50 text-indigo-700 border-indigo-200"
+                              title="Áp dụng cả chiều ngược (trả → đón)"
+                            >
+                              <ArrowLeftRight className="w-3 h-3 mr-0.5" />2 chiều
+                            </Badge>
+                          )}
+                        </div>
                         {rule.note && <div className="text-[11px] text-slate-400 mt-0.5">{rule.note}</div>}
                       </TableCell>
                       <TableCell>
@@ -448,10 +621,10 @@ export function PricingMacroManager() {
                       <TableCell>
                         <div className="flex flex-wrap gap-1">
                           <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                            {rule.serviceType === 'ALL' ? 'Mọi dịch vụ' : rule.serviceType}
+                            {serviceLabel(rule.serviceType)}
                           </Badge>
                           <Badge variant="secondary" className="text-[10px] h-4 px-1">
-                            {rule.vehicleType === 'ALL' ? 'Mọi loại xe' : rule.vehicleType}
+                            {vehicleLabel(rule.vehicleType)}
                           </Badge>
                         </div>
                       </TableCell>
@@ -466,6 +639,15 @@ export function PricingMacroManager() {
                         >
                           {formatAdjustment(rule.adjustmentType, Number(rule.adjustmentValue), rule.applyPerSeat)}
                         </span>
+                        {isLegacyAdjustmentType(rule.adjustmentType) && (
+                          <Badge
+                            variant="outline"
+                            className="ml-1 text-[10px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200"
+                            title="Backend không còn áp loại sàn/trần vào giá"
+                          >
+                            ngừng áp dụng
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
@@ -487,6 +669,7 @@ export function PricingMacroManager() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-slate-500 hover:text-indigo-600"
+                            aria-label={`Sửa quy tắc ${rule.name}`}
                             onClick={() => openEditDialog(rule)}
                           >
                             <Edit className="w-3.5 h-3.5" />
@@ -495,6 +678,7 @@ export function PricingMacroManager() {
                             variant="ghost"
                             size="icon"
                             className="h-7 w-7 text-slate-500 hover:text-red-600"
+                            aria-label={`Xoá quy tắc ${rule.name}`}
                             onClick={() => setDeleteRuleId(rule.id)}
                           >
                             <Trash2 className="w-3.5 h-3.5" />
@@ -670,6 +854,9 @@ export function PricingMacroManager() {
                     <SelectItem value="ALL">Tất cả dịch vụ</SelectItem>
                     <SelectItem value="CARPOOL">Ghép xe (CARPOOL)</SelectItem>
                     <SelectItem value="CONVENIENT">Bao xe (CONVENIENT)</SelectItem>
+                    {!FORM_SERVICE_VALUES.includes(formData.serviceType) && (
+                      <SelectItem value={formData.serviceType}>Khác: {formData.serviceType}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -687,6 +874,9 @@ export function PricingMacroManager() {
                     <SelectItem value="ALL">Tất cả loại xe</SelectItem>
                     <SelectItem value="4SEATS">Xe 4 chỗ</SelectItem>
                     <SelectItem value="7SEATS">Xe 7 chỗ</SelectItem>
+                    {!FORM_VEHICLE_VALUES.includes(formData.vehicleType) && (
+                      <SelectItem value={formData.vehicleType}>Khác: {formData.vehicleType}</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
@@ -708,10 +898,19 @@ export function PricingMacroManager() {
                   <SelectContent>
                     <SelectItem value="DELTA_AMOUNT">Cộng/Trừ tiền cố định (± VNĐ)</SelectItem>
                     <SelectItem value="PERCENTAGE">Theo phần trăm (± %)</SelectItem>
-                    <SelectItem value="MIN_FLOOR">Giá sàn tối thiểu (VNĐ)</SelectItem>
-                    <SelectItem value="MAX_CEILING">Giá trần tối đa (VNĐ)</SelectItem>
+                    {/* Sàn/trần: backend đã ngừng áp dụng và không cho tạo mới — chỉ hiện khi đang mở một luật cũ. */}
+                    {isLegacyAdjustmentType(formData.adjustmentType) && (
+                      <SelectItem value={formData.adjustmentType} disabled>
+                        {formData.adjustmentType === 'MIN_FLOOR' ? 'Giá sàn tối thiểu' : 'Giá trần tối đa'} (đã ngừng áp dụng)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
+                {isLegacyAdjustmentType(formData.adjustmentType) && (
+                  <div role="note" className="text-[11px] text-amber-700">
+                    Quy tắc kiểu sàn/trần không còn được áp dụng vào giá. Hãy đổi sang cộng/trừ tiền hoặc %, hoặc xoá quy tắc.
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -721,6 +920,7 @@ export function PricingMacroManager() {
                 <Input
                   className="h-8 text-xs"
                   type="number"
+                  {...adjustmentValueRange(formData.adjustmentType)}
                   placeholder={formData.adjustmentType === 'PERCENTAGE' ? 'Ví dụ: 10 hoặc -5' : 'Ví dụ: -20000 hoặc 50000'}
                   value={formData.adjustmentValue}
                   onChange={(e) =>
@@ -728,32 +928,44 @@ export function PricingMacroManager() {
                   }
                   required
                 />
+                <div className="text-[11px] text-slate-400">{adjustmentValueHint(formData.adjustmentType)}</div>
+                <div className="text-[11px] text-slate-400">Đi ghép: mức này áp lên giá MỘT ghế, sau đó nhân số ghế.</div>
               </div>
             </div>
 
-            {/* Checkbox per seat & priority */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-              <div className="flex items-center space-x-2 pt-2">
-                <Checkbox
-                  id="applyPerSeat"
-                  checked={formData.applyPerSeat}
-                  onCheckedChange={(c) => setFormData((prev) => ({ ...prev, applyPerSeat: !!c }))}
-                />
-                <Label htmlFor="applyPerSeat" className="text-xs font-normal cursor-pointer">
-                  Áp dụng nhân theo số ghế (khi đi ghép xe)
-                </Label>
-              </div>
-
+            {/* Độ ưu tiên (backend luôn nhân theo số ghế khi đi ghép — không còn tuỳ chọn applyPerSeat) */}
+            <div className="grid grid-cols-1 gap-3 items-center">
               <div className="space-y-1">
-                <Label className="text-xs font-semibold">Độ ưu tiên (Số càng cao càng ưu tiên)</Label>
+                <Label className="text-xs font-semibold">Độ ưu tiên (số càng cao càng thắng khi chi tiết như nhau)</Label>
                 <Input
                   className="h-8 text-xs"
                   type="number"
+                  min={MACRO_VALUE_LIMITS.PRIORITY_MIN}
+                  max={MACRO_VALUE_LIMITS.PRIORITY_MAX}
                   value={formData.priority}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, priority: parseInt(e.target.value, 10) || 0 }))
                   }
                 />
+                <div className="text-[11px] text-slate-400">
+                  Quy tắc khớp chi tiết hơn (xã/phường) luôn thắng quy tắc chung hơn, bất kể độ ưu tiên.
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-start space-x-2">
+              <Checkbox
+                id="isBidirectional"
+                checked={formData.isBidirectional}
+                onCheckedChange={(c) => setFormData((prev) => ({ ...prev, isBidirectional: !!c }))}
+              />
+              <div>
+                <Label htmlFor="isBidirectional" className="text-xs font-normal cursor-pointer">
+                  Áp dụng cả chiều ngược (trả → đón)
+                </Label>
+                <div className="text-[11px] text-slate-400">
+                  Một quy tắc dùng cho cả chuyến đi và chuyến về giữa hai điểm này.
+                </div>
               </div>
             </div>
 
@@ -791,6 +1003,57 @@ export function PricingMacroManager() {
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* ───────── BULK CREATE DIALOG ───────── */}
+      <MacroBulkDialog
+        open={bulkDialogOpen}
+        onOpenChange={setBulkDialogOpen}
+        provinces={provinces}
+        onDone={loadData}
+      />
+
+      {/* ───────── BULK DELETE CONFIRM ───────── */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => !open && !bulkDeleting && setBulkDeleteOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-bold text-slate-900">
+              Xoá {selectedIds.size} quy tắc đã chọn?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500">
+              Các chuyến đặt sau khi xoá sẽ không còn áp dụng những quy tắc này. Thao tác không hoàn tác được.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="text-xs space-y-1.5" data-testid="bulk-delete-list">
+            <ul className="list-disc pl-5 text-slate-700 max-h-40 overflow-y-auto">
+              {selectedRules.slice(0, BULK_DELETE_LIST_MAX).map((r) => (
+                <li key={r.id}>{r.name}</li>
+              ))}
+            </ul>
+            {selectedRules.length > BULK_DELETE_LIST_MAX && (
+              <div className="text-slate-500">… và {selectedRules.length - BULK_DELETE_LIST_MAX} quy tắc khác.</div>
+            )}
+            {hiddenSelectedCount > 0 && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-1.5 text-amber-800" role="alert">
+                Trong đó {hiddenSelectedCount} quy tắc đang bị bộ lọc tìm kiếm ẩn đi — chúng VẪN sẽ bị xoá.
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs" disabled={bulkDeleting}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs bg-red-600 hover:bg-red-700 text-white"
+              onClick={(e) => {
+                e.preventDefault();
+                handleBulkDelete();
+              }}
+              disabled={bulkDeleting}
+            >
+              {bulkDeleting && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+              Xoá {selectedIds.size} quy tắc
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ───────── DELETE CONFIRM ALERT DIALOG ───────── */}
       <AlertDialog open={!!deleteRuleId} onOpenChange={(open) => !open && setDeleteRuleId(null)}>
