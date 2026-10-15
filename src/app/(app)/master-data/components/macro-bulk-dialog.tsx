@@ -34,6 +34,7 @@ import {
   priorityError,
   removeEndpoint,
   summarizeEndpoints,
+  summarizeWarnings,
   toSelectors,
   type MacroEndpoint,
 } from '@/lib/macro-bulk';
@@ -55,7 +56,6 @@ type FormState = {
   vehicleType: string;
   adjustmentType: MacroAdjustmentType;
   adjustmentValue: string;
-  applyPerSeat: boolean;
   isBidirectional: boolean;
   priority: string;
   isActive: boolean;
@@ -68,9 +68,8 @@ const initialForm = (): FormState => ({
   vehicleType: 'ALL',
   adjustmentType: 'DELTA_AMOUNT',
   adjustmentValue: '',
-  applyPerSeat: true,
-  // Mặc định MỘT chiều, giống form tạo đơn lẻ và cột DB: hai chiều nhầm sẽ âm thầm đổi giá cả chuyến ngược.
-  isBidirectional: false,
+  // Spec bỏ-tuyến §5 (QĐ#4): luật MỚI mặc định HAI chiều, giống form tạo đơn lẻ. Bỏ tích khi chỉ muốn một chiều.
+  isBidirectional: true,
   priority: '0',
   isActive: true,
   note: '',
@@ -337,7 +336,8 @@ export function MacroBulkDialog({
       vehicleType: form.vehicleType,
       adjustmentType: form.adjustmentType,
       adjustmentValue: value,
-      applyPerSeat: form.applyPerSeat,
+      // Backend luôn nhân theo ghế và từ chối `applyPerSeat=false`: gửi true cho khớp mọi phiên bản.
+      applyPerSeat: true,
       isBidirectional: form.isBidirectional,
       note: form.note.trim() ? form.note.trim() : null,
       origins: toSelectors(origins),
@@ -348,11 +348,16 @@ export function MacroBulkDialog({
       const data = await bulkCreatePricingMacroRules(payload);
       setResult({ data, labels: labelMap, requestedBidirectional: form.isBidirectional });
       if (data.created.length > 0) onDone();
+      const warn = summarizeWarnings(data.warnings);
+      const notes = [
+        data.skipped.length
+          ? `Bỏ qua ${data.skipped.length} tổ hợp (đã có quy tắc cùng khoá hoặc lặp trong yêu cầu).`
+          : null,
+        warn.count ? `Có ${warn.count} cảnh báo (không chặn) — xem chi tiết trong hộp kết quả.` : null,
+      ].filter(Boolean);
       toast({
         title: `Đã tạo ${data.created.length} quy tắc`,
-        description: data.skipped.length
-          ? `Bỏ qua ${data.skipped.length} tổ hợp (đã có quy tắc cùng khoá hoặc lặp trong yêu cầu).`
-          : undefined,
+        description: notes.length ? notes.join(' ') : undefined,
       });
     } catch (err: any) {
       toast({
@@ -376,6 +381,9 @@ export function MacroBulkDialog({
     result.data.created.length > 0 &&
     result.data.created.some((r) => r.isBidirectional !== true);
 
+  // Cảnh báo (không chặn) backend trả kèm kết quả tạo hàng loạt — tính một lần cho hộp kết quả.
+  const resultWarnings = summarizeWarnings(result?.data.warnings, 8);
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -396,6 +404,19 @@ export function MacroBulkDialog({
               <div role="alert" className="p-2 rounded border border-red-300 bg-red-50 text-red-700">
                 Máy chủ chưa hỗ trợ quy tắc hai chiều: các quy tắc vừa tạo chỉ áp dụng MỘT chiều. Hãy báo lập trình
                 viên cập nhật backend trước khi dùng tính năng này.
+              </div>
+            )}
+            {resultWarnings.count > 0 && (
+              <div role="note" data-testid="bulk-warnings" className="p-2 rounded border border-amber-300 bg-amber-50 text-amber-900">
+                <div className="font-semibold">Cảnh báo (không chặn)</div>
+                <ul className="list-disc pl-5 space-y-0.5 mt-0.5">
+                  {resultWarnings.lines.map((m, i) => (
+                    <li key={i}>{m}</li>
+                  ))}
+                </ul>
+                {resultWarnings.more > 0 && (
+                  <div className="mt-1 text-amber-700">… và {resultWarnings.more} cảnh báo khác.</div>
+                )}
               </div>
             )}
             {result.data.skipped.length > 0 && (
@@ -525,8 +546,6 @@ export function MacroBulkDialog({
                 >
                   <option value="DELTA_AMOUNT">Cộng/Trừ tiền cố định (± VNĐ)</option>
                   <option value="PERCENTAGE">Theo phần trăm (± %)</option>
-                  <option value="MIN_FLOOR">Giá sàn tối thiểu (VNĐ)</option>
-                  <option value="MAX_CEILING">Giá trần tối đa (VNĐ)</option>
                 </select>
               </div>
               <div className="space-y-1">
@@ -557,16 +576,6 @@ export function MacroBulkDialog({
                   />
                   <Label htmlFor="bulk-bidirectional" className="text-xs font-normal cursor-pointer">
                     Áp dụng cả chiều ngược (trả → đón)
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Checkbox
-                    id="bulk-per-seat"
-                    checked={form.applyPerSeat}
-                    onCheckedChange={(c) => setForm((p) => ({ ...p, applyPerSeat: !!c }))}
-                  />
-                  <Label htmlFor="bulk-per-seat" className="text-xs font-normal cursor-pointer">
-                    Nhân theo số ghế (khi đi ghép xe)
                   </Label>
                 </div>
                 <div className="flex items-center space-x-2">
@@ -609,7 +618,7 @@ export function MacroBulkDialog({
                 <span className="font-semibold">Sẽ tạo:</span> {selection.combos} quy tắc · Đón: {summarizeEndpoints(origins)}{' '}
                 {form.isBidirectional ? '↔' : '→'} Trả: {summarizeEndpoints(dests)} ·{' '}
                 {form.isBidirectional ? 'hai chiều' : 'chỉ chiều đón → trả'} ·{' '}
-                {valueError ? 'mức điều chỉnh chưa hợp lệ' : formatMacroAdjustment(form.adjustmentType, value, form.applyPerSeat)} ·{' '}
+                {valueError ? 'mức điều chỉnh chưa hợp lệ' : formatMacroAdjustment(form.adjustmentType, value, true)} ·{' '}
                 {form.isActive ? 'BẬT ngay' : 'tạo ở trạng thái tắt'}
               </div>
             )}

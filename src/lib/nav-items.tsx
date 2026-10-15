@@ -68,7 +68,7 @@ export const navGroups: NavGroup[] = [
       { href: '/driver-reputation', label: 'Điểm & đánh giá tài xế', icon: Star },
       // Cùng cụm "chất lượng tài xế". Quyền RIÊNG driver-team — ops/CSKH không thấy.
       { href: '/driver-team', label: 'Đội tài chuyên nghiệp', icon: Handshake },
-      { href: '/master-data', label: 'Tuyến đường & Vùng', icon: Map },
+      { href: '/master-data', label: 'Vùng & Giá khu vực', icon: Map },
       { href: '/feedback', label: 'Góp ý tài xế', icon: MessageSquare },
     ],
   },

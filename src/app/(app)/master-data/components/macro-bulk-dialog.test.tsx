@@ -129,9 +129,11 @@ describe('MacroBulkDialog', () => {
     await user.click(await screen.findByRole('button', { name: 'Điểm trả: Thêm cả tỉnh' }));
     expect(screen.getByLabelText('Điểm trả: bỏ Cả tỉnh Hưng Yên')).toBeInTheDocument();
 
-    // Mặc định MỘT chiều; tích "cả chiều ngược" thì đổi sang hai chiều.
+    // Mặc định HAI chiều (spec §5); bỏ tích thì thành một chiều, tích lại thì về hai chiều.
     const twoWay = screen.getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ });
-    expect(twoWay).not.toBeChecked();
+    expect(twoWay).toBeChecked();
+    expect(screen.getByTestId('bulk-count')).toHaveTextContent('Sẽ tạo tối đa 2 quy tắc (mỗi quy tắc áp dụng cả hai chiều)');
+    await user.click(twoWay);
     expect(screen.getByTestId('bulk-count')).toHaveTextContent('Sẽ tạo tối đa 2 quy tắc (chỉ chiều đón → trả)');
     await user.click(twoWay);
     expect(screen.getByTestId('bulk-count')).toHaveTextContent('Sẽ tạo tối đa 2 quy tắc (mỗi quy tắc áp dụng cả hai chiều)');
@@ -178,16 +180,16 @@ describe('MacroBulkDialog', () => {
     await addWholeProvince(user, 'Điểm trả', '33');
     await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
-    await user.click(screen.getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
+    // Hai chiều là mặc định ⇒ không cần tích; backend cũ cắt field nên luật tạo ra không có isBidirectional.
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('chưa hỗ trợ quy tắc hai chiều');
   });
 
-  it('mặc định MỘT chiều: gửi isBidirectional=false và KHÔNG cảnh báo oan khi backend không trả field đó', async () => {
+  it('mặc định HAI chiều: gửi isBidirectional=true, applyPerSeat=true; backend xác nhận thì KHÔNG cảnh báo', async () => {
     const { user } = setup();
-    bulkCreate.mockResolvedValue({ created: [{ id: 1, name: 'a' }], skipped: [] });
+    bulkCreate.mockResolvedValue({ created: [{ id: 1, name: 'a', isBidirectional: true }], skipped: [] });
 
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
@@ -196,8 +198,57 @@ describe('MacroBulkDialog', () => {
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
 
     await screen.findByTestId('bulk-result');
+    expect(bulkCreate.mock.calls[0][0]).toMatchObject({ isBidirectional: true, applyPerSeat: true });
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('bỏ tích hai chiều → gửi isBidirectional=false và KHÔNG cảnh báo oan khi backend không trả field đó', async () => {
+    const { user } = setup();
+    bulkCreate.mockResolvedValue({ created: [{ id: 1, name: 'a' }], skipped: [] });
+
+    await addWholeProvince(user, 'Điểm đón', '01');
+    await addWholeProvince(user, 'Điểm trả', '33');
+    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
+    await user.type(screen.getByLabelText(/^Giá trị/), '10000');
+    await user.click(screen.getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
+    await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
+
+    await screen.findByTestId('bulk-result');
     expect(bulkCreate.mock.calls[0][0]).toMatchObject({ isBidirectional: false });
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('không còn Giá sàn/Giá trần và không còn ô "Nhân theo số ghế" (backend từ chối cả hai)', () => {
+    setup();
+    const select = screen.getByLabelText('Kiểu điều chỉnh') as HTMLSelectElement;
+    const options = within(select).getAllByRole('option').map((o) => (o as HTMLOptionElement).value);
+    expect(options).toEqual(['DELTA_AMOUNT', 'PERCENTAGE']);
+    expect(screen.queryByRole('checkbox', { name: /Nhân theo số ghế/ })).not.toBeInTheDocument();
+  });
+
+  it('backend trả warnings: hộp kết quả liệt kê cảnh báo (vàng, không phải lỗi đỏ) và toast nêu số cảnh báo', async () => {
+    const { user } = setup();
+    bulkCreate.mockResolvedValue({
+      created: [{ id: 1, name: 'a', isBidirectional: true }],
+      skipped: [],
+      warnings: [
+        { code: 'XUNG_DOT_CUNG_CAP', ruleId: 9, message: 'Chồng phạm vi với quy tắc #9 nhưng khác mức.' },
+        { code: 'RUT_GON', ruleId: null, message: 'Còn 3 cảnh báo khác.' },
+      ],
+    });
+    await addWholeProvince(user, 'Điểm đón', '01');
+    await addWholeProvince(user, 'Điểm trả', '33');
+    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
+    await user.type(screen.getByLabelText(/^Giá trị/), '10000');
+    await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
+
+    const box = await screen.findByTestId('bulk-warnings');
+    expect(box).toHaveTextContent('Chồng phạm vi với quy tắc #9 nhưng khác mức.');
+    expect(box).toHaveTextContent('Còn 3 cảnh báo khác.');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(toastMock).toHaveBeenCalledWith(
+      expect.objectContaining({ description: expect.stringContaining('2 cảnh báo') }),
+    );
   });
 
   it('tiền tố quá dài: báo ngay dưới ô nhập và khoá nút Tạo', async () => {
@@ -319,7 +370,7 @@ describe('MacroBulkDialog', () => {
     expect(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ })).toBeDisabled();
   });
 
-  it('bật "hai chiều" làm phạm vi rộng gấp đôi ⇒ xác nhận "mọi nơi" đã tích phải bị thu hồi', async () => {
+  it('đổi hướng (hai chiều ↔ một chiều) làm đổi phạm vi ⇒ xác nhận "mọi nơi" đã tích phải bị thu hồi', async () => {
     const { user } = setup();
     await addWholeProvince(user, 'Điểm trả', '33');
     await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
@@ -432,15 +483,15 @@ describe('MacroBulkDialog', () => {
 
     const sum = screen.getByTestId('bulk-summary');
     expect(sum).toHaveTextContent('1 quy tắc');
-    expect(sum).toHaveTextContent('Đón: Cả tỉnh Hà Nội → Trả: Cả tỉnh Hưng Yên');
-    expect(sum).toHaveTextContent('chỉ chiều đón → trả');
+    expect(sum).toHaveTextContent('Đón: Cả tỉnh Hà Nội ↔ Trả: Cả tỉnh Hưng Yên');
+    expect(sum).toHaveTextContent('hai chiều');
     expect(sum).toHaveTextContent('+30.000 đ/ghế');
     expect(sum).toHaveTextContent('BẬT ngay');
 
     await user.click(screen.getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
     await user.click(screen.getByRole('checkbox', { name: /Kích hoạt ngay/ }));
-    expect(sum).toHaveTextContent('Đón: Cả tỉnh Hà Nội ↔ Trả: Cả tỉnh Hưng Yên');
-    expect(sum).toHaveTextContent('hai chiều');
+    expect(sum).toHaveTextContent('Đón: Cả tỉnh Hà Nội → Trả: Cả tỉnh Hưng Yên');
+    expect(sum).toHaveTextContent('chỉ chiều đón → trả');
     expect(sum).toHaveTextContent('tạo ở trạng thái tắt');
   });
 

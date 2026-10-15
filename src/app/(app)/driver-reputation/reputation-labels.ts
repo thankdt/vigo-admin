@@ -90,9 +90,8 @@ export function isLowRating(stars: number | null | undefined): boolean {
 }
 
 /**
- * Loại dịch vụ của chuyến → tiếng Việt (khớp SERVICE_TYPE_LABELS ở
- * master-data/route-pricing-manager). Mã lạ hiện NGUYÊN MÃ; rỗng ⇒ null (nơi
- * gọi bỏ hẳn nhãn thay vì hiện badge trống).
+ * Loại dịch vụ của chuyến → tiếng Việt (cùng nhãn với `serviceLabel` ở lib/macro-bulk).
+ * Mã lạ hiện NGUYÊN MÃ; rỗng ⇒ null (nơi gọi bỏ hẳn nhãn thay vì hiện badge trống).
  */
 const SERVICE_TYPE_LABEL: Record<string, string> = {
   CARPOOL: 'Ghép xe',

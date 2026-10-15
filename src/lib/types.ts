@@ -1067,7 +1067,18 @@ export type TeamMemberRow = {
 
 // ───────── PRICING MACRO 2-TIER (TỈNH -> XÃ) TYPES ─────────
 
+/**
+ * `MIN_FLOOR`/`MAX_CEILING` chỉ còn để ĐỌC/hiển thị luật cũ: backend không còn áp và từ chối tạo mới
+ * (spec bỏ-tuyến §5). Form tạo/sửa chỉ được đưa ra DELTA_AMOUNT và PERCENTAGE.
+ */
 export type MacroAdjustmentType = 'DELTA_AMOUNT' | 'PERCENTAGE' | 'MIN_FLOOR' | 'MAX_CEILING';
+
+/** Cảnh báo KHÔNG chặn của backend khi lưu luật (xung đột cùng cặp tỉnh, % lọt băng chặn, rút gọn). */
+export type MacroRuleWarning = {
+  code: 'XUNG_DOT_CUNG_CAP' | 'XUNG_DOT_KHAC_CAP' | 'PHAN_TRAM_NGOAI_BANG' | 'RUT_GON' | string;
+  message: string;
+  ruleId: number | null;
+};
 
 export type PricingMacroRule = {
   id: number;
@@ -1131,6 +1142,17 @@ export type BulkMacroSkippedItem = {
 export type BulkCreatePricingMacroRulesResult = {
   created: PricingMacroRule[];
   skipped: BulkMacroSkippedItem[];
+  /** Chỉ có ở backend mới (thêm field, không đổi shape cũ). */
+  warnings?: MacroRuleWarning[];
+};
+
+/** Luật vừa lưu + cảnh báo không chặn (backend cũ không trả `warnings`). */
+export type SavedPricingMacroRule = PricingMacroRule & { warnings?: MacroRuleWarning[] };
+
+/** `GET /pricing/macro-rules/band-warnings`: luật % đang bật lọt ngoài băng chặn kết quả. */
+export type MacroBandWarnings = {
+  band: { minRatio?: number; maxRatio?: number; minAbsolute?: number; maxAbsolute?: number };
+  warnings: MacroRuleWarning[];
 };
 
 export type BulkDeletePricingMacroRulesResult = {
