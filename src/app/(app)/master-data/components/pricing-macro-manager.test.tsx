@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { PricingMacroRule } from '@/lib/types';
@@ -13,6 +15,7 @@ const createRule = vi.fn();
 const updateRule = vi.fn();
 const deleteRule = vi.fn();
 const bulkDelete = vi.fn();
+const bandWarnings = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
 vi.mock('@/lib/api', () => ({
@@ -23,6 +26,7 @@ vi.mock('@/lib/api', () => ({
   updatePricingMacroRule: (...a: unknown[]) => updateRule(...a),
   deletePricingMacroRule: (...a: unknown[]) => deleteRule(...a),
   bulkDeletePricingMacroRules: (...a: unknown[]) => bulkDelete(...a),
+  getPricingMacroBandWarnings: (...a: unknown[]) => bandWarnings(...a),
 }));
 // Hộp thoại tạo hàng loạt có test riêng (macro-bulk-dialog.test.tsx). Ở đây chỉ kiểm manager mở nó đúng
 // lúc và nạp lại danh sách khi nó báo xong.
@@ -98,6 +102,7 @@ describe('PricingMacroManager — danh sách', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
   it('chỉ luật hai chiều mới có nhãn "2 chiều"; dịch vụ/xe dạng chuẩn hiển thị tiếng Việt', async () => {
@@ -272,6 +277,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
   async function openCreate(user: ReturnType<typeof userEvent.setup>, name: string) {
@@ -281,28 +287,33 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     return dlg;
   }
 
-  it('mặc định KHÔNG hai chiều: gửi isBidirectional=false', async () => {
+  it('mặc định HAI chiều (spec §5): ô đã tích, gửi isBidirectional=true và applyPerSeat=true', async () => {
     const { user } = await setup([ONE_WAY]);
-    createRule.mockResolvedValue({ ...ONE_WAY, id: 10, isBidirectional: false });
+    createRule.mockResolvedValue({ ...ONE_WAY, id: 10, isBidirectional: true });
     const dlg = await openCreate(user, 'Luật mới');
-    expect(within(dlg).getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ })).not.toBeChecked();
+    expect(within(dlg).getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ })).toBeChecked();
 
     await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
     await waitFor(() => expect(createRule).toHaveBeenCalledTimes(1));
-    expect(createRule.mock.calls[0][0]).toMatchObject({ name: 'Luật mới', isBidirectional: false });
-    expect(toastMock).toHaveBeenCalledWith({ title: 'Tạo quy tắc macro thành công' });
+    expect(createRule.mock.calls[0][0]).toMatchObject({
+      name: 'Luật mới',
+      isBidirectional: true,
+      applyPerSeat: true,
+      adjustmentType: 'DELTA_AMOUNT',
+    });
+    expect(toastMock).toHaveBeenCalledWith({ title: 'Tạo quy tắc macro thành công', description: undefined });
+    expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
   });
 
-  it('tích "Áp dụng cả chiều ngược" → gửi isBidirectional=true; backend xác nhận thì báo thành công', async () => {
+  it('bỏ tích "cả chiều ngược" → gửi isBidirectional=false (luật một chiều có chủ ý)', async () => {
     const { user } = await setup([ONE_WAY]);
-    createRule.mockResolvedValue({ ...ONE_WAY, id: 11, isBidirectional: true });
-    const dlg = await openCreate(user, 'Luật hai chiều');
+    createRule.mockResolvedValue({ ...ONE_WAY, id: 11, isBidirectional: false });
+    const dlg = await openCreate(user, 'Luật một chiều');
     await user.click(within(dlg).getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
 
     await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
     await waitFor(() => expect(createRule).toHaveBeenCalledTimes(1));
-    expect(createRule.mock.calls[0][0]).toMatchObject({ name: 'Luật hai chiều', isBidirectional: true });
-    expect(toastMock).toHaveBeenCalledWith({ title: 'Tạo quy tắc macro thành công' });
+    expect(createRule.mock.calls[0][0]).toMatchObject({ name: 'Luật một chiều', isBidirectional: false });
     expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
   });
 
@@ -311,7 +322,6 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     // Backend cũ: whitelist cắt field lạ, luật trả về không có isBidirectional.
     createRule.mockResolvedValue({ ...ONE_WAY, id: 12 });
     const dlg = await openCreate(user, 'Luật hai chiều');
-    await user.click(within(dlg).getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
     await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
 
     await waitFor(() =>
@@ -322,16 +332,91 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
         }),
       ),
     );
-    expect(toastMock).not.toHaveBeenCalledWith({ title: 'Tạo quy tắc macro thành công' });
+    expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ title: 'Tạo quy tắc macro thành công' }));
   });
 
-  it('không yêu cầu hai chiều thì backend cũ KHÔNG bị cảnh báo oan', async () => {
+  it('chủ động bỏ hai chiều thì backend cũ KHÔNG bị cảnh báo oan', async () => {
     const { user } = await setup([ONE_WAY]);
     createRule.mockResolvedValue({ ...ONE_WAY, id: 13 }); // không có isBidirectional
     const dlg = await openCreate(user, 'Luật thường');
+    await user.click(within(dlg).getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
     await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
     await waitFor(() => expect(createRule).toHaveBeenCalledTimes(1));
     expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+  });
+
+  it('form tạo mới KHÔNG còn ô "nhân theo số ghế"; kiểu điều chỉnh mặc định là cộng/trừ tiền', async () => {
+    const { user } = await setup([ONE_WAY]);
+    const dlg = await openCreate(user, 'Luật kiểm lựa chọn');
+    expect(within(dlg).queryByText(/Áp dụng nhân theo số ghế/)).not.toBeInTheDocument();
+    expect(within(dlg).queryByRole('checkbox', { name: /số ghế/i })).not.toBeInTheDocument();
+    const triggers = within(dlg).getAllByRole('combobox').map((t) => t.textContent ?? '');
+    expect(triggers.some((t) => /Cộng\/Trừ tiền/.test(t))).toBe(true);
+    expect(within(dlg).queryByText(/sàn|trần/i)).not.toBeInTheDocument();
+  });
+
+  it('mã nguồn form KHÔNG đưa Giá sàn/Giá trần thành lựa chọn tĩnh (chỉ hiện có điều kiện cho luật cũ)', () => {
+    // Radix Select không mở được ổn định trong jsdom ⇒ gác bằng nguồn: không còn SelectItem cố định cho 2 loại này.
+    const src = readFileSync(
+      resolve(__dirname, 'pricing-macro-manager.tsx'),
+      'utf-8',
+    );
+    expect(src).not.toMatch(/<SelectItem value="MIN_FLOOR"/);
+    expect(src).not.toMatch(/<SelectItem value="MAX_CEILING"/);
+    expect(src).toMatch(/isLegacyAdjustmentType\(formData\.adjustmentType\)/);
+  });
+
+  it('lưu xong có cảnh báo của backend: toast nêu số cảnh báo + nội dung (không chặn, không đỏ)', async () => {
+    const { user } = await setup([ONE_WAY]);
+    createRule.mockResolvedValue({
+      ...ONE_WAY,
+      id: 14,
+      isBidirectional: true,
+      warnings: [
+        { code: 'XUNG_DOT_CUNG_CAP', ruleId: 1, message: 'Chồng phạm vi với "Một chiều HN-HY" nhưng khác mức.' },
+        { code: 'PHAN_TRAM_NGOAI_BANG', ruleId: null, message: 'Luật % lọt ngoài băng chặn.' },
+      ],
+    });
+    const dlg = await openCreate(user, 'Luật có cảnh báo');
+    await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Tạo quy tắc macro thành công',
+          description: expect.stringContaining('Có 2 cảnh báo'),
+        }),
+      ),
+    );
+    expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+  });
+
+  it('GET band-warnings có cảnh báo → hiện khung vàng; không có → không hiện', async () => {
+    bandWarnings.mockResolvedValue({
+      band: { minRatio: 0.2, maxRatio: 3, minAbsolute: 20000, maxAbsolute: 300000 },
+      warnings: [{ code: 'PHAN_TRAM_NGOAI_BANG', ruleId: 5, message: 'Luật #5 (+150%) lọt ngoài băng.' }],
+    });
+    await setup([ONE_WAY]);
+    const box = await screen.findByTestId('band-warnings');
+    expect(box).toHaveTextContent('1 quy tắc % đang bật có thể làm báo giá bị từ chối');
+    expect(box).toHaveTextContent('Luật #5 (+150%) lọt ngoài băng.');
+  });
+
+  it('band-warnings lỗi (backend cũ / thiếu quyền) → bỏ qua, danh sách vẫn hiện, không toast lỗi', async () => {
+    bandWarnings.mockRejectedValue(new Error('403'));
+    await setup([ONE_WAY]);
+    expect(screen.queryByTestId('band-warnings')).not.toBeInTheDocument();
+    expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
+  });
+
+  it('luật CŨ kiểu giá sàn: hiện "ngừng áp dụng" ở bảng; mở sửa thì có ghi chú đổi/xoá', async () => {
+    const floor = rule({ id: 20, name: 'Sàn cũ', adjustmentType: 'MIN_FLOOR', adjustmentValue: 150000 });
+    const { user } = await setup([floor]);
+    expect(within(rowOf('Sàn cũ')).getByText('ngừng áp dụng')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Sàn cũ' }));
+    const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
+    expect(within(dlg).getByRole('note')).toHaveTextContent('không còn được áp dụng vào giá');
   });
 
   it('giá trị ngoài biên bị chặn ở client: không gọi API, báo lý do', async () => {

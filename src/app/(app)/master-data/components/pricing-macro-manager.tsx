@@ -41,6 +41,7 @@ import {
   updatePricingMacroRule,
   deletePricingMacroRule,
   bulkDeletePricingMacroRules,
+  getPricingMacroBandWarnings,
 } from '@/lib/api';
 import {
   FORM_SERVICE_VALUES,
@@ -55,8 +56,10 @@ import {
   formServiceValue,
   formVehicleValue,
   formatMacroAdjustment,
+  isLegacyAdjustmentType,
   priorityError,
   serviceLabel,
+  summarizeWarnings,
   vehicleLabel,
 } from '@/lib/macro-bulk';
 import { MacroBulkDialog } from './macro-bulk-dialog';
@@ -65,6 +68,7 @@ import type {
   ProvinceOption,
   WardOption,
   MacroAdjustmentType,
+  MacroBandWarnings,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -100,7 +104,6 @@ export function PricingMacroManager() {
     destWardCode: string;
     adjustmentType: MacroAdjustmentType;
     adjustmentValue: number;
-    applyPerSeat: boolean;
     isBidirectional: boolean;
     note: string;
   }>({
@@ -115,10 +118,13 @@ export function PricingMacroManager() {
     destWardCode: '',
     adjustmentType: 'DELTA_AMOUNT',
     adjustmentValue: 0,
-    applyPerSeat: true,
-    isBidirectional: false,
+    // Spec bỏ-tuyến §5: luật MỚI mặc định HAI chiều (backend lưu `isBidirectional !== false`).
+    isBidirectional: true,
     note: '',
   });
+
+  // Băng chặn kết quả: luật % đang bật lọt ngoài biên (báo giá khớp có thể bị PRC_002). Không chặn thao tác.
+  const [bandWarnings, setBandWarnings] = React.useState<MacroBandWarnings | null>(null);
 
   // Chọn nhiều + tạo/xoá hàng loạt
   const [selectedIds, setSelectedIds] = React.useState<Set<number>>(new Set());
@@ -141,6 +147,10 @@ export function PricingMacroManager() {
       ]);
       setRules(fetchedRules || []);
       setProvinces(fetchedProvinces || []);
+      // Cảnh báo băng chặn: phụ — lỗi (backend cũ / thiếu quyền master-data) thì bỏ qua, không làm hỏng danh sách.
+      getPricingMacroBandWarnings()
+        .then((b) => setBandWarnings(b ?? null))
+        .catch(() => setBandWarnings(null));
       const alive = new Set((fetchedRules || []).map((r) => r.id));
       setSelectedIds((prev) => new Set(Array.from(prev).filter((id) => alive.has(id))));
     } catch (err: any) {
@@ -209,8 +219,7 @@ export function PricingMacroManager() {
       destWardCode: '',
       adjustmentType: 'DELTA_AMOUNT',
       adjustmentValue: 0,
-      applyPerSeat: true,
-      isBidirectional: false,
+      isBidirectional: true,
       note: '',
     });
     setOriginWards([]);
@@ -233,7 +242,6 @@ export function PricingMacroManager() {
       destWardCode: rule.destWardCode || '',
       adjustmentType: rule.adjustmentType,
       adjustmentValue: Number(rule.adjustmentValue),
-      applyPerSeat: rule.applyPerSeat,
       isBidirectional: rule.isBidirectional === true,
       note: rule.note || '',
     });
@@ -282,7 +290,8 @@ export function PricingMacroManager() {
         destWardCode: formData.destWardCode || null,
         adjustmentType: formData.adjustmentType,
         adjustmentValue: Number(formData.adjustmentValue) || 0,
-        applyPerSeat: formData.applyPerSeat,
+        // Backend luôn nhân theo ghế và từ chối `applyPerSeat=false`: gửi true cho khớp mọi phiên bản.
+        applyPerSeat: true,
         isBidirectional: formData.isBidirectional,
         note: formData.note ? formData.note.trim() : null,
       };
@@ -299,7 +308,14 @@ export function PricingMacroManager() {
           variant: 'destructive',
         });
       } else {
-        toast({ title: editingRule ? 'Cập nhật quy tắc macro thành công' : 'Tạo quy tắc macro thành công' });
+        const w = summarizeWarnings(saved.warnings);
+        toast({
+          title: editingRule ? 'Cập nhật quy tắc macro thành công' : 'Tạo quy tắc macro thành công',
+          description:
+            w.count > 0
+              ? `Có ${w.count} cảnh báo (không chặn): ${w.lines.join(' · ')}${w.more ? ` · … và ${w.more} cảnh báo khác` : ''}`
+              : undefined,
+        });
       }
 
       setDialogOpen(false);
@@ -445,6 +461,29 @@ export function PricingMacroManager() {
           </Button>
         </div>
       </div>
+
+      {bandWarnings && bandWarnings.warnings.length > 0 && (
+        <div role="alert" data-testid="band-warnings" className="rounded border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          <div className="font-semibold">
+            {bandWarnings.warnings.length} quy tắc % đang bật có thể làm báo giá bị từ chối
+          </div>
+          <div className="mt-0.5">
+            Giá sau điều chỉnh nằm ngoài băng cho phép
+            {bandWarnings.band?.minRatio != null && bandWarnings.band?.maxRatio != null
+              ? ` (tỉ lệ ${bandWarnings.band.minRatio}–${bandWarnings.band.maxRatio} × giá nền)`
+              : ''}
+            : báo giá khớp các quy tắc này sẽ bị từ chối (khách không đặt được chuyến). Hãy sửa mức % hoặc điều chỉnh băng.
+          </div>
+          <ul className="list-disc pl-5 mt-1 space-y-0.5">
+            {bandWarnings.warnings.slice(0, 5).map((w, i) => (
+              <li key={i}>{w.message}</li>
+            ))}
+          </ul>
+          {bandWarnings.warnings.length > 5 && (
+            <div className="mt-1 text-amber-700">… và {bandWarnings.warnings.length - 5} cảnh báo khác.</div>
+          )}
+        </div>
+      )}
 
       {/* ───────── RULES LIST TABLE ───────── */}
       <Card>
@@ -600,6 +639,15 @@ export function PricingMacroManager() {
                         >
                           {formatAdjustment(rule.adjustmentType, Number(rule.adjustmentValue), rule.applyPerSeat)}
                         </span>
+                        {isLegacyAdjustmentType(rule.adjustmentType) && (
+                          <Badge
+                            variant="outline"
+                            className="ml-1 text-[10px] h-4 px-1 bg-amber-50 text-amber-700 border-amber-200"
+                            title="Backend không còn áp loại sàn/trần vào giá"
+                          >
+                            ngừng áp dụng
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         <Button
@@ -850,10 +898,19 @@ export function PricingMacroManager() {
                   <SelectContent>
                     <SelectItem value="DELTA_AMOUNT">Cộng/Trừ tiền cố định (± VNĐ)</SelectItem>
                     <SelectItem value="PERCENTAGE">Theo phần trăm (± %)</SelectItem>
-                    <SelectItem value="MIN_FLOOR">Giá sàn tối thiểu (VNĐ)</SelectItem>
-                    <SelectItem value="MAX_CEILING">Giá trần tối đa (VNĐ)</SelectItem>
+                    {/* Sàn/trần: backend đã ngừng áp dụng và không cho tạo mới — chỉ hiện khi đang mở một luật cũ. */}
+                    {isLegacyAdjustmentType(formData.adjustmentType) && (
+                      <SelectItem value={formData.adjustmentType} disabled>
+                        {formData.adjustmentType === 'MIN_FLOOR' ? 'Giá sàn tối thiểu' : 'Giá trần tối đa'} (đã ngừng áp dụng)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
+                {isLegacyAdjustmentType(formData.adjustmentType) && (
+                  <div role="note" className="text-[11px] text-amber-700">
+                    Quy tắc kiểu sàn/trần không còn được áp dụng vào giá. Hãy đổi sang cộng/trừ tiền hoặc %, hoặc xoá quy tắc.
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1">
@@ -872,22 +929,12 @@ export function PricingMacroManager() {
                   required
                 />
                 <div className="text-[11px] text-slate-400">{adjustmentValueHint(formData.adjustmentType)}</div>
+                <div className="text-[11px] text-slate-400">Đi ghép: mức này áp lên giá MỘT ghế, sau đó nhân số ghế.</div>
               </div>
             </div>
 
-            {/* Checkbox per seat & priority */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-              <div className="flex items-center space-x-2 pt-2">
-                <Checkbox
-                  id="applyPerSeat"
-                  checked={formData.applyPerSeat}
-                  onCheckedChange={(c) => setFormData((prev) => ({ ...prev, applyPerSeat: !!c }))}
-                />
-                <Label htmlFor="applyPerSeat" className="text-xs font-normal cursor-pointer">
-                  Áp dụng nhân theo số ghế (khi đi ghép xe)
-                </Label>
-              </div>
-
+            {/* Độ ưu tiên (backend luôn nhân theo số ghế khi đi ghép — không còn tuỳ chọn applyPerSeat) */}
+            <div className="grid grid-cols-1 gap-3 items-center">
               <div className="space-y-1">
                 <Label className="text-xs font-semibold">Độ ưu tiên (số càng cao càng thắng khi chi tiết như nhau)</Label>
                 <Input

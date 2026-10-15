@@ -1,4 +1,4 @@
-import type { BulkMacroSkippedItem, MacroAdjustmentType, MacroEndSelector } from './types';
+import type { BulkMacroSkippedItem, MacroAdjustmentType, MacroEndSelector, MacroRuleWarning } from './types';
 
 /**
  * Hàm thuần cho màn "Điều chỉnh khu vực" (macro định giá): tạo/xoá hàng loạt, nhãn dịch vụ/xe, biên giá trị.
@@ -22,6 +22,23 @@ export const MACRO_VALUE_LIMITS = {
   PRICE_MAX: 20_000_000,
   NAME_PREFIX_MAX: 60,
 } as const;
+
+/**
+ * Loại điều chỉnh backend KHÔNG còn áp và không cho tạo mới (MIN_FLOOR/MAX_CEILING). Chỉ để hiển thị luật cũ
+ * và để form biết đường cho phép giữ giá trị hiện có khi mở một luật cũ.
+ */
+export function isLegacyAdjustmentType(type: string): boolean {
+  return type === 'MIN_FLOOR' || type === 'MAX_CEILING';
+}
+
+/** Tóm tắt cảnh báo của backend để đưa vào toast/hộp kết quả: tối đa `max` dòng + "và N cảnh báo khác". */
+export function summarizeWarnings(
+  warnings: MacroRuleWarning[] | null | undefined,
+  max = 3,
+): { count: number; lines: string[]; more: number } {
+  const list = Array.isArray(warnings) ? warnings.filter((w) => w && typeof w.message === 'string') : [];
+  return { count: list.length, lines: list.slice(0, max).map((w) => w.message), more: Math.max(0, list.length - max) };
+}
 
 /** Một điểm đón/trả trong danh sách tạo hàng loạt: cả tỉnh (không có wardCode) hoặc một phường/xã. */
 export type MacroEndpoint = {
