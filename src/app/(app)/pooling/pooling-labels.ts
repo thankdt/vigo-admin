@@ -12,6 +12,7 @@ export const REJECT_LABEL: Record<PoolRejectReason, string> = {
   DAT_LAI: 'Khách đặt lại',
   LECH_GIO: 'Lệch giờ',
   QUA_GHE: 'Quá số ghế',
+  KHAC_CAP_TINH: 'Khác cặp tỉnh',
   DON_LECH_HANH_LANG: 'Điểm đón lệch tuyến',
   TRA_LECH_HANH_LANG: 'Điểm trả lệch tuyến',
   NGUOC_CHIEU: 'Ngược chiều',
@@ -23,10 +24,24 @@ export const REJECT_HINT: Record<PoolRejectReason, string> = {
   DAT_LAI: 'Trùng điểm đón/trả và sát giờ — cùng một chuyến đặt lại, không phải hai khách.',
   LECH_GIO: 'Giờ đón cách nhau quá khung cho phép.',
   QUA_GHE: 'Cộng vào thì vượt sức chứa xe.',
+  KHAC_CAP_TINH:
+    'Khác cặp (tỉnh đón → tỉnh trả) với chuyến chủ — Hà Nội → Hải Phòng không ghép với Hải Phòng → Hà Nội — hoặc một đầu chưa có mã tỉnh. Cả nhóm phải cùng tập tỉnh để tài xế nhận được trọn nhóm.',
   DON_LECH_HANH_LANG: 'Điểm đón nằm quá xa lộ trình của chuyến chủ.',
   TRA_LECH_HANH_LANG: 'Điểm trả nằm quá xa lộ trình của chuyến chủ.',
   NGUOC_CHIEU: 'Điểm trả nằm TRƯỚC điểm đón dọc tuyến — chạy ngược, tài xế phải quay đầu.',
 };
+
+/**
+ * Nhãn/giải thích cho một lý do bất kỳ từ API. Lý do LẠ (backend thêm luật mới trước khi admin
+ * kịp cập nhật) hiện mã gốc thay vì "undefined" — vẫn thấy được có luật loại, chỉ chưa dịch.
+ */
+export function rejectLabel(reason: string): string {
+  return (REJECT_LABEL as Record<string, string>)[reason] ?? reason;
+}
+
+export function rejectHint(reason: string): string | undefined {
+  return (REJECT_HINT as Record<string, string>)[reason];
+}
 
 /** Ngày VN hôm nay dạng YYYY-MM-DD, không phụ thuộc múi giờ máy admin. */
 export function vnToday(): string {

@@ -63,7 +63,7 @@ describe('/reports', () => {
     await waitFor(() => expect(getReportQuery).toHaveBeenCalled());
     const spec = getReportQuery.mock.calls[0][0];
     expect(spec.cube).toBe('booking');
-    expect(spec.dims).toEqual(['route', 'cancelPhase']);
+    expect(spec.dims).toEqual(['provinceFrom', 'provinceTo', 'cancelPhase']);
     const expectedToday = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
     expect(spec.from).toBe(expectedToday);
     expect(spec.to).toBe(expectedToday);
@@ -115,7 +115,34 @@ describe('/reports', () => {
     const [sentSpec] = getReportRows.mock.calls[0];
     expect(sentSpec.filters.route).toEqual(['HN-HP']);
     expect(sentSpec.cube).toBe('booking');
-    expect(sentSpec.dims).toEqual(['route', 'cancelPhase']); // spec của preset đang chọn, không tự dựng lại
+    expect(sentSpec.dims).toEqual(['provinceFrom', 'provinceTo', 'cancelPhase']); // spec của preset đang chọn, không tự dựng lại
+  });
+
+  it('preset cặp tỉnh: dòng "Hà Nội → Hải Phòng" drill-down lọc theo CẢ HAI tỉnh và tiêu đề đọc ra hướng đi', async () => {
+    getReportQuery.mockResolvedValue(
+      makeResult({
+        columns: [
+          { key: 'provinceFrom', label: 'Tỉnh đi', type: 'dim' },
+          { key: 'provinceTo', label: 'Tỉnh đến', type: 'dim' },
+          { key: 'cancelPhase', label: 'Giai đoạn huỷ', type: 'dim' },
+          { key: 'created', label: 'Tạo mới', type: 'measure' },
+        ],
+        rows: [
+          { dims: { provinceFrom: 'Hà Nội', provinceTo: 'Hải Phòng', cancelPhase: 'Huỷ trước khi có tài' }, measures: { created: 8 } },
+        ],
+      }),
+    );
+    render(<ReportsPage />);
+    expect(await screen.findByText('Tỉnh đi')).toBeInTheDocument();
+    expect(screen.getByText('Tỉnh đến')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Hải Phòng').closest('tr')!);
+
+    await waitFor(() => expect(getReportRows).toHaveBeenCalled());
+    const [sentSpec] = getReportRows.mock.calls[0];
+    expect(sentSpec.filters.provinceFrom).toEqual(['Hà Nội']);
+    expect(sentSpec.filters.provinceTo).toEqual(['Hải Phòng']);
+    expect(await screen.findByText(/Chuyến trong ô: Hà Nội → Hải Phòng · Huỷ trước khi có tài/)).toBeInTheDocument();
   });
 
   it('bấm sang dòng khác trong khi drill-down đang mở ở trang 2 thì phiên mới bắt đầu lại ở trang 1', async () => {

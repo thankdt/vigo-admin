@@ -21,8 +21,10 @@ import {
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toastApiError } from '@/hooks/use-api-error-toast';
 import { useToast } from '@/hooks/use-toast';
+import { useProvinceOptions } from '@/hooks/use-province-options';
 import { useAuth } from '@/lib/auth-context';
 import { getBookings, getCustomerCallReasons, recordBookingCustomerCall } from '@/lib/api';
+import { provincePairLabel } from '@/lib/province-labels';
 import type { Booking, CustomerCallStatus } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { formatVnDateTime } from '../leakage-review/leakage-labels';
@@ -56,6 +58,8 @@ const BASE_COLS = 5;
 export default function CrmQueuePage() {
   const { me, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  // Tên tỉnh cho cột "Hành trình". Soft-fail: tải lỗi thì "01" vẫn có nhãn, mã khác hiện "Mã tỉnh <mã>".
+  const { names: provinceNames } = useProvinceOptions();
 
   const [tab, setTab] = React.useState<QueueTab>('before');
   const [page, setPage] = React.useState(1);
@@ -281,7 +285,7 @@ export default function CrmQueuePage() {
           <TableHeader>
             <TableRow>
               <TableHead>Khách</TableHead>
-              <TableHead>Tuyến</TableHead>
+              <TableHead>Hành trình</TableHead>
               <TableHead>Giờ đón / hoàn thành</TableHead>
               <TableHead>Đã chờ</TableHead>
               {showOwnerCol && <TableHead>Người giữ việc</TableHead>}
@@ -316,7 +320,11 @@ export default function CrmQueuePage() {
                       <p className="font-medium">{b.customer?.fullName || '—'}</p>
                       <p className="text-xs text-muted-foreground">{b.customer?.phone || '—'}</p>
                     </TableCell>
-                    <TableCell className="text-sm">{b.route?.name || '—'}</TableCell>
+                    {/* Cặp tỉnh đón → trả (chuyến mới không còn tuyến); chuyến LỊCH SỬ chưa có
+                        mã tỉnh mới rơi về tên tuyến cũ. */}
+                    <TableCell className="text-sm">
+                      {provincePairLabel(b.pickupProvinceCode, b.dropoffProvinceCode, provinceNames) || b.route?.name || '—'}
+                    </TableCell>
                     <TableCell className="whitespace-nowrap text-sm">
                       {formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}
                     </TableCell>

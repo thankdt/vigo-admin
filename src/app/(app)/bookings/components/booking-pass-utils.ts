@@ -1,6 +1,7 @@
 import type { Booking } from '@/lib/types';
 import { formatScheduleWindow } from './schedule-window';
 import { formatVnDateTime } from '../../leakage-review/leakage-labels';
+import { provincePairLabel, type ProvinceNameMap } from '@/lib/province-labels';
 
 export const PASS_VEHICLE_TYPE_MAP: Record<string, string> = {
   CAR_4: 'Xe 4 chỗ',
@@ -26,7 +27,7 @@ export const getAddressText = (addr: string | { address: string; lat?: number; l
  * Tạo nội dung văn bản tổng hợp thông tin chuyến đi để CSKH copy pass vào nhóm Zalo/Telegram.
  * Bao gồm: từ đâu đến đâu, bao xa, sdt khách, bao nhiêu tiền, đi bao người, xe mấy chỗ, hẹn giờ đi.
  */
-export function buildTripPassText(booking: Booking): string {
+export function buildTripPassText(booking: Booking, provinceNames: ProvinceNameMap = {}): string {
   const pickup = getAddressText(booking.pickupAddress);
   const dropoff = getAddressText(booking.dropoffAddress);
 
@@ -42,13 +43,20 @@ export function buildTripPassText(booking: Booking): string {
     timeText = formatVnDateTime(booking.scheduledTime);
   }
 
-  // Khoảng cách & Tuyến đường
+  // Khoảng cách & hành trình. Cặp tỉnh là trục chính (bỏ tuyến 10/2026); tên tuyến chỉ còn cho
+  // chuyến LỊCH SỬ chưa có mã tỉnh.
   const distanceKm = booking.distanceKm != null ? `${Number(booking.distanceKm).toFixed(1)} km` : null;
+  const provincePair = provincePairLabel(booking.pickupProvinceCode, booking.dropoffProvinceCode, provinceNames);
+  const journey = provincePair
+    ? `🛣 Hành trình: ${provincePair}`
+    : booking.route?.name
+      ? `🛣 Tuyến đường: ${booking.route.name}`
+      : null;
   let routeLine: string | null = null;
-  if (booking.route?.name && distanceKm) {
-    routeLine = `🛣 Tuyến đường: ${booking.route.name} (${distanceKm})`;
-  } else if (booking.route?.name) {
-    routeLine = `🛣 Tuyến đường: ${booking.route.name}`;
+  if (journey && distanceKm) {
+    routeLine = `${journey} (${distanceKm})`;
+  } else if (journey) {
+    routeLine = journey;
   } else if (distanceKm) {
     routeLine = `📏 Khoảng cách: ${distanceKm}`;
   }

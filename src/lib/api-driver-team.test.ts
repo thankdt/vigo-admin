@@ -21,16 +21,28 @@ afterEach(() => vi.unstubAllGlobals());
 
 const urlOf = () => String(fetchMock.mock.calls[0][0]);
 
-describe('getTeamRouteDrivers', () => {
-  it("routeId 'none' đi vào path, KHÔNG bị ép thành số", async () => {
-    const { getTeamRouteDrivers } = await import('./api');
-    await getTeamRouteDrivers('none', { from: '2026-08-01', to: '2026-08-31' });
-    expect(urlOf()).toContain('/admin/driver-team/routes/none/drivers');
+describe('getTeamProvinceDrivers', () => {
+  it("mã 'none' đi vào path (nhóm chưa xác định tỉnh), KHÔNG bị ép thành số", async () => {
+    const { getTeamProvinceDrivers } = await import('./api');
+    await getTeamProvinceDrivers('none', { from: '2026-08-01', to: '2026-08-31' });
+    expect(urlOf()).toContain('/admin/driver-team/provinces/none/drivers');
+  });
+
+  it('mã tỉnh 2 chữ số giữ nguyên số 0 đầu ở path', async () => {
+    const { getTeamProvinceDrivers } = await import('./api');
+    await getTeamProvinceDrivers('01', { from: '2026-08-01', to: '2026-08-31' });
+    expect(urlOf()).toContain('/admin/driver-team/provinces/01/drivers');
+  });
+
+  it('KHÔNG còn gọi API theo tuyến cũ', async () => {
+    const { getTeamProvinceDrivers } = await import('./api');
+    await getTeamProvinceDrivers('31', { from: '2026-08-01', to: '2026-08-31' });
+    expect(urlOf()).not.toContain('/routes');
   });
 
   it('bỏ qua field rỗng, không gửi param rác', async () => {
-    const { getTeamRouteDrivers } = await import('./api');
-    await getTeamRouteDrivers(12, {
+    const { getTeamProvinceDrivers } = await import('./api');
+    await getTeamProvinceDrivers('31', {
       from: '2026-08-01', to: '2026-08-31', q: '', stage: undefined,
     });
     const url = urlOf();
@@ -39,45 +51,58 @@ describe('getTeamRouteDrivers', () => {
   });
 
   it('gửi from/to đúng dạng VN YYYY-MM-DD', async () => {
-    const { getTeamRouteDrivers } = await import('./api');
-    await getTeamRouteDrivers(12, { from: '2026-08-01', to: '2026-08-31' });
+    const { getTeamProvinceDrivers } = await import('./api');
+    await getTeamProvinceDrivers('31', { from: '2026-08-01', to: '2026-08-31' });
     expect(urlOf()).toContain('from=2026-08-01');
     expect(urlOf()).toContain('to=2026-08-31');
   });
+
+  it('thiếu data/meta thì rơi về mảng rỗng + meta mặc định (backend cũ không vỡ)', async () => {
+    fetchMock.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) });
+    const { getTeamProvinceDrivers } = await import('./api');
+    const out = await getTeamProvinceDrivers('31', { from: '2026-08-01', to: '2026-08-31' });
+    expect(out.data).toEqual([]);
+    expect(out.meta.total).toBe(0);
+  });
 });
 
-describe('getTeamRoutes', () => {
-  it('đọc đúng shape {routes, unassigned} — KHÔNG phải {data, meta}', async () => {
+describe('getTeamProvinces', () => {
+  it('đọc đúng shape {provinces, unknown} — KHÔNG phải {data, meta}', async () => {
     fetchMock.mockResolvedValue({
       ok: true,
       status: 200,
       json: async () => ({
         success: true,
         data: {
-          routes: [{ routeId: 1, routeName: 'HN – HP' }],
-          unassigned: { routeId: null, routeName: 'Không gắn tuyến' },
+          provinces: [{ provinceCode: '31', provinceName: 'Hải Phòng' }],
+          unknown: { provinceCode: null, provinceName: 'Chưa xác định tỉnh' },
           range: { from: '2026-08-01', to: '2026-08-31' },
+          bucketNote: 'Mỗi chuyến được đếm ở mọi tỉnh…',
         },
       }),
     });
-    const { getTeamRoutes } = await import('./api');
+    const { getTeamProvinces } = await import('./api');
 
-    const out = await getTeamRoutes({ from: '2026-08-01', to: '2026-08-31' });
+    const out = await getTeamProvinces({ from: '2026-08-01', to: '2026-08-31' });
 
-    expect(out.routes).toHaveLength(1);
-    expect(out.unassigned?.routeId).toBeNull();
+    expect(urlOf()).toContain('/admin/driver-team/provinces?');
+    expect(out.provinces).toHaveLength(1);
+    expect(out.unknown?.provinceCode).toBeNull();
+    expect(out.bucketNote).toContain('Mỗi chuyến');
   });
 
-  it('gửi q để lọc theo tên tuyến', async () => {
+  it('gửi q để lọc theo tên tỉnh và driverQ để tìm tài xế', async () => {
     fetchMock.mockResolvedValue({
       ok: true, status: 200,
-      json: async () => ({ success: true, data: { routes: [], unassigned: null } }),
+      json: async () => ({ success: true, data: { provinces: [], unknown: null } }),
     });
-    const { getTeamRoutes } = await import('./api');
-    await getTeamRoutes({ from: '2026-08-01', to: '2026-08-31', q: 'Hải Phòng' });
+    const { getTeamProvinces } = await import('./api');
+    await getTeamProvinces({ from: '2026-08-01', to: '2026-08-31', q: 'Hải Phòng', driverQ: 'Nguyễn' });
     // Đọc qua searchParams thay vì so chuỗi: URLSearchParams mã hoá khoảng trắng
     // thành '+', so chuỗi thô sẽ fail dù URL hoàn toàn đúng.
-    expect(new URL(urlOf()).searchParams.get('q')).toBe('Hải Phòng');
+    const sp = new URL(urlOf()).searchParams;
+    expect(sp.get('q')).toBe('Hải Phòng');
+    expect(sp.get('driverQ')).toBe('Nguyễn');
   });
 });
 
@@ -102,5 +127,16 @@ describe('patchTeamMember', () => {
     const { patchTeamMember } = await import('./api');
     await patchTeamMember('d1', { ownerAdminUserId: null });
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ ownerAdminUserId: null });
+  });
+
+  it('assignedProvinceCodes gửi nguyên mảng; [] VẪN được gửi (nghĩa là bỏ hết tỉnh)', async () => {
+    const { patchTeamMember } = await import('./api');
+    await patchTeamMember('d1', { assignedProvinceCodes: ['31', '22'] });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({
+      assignedProvinceCodes: ['31', '22'],
+    });
+    fetchMock.mockClear();
+    await patchTeamMember('d1', { assignedProvinceCodes: [] });
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ assignedProvinceCodes: [] });
   });
 });

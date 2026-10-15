@@ -121,6 +121,13 @@ export type TransportCompany = {
   updatedAt?: string;
 }
 
+/** Một tỉnh hoạt động của tài. `gisCode` (mã gis 2 số, '01' = Nội đô Hà Nội) vắng ở backend cũ. */
+export type DriverProvince = {
+  id: number;
+  name: string;
+  gisCode?: string;
+};
+
 export type Driver = {
   id: string;
   name?: string;
@@ -188,26 +195,22 @@ export type Driver = {
   // Ảnh giấy xác nhận HTX (admin upload hộ). 1 ảnh, S3 key; rỗng = chưa có.
   htxConfirmationImage?: string;
   enabledDropoffDistricts?: number[];
-  fixedRouteId?: number;
   enabledServices?: string[];
   isSubmittedForApproval?: boolean;
   createdAt?: string;
+  /** @deprecated Tuyến đã bỏ: backend vẫn trả khoá này nhưng rỗng. Đừng đọc cho vùng hoạt động. */
   fixedRoute?: {
     id: number;
     name: string;
   };
-  // Multi-route: backend started returning the M2M `routes` collection
-  // alongside the legacy `fixedRoute`. Old admin code only reads
-  // `fixedRoute`; new components prefer `routes` and fall back when empty.
+  /** @deprecated Tuyến đã bỏ: backend vẫn trả khoá này nhưng luôn rỗng. */
   routes?: {
     id: number;
     name: string;
   }[];
-  // 2025 Admin Reform: Surviving provinces selected by the driver
-  provinces?: {
-    id: number;
-    name: string;
-  }[];
+  // Tỉnh hoạt động (34 tỉnh sau sáp nhập), nguồn `driver_service_provinces`. Tài đã duyệt mà
+  // mảng này rỗng thì KHÔNG bật được "Sẵn sàng" (DRV_PROVINCE_REQUIRED). Undefined = backend cũ.
+  provinces?: DriverProvince[];
   transportCompanyId?: string;
   transportCompany?: TransportCompany;
   customTransportCompanyName?: string;
@@ -412,11 +415,14 @@ export type Booking = {
   driverEarnings?: DriverEarnings;
   finalPriceVAT?: number;
   distanceKm?: number;
-  // Defined route this trip priced against. null = legacy booking from
-  // before the routeId column existed, or runtime fell through to km-based
-  // pricing because nothing in defined_routes matched.
+  // LEGACY (bỏ tuyến 10/2026): tuyến của chuyến TẠO TRƯỚC khi bỏ tuyến. Chuyến mới luôn null —
+  // trục địa lý hiện là cặp tỉnh bên dưới. Chỉ hiển thị như dữ liệu lịch sử.
   routeId?: number | null;
   route?: { id: number; name: string } | null;
+  // Snapshot địa lý gis (34 tỉnh) hai đầu chuyến, BE stamp lúc tạo từ toạ độ. null/thiếu = chuyến
+  // cũ chưa backfill hoặc BE chưa deploy — luôn xử lý tường minh. '01' = Nội đô Hà Nội.
+  pickupProvinceCode?: string | null;
+  dropoffProvinceCode?: string | null;
   // Vi-now: customer shows a 6-digit code to a nearby driver to claim the
   // trip directly, bypassing dispatch. Admin needs to spot these at a
   // glance because the customer journey + UI flow differ from a normal
@@ -532,6 +538,8 @@ export type AdminUnit = {
   isPoi?: boolean;
   // Constituent old provinces (pre-2025 merger)
   oldProvinces?: string[];
+  // Mã tỉnh gis (2 số) — chỉ có ở GET /drivers/provinces của backend mới.
+  gisCode?: string;
 };
 
 export type Route = {
@@ -950,7 +958,11 @@ export type DriverTeamEventType = 'STAGE_CHANGE' | 'CALL' | 'NOTE' | 'ASSIGN' | 
 
 export type TeamMemberState = {
   stage: DriverTeamStage;
-  assignedRouteIds: number[];
+  /**
+   * Tỉnh admin giao cho tài (mã gis 2 chữ số, '01' = Nội đô Hà Nội). Thay `assignedRouteIds`
+   * (tuyến đã bỏ — backend luôn trả `[]`). Optional để backend cũ chưa có field không làm vỡ màn.
+   */
+  assignedProvinceCodes?: string[];
   ownerAdminUserId: string | null;
   ownerAdminName: string | null;
   nextFollowUpAt: string | null;
@@ -960,10 +972,13 @@ export type TeamMemberState = {
   commissionRate?: number | null;
 };
 
-/** Một dòng cấp 1. routeId null = hàng gộp "Không gắn tuyến". */
-export type TeamRouteRow = {
-  routeId: number | null;
-  routeName: string;
+/**
+ * Một dòng cấp 1 theo TỈNH. provinceCode null = hàng "Chưa xác định tỉnh". Chuyến X↔Y được đếm ở CẢ
+ * dòng X lẫn dòng Y nên cộng các dòng ra số LỚN HƠN tổng chuyến (xem `bucketNote` của response).
+ */
+export type TeamProvinceRow = {
+  provinceCode: string | null;
+  provinceName: string;
   driverCount: number;
   /** Đếm theo completedAt. KHÁC mốc với totalBookings — đừng chia cho nhau. */
   completedTrips: number;
@@ -972,20 +987,22 @@ export type TeamRouteRow = {
   lastCompletedAt: string | null;
   contactedCount: number;
   joinedCount: number;
-  /** Số tài KHỚP từ khoá tìm tài xế trên tuyến này; 0 khi không tìm kiếm. */
+  /** Số tài KHỚP từ khoá tìm tài xế ở tỉnh này; 0 khi không tìm kiếm. */
   matchedDriverCount: number;
 };
 
-/** Một dòng cấp 2 — cặp (tài × tuyến). */
+/** Một dòng cấp 2 — cặp (tài × tỉnh). */
 export type TeamDriverRow = {
   driverId: string;
   fullName: string | null;
   phone: string | null;
   transportCompanyName: string | null;
-  tripsOnRoute: number;
-  tripsAllRoutes: number;
+  /** Số chuyến của tài TRONG tỉnh đang xem. */
+  tripsInProvince: number;
+  /** Tổng chuyến của tài trong kỳ, mỗi chuyến một lần (không phải tổng các tỉnh). */
+  tripsAll: number;
   /** 0..1, backend tính sẵn. */
-  shareOfRoute: number;
+  shareOfProvince: number;
   lastCompletedAt: string | null;
   /** Chuyến đầu tiên TRONG KỲ đang lọc, không phải chuyến đầu tiên từng chạy. */
   firstCompletedAt: string | null;
@@ -1023,20 +1040,25 @@ export type DriverTeamEvent = {
   createdAt: string;
 };
 
-export type TeamRouteRun = {
-  routeId: number | null;
-  name: string | null;
-  /** true = tuyến đã xoá mềm → hiện "Tuyến đã xoá (#id)" thay vì tên. */
-  routeDeleted?: boolean;
+/** Chuyến hoàn thành trong kỳ của một tài ở một tỉnh (chuyến X↔Y nằm ở cả X và Y). */
+export type TeamProvinceRun = {
+  /** null = chuyến chưa xác định tỉnh. */
+  provinceCode: string | null;
+  provinceName: string;
   trips: number;
 };
 
 export type DriverTeamDetail = {
   team: TeamMemberState | null;
   events: DriverTeamEvent[];
-  routesRun: TeamRouteRun[];
-  /** Tuyến tài ĐĂNG KÝ — đối chiếu với routesRun để thấy chỗ lệch. */
-  registeredRouteIds: number[];
+  /** Tỉnh thực chạy trong kỳ. Backend cũ chưa có field này → coi như rỗng. */
+  provincesRun?: TeamProvinceRun[];
+  /** Tỉnh tài ĐĂNG KÝ hoạt động (driver_service_provinces) — đối chiếu với provincesRun. */
+  registeredProvinceCodes?: string[];
+  /** Cùng độ dài + thứ tự với registeredProvinceCodes. */
+  registeredProvinceNames?: string[];
+  /** Câu giải thích luật đếm theo tỉnh, do backend trả kèm. */
+  bucketNote?: string;
 };
 
 export type TeamOwner = { id: string; fullName: string | null; phone: string | null };
@@ -1055,9 +1077,10 @@ export type TeamMemberRow = {
   commissionRate: number | null;
   ownerAdminUserId: string | null;
   ownerName: string | null;
-  assignedRouteIds: number[];
-  /** Cùng độ dài + cùng thứ tự với assignedRouteIds. Tuyến xoá mềm → "Tuyến đã xoá (#id)". */
-  assignedRouteNames: string[];
+  /** Tỉnh được giao (mã gis). Optional: backend cũ chỉ có assignedRouteIds/Names (luôn rỗng giờ). */
+  assignedProvinceCodes?: string[];
+  /** Cùng độ dài + cùng thứ tự với assignedProvinceCodes ('01' = "Nội đô Hà Nội"). */
+  assignedProvinceNames?: string[];
   nextFollowUpAt: string | null;
   stageChangedAt: string | null;
   createdAt: string;
@@ -1169,6 +1192,40 @@ export type WardOption = {
   code: string;
   name: string;
   provinceCode: string;
+};
+
+/** Điểm đặc biệt (sân bay…) — `GET pricing/special-zones`. Polygon KHÔNG có API (chỉ nạp bằng migration). */
+export type SpecialZone = {
+  code: string;
+  name: string;
+  provinceCode: string;
+  provinceName: string | null;
+  /** Loại vùng (vd 'AIRPORT'); giữ string vì DB có thể chứa loại màn chưa biết. */
+  kind: string;
+  active: boolean;
+};
+
+/** Một hàng đồng giá — `wardCode` null = hàng mặc định cho cả tỉnh của vùng. Giá null = không áp cho loại đó. */
+export type SpecialZoneFlatPrice = {
+  id: number;
+  zoneCode: string;
+  wardCode: string | null;
+  wardName: string | null;
+  pricePerSeatGhep: number | null;
+  priceCar4: number | null;
+  priceCar7: number | null;
+  note: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
+
+/** Body `PUT pricing/special-zones/:code/flat-prices` — ghi đè CẢ hàng; 4 khoá đầu BẮT BUỘC có mặt (null được). */
+export type UpsertSpecialZoneFlatPriceRequest = {
+  wardCode: string | null;
+  pricePerSeatGhep: number | null;
+  priceCar4: number | null;
+  priceCar7: number | null;
+  note?: string | null;
 };
 
 export type SimulatePricingMacroDto = {

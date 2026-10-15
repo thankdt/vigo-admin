@@ -1,14 +1,20 @@
-import { commissionRateLabel, formatShare, stageLabel, vnDay } from './driver-team-labels';
+import {
+  assignedProvinceLabels,
+  commissionRateLabel,
+  formatShare,
+  stageLabel,
+  vnDay,
+} from './driver-team-labels';
 import type { TeamDriverRow, TeamMemberRow } from './types';
 
 export const EXPORT_HEADER = [
-  'Tuyến',
+  'Tỉnh',
   'Tài xế',
   'SĐT',
   'Đơn vị vận tải',
-  'Chuyến trên tuyến',
-  'Tỉ trọng tuyến',
-  'Tổng chuyến mọi tuyến',
+  'Chuyến trong tỉnh',
+  'Tỉ trọng trong tỉnh',
+  'Tổng chuyến (mỗi chuyến một lần)',
   'Chuyến gần nhất',
   'Trạng thái',
   'Người phụ trách',
@@ -23,24 +29,24 @@ const day = (iso: string | null | undefined) => {
 };
 
 /**
- * Ma trận dòng cho xlsx. Xuất PHẲNG (mỗi dòng là một cặp tài × tuyến) vì file này
+ * Ma trận dòng cho xlsx. Xuất PHẲNG (mỗi dòng là một cặp tài × tỉnh) vì file này
  * để mang đi gọi điện, phẳng dễ dùng hơn cấu trúc lồng.
  * Số giữ dạng number để Excel sort/sum; SĐT giữ dạng string vì ép sang number sẽ
  * mất số 0 đầu.
  */
 export function buildExportRows(
-  items: { routeName: string; driver: TeamDriverRow }[],
+  items: { provinceName: string; driver: TeamDriverRow }[],
   cap = 1000,
 ): { rows: (string | number)[][]; truncated: number } {
   const kept = items.slice(0, cap);
-  const rows = kept.map(({ routeName, driver: d }) => [
-    routeName,
+  const rows = kept.map(({ provinceName, driver: d }) => [
+    provinceName,
     d.fullName ?? '',
     d.phone ?? '',
     d.transportCompanyName ?? '',
-    d.tripsOnRoute,
-    formatShare(d.shareOfRoute),
-    d.tripsAllRoutes,
+    d.tripsInProvince,
+    formatShare(d.shareOfProvince),
+    d.tripsAll,
     day(d.lastCompletedAt),
     stageLabel(d.team?.stage ?? null),
     d.team?.ownerAdminName ?? '',
@@ -56,7 +62,7 @@ export const MEMBER_EXPORT_HEADER = [
   'Trạng thái',
   '% hoa hồng',
   'Người phụ trách',
-  'Tuyến phụ trách',
+  'Tỉnh phụ trách',
   'Hẹn gọi lại',
   'Ngày vào team',
   'Chuyến trong kỳ',
@@ -65,7 +71,7 @@ export const MEMBER_EXPORT_HEADER = [
 
 /**
  * Xuất PHẲNG tab "Đội tài" — mỗi dòng MỘT tài, khác `buildExportRows` (mỗi dòng
- * một cặp tài × tuyến của tab "Theo tuyến"). Không phụ thuộc khoảng ngày để lọc
+ * một cặp tài × tỉnh của tab "Theo tỉnh"). Không phụ thuộc khoảng ngày để lọc
  * bớt người — cột "Chuyến trong kỳ"/"Chuyến gần nhất" chỉ PHẢN ÁNH khoảng ngày
  * đang chọn, không phải điều kiện lọc (xem team-members-table.tsx).
  */
@@ -84,7 +90,7 @@ export function buildMemberExportRows(
       stageLabel(m.stage),
       commission.text,
       m.ownerName ?? '',
-      m.assignedRouteNames.join(', '),
+      assignedProvinceLabels(m).join(', '),
       day(m.nextFollowUpAt),
       // "Ngày vào team" ước lượng bằng stageChangedAt (fallback createdAt cho
       // tài chưa từng đổi stage kể từ khi tạo row) — DB không có cột riêng

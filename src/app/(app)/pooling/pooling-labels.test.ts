@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { buildGroupText, delayLabel, lastScanText, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, addressText, shortId, vnTime, vnToday } from './pooling-labels';
+import { buildGroupText, delayLabel, lastScanText, formatVnd, maskPhone, REJECT_HINT, REJECT_LABEL, rejectHint, rejectLabel, addressText, shortId, vnTime, vnToday } from './pooling-labels';
 
 describe('pooling-labels', () => {
   afterEach(() => vi.useRealTimers());
@@ -10,6 +10,19 @@ describe('pooling-labels', () => {
       expect(REJECT_HINT[key as keyof typeof REJECT_HINT]).toBeTruthy();
     }
     expect(Object.keys(REJECT_LABEL)).toHaveLength(Object.keys(REJECT_HINT).length);
+  });
+
+  it('KHAC_CAP_TINH (khác cặp tỉnh có thứ tự) có nhãn tiếng Việt và giải thích hướng đi', () => {
+    expect(REJECT_LABEL.KHAC_CAP_TINH).toBe('Khác cặp tỉnh');
+    expect(REJECT_HINT.KHAC_CAP_TINH).toMatch(/Hà Nội → Hải Phòng/);
+    expect(REJECT_HINT.KHAC_CAP_TINH).toMatch(/chưa có mã tỉnh/);
+    expect(rejectLabel('KHAC_CAP_TINH')).toBe('Khác cặp tỉnh');
+    expect(rejectHint('KHAC_CAP_TINH')).toBe(REJECT_HINT.KHAC_CAP_TINH);
+  });
+
+  it('lý do LẠ (backend thêm luật trước admin) hiện mã gốc, không phải "undefined"', () => {
+    expect(rejectLabel('LUAT_MOI')).toBe('LUAT_MOI');
+    expect(rejectHint('LUAT_MOI')).toBeUndefined();
   });
 
   it('vnToday theo giờ VN, không theo giờ máy admin', () => {

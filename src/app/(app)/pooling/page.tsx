@@ -41,8 +41,8 @@ import {
   delayLabel,
   formatVnd,
   maskPhone,
-  REJECT_HINT,
-  REJECT_LABEL,
+  rejectHint,
+  rejectLabel,
   addressText,
   lastScanText,
   shortId,
@@ -399,9 +399,6 @@ function GroupCard({
   const treQuaMuc = g.passengers.filter(
     (p) => p.pickupDelayMin != null && p.pickupDelayMin > 25,
   ).length;
-  const soKhacTuyen = g.passengers.filter(
-    (p) => !p.isAnchor && p.routeName && p.routeName !== anchorRoute,
-  ).length;
 
   return (
     <Card className="p-4">
@@ -417,11 +414,6 @@ function GroupCard({
             title="Vượt ngân sách vòng thêm 25 phút/khách đã chốt"
           >
             {treQuaMuc} khách bị đón trễ &gt;25′
-          </Badge>
-        )}
-        {soKhacTuyen > 0 && (
-          <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
-            +{soKhacTuyen} khác tuyến
           </Badge>
         )}
         <Badge variant="secondary">
@@ -449,7 +441,7 @@ function GroupCard({
         <TableHeader>
           <TableRow>
             <TableHead>Khách</TableHead>
-            <TableHead>Tuyến</TableHead>
+            <TableHead>Cặp tỉnh</TableHead>
             <TableHead>Điện thoại</TableHead>
             <TableHead className="whitespace-nowrap">Khách đặt</TableHead>
             <TableHead className="whitespace-nowrap">Dự trù đón</TableHead>
@@ -477,19 +469,9 @@ function GroupCard({
                 </div>
               </TableCell>
               <TableCell className="text-xs">
+                {/* `routeName` nay là CẶP TỈNH đón → trả. Cổng KHAC_CAP_TINH của bộ ghép bảo đảm
+                    cả nhóm cùng cặp, nên không còn ca "khác tuyến chuyến chủ" để đánh dấu. */}
                 {p.routeName ?? '—'}
-                {/* Khác tuyến chuyến chủ = ĐÚNG ca ghép theo hành lang, thứ mà
-                    cách so routeId hiện tại không nhìn thấy. Đánh dấu để admin
-                    nhận ra ngay giá trị mới nằm ở đâu. */}
-                {!p.isAnchor && p.routeName && p.routeName !== anchorRoute && (
-                  <Badge
-                    variant="outline"
-                    className="ml-1.5 border-amber-300 bg-amber-50 font-normal text-amber-800"
-                    title="Khác tuyến chuyến chủ — chỉ ghép theo hành lang mới thấy được"
-                  >
-                    khác tuyến
-                  </Badge>
-                )}
               </TableCell>
               <TableCell className="whitespace-nowrap font-mono text-xs">
                 {hienSdt ? (p.customerPhone ?? '—') : maskPhone(p.customerPhone)}
@@ -591,9 +573,9 @@ function GroupCard({
                 key={reason}
                 variant="outline"
                 className="font-normal"
-                title={REJECT_HINT[reason as keyof typeof REJECT_HINT]}
+                title={rejectHint(reason)}
               >
-                {REJECT_LABEL[reason as keyof typeof REJECT_LABEL]}: {n}
+                {rejectLabel(reason)}: {n}
               </Badge>
             ))}
           </div>

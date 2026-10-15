@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
 import {
@@ -21,10 +21,16 @@ import type {
   TeamOwner,
 } from '@/lib/types';
 import {
+  buildAssignedProvincePatch,
   commissionRateLabel,
   driverWarning,
+  isCatalogProvince,
+  type ProvinceOption,
+  PROVINCE_BUCKET_NOTE_FALLBACK,
+  splitAssignedByCatalog,
   stageLabel,
   STAGE_ORDER,
+  unknownProvinceCodeLabel,
   vnDay,
 } from '@/lib/driver-team-labels';
 import { commissionRateWarning } from './commission-warning';
@@ -53,7 +59,7 @@ export function DriverTeamDrawer({
   driver,
   range,
   owners,
-  allRoutes,
+  provinceOptions,
   onClose,
   onSaved,
 }: {
@@ -62,7 +68,8 @@ export function DriverTeamDrawer({
   driver: TeamDriverRow | null;
   range: DateRange;
   owners: TeamOwner[];
-  allRoutes: { id: number; name: string }[];
+  /** Danh mục tỉnh để giao cho tài (mã gis + tên hiển thị). Rỗng khi chưa tải được. */
+  provinceOptions: ProvinceOption[];
   onClose: () => void;
   onSaved: (driverId: string, team: DriverTeamDetail['team']) => void;
 }) {
@@ -78,6 +85,11 @@ export function DriverTeamDrawer({
   // vì input hiện đơn vị PHẦN TRĂM (string) trong khi backend giữ PHÂN SỐ 0..1.
   // Đồng bộ lại từ giá trị đã lưu mỗi khi nó đổi (tải xong / vừa lưu thành công).
   const [rateDraft, setRateDraft] = React.useState('');
+  // PATCH tỉnh thay NGUYÊN tập, mà tập mới được tính từ `assignedCodes` ở lần render hiện tại. Hai lần
+  // chọn chồng nhau thì lần sau tính trên state cũ và ghi đè lần trước — mất lựa chọn im lặng. Nên KHOÁ
+  // việc chọn từ lúc gửi đến lúc có phản hồi. Phải chặn ở `saveProvinces` chứ không chỉ `disabled` ở
+  // nút: nút `disabled` không đóng popover, các mục bên trong popover đang mở vẫn bấm được.
+  const [provincesSaving, setProvincesSaving] = React.useState(false);
 
   React.useEffect(() => {
     setRateDraft(
@@ -112,18 +124,21 @@ export function DriverTeamDrawer({
       .catch(() => setCsCalls([]));
   }, [driverId, range, toast]);
 
-  const save = async (body: Parameters<typeof patchTeamMember>[1]) => {
-    if (!driverId) return;
+  /** Trả `true` khi backend đã nhận — nơi gọi cần biết để không báo "đã bỏ…" cho thứ chưa lưu. */
+  const save = async (body: Parameters<typeof patchTeamMember>[1]): Promise<boolean> => {
+    if (!driverId) return false;
     try {
       const team = await patchTeamMember(driverId, body);
       setDetail((d) => (d ? { ...d, team } : d));
       onSaved(driverId, team);
+      return true;
     } catch (e: any) {
       toast({
         variant: 'destructive',
         title: 'Không lưu được',
         description: String(e?.message ?? e),
       });
+      return false;
     }
   };
 
@@ -198,11 +213,48 @@ export function DriverTeamDrawer({
     }
   };
 
-  const registered = new Set(detail?.registeredRouteIds ?? []);
-  const run = new Set(
-    (detail?.routesRun ?? []).map((r) => r.routeId).filter((x): x is number => x != null),
+  const assignedCodes = detail?.team?.assignedProvinceCodes ?? [];
+  // Danh mục = những tỉnh backend nhận khi giao. Cấp 1 còn có thể chứa mã có số liệu mà danh mục không
+  // có (nhãn "Mã tỉnh XX") — giao mã đó là 400, nên không đưa vào ô chọn.
+  const catalogOptions = provinceOptions.filter(isCatalogProvince);
+  const catalogCodes = new Set(catalogOptions.map((p) => p.code));
+  // Mã tỉnh đang giao nhưng ngoài danh mục (không nên có): hiện tường minh kèm nút gỡ thay vì để nó
+  // biến mất im lặng khỏi ô chọn. Backend 400 nếu gửi lại → `saveProvinces` luôn bỏ chúng khi lưu.
+  const { inCatalog: assignedInCatalog, outside: assignedOutsideCatalog } = splitAssignedByCatalog(
+    assignedCodes,
+    catalogCodes,
   );
-  const registeredNotRun = (detail?.registeredRouteIds ?? []).filter((id) => !run.has(id));
+
+  /**
+   * Lưu tập tỉnh được giao. Bỏ qua khi đang có một PATCH tỉnh bay (xem `provincesSaving`). Mã ngoài
+   * danh mục KHÔNG gửi (backend 400 cả request) — bỏ chúng và báo người dùng đúng mã nào đã bỏ.
+   */
+  const saveProvinces = async (selected: string[]) => {
+    if (provincesSaving) return;
+    const { codes, dropped } = buildAssignedProvincePatch(selected, assignedCodes, catalogCodes);
+    setProvincesSaving(true);
+    try {
+      const ok = await save({ assignedProvinceCodes: codes });
+      if (ok && dropped.length > 0) {
+        toast({
+          title: 'Đã bỏ mã tỉnh ngoài danh mục',
+          description: `${dropped.map(unknownProvinceCodeLabel).join(', ')} không có trong danh mục tỉnh nên không được lưu lại.`,
+        });
+      }
+    } finally {
+      setProvincesSaving(false);
+    }
+  };
+
+  const provincesRun = detail?.provincesRun ?? [];
+  const registered = new Set(detail?.registeredProvinceCodes ?? []);
+  const runCodes = new Set(
+    provincesRun.map((r) => r.provinceCode).filter((x): x is string => x != null),
+  );
+  const registeredNames = detail?.registeredProvinceNames ?? [];
+  const registeredNotRun = (detail?.registeredProvinceCodes ?? [])
+    .map((code, i) => ({ code, name: registeredNames[i] || unknownProvinceCodeLabel(code) }))
+    .filter((r) => !runCodes.has(r.code));
   const warn = driver ? driverWarning(driver) : null;
 
   // Cảnh báo % hoa hồng riêng tính trên giá trị ĐANG GÕ (nháp), không phải giá trị
@@ -349,26 +401,48 @@ export function DriverTeamDrawer({
               </div>
 
               <div>
-                <Label className="text-xs text-muted-foreground">Tuyến được phân công</Label>
+                <Label className="flex items-center gap-1 text-xs text-muted-foreground">
+                  Tỉnh được phân công
+                  {provincesSaving ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                </Label>
                 <MultiSelectComboBox
-                  options={allRoutes.map((r) => ({ value: String(r.id), label: r.name }))}
-                  selectedValues={(detail.team?.assignedRouteIds ?? []).map(String)}
-                  onSelectedValuesChange={(vals) =>
-                    void save({ assignedRouteIds: vals.map(Number) })
-                  }
-                  placeholder="Chọn tuyến"
-                  searchPlaceholder="Tìm tuyến..."
-                  noResultsText="Không có tuyến khớp"
+                  options={catalogOptions.map((p) => ({ value: p.code, label: p.name }))}
+                  selectedValues={assignedInCatalog}
+                  // Gửi nguyên tập đã chọn (kể cả rỗng = bỏ hết). Mã ngoài danh mục không
+                  // nằm trong ô chọn và KHÔNG được gửi lại — xem `saveProvinces`.
+                  onSelectedValuesChange={(vals) => void saveProvinces(vals)}
+                  disabled={provincesSaving}
+                  placeholder="Chọn tỉnh"
+                  searchPlaceholder="Tìm tỉnh..."
+                  noResultsText="Không có tỉnh khớp"
                 />
-                {/* assignedRouteIds cố ý không có FK (spec §4.1) → tuyến xoá mềm còn
-                    nằm lại. Hiện tường minh thay vì để nó biến mất im lặng. */}
-                {(detail.team?.assignedRouteIds ?? [])
-                  .filter((id) => !allRoutes.some((r) => r.id === id))
-                  .map((id) => (
-                    <Badge key={id} className="mr-1 mt-1 bg-muted text-muted-foreground">
-                      Tuyến đã xoá (#{id})
-                    </Badge>
-                  ))}
+                {assignedOutsideCatalog.length > 0 ? (
+                  <div className="mt-1.5 space-y-1">
+                    <div className="flex flex-wrap gap-1">
+                      {assignedOutsideCatalog.map((code) => (
+                        <Badge
+                          key={code}
+                          className="gap-1 bg-amber-100 pr-1 text-amber-800 hover:bg-amber-100"
+                        >
+                          {unknownProvinceCodeLabel(code)} · ngoài danh mục
+                          <button
+                            type="button"
+                            aria-label={`Gỡ ${unknownProvinceCodeLabel(code)} (ngoài danh mục)`}
+                            disabled={provincesSaving}
+                            onClick={() => void saveProvinces(assignedInCatalog)}
+                            className="rounded-full p-0.5 hover:bg-amber-200 disabled:opacity-50"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Mã ngoài danh mục tỉnh — hệ thống không nhận nên sẽ bị bỏ ở lần lưu tỉnh
+                      tiếp theo. Bấm × để gỡ ngay (gỡ cùng lúc mọi mã ngoài danh mục).
+                    </p>
+                  </div>
+                ) : null}
               </div>
 
               <div>
@@ -404,24 +478,20 @@ export function DriverTeamDrawer({
               </div>
             </section>
 
-            {/* 2. Tuyến: thực chạy vs đăng ký */}
+            {/* 2. Tỉnh: thực chạy vs đăng ký hoạt động */}
             <section className="space-y-2">
-              <h3 className="text-sm font-medium">Tuyến thực chạy so với tuyến đăng ký</h3>
-              {detail.routesRun.length === 0 ? (
+              <h3 className="text-sm font-medium">Tỉnh thực chạy so với tỉnh đăng ký hoạt động</h3>
+              {provincesRun.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
                   Không có chuyến hoàn thành trong kỳ.
                 </p>
               ) : (
                 <ul className="space-y-1 text-sm">
-                  {detail.routesRun.map((r) => (
-                    <li key={String(r.routeId)} className="flex items-center gap-2">
-                      <span className="flex-1">
-                        {r.routeDeleted
-                          ? `Tuyến đã xoá (#${r.routeId})`
-                          : (r.name ?? 'Không gắn tuyến')}
-                      </span>
+                  {provincesRun.map((r) => (
+                    <li key={r.provinceCode ?? 'none'} className="flex items-center gap-2">
+                      <span className="flex-1">{r.provinceName}</span>
                       <span className="text-muted-foreground">{r.trips} chuyến</span>
-                      {r.routeId != null && !registered.has(r.routeId) ? (
+                      {r.provinceCode != null && !registered.has(r.provinceCode) ? (
                         <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">
                           Chạy nhưng chưa đăng ký
                         </Badge>
@@ -432,9 +502,13 @@ export function DriverTeamDrawer({
               )}
               {registeredNotRun.length > 0 ? (
                 <p className="text-xs text-muted-foreground">
-                  Đăng ký {registeredNotRun.length} tuyến nhưng không chạy chuyến nào trong kỳ.
+                  Đăng ký {registeredNotRun.length} tỉnh nhưng không chạy chuyến nào trong kỳ:{' '}
+                  {registeredNotRun.map((r) => r.name).join(', ')}.
                 </p>
               ) : null}
+              <p className="text-xs text-muted-foreground">
+                {detail.bucketNote ?? PROVINCE_BUCKET_NOTE_FALLBACK}
+              </p>
             </section>
 
             {/* 3. Điểm & đánh giá */}
