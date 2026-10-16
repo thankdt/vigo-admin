@@ -5007,7 +5007,13 @@ export async function getPricingMacroRulesPage(params: {
   const qs = new URLSearchParams({ page: String(params.page), limit: String(params.limit) });
   if (params.search?.trim()) qs.set('search', params.search.trim());
   const response = await fetchWithAuth(`/pricing/macro-rules?${qs.toString()}`);
-  return unwrap<PricingMacroRulePage>(response);
+  const data = await unwrap<PricingMacroRulePage | PricingMacroRulePage['items']>(response);
+  // Backend cũ (chưa có phân trang) trả mảng đầy đủ ⇒ tự cắt trang phía client để không hiện danh sách rỗng.
+  if (Array.isArray(data)) {
+    const start = (params.page - 1) * params.limit;
+    return { items: data.slice(start, start + params.limit), total: data.length, page: params.page, limit: params.limit };
+  }
+  return data;
 }
 
 export async function getPricingMacroProvinces(): Promise<ProvinceOption[]> {

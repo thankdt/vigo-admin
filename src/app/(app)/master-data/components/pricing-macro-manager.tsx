@@ -372,6 +372,13 @@ export function PricingMacroManager() {
     try {
       await deletePricingMacroRule(deleteRuleId);
       toast({ title: 'Đã xoá quy tắc macro' });
+      const deletedId = deleteRuleId;
+      setSelected((prev) => {
+        if (!prev.has(deletedId)) return prev;
+        const next = new Map(prev);
+        next.delete(deletedId);
+        return next;
+      });
       setDeleteRuleId(null);
       loadData();
     } catch (err: any) {
