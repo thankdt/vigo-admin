@@ -1,0 +1,8 @@
+# Chép nội dung dưới đây vào tệp `.env` ở gốc dự án (KHÔNG commit .env) để chạy `npm run build` / `npm run deploy:prod`.
+#
+# CLOUDFLARE_API_TOKEN: token Cloudflare có quyền "Cloudflare Pages: Edit" (tạo ở Dashboard > My Profile > API Tokens,
+#   hoặc token của tài khoản). Khuyến nghị token CHỈ có quyền Pages, không dùng token toàn quyền.
+# CLOUDFLARE_ACCOUNT_ID: ID tài khoản Cloudflare chứa 4 project Pages (vigo-admin, vigo-htx, vigo-kol, vigo-daily).
+
+CLOUDFLARE_API_TOKEN=
+CLOUDFLARE_ACCOUNT_ID=
