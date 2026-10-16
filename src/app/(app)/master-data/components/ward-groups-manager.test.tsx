@@ -78,6 +78,26 @@ describe('WardGroupsManager', () => {
     expect(updateGroup).toHaveBeenCalledWith(7, { name: 'Hà Nam cũ', note: 'ghi chú', wardCodes: ['13285'] });
   });
 
+  it('nạp xã của nhóm trả rỗng (backend nuốt lỗi) ⇒ khoá Lưu, không để PUT ghi đè nhóm', async () => {
+    const user = userEvent.setup();
+    getWards.mockResolvedValue([]);
+    render(<WardGroupsManager />);
+    await user.click(await screen.findByRole('button', { name: 'Sửa nhóm Hà Nam cũ' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Sửa nhóm xã' });
+    await within(dlg).findByRole('alert');
+    expect(within(dlg).getByRole('button', { name: 'Lưu nhóm' })).toBeDisabled();
+    expect(updateGroup).not.toHaveBeenCalled();
+  });
+
+  it('đang nạp xã của nhóm thì chưa cho Lưu', async () => {
+    const user = userEvent.setup();
+    getWards.mockReturnValue(new Promise(() => {}));
+    render(<WardGroupsManager />);
+    await user.click(await screen.findByRole('button', { name: 'Sửa nhóm Hà Nam cũ' }));
+    const dlg = await screen.findByRole('dialog', { name: 'Sửa nhóm xã' });
+    expect(within(dlg).getByRole('button', { name: 'Lưu nhóm' })).toBeDisabled();
+  });
+
   it('tạo nhóm: chưa có xã thì khoá nút Lưu', async () => {
     const user = userEvent.setup();
     listGroups.mockResolvedValue([]);

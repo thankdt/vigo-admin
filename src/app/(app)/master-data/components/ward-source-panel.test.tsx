@@ -118,6 +118,23 @@ describe('WardSourcePanel — nhóm xã', () => {
   });
 });
 
+describe('WardSourcePanel — nhóm xã thiếu dữ liệu xã', () => {
+  it('danh sách xã nạp rỗng ⇒ báo rõ số xã không thêm được và khoá nút, không thêm 0 xã lặng lẽ', async () => {
+    getWards.mockResolvedValue([]);
+    getGroups.mockResolvedValue([
+      { id: 1, name: 'Nhóm', note: null, wardCodes: ['13285'], wardCount: 1, staleCodes: [], createdBy: null, createdAt: '', updatedAt: '' },
+    ]);
+    const { onAdd, user } = setup();
+    await user.click(screen.getByRole('button', { name: 'Điểm đón: Nhóm xã' }));
+    const sel = await screen.findByLabelText('Điểm đón: chọn nhóm xã');
+    await waitFor(() => expect(sel).toBeEnabled());
+    await user.selectOptions(sel, '1');
+    expect(await screen.findByRole('alert')).toHaveTextContent('1 xã của nhóm không tìm thấy');
+    expect(screen.getByRole('button', { name: 'Điểm đón: thêm nhóm xã' })).toBeDisabled();
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+});
+
 describe('WardSourcePanel — dán danh sách', () => {
   it('khớp tên, hiện preview, chỉ thêm xã đã khớp', async () => {
     const { onAdd, user } = setup();

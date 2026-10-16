@@ -216,6 +216,7 @@ function WardGroupDialog({
   const [dropped, setDropped] = React.useState(0);
   const [saving, setSaving] = React.useState(false);
   const [loadingWards, setLoadingWards] = React.useState(false);
+  const [loadFailed, setLoadFailed] = React.useState(false);
   const [provinceCode, setProvinceCode] = React.useState('');
   const [wards, setWards] = React.useState<WardOption[]>([]);
   const [wardCodes, setWardCodes] = React.useState<string[]>([]);
@@ -235,6 +236,7 @@ function WardGroupDialog({
     setNote(group?.note ?? '');
     setItems([]);
     setDropped(0);
+    setLoadFailed(false);
     setProvinceCode('');
     setWards([]);
     setWardCodes([]);
@@ -245,10 +247,18 @@ function WardGroupDialog({
       .then((all) => {
         if (!alive) return;
         const eps = wardsToEndpoints(group.wardCodes, all || [], provinceNames);
-        setItems(eps);
+        // Danh sách rỗng/không khớp mã nào = nạp lỗi (backend nuốt lỗi trả []), KHÔNG phải "xã đã bị xoá": khoá Lưu, tránh ghi đè nhóm.
+        if (eps.length === 0) {
+          setLoadFailed(true);
+          return;
+        }
+        setItems((cur) => addEndpoints(eps, cur));
         setDropped(group.wardCodes.length - eps.length);
       })
-      .catch((e) => toast({ variant: 'destructive', title: 'Không tải được danh sách xã', description: e?.message }))
+      .catch((e) => {
+        setLoadFailed(true);
+        toast({ variant: 'destructive', title: 'Không tải được danh sách xã', description: e?.message });
+      })
       .finally(() => alive && setLoadingWards(false));
     return () => {
       alive = false;
@@ -277,7 +287,11 @@ function WardGroupDialog({
   };
 
   const trimmed = name.replace(/\s+/g, ' ').trim();
-  const error = !trimmed
+  const error = loadingWards
+    ? 'Đang tải danh sách xã của nhóm...'
+    : loadFailed
+      ? 'Không tải được xã của nhóm — đóng hộp thoại và mở lại trước khi lưu.'
+      : !trimmed
     ? 'Nhập tên nhóm.'
     : trimmed.length > NAME_MAX
       ? `Tên nhóm tối đa ${NAME_MAX} ký tự.`
@@ -416,7 +430,7 @@ function WardGroupDialog({
             ))}
           </div>
 
-          {error && items.length > 0 && (
+          {error && (items.length > 0 || loadFailed) && (
             <div role="alert" className="text-xs text-red-600">
               {error}
             </div>

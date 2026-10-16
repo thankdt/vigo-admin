@@ -130,6 +130,8 @@ function LegacyPicker({
     const mine = ++seq.current;
     setRows(null);
     setChecked(new Set());
+    setLoading(false);
+    setError(null);
     if (!province) return;
     setLoading(true);
     setError(null);
@@ -138,7 +140,14 @@ function LegacyPicker({
       if (mine !== seq.current) return;
       setRows(list || []);
       // Xã thuần ở mức đang lọc được tích sẵn; xã gộp (không thuần) để admin tự quyết từng xã.
-      setChecked(new Set((list || []).filter((w) => w.selectable).map((w) => w.wardCode)));
+      // Lọc theo huyện chỉ gửi mã huyện: xã có thành phần ở tỉnh cũ KHÁC (mã huyện trùng do dữ liệu lệch) không được tích sẵn.
+      setChecked(
+        new Set(
+          (list || [])
+            .filter((w) => w.selectable && w.parts.some((p) => p.legacyProvinceCode === province))
+            .map((w) => w.wardCode),
+        ),
+      );
     } catch (e: any) {
       if (mine === seq.current) setError(e?.message || 'Không tải được danh sách phường/xã');
     } finally {
@@ -157,7 +166,15 @@ function LegacyPicker({
   const pure = (rows ?? []).filter((w) => w.selectable);
   const mixed = (rows ?? []).filter((w) => !w.selectable);
   const add = () => {
-    onAdd(wardsToEndpoints([...checked], allWards ?? [], provinceNames));
+    // Dựng thẳng từ kết quả API (đã có tên + tỉnh mới): không phụ thuộc danh sách mọi xã nạp riêng, không bỏ xã lặng lẽ.
+    const eps = (rows ?? [])
+      .filter((w) => checked.has(w.wardCode))
+      .map((w) => ({
+        provinceCode: w.provinceCode,
+        wardCode: w.wardCode,
+        label: `${w.wardName} (${provinceNames.get(w.provinceCode) ?? w.provinceName})`,
+      }));
+    onAdd(eps);
     setChecked(new Set());
   };
   const label = (w: WardLegacyWard) => `${w.wardName} (${provinceNames.get(w.provinceCode) ?? w.provinceName})`;
@@ -263,7 +280,7 @@ function LegacyPicker({
             size="sm"
             variant="outline"
             className="h-7 text-xs"
-            disabled={checked.size === 0 || !allWards}
+            disabled={checked.size === 0}
             onClick={add}
             aria-label={`${title}: thêm ${checked.size} xã theo vùng cũ`}
           >
@@ -304,6 +321,9 @@ function GroupPicker({
 
   const group = groups?.find((g) => String(g.id) === groupId);
   const live = group ? group.wardCodes.filter((c) => !group.staleCodes.includes(c)) : [];
+  const endpoints = group && allWards ? wardsToEndpoints(live, allWards, provinceNames) : [];
+  // Mã còn sống nhưng không có trong danh sách xã đã nạp (nạp lỗi/rỗng): báo thay vì thêm ít hơn nút ghi.
+  const missing = group && allWards ? live.length - endpoints.length : 0;
 
   return (
     <div className="space-y-2 rounded border border-slate-200 bg-white p-2">
@@ -331,13 +351,18 @@ function GroupPicker({
           {group.staleCodes.length} xã trong nhóm không còn trong dữ liệu ranh giới — sẽ bị bỏ qua.
         </div>
       )}
+      {missing > 0 && (
+        <div role="alert" className="text-[11px] text-red-600">
+          {missing} xã của nhóm không tìm thấy trong danh sách phường/xã đã tải — chỉ thêm được {endpoints.length} xã.
+        </div>
+      )}
       <Button
         type="button"
         size="sm"
         variant="outline"
         className="h-7 text-xs"
-        disabled={!group || live.length === 0 || !allWards}
-        onClick={() => onAdd(wardsToEndpoints(live, allWards ?? [], provinceNames))}
+        disabled={!group || endpoints.length === 0 || missing > 0}
+        onClick={() => onAdd(endpoints)}
         aria-label={`${title}: thêm nhóm xã`}
       >
         {group ? `Thêm nhóm (${live.length} xã)` : 'Thêm nhóm'}
@@ -362,6 +387,7 @@ function PastePicker({
   const [provinceCode, setProvinceCode] = React.useState('');
   const [wards, setWards] = React.useState<WardOption[]>([]);
   const [loading, setLoading] = React.useState(false);
+  const [loadError, setLoadError] = React.useState<string | null>(null);
   const [text, setText] = React.useState('');
   const [result, setResult] = React.useState<WardMatchResult | null>(null);
   // Xã admin chọn tay cho các dòng trùng tên: input → mã xã.
@@ -378,14 +404,22 @@ function PastePicker({
     setResult(null);
     setPicked({});
     setWards([]);
+    setLoadError(null);
     const mine = ++seq.current;
+    setLoading(false);
     if (!code) return;
     setLoading(true);
     try {
       const list = await getPricingMacroWards(code);
-      if (mine === seq.current) setWards(list || []);
-    } catch {
-      if (mine === seq.current) setWards([]);
+      if (mine === seq.current) {
+        setWards(list || []);
+        if (!list || list.length === 0) setLoadError('Tỉnh này không có phường/xã nào trong dữ liệu — không thể khớp tên.');
+      }
+    } catch (e: any) {
+      if (mine === seq.current) {
+        setWards([]);
+        setLoadError(e?.message || 'Không tải được danh sách phường/xã của tỉnh');
+      }
     } finally {
       if (mine === seq.current) setLoading(false);
     }
@@ -423,6 +457,11 @@ function PastePicker({
           noResultsText="Không tìm thấy tỉnh"
         />
       </div>
+      {loadError && (
+        <div role="alert" className="text-[11px] text-red-600">
+          {loadError}
+        </div>
+      )}
       <textarea
         className="min-h-20 w-full rounded-md border border-input bg-white p-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
         aria-label={`${title}: danh sách tên hoặc mã xã`}
@@ -438,7 +477,7 @@ function PastePicker({
         size="sm"
         variant="outline"
         className="h-7 text-xs"
-        disabled={!provinceCode || loading || !text.trim()}
+        disabled={!provinceCode || loading || !!loadError || !text.trim()}
         onClick={match}
         aria-label={`${title}: khớp danh sách`}
       >
