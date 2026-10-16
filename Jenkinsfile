@@ -5,7 +5,7 @@
 // `docker compose` here drives the same containers as running it on the host.
 //
 // IMPORTANT: never run `npm run build` here — for this repo `build` =
-// `next build && deploy:prod`, which publishes to the production S3 bucket.
+// `next build && deploy:prod`, which publishes to the production Cloudflare Pages projects.
 // Dev just (re)starts the `next dev` container; the bind-mount + dev watcher
 // pick up source changes with no rebuild.
 //

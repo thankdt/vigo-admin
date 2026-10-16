@@ -21,7 +21,10 @@ Reference helpers (reuse these, don't hand-roll):
   `firstOfMonthVn`, `lastOfMonthVn`, `firstOfYearVn`, and the `PRESETS` array.
 
 ## Stack & cấu trúc
-Next.js 15 (App Router, React 19, TS) — **static export** (`output: 'export'`) host trên S3.
+Next.js 15 (App Router, React 19, TS) — **static export** (`output: 'export'`) host trên **Cloudflare Pages**
+(từ 17/10/2026; trước đó S3 + CloudFront). MỘT bản export phục vụ 4 tên miền, mỗi tên là một project Pages:
+`admin.` (`vigo-admin`), `htx.` (`vigo-htx`), `kol.` (`vigo-kol`), `daily.` (`vigo-daily`) — chỉ khác trang gốc `/`
+(xem `scripts/pages-lib.ts`).
 Hai khu vực tách biệt trong `src/app/`:
 - `(app)/*` — admin nội bộ (bookings, drivers, finance, invoices, htx-reconciliation…)
 - `htx/*` — portal cho hợp tác xã, có `htx/login` riêng. ĐỪNG nhầm với admin.
@@ -41,17 +44,18 @@ npm test           # vitest run
 npm run lint       # next lint
 npx next build     # compile/smoke check, KHÔNG deploy
 ```
-Deploy cần `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` trong `.env` (xem `aws-config.template`).
+Deploy cần `CLOUDFLARE_API_TOKEN` (quyền Pages:Edit) + `CLOUDFLARE_ACCOUNT_ID` trong `.env` (xem `cloudflare-config.template`).
 
 ## Deploy note
-`npm run build` in vigo-admin **builds AND auto-syncs to the prod S3 bucket**. Use
-`npx next build` for a compile/smoke check that does NOT deploy.
+`npm run build` in vigo-admin **builds AND auto-deploys to the 4 PROD Cloudflare Pages projects**
+(`scripts/deploy-pages.ts`; trước 17/10/2026 là sync lên S3 — `scripts/deploy-s3.ts` đã xoá, xem git `cf5bec2`). Use `npx next build` for a compile/smoke check that does NOT deploy;
+`npx tsx scripts/deploy-pages.ts --dry-run` dựng `.pages-dist/<cổng>` mà không đẩy lên.
 
 ## Gotchas
 - `next.config.ts` bật `ignoreBuildErrors` + `ignoreDuringBuilds` → **build KHÔNG chặn
   lỗi type/lint**. Luôn chạy `npm run typecheck` để kiểm trước khi tin là sạch.
 - Có 2 test runner: vitest (`*.test.ts`) và `node:test` qua tsx (`*.node.test.ts`,
-  chạy bằng `npm run test:invoice-utils` / `test:export`).
+  chạy bằng `npm run test:invoice-utils` / `test:export` / `test:pages`).
 
 ## Git workflow (cập nhật 2026-06-27 — THAY THẾ rule cũ "qua dev rồi PR dev→main")
 

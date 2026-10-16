@@ -2,9 +2,9 @@ import type { NextConfig } from 'next';
 
 
 const nextConfig: NextConfig = {
-  output: 'export', // Enable static export for S3 hosting
-  trailingSlash: true, // Required for S3 to serve index.html for directories
-  // assetPrefix is NOT needed when hosting the entire site on S3
+  output: 'export', // Enable static export (hosted on Cloudflare Pages; was S3 + CloudFront before 17/10/2026)
+  trailingSlash: true, // Required so every route is exported as <route>/index.html
+  // assetPrefix is NOT needed when the whole site is served from one origin root
 
   // Allow the dev server (next dev) to accept requests proxied from the
   // Cloudflare tunnel host. Next 15.5 blocks cross-origin dev requests

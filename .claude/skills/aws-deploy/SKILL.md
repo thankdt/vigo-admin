@@ -5,6 +5,9 @@ description: Deploy applications and services to AWS safely and repeatably. Use 
 
 # AWS Deploy
 
+> ⚠️ **LƯU TRỮ (17/10/2026):** 4 cổng của vigo-admin đã chuyển từ S3 + CloudFront sang Cloudflare Pages
+> (`scripts/deploy-pages.ts`, xem CLAUDE.md). Skill này chỉ còn là tài liệu lịch sử — đừng dùng để deploy PROD.
+
 Guidance for deploying this team's services to AWS. Primary target is **ECS/Fargate with containers**; alternatives are covered in reference files.
 
 ## Step 0 — Detect the deploy setup before changing anything
@@ -57,4 +60,4 @@ State explicitly which environment was deployed (dev/staging/prod) and the image
 - **Prod deploy = manual, script-driven** via `vigo-backend/scripts/deploy.ps1` (PowerShell): ECR login → `docker buildx` `linux/amd64` (no provenance) → push → run migrations as a one-off ECS task → force new ECS service deployment. **No pipeline gate / approval step** — running the script *is* the gate.
 - **Dev CI**: Jenkins (`vigo-backend/Jenkinsfile`, runs via docker-compose) triggered by GitHub webhook on the `dev` branch; deploy-in-place hot-reload + Telegram notify. This is dev only, not the prod path.
 - **Managed dependencies**: DB is **Neon PostgreSQL** (`DATABASE_URL`, not RDS); cache is **ElastiCache Redis 7** replication group `vigo-redis-{env}` on `cache.t4g.micro`. Push via SNS platform apps; cron via EventBridge Scheduler (`vigo-scheduler-role-{env}`). Secrets are injected as task-definition env at runtime.
-- **vigo-admin** (Next.js): not containerized — deployed as a static/SPA build to S3 bucket `vigo-admin` (region `ap-southeast-1`) behind CloudFront. Flutter apps (vigo, vigo-driver) are not deployed to AWS.
+- **vigo-admin** (Next.js): not containerized — a static/SPA export. **Since 17/10/2026 hosted on Cloudflare Pages** (4 projects `vigo-admin|htx|kol|daily`, `scripts/deploy-pages.ts`); the old S3 bucket `vigo-admin` + 4 CloudFront distributions are legacy and kept only until AWS is switched off. Flutter apps (vigo, vigo-driver) are not deployed to AWS.

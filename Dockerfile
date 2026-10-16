@@ -11,7 +11,7 @@ COPY . .
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 # `next build` with output:'export' emits the static site to /app/out.
-# NOT `npm run build` — that also runs deploy:prod → publishes to the prod S3 bucket.
+# NOT `npm run build` — that also runs deploy:prod → publishes to the 4 prod Cloudflare Pages projects.
 RUN npx next build
 
 # Serve the static export with nginx.
