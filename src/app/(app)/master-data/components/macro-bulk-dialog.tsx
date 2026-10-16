@@ -22,7 +22,6 @@ import { Loader2, MapPin, X } from 'lucide-react';
 import { bulkCreatePricingMacroRules, getPricingMacroWards } from '@/lib/api';
 import {
   MACRO_BULK_MAX_COMBOS,
-  MACRO_VALUE_LIMITS,
   addEndpoints,
   adjustmentValueError,
   adjustmentValueHint,
@@ -53,7 +52,6 @@ const NATIVE_SELECT =
   'h-8 w-full rounded-md border border-input bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60';
 
 type FormState = {
-  namePrefix: string;
   serviceType: string;
   vehicleType: string;
   adjustmentType: MacroAdjustmentType;
@@ -65,7 +63,6 @@ type FormState = {
 };
 
 const initialForm = (): FormState => ({
-  namePrefix: '',
   serviceType: 'ALL',
   vehicleType: 'ALL',
   adjustmentType: 'DELTA_AMOUNT',
@@ -306,12 +303,6 @@ export function MacroBulkDialog({
   const value = Number(form.adjustmentValue);
   const valueError = form.adjustmentValue.trim() === '' ? 'Nhập giá trị điều chỉnh.' : adjustmentValueError(form.adjustmentType, value);
   const prioError = priorityError(Number(form.priority));
-  const prefix = form.namePrefix.trim();
-  const prefixError = !prefix
-    ? 'Nhập tiền tố tên quy tắc.'
-    : prefix.length > MACRO_VALUE_LIMITS.NAME_PREFIX_MAX
-      ? `Tiền tố tối đa ${MACRO_VALUE_LIMITS.NAME_PREFIX_MAX} ký tự.`
-      : null;
   const emptySide = selection.ok ? anySide(origins.length, dests.length) : null;
   const emptySideName = emptySide === 'origin' ? 'điểm đón' : emptySide === 'dest' ? 'điểm trả' : '';
   const pendingError = pendingOrigin
@@ -320,7 +311,7 @@ export function MacroBulkDialog({
       ? `Điểm trả: ${pendingDest}.`
       : null;
   const anyError = emptySide && !ackAny ? `Cần xác nhận áp dụng cho MỌI ${emptySideName}.` : null;
-  const firstError = prefixError || selection.error || pendingError || anyError || valueError || prioError;
+  const firstError = selection.error || pendingError || anyError || valueError || prioError;
 
   const labelMap = React.useMemo(() => {
     const m: Record<string, string> = {};
@@ -338,7 +329,6 @@ export function MacroBulkDialog({
     e.preventDefault();
     if (firstError || saving) return;
     const payload: BulkCreatePricingMacroRulesRequest = {
-      namePrefix: prefix,
       isActive: form.isActive,
       priority: Number(form.priority) || 0,
       serviceType: form.serviceType,
@@ -400,7 +390,7 @@ export function MacroBulkDialog({
           <DialogTitle className="text-base font-bold text-slate-900">Thêm quy tắc macro định giá mới</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
             Chọn điểm đón × điểm trả (một hay nhiều xã mỗi bên); mỗi cặp sinh một quy tắc với cùng mức điều chỉnh. Có thể
-            chọn theo tỉnh cũ/huyện cũ, nhóm xã hoặc dán danh sách. Cặp đã có quy tắc cùng khoá (kể cả chiều ngược) sẽ
+            chọn theo tỉnh cũ/huyện cũ, nhóm xã. Cặp đã có quy tắc cùng khoá (kể cả chiều ngược) sẽ
             được BỎ QUA, không ghi đè.
           </DialogDescription>
         </DialogHeader>
@@ -453,18 +443,6 @@ export function MacroBulkDialog({
           </div>
         ) : (
           <form onSubmit={submit} className="space-y-4 text-xs">
-            <div className="space-y-1">
-              <Label htmlFor="bulk-prefix" className="text-xs font-semibold">Tiền tố tên quy tắc *</Label>
-              <Input
-                id="bulk-prefix"
-                className="h-9 text-xs"
-                placeholder={`Ví dụ: HN-HY — tên mỗi quy tắc sẽ là «HN-HY: Nghĩa Đô ${form.isBidirectional ? '↔' : '→'} Hưng Yên»`}
-                value={form.namePrefix}
-                onChange={(e) => setForm((p) => ({ ...p, namePrefix: e.target.value }))}
-              />
-              {prefix && prefixError && <div className="text-[11px] text-red-600">{prefixError}</div>}
-            </div>
-
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <EndpointBuilder
                 title="Điểm đón"

@@ -19,7 +19,11 @@ const bandWarnings = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
 vi.mock('@/lib/api', () => ({
-  getPricingMacroRules: (...a: unknown[]) => getRules(...a),
+  // Mock trả mảng cho gọn; bọc lại thành trang { items, total, page, limit } như backend.
+  getPricingMacroRulesPage: async (...a: unknown[]) => {
+    const r = await getRules(...a);
+    return Array.isArray(r) ? { items: r, total: r.length, page: 1, limit: 50 } : r;
+  },
   getPricingMacroProvinces: (...a: unknown[]) => getProvinces(...a),
   getPricingMacroWards: (...a: unknown[]) => getWards(...a),
   createPricingMacroRule: (...a: unknown[]) => createRule(...a),
@@ -120,19 +124,19 @@ const CANONICAL = rule({
   isBidirectional: true,
 });
 
+// Luật không còn tên trên giao diện: tên ở fixture chỉ để test gọi tắt; dòng được tìm theo id.
+const NAME_ID: Record<string, number> = { 'Một chiều HN-HY': 1, 'Hai chiều HN-HY': 2, 'Tạo từ API': 3, 'Sàn cũ': 20, 'Giao hàng': 7, 'Luật toàn quốc': 50, 'Có xã': 40 };
+
 async function setup(rules: PricingMacroRule[] = [ONE_WAY, TWO_WAY, CANONICAL]) {
   getRules.mockResolvedValue(rules);
   render(<PricingMacroManager />);
   // Chờ nạp xong: dòng đầu xuất hiện.
-  if (rules.length) await screen.findByText(rules[0].name);
+  if (rules.length) await screen.findByTestId(`rule-row-${rules[0].id}`);
   return { user: userEvent.setup() };
 }
 
 function rowOf(name: string): HTMLElement {
-  const cell = screen.getByText(name);
-  const row = cell.closest('tr');
-  if (!row) throw new Error(`không thấy dòng của "${name}"`);
-  return row as HTMLElement;
+  return screen.getByTestId(`rule-row-${NAME_ID[name]}`);
 }
 
 describe('PricingMacroManager — danh sách', () => {
@@ -165,21 +169,27 @@ describe('PricingMacroManager — danh sách', () => {
     const { user } = await setup();
     expect(screen.queryByRole('button', { name: /Xoá đã chọn/ })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Một chiều HN-HY' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Tạo từ API' }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (2)' })).toBeInTheDocument();
 
     // bỏ chọn một dòng → giảm còn 1
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Một chiều HN-HY' }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
   });
 
-  it('"chọn tất cả" chỉ chọn các dòng ĐANG HIỂN THỊ theo ô tìm kiếm', async () => {
+  it('tìm kiếm chạy ở SERVER (có chờ gõ xong), về trang 1; "chọn tất cả" chỉ chọn dòng của trang đang xem', async () => {
     const { user } = await setup();
-    await user.type(screen.getByPlaceholderText(/Tìm kiếm quy tắc/), 'Hai chiều');
-    await waitFor(() => expect(screen.queryByText('Một chiều HN-HY')).not.toBeInTheDocument());
+    getRules.mockImplementation(async (p: { search?: string }) =>
+      p.search ? { items: [TWO_WAY], total: 1, page: 1, limit: 50 } : [ONE_WAY, TWO_WAY, CANONICAL],
+    );
+    await user.type(screen.getByPlaceholderText(/Tìm theo tỉnh, xã/), 'Hà Nội');
+    await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, search: 'Hà Nội' }));
+    // gõ 6 ký tự chỉ sinh MỘT lần gọi tìm (không gọi mỗi phím)
+    expect(getRules.mock.calls.filter((c) => c[0].search)).toHaveLength(1);
+    await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
 
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc đang hiển thị' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (1)' }));
@@ -188,12 +198,32 @@ describe('PricingMacroManager — danh sách', () => {
     expect(bulkDelete).toHaveBeenCalledWith([2]); // chỉ dòng đang hiện, không phải cả 3
   });
 
+  it('hộp xác nhận xoá liệt kê "Đón → Trả" từng quy tắc đã chọn xuyên trang và báo dòng không ở trang đang xem (vẫn bị xoá)', async () => {
+    const { user } = await setup();
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #2\b/ }));
+
+    // sang kết quả tìm khác: hai dòng đã chọn không còn ở trang đang xem, chọn thêm dòng đang hiện
+    getRules.mockResolvedValue({ items: [CANONICAL], total: 1, page: 1, limit: 50 });
+    await user.type(screen.getByPlaceholderText(/Tìm theo tỉnh, xã/), 'api');
+    await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
+    expect(screen.getByRole('button', { name: 'Xoá đã chọn (3)' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (3)' }));
+    const list = await screen.findByTestId('bulk-delete-list');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(list).toHaveTextContent('Hà Nội → Hưng Yên'); // một chiều (#1)
+    expect(list).toHaveTextContent('Hà Nội ↔ Hưng Yên'); // hai chiều (#2, #3)
+    expect(within(list).getByRole('alert')).toHaveTextContent('2 quy tắc không nằm ở trang đang xem');
+  });
+
   it('xoá hàng loạt: xác nhận → gọi API đúng id, báo kết quả, nạp lại và bỏ vùng chọn', async () => {
     const { user } = await setup();
     bulkDelete.mockResolvedValue({ deleted: [1, 3], missing: [] });
 
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Một chiều HN-HY' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Tạo từ API' }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
     await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (2)' }));
 
     // hộp xác nhận: chưa gọi API cho tới khi bấm xác nhận
@@ -206,34 +236,15 @@ describe('PricingMacroManager — danh sách', () => {
     await waitFor(() =>
       expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Đã xoá 2 quy tắc' })),
     );
-    await waitFor(() => expect(screen.queryByText('Một chiều HN-HY')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
     expect(screen.queryByRole('button', { name: /Xoá đã chọn/ })).not.toBeInTheDocument();
     expect(getRules).toHaveBeenCalledTimes(2); // lần nạp đầu + nạp lại
-  });
-
-  it('hộp xác nhận xoá liệt kê TÊN từng quy tắc và báo những dòng đang bị bộ lọc ẩn (vẫn bị xoá)', async () => {
-    const { user } = await setup();
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Một chiều HN-HY' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Hai chiều HN-HY' }));
-
-    // lọc theo tên "Tạo từ API" → hai dòng đã chọn bị ẩn, chọn thêm dòng đang hiện
-    await user.type(screen.getByPlaceholderText(/Tìm kiếm quy tắc/), 'Tạo từ API');
-    await waitFor(() => expect(screen.queryByText('Một chiều HN-HY')).not.toBeInTheDocument());
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Tạo từ API' }));
-    expect(screen.getByRole('button', { name: 'Xoá đã chọn (3)' })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (3)' }));
-    const list = await screen.findByTestId('bulk-delete-list');
-    expect(list).toHaveTextContent('Một chiều HN-HY');
-    expect(list).toHaveTextContent('Hai chiều HN-HY');
-    expect(list).toHaveTextContent('Tạo từ API');
-    expect(within(list).getByRole('alert')).toHaveTextContent('2 quy tắc đang bị bộ lọc tìm kiếm ẩn đi');
   });
 
   it('danh sách trong hộp xác nhận rút gọn sau 8 tên, ghi số còn lại; không có cảnh báo ẩn khi mọi dòng đang hiện', async () => {
     const many = Array.from({ length: 12 }, (_, i) => rule({ id: i + 1, name: `Luật ${i + 1}` }));
     const { user } = await setup(many);
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc đang hiển thị' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
     await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (12)' }));
     const list = await screen.findByTestId('bulk-delete-list');
     expect(within(list).getAllByRole('listitem')).toHaveLength(8);
@@ -244,8 +255,8 @@ describe('PricingMacroManager — danh sách', () => {
   it('xoá hàng loạt: báo cả số quy tắc "không còn tồn tại" (đã bị người khác xoá)', async () => {
     const { user } = await setup();
     bulkDelete.mockResolvedValue({ deleted: [1], missing: [3] });
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Một chiều HN-HY' }));
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Tạo từ API' }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
     await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (2)' }));
     await user.click(await screen.findByRole('button', { name: 'Xoá 2 quy tắc' }));
 
@@ -259,7 +270,7 @@ describe('PricingMacroManager — danh sách', () => {
   it('xoá hàng loạt lỗi: báo lỗi đỏ và GIỮ vùng chọn để bấm thử lại', async () => {
     const { user } = await setup();
     bulkDelete.mockRejectedValue(new Error('Mất kết nối'));
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn quy tắc Một chiều HN-HY' }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
     await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (1)' }));
     await user.click(await screen.findByRole('button', { name: 'Xoá 1 quy tắc' }));
 
@@ -277,7 +288,7 @@ describe('PricingMacroManager — danh sách', () => {
     const { user } = await setup(many);
     bulkDelete.mockImplementation(async (ids: number[]) => ({ deleted: ids, missing: [] }));
 
-    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc đang hiển thị' }));
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
     await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (501)' }));
     await user.click(await screen.findByRole('button', { name: 'Xoá 501 quy tắc' }));
 
@@ -325,12 +336,9 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
   });
 
   // Tạo mới đi qua hộp thoại nhiều xã (macro-bulk-dialog.test.tsx); form một luật chỉ còn để SỬA.
-  async function openCreate(user: ReturnType<typeof userEvent.setup>, name: string, target = 'Một chiều HN-HY') {
-    await user.click(screen.getByRole('button', { name: `Sửa quy tắc ${target}` }));
+  async function openCreate(user: ReturnType<typeof userEvent.setup>, _label: string, target = 'Một chiều HN-HY') {
+    await user.click(screen.getByRole('button', { name: new RegExp(`^Sửa quy tắc #${NAME_ID[target]}\\b`) }));
     const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
-    const input = within(dlg).getByPlaceholderText(/Về TP Phủ Lý/);
-    await user.clear(input);
-    await user.type(input, name);
     return dlg;
   }
 
@@ -342,7 +350,8 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
 
     await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
     await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(1));
-    expect(updateRule.mock.calls[0][1]).toMatchObject({ name: 'Luật một chiều', isBidirectional: false });
+    expect(updateRule.mock.calls[0][1]).toMatchObject({ isBidirectional: false });
+    expect(updateRule.mock.calls[0][1]).not.toHaveProperty('name'); // tên không còn nhập/gửi
     expect(toastMock).not.toHaveBeenCalledWith(expect.objectContaining({ variant: 'destructive' }));
   });
 
@@ -443,7 +452,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     const { user } = await setup([floor]);
     expect(within(rowOf('Sàn cũ')).getByText('ngừng áp dụng')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Sàn cũ' }));
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #20\b/ }));
     const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
     expect(within(dlg).getByRole('note')).toHaveTextContent('không còn được áp dụng vào giá');
   });
@@ -468,7 +477,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
   it('sửa luật hai chiều: hộp "cả chiều ngược" đã tích; lưu giữ nguyên isBidirectional=true', async () => {
     const { user } = await setup([ONE_WAY, TWO_WAY]);
     updateRule.mockResolvedValue({ ...TWO_WAY });
-    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Hai chiều HN-HY' }));
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #2\b/ }));
     const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
     expect(within(dlg).getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ })).toBeChecked();
 
@@ -482,7 +491,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
   it('sửa luật tạo từ API (RIDE/CAR_4): form quy về CONVENIENT/4SEATS thay vì để ô chọn trống', async () => {
     const { user } = await setup([CANONICAL]);
     updateRule.mockResolvedValue({ ...CANONICAL });
-    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Tạo từ API' }));
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #3\b/ }));
     const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
     await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
 
@@ -497,7 +506,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     const odd = rule({ id: 7, name: 'Giao hàng', serviceType: 'DELIVERY', vehicleType: 'CAR_16' });
     const { user } = await setup([odd]);
     updateRule.mockResolvedValue({ ...odd });
-    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Giao hàng' }));
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #7\b/ }));
     const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
     // ô chọn (Radix trigger) thật sự HIỂN THỊ giá trị lạ, không để trống
     const triggers = within(dlg).getAllByRole('combobox').map((t) => t.textContent);
@@ -512,7 +521,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
   it('xoá một quy tắc: chỉ gọi API sau khi xác nhận', async () => {
     const { user } = await setup([ONE_WAY, TWO_WAY]);
     deleteRule.mockResolvedValue(undefined);
-    await user.click(screen.getByRole('button', { name: 'Xoá quy tắc Hai chiều HN-HY' }));
+    await user.click(screen.getByRole('button', { name: /^Xoá quy tắc #2\b/ }));
     expect(deleteRule).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Xoá quy tắc' }));
     await waitFor(() => expect(deleteRule).toHaveBeenCalledWith(2));
@@ -538,7 +547,7 @@ describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)'
   });
 
   async function openForm(user: ReturnType<typeof userEvent.setup>) {
-    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Luật toàn quốc' }));
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #50\b/ }));
     return await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
   }
 
@@ -628,10 +637,163 @@ describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)'
   it('sửa luật có sẵn: tỉnh và xã hiện đúng tên (xã chưa nạp xong thì hiện mã, không để ô trống)', async () => {
     const withWard = rule({ id: 40, name: 'Có xã', originProvinceCode: '01', originWardCode: '00002' });
     const { user } = await setup([withWard]);
-    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Có xã' }));
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #40\b/ }));
     const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
     expect(shown(slot(dlg, 'origin-province'))).toBe('Hà Nội');
     expect(shown(slot(dlg, 'dest-province'))).toBe('Hưng Yên');
     await waitFor(() => expect(shown(slot(dlg, 'origin-ward'))).toBe('Cầu Giấy'));
+  });
+});
+
+describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
+  beforeEach(() => {
+    toastMock.mockReset();
+    getRules.mockReset();
+    getProvinces.mockReset().mockResolvedValue(PROVINCES);
+    getWards.mockReset().mockResolvedValue([]);
+    updateRule.mockReset();
+    deleteRule.mockReset();
+    bulkDelete.mockReset();
+    bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
+  });
+
+  const pageOf = (items: PricingMacroRule[], total: number, page = 1, limit = 50) => ({ items, total, page, limit });
+
+  it('không còn cột/ô "Tên quy tắc"; dòng hiện điểm đón/trả (tên xã nếu có) + nhãn 2 chiều + ghi chú', async () => {
+    const r = rule({
+      id: 9,
+      name: 'tên cũ không hiển thị',
+      isBidirectional: true,
+      originWardCode: '13285',
+      originWardName: 'Phường Phủ Lý',
+      destWardCode: 'ZONE:NOIBAI',
+      destWardName: 'Sân bay Nội Bài',
+      note: 'Dịp lễ',
+    });
+    getRules.mockResolvedValue(pageOf([r], 1));
+    render(<PricingMacroManager />);
+    const row = await screen.findByTestId('rule-row-9');
+    expect(screen.queryByRole('columnheader', { name: /Tên quy tắc/ })).not.toBeInTheDocument();
+    expect(within(row).queryByText('tên cũ không hiển thị')).not.toBeInTheDocument();
+    expect(within(row).getByText('Phường Phủ Lý')).toBeInTheDocument();
+    expect(within(row).getByText('Sân bay Nội Bài')).toBeInTheDocument();
+    expect(within(row).getByText('2 chiều')).toBeInTheDocument();
+    expect(within(row).getByText('Dịp lễ')).toBeInTheDocument();
+    // nhãn truy cập dùng "Đón ↔ Trả", có mã luật
+    expect(
+      screen.getByRole('button', { name: 'Sửa quy tắc #9 Phường Phủ Lý (Hà Nội) ↔ Sân bay Nội Bài (Hưng Yên)' }),
+    ).toBeInTheDocument();
+  });
+
+  it('backend cũ không trả tên xã ⇒ hiện mã, không vỡ', async () => {
+    getRules.mockResolvedValue(pageOf([rule({ id: 8, originWardCode: '13285' })], 1));
+    render(<PricingMacroManager />);
+    expect(within(await screen.findByTestId('rule-row-8')).getByText('Xã #13285')).toBeInTheDocument();
+  });
+
+  it('form sửa không có ô tên và không gửi tên (backend giữ nguyên tên cũ)', async () => {
+    const { user } = await setup([ONE_WAY]);
+    updateRule.mockResolvedValue({ ...ONE_WAY });
+    await user.click(screen.getByRole('button', { name: /^Sửa quy tắc #1\b/ }));
+    const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
+    expect(within(dlg).queryByText(/Tên quy tắc/)).not.toBeInTheDocument();
+    await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+    await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(1));
+    expect(updateRule.mock.calls[0][1]).not.toHaveProperty('name');
+  });
+
+  it('mặc định 50 dòng/trang; thanh phân trang cho biết khoảng đang xem và tổng', async () => {
+    getRules.mockResolvedValue(pageOf([ONE_WAY, TWO_WAY], 120));
+    render(<PricingMacroManager />);
+    await screen.findByTestId('rule-row-1');
+    expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 50, search: '' });
+    expect(screen.getByTestId('rules-pager')).toHaveTextContent('Hiển thị 1–2 / 120 quy tắc');
+    expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 1 / 3');
+    expect(screen.getByRole('button', { name: 'Trang trước' })).toBeDisabled();
+  });
+
+  it('chọn số dòng/trang: gọi lại với limit mới và về trang 1', async () => {
+    getRules.mockResolvedValue(pageOf([ONE_WAY], 120));
+    render(<PricingMacroManager />);
+    await screen.findByTestId('rule-row-1');
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 2, limit: 50, search: '' }));
+    await user.selectOptions(screen.getByLabelText('Số dòng mỗi trang'), '100');
+    await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 100, search: '' }));
+    expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 1 / 2');
+  });
+
+  it('Trang sau/Trước đổi trang; ở trang cuối nút Sau bị khoá', async () => {
+    getRules.mockImplementation(async (p: { page: number }) =>
+      pageOf([rule({ id: 100 + p.page })], 120, p.page),
+    );
+    render(<PricingMacroManager />);
+    const user = userEvent.setup();
+    await screen.findByTestId('rule-row-101');
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByTestId('rule-row-102');
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByTestId('rule-row-103');
+    expect(screen.getByRole('button', { name: 'Trang sau' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Trang trước' }));
+    await screen.findByTestId('rule-row-102');
+  });
+
+  it('vùng chọn được GIỮ khi sang trang khác (xoá hàng loạt gồm cả dòng trang trước)', async () => {
+    getRules.mockImplementation(async (p: { page: number }) =>
+      pageOf([rule({ id: p.page === 1 ? 1 : 2 })], 100, p.page),
+    );
+    render(<PricingMacroManager />);
+    const user = userEvent.setup();
+    await screen.findByTestId('rule-row-1');
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByTestId('rule-row-2');
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #2\b/ }));
+    bulkDelete.mockResolvedValue({ deleted: [1, 2], missing: [] });
+    await user.click(screen.getByRole('button', { name: 'Xoá đã chọn (2)' }));
+    await user.click(await screen.findByRole('button', { name: 'Xoá 2 quy tắc' }));
+    await waitFor(() => expect(bulkDelete).toHaveBeenCalledTimes(1));
+    expect(bulkDelete.mock.calls[0][0].slice().sort()).toEqual([1, 2]);
+  });
+
+  it('xoá hết dòng của trang cuối ⇒ tự lùi về trang cuối còn dữ liệu (không kẹt ở trang trống)', async () => {
+    getRules.mockImplementation(async (p: { page: number }) =>
+      p.page === 2 ? pageOf([], 50, 2) : pageOf([rule({ id: 1 })], 50, 1),
+    );
+    render(<PricingMacroManager />);
+    const user = userEvent.setup();
+    await screen.findByTestId('rule-row-1');
+    // giả lập đang ở trang 2 mà server báo trống nhưng tổng còn 50 ⇒ lùi về trang 1
+    getRules.mockImplementation(async (p: { page: number }) =>
+      p.page === 2 ? pageOf([], 50, 2, 50) : pageOf([rule({ id: 1 })], 50, 1, 50),
+    );
+    await user.selectOptions(screen.getByLabelText('Số dòng mỗi trang'), '20');
+    await waitFor(() => expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 20, search: '' }));
+    expect(await screen.findByTestId('rule-row-1')).toBeInTheDocument();
+  });
+
+  it('kết quả của yêu cầu CŨ không đè lên yêu cầu mới (gõ tìm nhanh)', async () => {
+    let releaseOld: (v: unknown) => void = () => {};
+    getRules.mockImplementationOnce(() => new Promise((r) => (releaseOld = r))); // lần nạp đầu: treo
+    getRules.mockImplementation(async () => pageOf([TWO_WAY], 1));
+    render(<PricingMacroManager />);
+    const user = userEvent.setup();
+    await user.type(screen.getByPlaceholderText(/Tìm theo tỉnh, xã/), 'x');
+    await screen.findByTestId('rule-row-2');
+    releaseOld(pageOf([ONE_WAY], 1)); // yêu cầu cũ về muộn
+    await new Promise((r) => setTimeout(r, 20));
+    expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument();
+    expect(screen.getByTestId('rule-row-2')).toBeInTheDocument();
+  });
+
+  it('không khớp từ khoá ⇒ báo riêng, không phải "chưa có quy tắc"', async () => {
+    getRules.mockImplementation(async (p: { search?: string }) => pageOf(p.search ? [] : [ONE_WAY], p.search ? 0 : 1));
+    render(<PricingMacroManager />);
+    const user = userEvent.setup();
+    await screen.findByTestId('rule-row-1');
+    await user.type(screen.getByPlaceholderText(/Tìm theo tỉnh, xã/), 'zzz');
+    expect(await screen.findByText('Không có quy tắc nào khớp từ khoá tìm kiếm.')).toBeInTheDocument();
   });
 });

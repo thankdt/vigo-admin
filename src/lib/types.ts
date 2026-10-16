@@ -1122,6 +1122,17 @@ export type PricingMacroRule = {
   note?: string | null;
   createdAt?: string;
   updatedAt?: string;
+  /** Tên phường/xã hoặc điểm đặc biệt (chỉ có trong danh sách phân trang của backend mới). */
+  originWardName?: string;
+  destWardName?: string;
+};
+
+/** `GET /pricing/macro-rules?page&limit&search`. */
+export type PricingMacroRulePage = {
+  items: PricingMacroRule[];
+  total: number;
+  page: number;
+  limit: number;
 };
 
 /** Một đầu của tổ hợp tạo hàng loạt: tỉnh và/hoặc phường/xã. Bỏ trống cả hai = "bất kỳ". */
@@ -1131,7 +1142,8 @@ export type MacroEndSelector = {
 };
 
 export type BulkCreatePricingMacroRulesRequest = {
-  namePrefix: string;
+  /** Tuỳ chọn (admin không còn nhập; backend cũ vẫn đòi — deploy backend TRƯỚC). */
+  namePrefix?: string;
   isActive?: boolean;
   priority?: number;
   serviceType?: string;

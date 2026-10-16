@@ -278,7 +278,8 @@ export function describeSkipped(
   const b = s.blockedBy;
   if (!b || b.id === null) return `${route}: ${s.message}`;
   const state = b.isActive ? 'đang bật' : 'đang tắt';
-  return `${route}: đã có quy tắc #${b.id} "${b.name}" (${state}${b.isBidirectional ? ', hai chiều' : ''})`;
+  const named = b.name?.trim() ? ` "${b.name.trim()}"` : '';
+  return `${route}: đã có quy tắc #${b.id}${named} (${state}${b.isBidirectional ? ', hai chiều' : ''})`;
 }
 
 /**
