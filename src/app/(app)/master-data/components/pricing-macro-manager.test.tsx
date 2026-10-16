@@ -41,6 +41,49 @@ vi.mock('./macro-bulk-dialog', () => ({
     ) : null,
 }));
 
+// Combobox = Popover(modal) + cmdk. Bật nó BÊN TRONG Dialog của Radix thì jsdom đệ quy vô hạn
+// ("Maximum call stack size exceeded" — hai FocusScope tranh nhau; trình duyệt thật không bị), cùng lý do với
+// MultiSelectComboBox ở macro-bulk-dialog.test.tsx. Ở đây thay bằng <select> thô: test này kiểm cách form nối
+// ô chọn với dữ liệu (mã, mục "tất cả", khoá/mở). Việc lọc gõ không dấu của Combobox thật có test riêng ở
+// src/components/ui/combobox.test.tsx. Nút "bấm lại" mô phỏng đúng hợp đồng thật: bấm lại mục đang chọn → undefined.
+vi.mock('@/components/ui/combobox', () => ({
+  Combobox: ({
+    id,
+    ariaLabel,
+    options,
+    selectedValue,
+    onSelect,
+    placeholder,
+    disabled,
+  }: {
+    id?: string;
+    ariaLabel?: string;
+    options: { value: string; label: string }[];
+    selectedValue?: string;
+    onSelect: (v: string | undefined) => void;
+    placeholder: string;
+    disabled?: boolean;
+  }) => (
+    <span>
+      <select
+        id={id}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        value={selectedValue ?? ''}
+        onChange={(e) => onSelect(e.target.value)}
+      >
+        {selectedValue === undefined && <option value="">{placeholder}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <button type="button" aria-label={`bấm lại ${id ?? ariaLabel}`} onClick={() => onSelect(undefined)} />
+    </span>
+  ),
+}));
+
 import { PricingMacroManager } from './pricing-macro-manager';
 
 const PROVINCES = [
@@ -487,5 +530,123 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     expect(deleteRule).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Xoá quy tắc' }));
     await waitFor(() => expect(deleteRule).toHaveBeenCalledWith(2));
+  });
+});
+
+describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)', () => {
+  const HN_WARDS = [
+    { code: '00001', name: 'Sơn Đồng', provinceCode: '01' },
+    { code: '00002', name: 'Cầu Giấy', provinceCode: '01' },
+    { code: '00003', name: 'Hoàng Mai', provinceCode: '01' },
+  ];
+
+  beforeEach(() => {
+    toastMock.mockReset();
+    getRules.mockReset();
+    getProvinces.mockReset().mockResolvedValue(PROVINCES);
+    getWards.mockReset().mockImplementation(async (code: string) => (code === '01' ? HN_WARDS : []));
+    createRule.mockReset();
+    updateRule.mockReset();
+    deleteRule.mockReset();
+    bulkDelete.mockReset();
+    bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
+  });
+
+  async function openForm(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /Thêm quy tắc/ }));
+    const dlg = await screen.findByRole('dialog', { name: /Thêm quy tắc macro/ });
+    await user.type(within(dlg).getByPlaceholderText(/Về TP Phủ Lý/), 'Luật tìm kiếm');
+    return dlg;
+  }
+
+  type Slot = 'origin-province' | 'origin-ward' | 'dest-province' | 'dest-ward';
+  const slot = (dlg: HTMLElement, id: Slot) => dlg.querySelector(`#macro-${id}`) as HTMLSelectElement;
+  const shown = (el: HTMLSelectElement) => el.selectedOptions[0]?.textContent;
+  const optionLabels = (el: HTMLSelectElement) => Array.from(el.options).map((o) => o.textContent);
+
+  it('ban đầu: "Toàn quốc (Bất kỳ)" ở ô tỉnh; ô xã bị khoá, nhắc "Chọn tỉnh trước"', async () => {
+    const { user } = await setup([ONE_WAY]);
+    const dlg = await openForm(user);
+    for (const side of ['origin', 'dest'] as const) {
+      const prov = slot(dlg, `${side}-province`);
+      expect(shown(prov)).toBe('Toàn quốc (Bất kỳ)');
+      expect(optionLabels(prov)).toEqual(['Toàn quốc (Bất kỳ)', 'Hà Nội', 'Hưng Yên']); // "tất cả" đứng đầu
+      const ward = slot(dlg, `${side}-ward`);
+      expect(ward).toBeDisabled();
+      expect(shown(ward)).toBe('Chọn tỉnh trước');
+    }
+  });
+
+  it('chọn tỉnh nạp xã của tỉnh đó, mở khoá ô xã (mục "Toàn bộ tỉnh" đứng đầu); chọn xã rồi lưu đúng mã', async () => {
+    const { user } = await setup([ONE_WAY]);
+    createRule.mockResolvedValue({ ...ONE_WAY, id: 30 });
+    const dlg = await openForm(user);
+
+    await user.selectOptions(slot(dlg, 'origin-province'), '01');
+    await waitFor(() => expect(getWards).toHaveBeenCalledWith('01'));
+    await waitFor(() => expect(slot(dlg, 'origin-ward')).toBeEnabled());
+    expect(optionLabels(slot(dlg, 'origin-ward'))).toEqual(['Toàn bộ tỉnh (Mọi xã)', 'Sơn Đồng', 'Cầu Giấy', 'Hoàng Mai']);
+    expect(shown(slot(dlg, 'origin-ward'))).toBe('Toàn bộ tỉnh (Mọi xã)');
+
+    await user.selectOptions(slot(dlg, 'origin-ward'), '00001');
+    expect(shown(slot(dlg, 'origin-ward'))).toBe('Sơn Đồng');
+
+    await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+    await waitFor(() => expect(createRule).toHaveBeenCalledTimes(1));
+    expect(createRule.mock.calls[0][0]).toMatchObject({
+      originProvinceCode: '01',
+      originWardCode: '00001',
+      destProvinceCode: null,
+      destWardCode: null,
+    });
+  });
+
+  it('"Toàn bộ tỉnh" trả xã về rỗng; "Toàn quốc" xoá cả tỉnh lẫn xã và khoá lại ô xã', async () => {
+    const { user } = await setup([ONE_WAY]);
+    createRule.mockResolvedValue({ ...ONE_WAY, id: 31 });
+    const dlg = await openForm(user);
+
+    await user.selectOptions(slot(dlg, 'dest-province'), '01');
+    await waitFor(() => expect(slot(dlg, 'dest-ward')).toBeEnabled());
+    await user.selectOptions(slot(dlg, 'dest-ward'), '00002');
+    expect(shown(slot(dlg, 'dest-ward'))).toBe('Cầu Giấy');
+
+    await user.selectOptions(slot(dlg, 'dest-ward'), '__ALL__');
+    expect(shown(slot(dlg, 'dest-ward'))).toBe('Toàn bộ tỉnh (Mọi xã)');
+
+    await user.selectOptions(slot(dlg, 'dest-ward'), '00003');
+    await user.selectOptions(slot(dlg, 'dest-province'), '__ALL__');
+    expect(shown(slot(dlg, 'dest-province'))).toBe('Toàn quốc (Bất kỳ)');
+    expect(slot(dlg, 'dest-ward')).toBeDisabled();
+    expect(shown(slot(dlg, 'dest-ward'))).toBe('Chọn tỉnh trước');
+
+    await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+    await waitFor(() => expect(createRule).toHaveBeenCalledTimes(1));
+    expect(createRule.mock.calls[0][0]).toMatchObject({ destProvinceCode: null, destWardCode: null });
+  });
+
+  it('bấm lại tỉnh / xã đang chọn (Combobox trả undefined) thì giữ nguyên, không đặt lại về "tất cả"', async () => {
+    const { user } = await setup([ONE_WAY]);
+    const dlg = await openForm(user);
+
+    await user.selectOptions(slot(dlg, 'origin-province'), '01');
+    await waitFor(() => expect(slot(dlg, 'origin-ward')).toBeEnabled());
+    await user.selectOptions(slot(dlg, 'origin-ward'), '00003');
+
+    await user.click(screen.getByRole('button', { name: 'bấm lại macro-origin-ward' }));
+    await user.click(screen.getByRole('button', { name: 'bấm lại macro-origin-province' }));
+    expect(shown(slot(dlg, 'origin-province'))).toBe('Hà Nội');
+    expect(shown(slot(dlg, 'origin-ward'))).toBe('Hoàng Mai');
+    expect(getWards).toHaveBeenCalledTimes(1);
+  });
+
+  it('sửa luật có sẵn: tỉnh và xã hiện đúng tên (xã chưa nạp xong thì hiện mã, không để ô trống)', async () => {
+    const withWard = rule({ id: 40, name: 'Có xã', originProvinceCode: '01', originWardCode: '00002' });
+    const { user } = await setup([withWard]);
+    await user.click(screen.getByRole('button', { name: 'Sửa quy tắc Có xã' }));
+    const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
+    expect(shown(slot(dlg, 'origin-province'))).toBe('Hà Nội');
+    expect(shown(slot(dlg, 'dest-province'))).toBe('Hưng Yên');
+    await waitFor(() => expect(shown(slot(dlg, 'origin-ward'))).toBe('Cầu Giấy'));
   });
 });

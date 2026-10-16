@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Combobox } from '@/components/ui/combobox';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -71,6 +72,25 @@ import type {
   MacroBandWarnings,
 } from '@/lib/types';
 import { cn } from '@/lib/utils';
+
+/** Giá trị của mục "Toàn quốc / Toàn bộ tỉnh" trong ô chọn tỉnh / xã (form lưu '' cho "không giới hạn"). */
+const ALL_CODE = '__ALL__';
+
+/**
+ * Lựa chọn cho ô chọn tỉnh / xã có thể tìm: mục "tất cả" đứng đầu rồi tới danh sách.
+ * Mã đang chọn mà chưa có trong danh sách (đang nạp xã, hoặc nạp lỗi) vẫn được hiện — bằng mã — thay vì ô trống.
+ */
+function withAllOption(
+  allLabel: string,
+  items: { code: string; name: string }[],
+  selectedCode: string,
+): { value: string; label: string }[] {
+  const options = [{ value: ALL_CODE, label: allLabel }, ...items.map((i) => ({ value: i.code, label: i.name }))];
+  if (selectedCode && !items.some((i) => i.code === selectedCode)) {
+    options.push({ value: selectedCode, label: selectedCode });
+  }
+  return options;
+}
 
 export function PricingMacroManager() {
   const { toast } = useToast();
@@ -170,7 +190,7 @@ export function PricingMacroManager() {
 
   // Load wards when province changes in dialog
   const handleOriginProvinceChange = async (provCode: string) => {
-    const val = provCode === '__ALL__' ? '' : provCode;
+    const val = provCode === ALL_CODE ? '' : provCode;
     setFormData((prev) => ({ ...prev, originProvinceCode: val, originWardCode: '' }));
     if (!val) {
       setOriginWards([]);
@@ -188,7 +208,7 @@ export function PricingMacroManager() {
   };
 
   const handleDestProvinceChange = async (provCode: string) => {
-    const val = provCode === '__ALL__' ? '' : provCode;
+    const val = provCode === ALL_CODE ? '' : provCode;
     setFormData((prev) => ({ ...prev, destProvinceCode: val, destWardCode: '' }));
     if (!val) {
       setDestWards([]);
@@ -432,6 +452,24 @@ export function PricingMacroManager() {
     return selectedRules.filter((r) => !visible.has(r.id)).length;
   }, [selectedRules, filteredRules]);
   const BULK_DELETE_LIST_MAX = 8;
+
+  // Ô chọn tỉnh / xã có ô tìm (gõ không dấu vẫn khớp): xã mỗi tỉnh có thể hơn 100 mục.
+  const originProvinceOptions = React.useMemo(
+    () => withAllOption('Toàn quốc (Bất kỳ)', provinces, formData.originProvinceCode),
+    [provinces, formData.originProvinceCode],
+  );
+  const destProvinceOptions = React.useMemo(
+    () => withAllOption('Toàn quốc (Bất kỳ)', provinces, formData.destProvinceCode),
+    [provinces, formData.destProvinceCode],
+  );
+  const originWardOptions = React.useMemo(
+    () => withAllOption('Toàn bộ tỉnh (Mọi xã)', originWards, formData.originWardCode),
+    [originWards, formData.originWardCode],
+  );
+  const destWardOptions = React.useMemo(
+    () => withAllOption('Toàn bộ tỉnh (Mọi xã)', destWards, formData.destWardCode),
+    [destWards, formData.destWardCode],
+  );
 
   return (
     <div className="space-y-6">
@@ -727,54 +765,45 @@ export function PricingMacroManager() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Tỉnh / Thành phố</Label>
-                  <Select
-                    value={formData.originProvinceCode || '__ALL__'}
-                    onValueChange={handleOriginProvinceChange}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-white">
-                      <SelectValue placeholder="Toàn quốc (Bất kỳ tỉnh nào)" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-56">
-                      <SelectItem value="__ALL__">Toàn quốc (Bất kỳ)</SelectItem>
-                      {provinces.map((p) => (
-                        <SelectItem key={p.code} value={p.code}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="macro-origin-province" className="text-[11px] text-slate-500">Tỉnh / Thành phố</Label>
+                  <Combobox
+                    id="macro-origin-province"
+                    className="h-8 text-xs bg-white"
+                    options={originProvinceOptions}
+                    selectedValue={formData.originProvinceCode || ALL_CODE}
+                    // Bấm lại mục đang chọn làm Combobox trả undefined: bỏ qua, đừng đặt lại thành "Toàn quốc".
+                    onSelect={(val) => {
+                      if (val !== undefined) handleOriginProvinceChange(val);
+                    }}
+                    placeholder="Toàn quốc (Bất kỳ tỉnh nào)"
+                    searchPlaceholder="Tìm tỉnh / thành phố..."
+                    noResultsText="Không tìm thấy tỉnh"
+                  />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Xã / Phường</Label>
-                  <Select
-                    value={formData.originWardCode || '__ALL__'}
-                    onValueChange={(val) =>
-                      setFormData((prev) => ({ ...prev, originWardCode: val === '__ALL__' ? '' : val }))
-                    }
+                  <Label htmlFor="macro-origin-ward" className="text-[11px] text-slate-500">Xã / Phường</Label>
+                  <Combobox
+                    id="macro-origin-ward"
+                    className="h-8 text-xs bg-white"
+                    options={originWardOptions}
+                    selectedValue={formData.originWardCode || (formData.originProvinceCode && !loadingOriginWards ? ALL_CODE : undefined)}
+                    onSelect={(val) => {
+                      if (val !== undefined) {
+                        setFormData((prev) => ({ ...prev, originWardCode: val === ALL_CODE ? '' : val }));
+                      }
+                    }}
                     disabled={!formData.originProvinceCode || loadingOriginWards}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-white">
-                      <SelectValue
-                        placeholder={
-                          loadingOriginWards
-                            ? 'Đang tải danh sách xã...'
-                            : !formData.originProvinceCode
-                            ? 'Chọn tỉnh trước'
-                            : 'Toàn bộ tỉnh (Mọi xã)'
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-56">
-                      <SelectItem value="__ALL__">Toàn bộ tỉnh (Mọi xã)</SelectItem>
-                      {originWards.map((w) => (
-                        <SelectItem key={w.code} value={w.code}>
-                          {w.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      loadingOriginWards
+                        ? 'Đang tải danh sách xã...'
+                        : !formData.originProvinceCode
+                        ? 'Chọn tỉnh trước'
+                        : 'Toàn bộ tỉnh (Mọi xã)'
+                    }
+                    searchPlaceholder="Tìm xã / phường..."
+                    noResultsText="Không tìm thấy xã / phường"
+                  />
                 </div>
               </div>
             </div>
@@ -787,54 +816,45 @@ export function PricingMacroManager() {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Tỉnh / Thành phố</Label>
-                  <Select
-                    value={formData.destProvinceCode || '__ALL__'}
-                    onValueChange={handleDestProvinceChange}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-white">
-                      <SelectValue placeholder="Toàn quốc (Bất kỳ tỉnh nào)" />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-56">
-                      <SelectItem value="__ALL__">Toàn quốc (Bất kỳ)</SelectItem>
-                      {provinces.map((p) => (
-                        <SelectItem key={p.code} value={p.code}>
-                          {p.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label htmlFor="macro-dest-province" className="text-[11px] text-slate-500">Tỉnh / Thành phố</Label>
+                  <Combobox
+                    id="macro-dest-province"
+                    className="h-8 text-xs bg-white"
+                    options={destProvinceOptions}
+                    selectedValue={formData.destProvinceCode || ALL_CODE}
+                    // Bấm lại mục đang chọn làm Combobox trả undefined: bỏ qua, đừng đặt lại thành "Toàn quốc".
+                    onSelect={(val) => {
+                      if (val !== undefined) handleDestProvinceChange(val);
+                    }}
+                    placeholder="Toàn quốc (Bất kỳ tỉnh nào)"
+                    searchPlaceholder="Tìm tỉnh / thành phố..."
+                    noResultsText="Không tìm thấy tỉnh"
+                  />
                 </div>
 
                 <div className="space-y-1">
-                  <Label className="text-[11px] text-slate-500">Xã / Phường</Label>
-                  <Select
-                    value={formData.destWardCode || '__ALL__'}
-                    onValueChange={(val) =>
-                      setFormData((prev) => ({ ...prev, destWardCode: val === '__ALL__' ? '' : val }))
-                    }
+                  <Label htmlFor="macro-dest-ward" className="text-[11px] text-slate-500">Xã / Phường</Label>
+                  <Combobox
+                    id="macro-dest-ward"
+                    className="h-8 text-xs bg-white"
+                    options={destWardOptions}
+                    selectedValue={formData.destWardCode || (formData.destProvinceCode && !loadingDestWards ? ALL_CODE : undefined)}
+                    onSelect={(val) => {
+                      if (val !== undefined) {
+                        setFormData((prev) => ({ ...prev, destWardCode: val === ALL_CODE ? '' : val }));
+                      }
+                    }}
                     disabled={!formData.destProvinceCode || loadingDestWards}
-                  >
-                    <SelectTrigger className="h-8 text-xs bg-white">
-                      <SelectValue
-                        placeholder={
-                          loadingDestWards
-                            ? 'Đang tải danh sách xã...'
-                            : !formData.destProvinceCode
-                            ? 'Chọn tỉnh trước'
-                            : 'Toàn bộ tỉnh (Mọi xã)'
-                        }
-                      />
-                    </SelectTrigger>
-                    <SelectContent className="max-h-56">
-                      <SelectItem value="__ALL__">Toàn bộ tỉnh (Mọi xã)</SelectItem>
-                      {destWards.map((w) => (
-                        <SelectItem key={w.code} value={w.code}>
-                          {w.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    placeholder={
+                      loadingDestWards
+                        ? 'Đang tải danh sách xã...'
+                        : !formData.destProvinceCode
+                        ? 'Chọn tỉnh trước'
+                        : 'Toàn bộ tỉnh (Mọi xã)'
+                    }
+                    searchPlaceholder="Tìm xã / phường..."
+                    noResultsText="Không tìm thấy xã / phường"
+                  />
                 </div>
               </div>
             </div>

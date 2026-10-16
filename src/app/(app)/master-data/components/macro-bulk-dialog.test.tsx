@@ -47,6 +47,44 @@ vi.mock('@/components/ui/multi-select-combobox', () => ({
     </fieldset>
   ),
 }));
+// Combobox (ô chọn tỉnh) cũng là Popover(modal) + cmdk nên mắc cùng lỗi lồng trong Dialog như trên. Thay bằng
+// <select> thô: test này kiểm hộp thoại (mã tỉnh, "— Chọn tỉnh —" = bỏ chọn, nạp phường), còn việc lọc gõ không
+// dấu của Combobox thật có test riêng ở src/components/ui/combobox.test.tsx. Nút "bấm lại" mô phỏng đúng hợp
+// đồng thật: bấm lại mục đang chọn → onSelect(undefined).
+vi.mock('@/components/ui/combobox', () => ({
+  Combobox: ({
+    ariaLabel,
+    options,
+    selectedValue,
+    onSelect,
+    placeholder,
+    disabled,
+  }: {
+    ariaLabel?: string;
+    options: { value: string; label: string }[];
+    selectedValue?: string;
+    onSelect: (v: string | undefined) => void;
+    placeholder: string;
+    disabled?: boolean;
+  }) => (
+    <span>
+      <select
+        aria-label={ariaLabel}
+        disabled={disabled}
+        value={selectedValue ?? ''}
+        onChange={(e) => onSelect(e.target.value)}
+      >
+        {selectedValue === undefined && <option value="">{placeholder}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <button type="button" aria-label={`bấm lại ${ariaLabel}`} onClick={() => onSelect(undefined)} />
+    </span>
+  ),
+}));
 vi.mock('@/lib/api', () => ({
   bulkCreatePricingMacroRules: (...a: unknown[]) => bulkCreate(...a),
   getPricingMacroWards: (...a: unknown[]) => getWards(...a),
@@ -465,6 +503,30 @@ describe('MacroBulkDialog', () => {
 
     await pickProvince(user, 'Điểm đón', ''); // bỏ chọn → không còn chờ
     expect(screen.queryByTestId('bulk-pending')).not.toBeInTheDocument();
+  });
+
+  it('ô tỉnh: "— Chọn tỉnh —" đứng đầu rồi tới các tỉnh; chọn tỉnh nạp phường của đúng tỉnh đó', async () => {
+    const { user } = setup();
+    const box = screen.getByLabelText('Điểm đón: tỉnh/thành') as HTMLSelectElement;
+    expect(Array.from(box.options).map((o) => o.textContent)).toEqual(['— Chọn tỉnh —', 'Hà Nội', 'Hưng Yên']);
+    expect(box.value).toBe('');
+
+    await pickProvince(user, 'Điểm đón', '33');
+    await waitFor(() => expect(getWards).toHaveBeenCalledWith('33'));
+    expect(box.value).toBe('33');
+    expect(screen.getByRole('button', { name: 'Điểm đón: Thêm cả tỉnh' })).toBeEnabled();
+  });
+
+  it('bấm lại tỉnh đang chọn (Combobox trả undefined) thì giữ tỉnh và phường đã chọn, không nạp lại', async () => {
+    const { user } = setup();
+    await pickProvince(user, 'Điểm đón', '01');
+    await waitFor(() => expect(getWards).toHaveBeenCalledWith('01'));
+    await user.click(await screen.findByLabelText('Chọn Nghĩa Đô'));
+
+    await user.click(screen.getByRole('button', { name: 'bấm lại Điểm đón: tỉnh/thành' }));
+    expect((screen.getByLabelText('Điểm đón: tỉnh/thành') as HTMLSelectElement).value).toBe('01');
+    expect(screen.getByLabelText('Chọn Nghĩa Đô')).toBeChecked();
+    expect(getWards).toHaveBeenCalledTimes(1);
   });
 
   it('sau khi đã Thêm, ô tỉnh còn giữ nguyên KHÔNG bị coi là đang chờ', async () => {

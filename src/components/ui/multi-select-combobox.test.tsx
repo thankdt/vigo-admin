@@ -57,4 +57,32 @@ describe('MultiSelectComboBox', () => {
 
     expect(selected.at(-1)).toEqual(['2']);
   });
+
+  it('gõ không dấu vẫn tìm ra mục có dấu ("son dong" → "Sơn Đồng", "ha noi" → "Hà Nội")', async () => {
+    const user = userEvent.setup();
+    const options = [
+      { value: '1', label: 'Sơn Đồng' },
+      { value: '2', label: 'Cầu Giấy' },
+      { value: '3', label: 'Hà Nội' },
+    ];
+
+    render(
+      <MultiSelectComboBox
+        options={options}
+        selectedValues={[]}
+        onSelectedValuesChange={() => {}}
+        placeholder="Chọn..."
+        searchPlaceholder="Tìm..."
+        noResultsText="Không tìm thấy"
+      />
+    );
+
+    await user.click(screen.getByRole('combobox'));
+    await user.type(await screen.findByPlaceholderText('Tìm...'), 'son dong');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Sơn Đồng']);
+
+    await user.clear(screen.getByPlaceholderText('Tìm...'));
+    await user.type(screen.getByPlaceholderText('Tìm...'), 'ha noi');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Hà Nội']);
+  });
 });
