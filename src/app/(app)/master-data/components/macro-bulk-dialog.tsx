@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Combobox } from '@/components/ui/combobox';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, MapPin, X } from 'lucide-react';
@@ -104,6 +105,11 @@ function EndpointBuilder({
   const requestSeq = React.useRef(0);
 
   const provinceName = provinces.find((p) => p.code === provinceCode)?.name ?? provinceCode;
+  // Mục đầu "— Chọn tỉnh —" (mã rỗng) = bỏ chọn, như ô chọn cũ: bỏ chọn tỉnh đã nhập mà chưa "Thêm" là cách gỡ chặn tạo.
+  const provinceOptions = React.useMemo(
+    () => [{ value: '', label: '— Chọn tỉnh —' }, ...provinces.map((p) => ({ value: p.code, label: p.name }))],
+    [provinces],
+  );
   const addLabel = wardCodes.length ? `Thêm ${wardCodes.length} phường/xã` : provinceCode ? 'Thêm cả tỉnh' : 'Thêm';
 
   // Lựa chọn đã nhập mà chưa "Thêm" sẽ KHÔNG vào payload — cha phải biết để chặn tạo (bên đó sẽ thành "mọi nơi").
@@ -161,19 +167,19 @@ function EndpointBuilder({
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-[11px] text-slate-500">Tỉnh / Thành phố</Label>
-          <select
-            aria-label={`${title}: tỉnh/thành`}
-            className={NATIVE_SELECT}
-            value={provinceCode}
-            onChange={(e) => handleProvince(e.target.value)}
-          >
-            <option value="">— Chọn tỉnh —</option>
-            {provinces.map((p) => (
-              <option key={p.code} value={p.code}>
-                {p.name}
-              </option>
-            ))}
-          </select>
+          <Combobox
+            ariaLabel={`${title}: tỉnh/thành`}
+            className="h-8 text-xs bg-white"
+            options={provinceOptions}
+            selectedValue={provinceCode}
+            // Bấm lại mục đang chọn làm Combobox trả undefined: bỏ qua (không xoá tỉnh/phường đã chọn).
+            onSelect={(code) => {
+              if (code !== undefined) void handleProvince(code);
+            }}
+            placeholder="— Chọn tỉnh —"
+            searchPlaceholder="Tìm tỉnh / thành phố..."
+            noResultsText="Không tìm thấy tỉnh"
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] text-slate-500">Phường / Xã (bỏ trống = cả tỉnh)</Label>

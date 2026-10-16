@@ -19,6 +19,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Badge } from '@/components/ui/badge';
+import { vietnameseInsensitiveFilter } from '@/components/ui/combobox-filter';
 
 type ComboboxOption = {
   value: string;
@@ -106,7 +107,7 @@ export function MultiSelectComboBox({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
-        <Command>
+        <Command filter={vietnameseInsensitiveFilter}>
           <CommandInput
             placeholder={searchPlaceholder}
             value={inputValue}

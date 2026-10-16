@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Combobox } from '@/components/ui/combobox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
@@ -51,9 +52,6 @@ import { cn } from '@/lib/utils';
 
 /** Cùng quyền với backend: `@RequireFunction('master-data')` ở cấp class của SpecialZonesController. */
 const REQUIRED_FUNCTION = 'master-data';
-
-const NATIVE_SELECT =
-  'h-9 w-full rounded-md border border-input bg-white px-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60';
 
 /** Giá trị ô chọn cho hàng mặc định cả tỉnh (mã phường gis là số nên không đụng). */
 const DEFAULT_TARGET = '__DEFAULT__';
@@ -225,7 +223,6 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
   const [showErrors, setShowErrors] = React.useState(false);
   const [wards, setWards] = React.useState<WardOption[] | null>(null);
   const [wardsError, setWardsError] = React.useState<string | null>(null);
-  const [wardFilter, setWardFilter] = React.useState('');
 
   const [pending, setPending] = React.useState<PendingSave | null>(null);
   const [saving, setSaving] = React.useState(false);
@@ -266,7 +263,6 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
     setEditing('new');
     setForm(EMPTY_FORM);
     setShowErrors(false);
-    setWardFilter('');
     // Rỗng cũng nạp lại: backend `listWards` nuốt lỗi DB và trả [] — danh sách rỗng không được coi là "đã tải".
     if (wards === null || wards.length === 0) void loadWards();
   };
@@ -311,13 +307,6 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
       { mode: editingRow ? 'edit' : 'create', provinceWardCodes: wardSet, existing: rows },
     );
   }, [editing, editingRow, wards, wardCodeOfForm, form, rows]);
-
-  const filteredWards = React.useMemo(() => {
-    const q = wardFilter.trim().toLowerCase();
-    const list = wards ?? [];
-    // Phường đang chọn luôn nằm trong danh sách: lọc không được làm ô chọn lệch khỏi giá trị thật.
-    return q ? list.filter((w) => w.code === form.target || w.name.toLowerCase().includes(q) || w.code.includes(q)) : list;
-  }, [wards, wardFilter, form.target]);
 
   const handleReview = (e: React.FormEvent) => {
     e.preventDefault();
@@ -385,6 +374,14 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
 
   const deleteText = deleteRow ? describeFlatPriceDelete({ zone, row: deleteRow }) : null;
   const provinceLabel = zone.provinceName ?? `tỉnh ${zone.provinceCode}`;
+  // Hàng mặc định cả tỉnh đứng đầu rồi tới phường/xã; ô tìm của Combobox khớp cả tên (không dấu cũng được) lẫn mã.
+  const targetOptions = React.useMemo(
+    () => [
+      { value: DEFAULT_TARGET, label: `Cả ${provinceLabel} (mặc định)` },
+      ...(wards ?? []).map((w) => ({ value: w.code, label: `${w.name} (${w.code})` })),
+    ],
+    [wards, provinceLabel],
+  );
   const errs = showErrors ? validation?.errors : undefined;
 
   return (
@@ -535,27 +532,19 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                 </div>
               ) : (
                 <>
-                  <Input
-                    aria-label="Lọc phường/xã"
-                    className="h-8 text-xs"
-                    placeholder="Lọc phường/xã theo tên hoặc mã..."
-                    value={wardFilter}
-                    onChange={(e) => setWardFilter(e.target.value)}
-                  />
-                  <select
+                  <Combobox
                     id={`sz-target-${zone.code}`}
-                    className={NATIVE_SELECT}
-                    value={form.target}
-                    onChange={(e) => setForm((p) => ({ ...p, target: e.target.value }))}
-                  >
-                    <option value="">— Chọn nơi áp dụng —</option>
-                    <option value={DEFAULT_TARGET}>Cả {provinceLabel} (mặc định)</option>
-                    {filteredWards.map((w) => (
-                      <option key={w.code} value={w.code}>
-                        {w.name} ({w.code})
-                      </option>
-                    ))}
-                  </select>
+                    className="h-9 text-sm"
+                    options={targetOptions}
+                    selectedValue={form.target || undefined}
+                    // Bấm lại mục đang chọn làm Combobox trả undefined: bỏ qua, giữ nơi áp dụng đã chọn.
+                    onSelect={(target) => {
+                      if (target !== undefined) setForm((p) => ({ ...p, target }));
+                    }}
+                    placeholder="— Chọn nơi áp dụng —"
+                    searchPlaceholder="Tìm phường/xã theo tên hoặc mã..."
+                    noResultsText="Không tìm thấy phường/xã"
+                  />
                   {wards === null && !wardsError && (
                     <div className="text-[11px] text-slate-500">Đang tải phường/xã của {provinceLabel}...</div>
                   )}
