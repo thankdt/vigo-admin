@@ -40,6 +40,10 @@ type ComboboxProps = {
   noResultsText: string;
   className?: string;
   disabled?: boolean;
+  /** Gắn vào nút (để `<Label htmlFor>` trỏ tới được). */
+  id?: string;
+  /** Tên truy cập của nút; mặc định là nhãn đang hiển thị. */
+  ariaLabel?: string;
 };
 
 export function Combobox({
@@ -51,6 +55,8 @@ export function Combobox({
     noResultsText,
     className,
     disabled = false,
+    id,
+    ariaLabel,
 }: ComboboxProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -73,8 +79,10 @@ export function Combobox({
     <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
+          id={id}
           variant="outline"
           role="combobox"
+          aria-label={ariaLabel}
           aria-expanded={open}
           className={cn("w-full justify-between", !selectedValue && "text-muted-foreground", className)}
           disabled={disabled}

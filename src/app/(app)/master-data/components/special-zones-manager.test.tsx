@@ -24,6 +24,49 @@ vi.mock('@/lib/api', () => ({
   deleteSpecialZoneFlatPrice: (...a: unknown[]) => del(...a),
 }));
 
+// Combobox = Popover(modal) + cmdk. Bật nó BÊN TRONG Dialog của Radix thì jsdom đệ quy vô hạn ("Maximum call
+// stack size exceeded" — hai FocusScope tranh nhau; trình duyệt thật không bị), cùng lý do với MultiSelectComboBox
+// ở macro-bulk-dialog.test.tsx. Thay bằng <select> thô: test này kiểm cách hộp thoại nối ô chọn với form
+// (id/nhãn, mục mặc định đứng đầu, validate). Việc lọc gõ không dấu của Combobox thật có test riêng ở
+// src/components/ui/combobox.test.tsx. Nút "bấm lại" mô phỏng đúng hợp đồng thật: bấm lại mục đang chọn → undefined.
+vi.mock('@/components/ui/combobox', () => ({
+  Combobox: ({
+    id,
+    ariaLabel,
+    options,
+    selectedValue,
+    onSelect,
+    placeholder,
+    disabled,
+  }: {
+    id?: string;
+    ariaLabel?: string;
+    options: { value: string; label: string }[];
+    selectedValue?: string;
+    onSelect: (v: string | undefined) => void;
+    placeholder: string;
+    disabled?: boolean;
+  }) => (
+    <span>
+      <select
+        id={id}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        value={selectedValue ?? ''}
+        onChange={(e) => onSelect(e.target.value)}
+      >
+        {selectedValue === undefined && <option value="">{placeholder}</option>}
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+      <button type="button" aria-label="bấm lại ô chọn" onClick={() => onSelect(undefined)} />
+    </span>
+  ),
+}));
+
 import { SpecialZonesManager } from './special-zones-manager';
 
 const NOIBAI: SpecialZone = {
@@ -169,6 +212,37 @@ describe('SpecialZonesManager', () => {
     await waitFor(() => expect(getWards).toHaveBeenCalledWith('01'));
     await within(dialog).findByRole('option', { name: /Phường Ba Đình/ });
     expect(within(dialog).queryByRole('option', { name: /Xã Lạ/ })).not.toBeInTheDocument();
+  });
+
+  it('ô "Áp cho": mục mặc định cả tỉnh đứng đầu rồi tới phường "Tên (mã)"; chưa chọn thì nhắc "— Chọn nơi áp dụng —"', async () => {
+    const user = await setup([]);
+    const dialog = await openCreate(user);
+    const target = within(dialog).getByLabelText('Áp cho') as HTMLSelectElement;
+    expect(Array.from(target.options).map((o) => o.textContent)).toEqual([
+      '— Chọn nơi áp dụng —',
+      'Cả Hà Nội (mặc định)',
+      'Phường Ba Đình (00001)',
+      'Xã Sóc Sơn (00002)',
+    ]);
+    expect(target.selectedOptions[0]).toHaveTextContent('— Chọn nơi áp dụng —');
+    // Ô lọc riêng đã bỏ: việc tìm nằm trong chính ô chọn (Combobox có ô tìm).
+    expect(within(dialog).queryByLabelText('Lọc phường/xã')).not.toBeInTheDocument();
+  });
+
+  it('chọn một phường rồi bấm lại đúng mục đó: giữ nguyên lựa chọn, vẫn lưu đúng mã phường', async () => {
+    const user = await setup([]);
+    upsert.mockResolvedValue(row({ id: 11, wardCode: '00002', wardName: 'Xã Sóc Sơn' }));
+    const dialog = await openCreate(user);
+
+    await user.selectOptions(within(dialog).getByLabelText('Áp cho'), '00002');
+    await user.click(within(dialog).getByRole('button', { name: 'bấm lại ô chọn' }));
+    expect((within(dialog).getByLabelText('Áp cho') as HTMLSelectElement).value).toBe('00002');
+
+    await user.type(within(dialog).getByLabelText('Bao xe 4 chỗ (đ)'), '300000');
+    await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Xác nhận lưu' }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
+    expect(upsert.mock.calls[0][1]).toMatchObject({ wardCode: '00002', priceCar4: 300000 });
   });
 
   it('sửa hàng: phường cố định; cảnh báo lệch xa mức tham chiếu hiện ở hộp xác nhận', async () => {
