@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 const toastMock = vi.fn();
 const bulkCreate = vi.fn();
 const getWards = vi.fn();
+const getZones = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
 
@@ -88,6 +89,7 @@ vi.mock('@/components/ui/combobox', () => ({
 vi.mock('@/lib/api', () => ({
   bulkCreatePricingMacroRules: (...a: unknown[]) => bulkCreate(...a),
   getPricingMacroWards: (...a: unknown[]) => getWards(...a),
+  getSpecialZones: (...a: unknown[]) => getZones(...a),
 }));
 
 import { MacroBulkDialog } from './macro-bulk-dialog';
@@ -95,6 +97,10 @@ import { MacroBulkDialog } from './macro-bulk-dialog';
 const PROVINCES = [
   { code: '01', name: 'Hà Nội' },
   { code: '33', name: 'Hưng Yên' },
+];
+const ZONES = [
+  { code: 'NOIBAI', name: 'Sân bay Nội Bài', provinceCode: '01', provinceName: 'Hà Nội', kind: 'AIRPORT', active: true },
+  { code: 'OLD', name: 'Vùng đã tắt', provinceCode: '01', provinceName: 'Hà Nội', kind: 'AIRPORT', active: false },
 ];
 const HN_WARDS = [
   { code: '00160', name: 'Nghĩa Đô', provinceCode: '01' },
@@ -126,6 +132,8 @@ describe('MacroBulkDialog', () => {
     toastMock.mockReset();
     bulkCreate.mockReset();
     getWards.mockReset();
+    getZones.mockReset();
+    getZones.mockResolvedValue(ZONES);
     getWards.mockImplementation(async (code: string) => (code === '01' ? HN_WARDS : manyWards(code, 3)));
   });
 
@@ -598,3 +606,62 @@ describe('MacroBulkDialog', () => {
     expect(screen.queryByRole('button', { name: 'Điểm đón: Chọn tất cả phường/xã (3)' })).not.toBeInTheDocument();
   });
 });
+
+describe('MacroBulkDialog — điểm đặc biệt', () => {
+  beforeEach(() => {
+    bulkCreate.mockReset();
+    getWards.mockReset();
+    getWards.mockImplementation(async (code: string) => (code === '01' ? HN_WARDS : manyWards(code, 3)));
+    getZones.mockReset();
+    getZones.mockResolvedValue(ZONES);
+  });
+
+  it('chỉ liệt kê điểm đặc biệt ĐANG BẬT; chọn sân bay + cả tỉnh Hưng Yên → payload có ZONE:NOIBAI kèm tỉnh vùng', async () => {
+    const { user } = setup();
+    bulkCreate.mockResolvedValue({ created: [{ id: 1, name: '', isBidirectional: true }], skipped: [] });
+    const select = await screen.findByLabelText('Điểm trả: điểm đặc biệt');
+    expect(within(select).queryByText('Vùng đã tắt')).not.toBeInTheDocument();
+    await user.selectOptions(select, 'NOIBAI');
+    await user.click(screen.getByRole('button', { name: 'Điểm trả: Thêm điểm đặc biệt' }));
+    expect(screen.getByLabelText('Điểm trả: bỏ Sân bay Nội Bài (điểm đặc biệt)')).toBeInTheDocument();
+    await addWholeProvince(user, 'Điểm đón', '33');
+    await user.type(screen.getByLabelText(/^Giá trị/), '50000');
+    await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
+    await waitFor(() => expect(bulkCreate).toHaveBeenCalledTimes(1));
+    const p = bulkCreate.mock.calls[0][0];
+    expect(p.origins).toEqual([{ provinceCode: '33' }]);
+    expect(p.dests).toEqual([{ provinceCode: '01', wardCode: 'ZONE:NOIBAI' }]);
+  });
+
+  it('không cảnh báo đồng giá khi vùng ↔ tỉnh KHÁC; cảnh báo khi ↔ điểm cùng tỉnh vùng hoặc ↔ mọi nơi', async () => {
+    const { user } = setup();
+    const zoneSel = await screen.findByLabelText('Điểm trả: điểm đặc biệt');
+    await user.selectOptions(zoneSel, 'NOIBAI');
+    await user.click(screen.getByRole('button', { name: 'Điểm trả: Thêm điểm đặc biệt' }));
+    // bên đón trống ⇒ mọi nơi ⇒ cảnh báo
+    expect(screen.getByTestId('bulk-zone-warning')).toHaveTextContent('Sân bay Nội Bài');
+    await addWholeProvince(user, 'Điểm đón', '33');
+    expect(screen.queryByTestId('bulk-zone-warning')).not.toBeInTheDocument();
+    await addWholeProvince(user, 'Điểm đón', '01');
+    expect(screen.getByTestId('bulk-zone-warning')).toHaveTextContent('cùng tỉnh với vùng');
+  });
+
+  it('chọn tỉnh của vùng mà chưa bấm «Thêm cả tỉnh» vẫn bị báo dù đã có điểm đặc biệt cùng mã tỉnh', async () => {
+    const { user } = setup();
+    const zoneSel = await screen.findByLabelText('Điểm trả: điểm đặc biệt');
+    await user.selectOptions(zoneSel, 'NOIBAI');
+    await user.click(screen.getByRole('button', { name: 'Điểm trả: Thêm điểm đặc biệt' }));
+    await pickProvince(user, 'Điểm trả', '01');
+    expect(await screen.findByTestId('bulk-pending')).toHaveTextContent('chưa bấm «Thêm cả tỉnh»');
+  });
+
+  it('lỗi tải điểm đặc biệt: ẩn nhóm này, tạo theo tỉnh/xã vẫn dùng được', async () => {
+    getZones.mockRejectedValue(new Error('x'));
+    const { user } = setup();
+    await waitFor(() => expect(getZones).toHaveBeenCalled());
+    expect(screen.queryByLabelText('Điểm trả: điểm đặc biệt')).not.toBeInTheDocument();
+    await addWholeProvince(user, 'Điểm đón', '33');
+    expect(screen.getByLabelText('Điểm đón: bỏ Cả tỉnh Hưng Yên')).toBeInTheDocument();
+  });
+});
+

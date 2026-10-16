@@ -29,41 +29,28 @@ vi.mock('@/lib/api', () => ({
 // ở macro-bulk-dialog.test.tsx. Thay bằng <select> thô: test này kiểm cách hộp thoại nối ô chọn với form
 // (id/nhãn, mục mặc định đứng đầu, validate). Việc lọc gõ không dấu của Combobox thật có test riêng ở
 // src/components/ui/combobox.test.tsx. Nút "bấm lại" mô phỏng đúng hợp đồng thật: bấm lại mục đang chọn → undefined.
-vi.mock('@/components/ui/combobox', () => ({
-  Combobox: ({
-    id,
-    ariaLabel,
+vi.mock('@/components/ui/multi-select-combobox', () => ({
+  MultiSelectComboBox: ({
     options,
-    selectedValue,
-    onSelect,
-    placeholder,
-    disabled,
+    selectedValues,
+    onSelectedValuesChange,
   }: {
-    id?: string;
-    ariaLabel?: string;
     options: { value: string; label: string }[];
-    selectedValue?: string;
-    onSelect: (v: string | undefined) => void;
-    placeholder: string;
-    disabled?: boolean;
+    selectedValues: string[];
+    onSelectedValuesChange: (v: string[]) => void;
   }) => (
-    <span>
-      <select
-        id={id}
-        aria-label={ariaLabel}
-        disabled={disabled}
-        value={selectedValue ?? ''}
-        onChange={(e) => onSelect(e.target.value)}
-      >
-        {selectedValue === undefined && <option value="">{placeholder}</option>}
-        {options.map((o) => (
-          <option key={o.value} value={o.value}>
-            {o.label}
-          </option>
-        ))}
-      </select>
-      <button type="button" aria-label="bấm lại ô chọn" onClick={() => onSelect(undefined)} />
-    </span>
+    <select
+      multiple
+      aria-label="Áp cho"
+      value={selectedValues}
+      onChange={(e) => onSelectedValuesChange(Array.from(e.target.selectedOptions).map((o) => o.value))}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   ),
 }));
 
@@ -113,7 +100,8 @@ async function setup(rows: SpecialZoneFlatPrice[] = [], zones: SpecialZone[] = [
 async function openCreate(user: ReturnType<typeof userEvent.setup>) {
   await user.click(screen.getByRole('button', { name: /Thêm đồng giá/ }));
   const dialog = await screen.findByRole('dialog');
-  await within(dialog).findByRole('option', { name: /Phường Ba Đình/ });
+  // Đợi phường nạp xong (ít nhất một mục trong ô chọn); phường đã có hàng riêng bị ẩn nên không dựa vào một tên cụ thể.
+  await waitFor(() => expect(within(dialog).getAllByRole('option').length).toBeGreaterThan(0));
   return dialog;
 }
 
@@ -176,7 +164,7 @@ describe('SpecialZonesManager', () => {
 
     // Không chọn nơi áp, không giá → bị chặn, KHÔNG mở xác nhận, KHÔNG gọi API.
     await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
-    expect(within(dialog).getByText(/Chọn phường\/xã/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Chọn ít nhất một phường\/xã/)).toBeInTheDocument();
     expect(within(dialog).getByText(/Phải nhập ít nhất một giá/)).toBeInTheDocument();
     expect(upsert).not.toHaveBeenCalled();
 
@@ -214,35 +202,66 @@ describe('SpecialZonesManager', () => {
     expect(within(dialog).queryByRole('option', { name: /Xã Lạ/ })).not.toBeInTheDocument();
   });
 
-  it('ô "Áp cho": mục mặc định cả tỉnh đứng đầu rồi tới phường "Tên (mã)"; chưa chọn thì nhắc "— Chọn nơi áp dụng —"', async () => {
+  it('ô "Áp cho": mục mặc định cả tỉnh đứng đầu rồi tới phường "Tên (mã)"; chọn được nhiều nơi', async () => {
     const user = await setup([]);
     const dialog = await openCreate(user);
     const target = within(dialog).getByLabelText('Áp cho') as HTMLSelectElement;
     expect(Array.from(target.options).map((o) => o.textContent)).toEqual([
-      '— Chọn nơi áp dụng —',
       'Cả Hà Nội (mặc định)',
       'Phường Ba Đình (00001)',
       'Xã Sóc Sơn (00002)',
     ]);
-    expect(target.selectedOptions[0]).toHaveTextContent('— Chọn nơi áp dụng —');
-    // Ô lọc riêng đã bỏ: việc tìm nằm trong chính ô chọn (Combobox có ô tìm).
+    expect(within(dialog).getByTestId('flat-target-hint')).toHaveTextContent('Chọn nhiều nơi');
     expect(within(dialog).queryByLabelText('Lọc phường/xã')).not.toBeInTheDocument();
   });
 
-  it('chọn một phường rồi bấm lại đúng mục đó: giữ nguyên lựa chọn, vẫn lưu đúng mã phường', async () => {
+  it('chọn NHIỀU phường cùng một giá: xác nhận nêu danh sách + giá, rồi PUT tuần tự từng phường', async () => {
     const user = await setup([]);
-    upsert.mockResolvedValue(row({ id: 11, wardCode: '00002', wardName: 'Xã Sóc Sơn' }));
+    upsert.mockResolvedValue(row({ id: 11, wardCode: '00002' }));
     const dialog = await openCreate(user);
+    await user.selectOptions(within(dialog).getByLabelText('Áp cho'), ['00001', '00002']);
+    await user.type(within(dialog).getByLabelText('Bao xe 4 chỗ (đ)'), '300000');
+    await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
+    const confirm = await screen.findByRole('alertdialog');
+    expect(confirm).toHaveTextContent('Thêm đồng giá Sân bay Nội Bài cho 2 nơi');
+    expect(confirm).toHaveTextContent('Phường Ba Đình (00001)');
+    expect(confirm).toHaveTextContent('Xã Sóc Sơn (00002)');
+    await user.click(within(confirm).getByRole('button', { name: 'Xác nhận lưu' }));
+    await waitFor(() => expect(upsert).toHaveBeenCalledTimes(2));
+    expect(upsert.mock.calls.map((c) => c[1].wardCode)).toEqual(['00001', '00002']);
+    expect(upsert.mock.calls[0][1]).toMatchObject({ priceCar4: 300000 });
+    expect(upsert.mock.calls[1][1]).toMatchObject({ priceCar4: 300000 });
+  });
 
-    await user.selectOptions(within(dialog).getByLabelText('Áp cho'), '00002');
-    await user.click(within(dialog).getByRole('button', { name: 'bấm lại ô chọn' }));
-    expect((within(dialog).getByLabelText('Áp cho') as HTMLSelectElement).value).toBe('00002');
-
+  it('lỗi giữa chừng: báo đã lưu k/N, dừng, giữ lại đúng các nơi chưa lưu trong form', async () => {
+    const user = await setup([]);
+    upsert.mockResolvedValueOnce(row({ id: 11, wardCode: '00001' })).mockRejectedValueOnce(new Error('Máy chủ bận'));
+    const dialog = await openCreate(user);
+    await user.selectOptions(within(dialog).getByLabelText('Áp cho'), ['00001', '00002']);
     await user.type(within(dialog).getByLabelText('Bao xe 4 chỗ (đ)'), '300000');
     await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Xác nhận lưu' }));
-    await waitFor(() => expect(upsert).toHaveBeenCalledTimes(1));
-    expect(upsert.mock.calls[0][1]).toMatchObject({ wardCode: '00002', priceCar4: 300000 });
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Đã lưu 1/2 nơi, dừng ở lỗi', variant: 'destructive' }),
+      ),
+    );
+    expect(upsert).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      // Hộp thoại được dựng lại sau khi đóng xác nhận: phải truy vấn lại, không dùng nút DOM cũ.
+      const left = Array.from((within(screen.getByRole('dialog')).getByLabelText('Áp cho') as HTMLSelectElement).selectedOptions).map((o) => o.value);
+      expect(left).toEqual(['00002']);
+    });
+  });
+
+  it('chưa chọn nơi nào: báo phải chọn ít nhất một, không mở xác nhận', async () => {
+    const user = await setup([]);
+    const dialog = await openCreate(user);
+    await user.type(within(dialog).getByLabelText('Bao xe 4 chỗ (đ)'), '300000');
+    await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
+    expect(within(dialog).getByText(/Chọn ít nhất một phường\/xã/)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(upsert).not.toHaveBeenCalled();
   });
 
   it('sửa hàng: phường cố định; cảnh báo lệch xa mức tham chiếu hiện ở hộp xác nhận', async () => {
@@ -333,30 +352,16 @@ describe('SpecialZonesManager', () => {
     expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Không có thay đổi để lưu' }));
   });
 
-  describe('thêm hàng mới trùng hàng có sẵn (PUT sẽ ghi đè lặng lẽ) — chặn ngay ở màn', () => {
-    it('trùng phường đã có đồng giá: báo lỗi, không mở xác nhận, không gọi API', async () => {
+  describe('hàng đã có đồng giá không cho thêm lại (PUT sẽ ghi đè lặng lẽ) — ẩn khỏi danh sách chọn', () => {
+    it('phường đã có hàng riêng và hàng mặc định không hiện trong ô chọn; ghi chú nêu số phường bị ẩn', async () => {
       const user = await setup([
         row({ id: 1 }),
         row({ id: 2, wardCode: '00001', wardName: 'Phường Ba Đình', priceCar4: 230000, priceCar7: null }),
       ]);
       const dialog = await openCreate(user);
-      await user.selectOptions(within(dialog).getByLabelText('Áp cho'), '00001');
-      await user.type(within(dialog).getByLabelText('Bao xe 4 chỗ (đ)'), '240000');
-      await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
-      expect(within(dialog).getByText(/Phường\/xã này đã có đồng giá/)).toBeInTheDocument();
-      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-      expect(upsert).not.toHaveBeenCalled();
-    });
-
-    it('trùng hàng mặc định cả tỉnh: báo lỗi, không gọi API', async () => {
-      const user = await setup([row({ id: 1 })]);
-      const dialog = await openCreate(user);
-      await user.selectOptions(within(dialog).getByLabelText('Áp cho'), '__DEFAULT__');
-      await user.type(within(dialog).getByLabelText('Bao xe 4 chỗ (đ)'), '240000');
-      await user.click(within(dialog).getByRole('button', { name: 'Xem lại & lưu' }));
-      expect(within(dialog).getByText(/đã có hàng mặc định cả tỉnh/)).toBeInTheDocument();
-      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-      expect(upsert).not.toHaveBeenCalled();
+      const target = within(dialog).getByLabelText('Áp cho') as HTMLSelectElement;
+      expect(Array.from(target.options).map((o) => o.textContent)).toEqual(['Xã Sóc Sơn (00002)']);
+      expect(within(dialog).getByTestId('flat-target-hint')).toHaveTextContent('1 phường/xã đã có hàng riêng');
     });
 
     it('phường chưa có hàng thì thêm được (đối chứng)', async () => {
@@ -699,13 +704,12 @@ describe('SpecialZonesManager', () => {
   });
 
   describe('nhãn "Áp cho"', () => {
-    it('thêm mới: nhãn trỏ đúng vào ô chọn', async () => {
+    it('thêm mới: có tiêu đề "Áp cho" và ô chọn nhiều nơi', async () => {
       const user = await setup([]);
       await user.click(screen.getByRole('button', { name: /Thêm đồng giá/ }));
       const dialog = await screen.findByRole('dialog');
-      const label = dialog.querySelector('label[for="sz-target-NOIBAI"]');
-      expect(label).not.toBeNull();
-      expect(dialog.querySelector('#sz-target-NOIBAI')).not.toBeNull();
+      expect(within(dialog).getByText('Áp cho')).toBeInTheDocument();
+      expect(within(dialog).getByLabelText('Áp cho')).toBeInTheDocument();
     });
 
     it('sửa hàng có sẵn: nơi áp là chữ cố định, không còn <label for> trỏ vào ô không tồn tại', async () => {

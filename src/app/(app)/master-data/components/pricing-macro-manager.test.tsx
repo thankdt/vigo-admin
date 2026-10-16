@@ -11,6 +11,7 @@ const toastMock = vi.fn();
 const getRules = vi.fn();
 const getProvinces = vi.fn();
 const getWards = vi.fn();
+const getZones = vi.fn();
 const createRule = vi.fn();
 const updateRule = vi.fn();
 const deleteRule = vi.fn();
@@ -26,6 +27,7 @@ vi.mock('@/lib/api', () => ({
   },
   getPricingMacroProvinces: (...a: unknown[]) => getProvinces(...a),
   getPricingMacroWards: (...a: unknown[]) => getWards(...a),
+  getSpecialZones: (...a: unknown[]) => getZones(...a),
   createPricingMacroRule: (...a: unknown[]) => createRule(...a),
   updatePricingMacroRule: (...a: unknown[]) => updateRule(...a),
   deletePricingMacroRule: (...a: unknown[]) => deleteRule(...a),
@@ -540,6 +542,7 @@ describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)'
     getRules.mockReset();
     getProvinces.mockReset().mockResolvedValue(PROVINCES);
     getWards.mockReset().mockImplementation(async (code: string) => (code === '01' ? HN_WARDS : []));
+    getZones.mockReset().mockResolvedValue([]);
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
@@ -593,6 +596,32 @@ describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)'
       destProvinceCode: null,
       destWardCode: null,
     });
+  });
+
+  it('điểm đặc biệt đang bật của tỉnh hiện trong ô xã (đứng trước xã); chọn rồi lưu gửi ZONE:<mã>; vùng tắt/tỉnh khác không hiện', async () => {
+    getZones.mockResolvedValue([
+      { code: 'NOIBAI', name: 'Sân bay Nội Bài', provinceCode: '01', provinceName: 'Hà Nội', kind: 'AIRPORT', active: true },
+      { code: 'OLD', name: 'Vùng tắt', provinceCode: '01', provinceName: 'Hà Nội', kind: 'AIRPORT', active: false },
+      { code: 'HY1', name: 'Vùng Hưng Yên', provinceCode: '33', provinceName: 'Hưng Yên', kind: 'AIRPORT', active: true },
+    ]);
+    const { user } = await setup([ANYWHERE]);
+    updateRule.mockResolvedValue({ ...ANYWHERE });
+    const dlg = await openForm(user);
+    await user.selectOptions(slot(dlg, 'origin-province'), '01');
+    await waitFor(() => expect(slot(dlg, 'origin-ward')).toBeEnabled());
+    await waitFor(() =>
+      expect(optionLabels(slot(dlg, 'origin-ward'))).toEqual([
+        'Toàn bộ tỉnh (Mọi xã)',
+        'Sân bay Nội Bài (điểm đặc biệt)',
+        'Sơn Đồng',
+        'Cầu Giấy',
+        'Hoàng Mai',
+      ]),
+    );
+    await user.selectOptions(slot(dlg, 'origin-ward'), 'ZONE:NOIBAI');
+    await user.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+    await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(1));
+    expect(updateRule.mock.calls[0][1]).toMatchObject({ originProvinceCode: '01', originWardCode: 'ZONE:NOIBAI' });
   });
 
   it('"Toàn bộ tỉnh" trả xã về rỗng; "Toàn quốc" xoá cả tỉnh lẫn xã và khoá lại ô xã', async () => {
