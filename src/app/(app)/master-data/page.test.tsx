@@ -7,8 +7,8 @@ import userEvent from '@testing-library/user-event';
 vi.mock('./components/pricing-macro-manager', () => ({
   PricingMacroManager: () => <div data-testid="macro-manager">macro</div>,
 }));
-vi.mock('./components/admin-units-manager', () => ({
-  AdminUnitsManager: () => <div data-testid="admin-units-manager">admin-units</div>,
+vi.mock('./components/ward-groups-manager', () => ({
+  WardGroupsManager: () => <div data-testid="ward-groups-manager">ward-groups</div>,
 }));
 
 vi.mock('./components/special-zones-manager', () => ({
@@ -18,10 +18,10 @@ vi.mock('./components/special-zones-manager', () => ({
 import MasterDataPage from './page';
 
 describe('MasterDataPage — khung trang', () => {
-  it('ba tab: "Điều chỉnh khu vực", "Sân bay & đồng giá", "Đơn vị hành chính"; không còn Tuyến đường / Bảng giá', () => {
+  it('ba tab: "Điều chỉnh khu vực", "Sân bay & đồng giá", "Nhóm xã"; không còn Tuyến đường / Bảng giá', () => {
     render(<MasterDataPage />);
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Điều chỉnh khu vực', 'Sân bay & đồng giá', 'Đơn vị hành chính']);
+    expect(tabs).toEqual(['Điều chỉnh khu vực', 'Sân bay & đồng giá', 'Nhóm xã']);
     expect(screen.queryByRole('tab', { name: 'Tuyến đường' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Bảng giá' })).not.toBeInTheDocument();
   });
@@ -46,8 +46,18 @@ describe('MasterDataPage — khung trang', () => {
     expect(screen.queryByText(/tuyến/i)).not.toBeInTheDocument();
   });
 
-  it('mô tả trang nhắc tới đồng giá sân bay (trang không còn chỉ nói về đơn vị hành chính và giá theo phường/xã)', () => {
+  it('mô tả trang nhắc tới đồng giá sân bay (trang không còn chỉ nói về nhóm xã và giá theo phường/xã)', () => {
     render(<MasterDataPage />);
     expect(screen.getByText(/đồng giá sân bay/)).toBeInTheDocument();
+  });
+});
+
+describe('MasterDataPage — tab Nhóm xã', () => {
+  it('thay tab "Đơn vị hành chính" cũ: bấm "Nhóm xã" hiện màn nhóm xã', async () => {
+    const user = userEvent.setup();
+    render(<MasterDataPage />);
+    expect(screen.queryByRole('tab', { name: 'Đơn vị hành chính' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Nhóm xã' }));
+    expect(screen.getByTestId('ward-groups-manager')).toBeInTheDocument();
   });
 });

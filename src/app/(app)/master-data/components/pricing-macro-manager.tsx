@@ -32,13 +32,11 @@ import {
   RefreshCw,
   Compass,
   ArrowLeftRight,
-  ListPlus,
 } from 'lucide-react';
 import {
   getPricingMacroRules,
   getPricingMacroProvinces,
   getPricingMacroWards,
-  createPricingMacroRule,
   updatePricingMacroRule,
   deletePricingMacroRule,
   bulkDeletePricingMacroRules,
@@ -225,27 +223,8 @@ export function PricingMacroManager() {
     }
   };
 
-  const openCreateDialog = () => {
-    setEditingRule(null);
-    setFormData({
-      name: '',
-      isActive: true,
-      priority: 0,
-      serviceType: 'ALL',
-      vehicleType: 'ALL',
-      originProvinceCode: '',
-      originWardCode: '',
-      destProvinceCode: '',
-      destWardCode: '',
-      adjustmentType: 'DELTA_AMOUNT',
-      adjustmentValue: 0,
-      isBidirectional: true,
-      note: '',
-    });
-    setOriginWards([]);
-    setDestWards([]);
-    setDialogOpen(true);
-  };
+  // "Thêm quy tắc" = hộp thoại nhiều xã (một xã mỗi bên ⇒ một luật). Form một-luật chỉ còn dùng để SỬA.
+  const openCreateDialog = () => setBulkDialogOpen(true);
 
   const openEditDialog = async (rule: PricingMacroRule) => {
     setEditingRule(rule);
@@ -316,9 +295,8 @@ export function PricingMacroManager() {
         note: formData.note ? formData.note.trim() : null,
       };
 
-      const saved = editingRule
-        ? await updatePricingMacroRule(editingRule.id, payload)
-        : await createPricingMacroRule(payload);
+      if (!editingRule) return; // tạo mới đi qua MacroBulkDialog
+      const saved = await updatePricingMacroRule(editingRule.id, payload);
 
       if (bidirectionalNotHonored(formData.isBidirectional, saved)) {
         // Backend cũ bỏ qua field lặng lẽ: quy tắc đã lưu nhưng chỉ MỘT chiều.
@@ -330,7 +308,7 @@ export function PricingMacroManager() {
       } else {
         const w = summarizeWarnings(saved.warnings);
         toast({
-          title: editingRule ? 'Cập nhật quy tắc macro thành công' : 'Tạo quy tắc macro thành công',
+          title: 'Cập nhật quy tắc macro thành công',
           description:
             w.count > 0
               ? `Có ${w.count} cảnh báo (không chặn): ${w.lines.join(' · ')}${w.more ? ` · … và ${w.more} cảnh báo khác` : ''}`
@@ -488,10 +466,6 @@ export function PricingMacroManager() {
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
             <RefreshCw className={cn('w-4 h-4 mr-1', loading && 'animate-spin')} />
             Làm mới
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setBulkDialogOpen(true)}>
-            <ListPlus className="w-4 h-4 mr-1" />
-            Tạo hàng loạt
           </Button>
           <Button size="sm" onClick={openCreateDialog} className="bg-indigo-600 hover:bg-indigo-700 text-white">
             <PlusCircle className="w-4 h-4 mr-1" />
@@ -737,7 +711,7 @@ export function PricingMacroManager() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900">
-              {editingRule ? 'Chỉnh sửa quy tắc macro' : 'Thêm quy tắc macro định giá mới'}
+              Chỉnh sửa quy tắc macro
             </DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
               Mô hình 2 cấp: Chọn Tỉnh/Thành phố sau đó chọn Xã/Phường tương ứng.

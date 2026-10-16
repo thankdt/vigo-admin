@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
+import { WardSourcePanel } from './ward-source-panel';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, MapPin, X } from 'lucide-react';
 import { bulkCreatePricingMacroRules, getPricingMacroWards } from '@/lib/api';
@@ -233,6 +234,8 @@ function EndpointBuilder({
         )}
       </div>
 
+      <WardSourcePanel title={title} provinces={provinces} onAdd={(add) => onChange(addEndpoints(items, add))} />
+
       {items.length === 0 ? (
         <div className="text-[11px] text-slate-400">Chưa chọn — áp dụng cho mọi điểm (chỉ được khi bên kia đã chọn).</div>
       ) : (
@@ -394,10 +397,11 @@ export function MacroBulkDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-base font-bold text-slate-900">Tạo hàng loạt quy tắc điều chỉnh khu vực</DialogTitle>
+          <DialogTitle className="text-base font-bold text-slate-900">Thêm quy tắc macro định giá mới</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
-            Chọn danh sách điểm đón × điểm trả; mỗi cặp sinh một quy tắc với cùng mức điều chỉnh. Cặp đã có quy tắc
-            cùng khoá (kể cả chiều ngược) sẽ được BỎ QUA, không ghi đè.
+            Chọn điểm đón × điểm trả (một hay nhiều xã mỗi bên); mỗi cặp sinh một quy tắc với cùng mức điều chỉnh. Có thể
+            chọn theo tỉnh cũ/huyện cũ, nhóm xã hoặc dán danh sách. Cặp đã có quy tắc cùng khoá (kể cả chiều ngược) sẽ
+            được BỎ QUA, không ghi đè.
           </DialogDescription>
         </DialogHeader>
 
