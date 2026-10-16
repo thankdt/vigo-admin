@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const toastMock = vi.fn();
@@ -176,7 +176,6 @@ describe('MacroBulkDialog', () => {
     await user.click(twoWay);
     expect(screen.getByTestId('bulk-count')).toHaveTextContent('Sẽ tạo tối đa 2 quy tắc (mỗi quy tắc áp dụng cả hai chiều)');
 
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'HN-HY');
     await user.type(screen.getByLabelText(/^Giá trị/), '30000');
     const submit = screen.getByRole('button', { name: /^Tạo 2 quy tắc/ });
     expect(submit).toBeEnabled();
@@ -184,7 +183,6 @@ describe('MacroBulkDialog', () => {
 
     await waitFor(() => expect(bulkCreate).toHaveBeenCalledTimes(1));
     expect(bulkCreate.mock.calls[0][0]).toEqual({
-      namePrefix: 'HN-HY',
       isActive: true,
       priority: 0,
       serviceType: 'ALL',
@@ -216,7 +214,6 @@ describe('MacroBulkDialog', () => {
 
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     // Hai chiều là mặc định ⇒ không cần tích; backend cũ cắt field nên luật tạo ra không có isBidirectional.
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
@@ -231,7 +228,6 @@ describe('MacroBulkDialog', () => {
 
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
 
@@ -246,7 +242,6 @@ describe('MacroBulkDialog', () => {
 
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('checkbox', { name: /Áp dụng cả chiều ngược/ }));
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
@@ -276,7 +271,6 @@ describe('MacroBulkDialog', () => {
     });
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
 
@@ -289,15 +283,9 @@ describe('MacroBulkDialog', () => {
     );
   });
 
-  it('tiền tố quá dài: báo ngay dưới ô nhập và khoá nút Tạo', async () => {
-    const { user } = setup();
-    await addWholeProvince(user, 'Điểm đón', '01');
-    await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/^Giá trị/), '10000');
-    fireEvent.change(screen.getByLabelText(/Tiền tố tên quy tắc/), { target: { value: 'A'.repeat(61) } });
-
-    expect(screen.getByText(/Tiền tố tối đa 60 ký tự/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^Tạo/ })).toBeDisabled();
+  it('không còn ô tiền tố tên; yêu cầu gửi KHÔNG kèm namePrefix', async () => {
+    setup();
+    expect(screen.queryByLabelText(/Tiền tố tên quy tắc/)).not.toBeInTheDocument();
   });
 
   it('vượt 500 tổ hợp: báo lỗi và khoá nút Tạo', async () => {
@@ -312,7 +300,6 @@ describe('MacroBulkDialog', () => {
     }
     // 30 × 30 = 900 > 500
     expect(screen.getByTestId('bulk-count')).toHaveTextContent('tối đa 500 quy tắc (đang chọn 900)');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     expect(screen.getByRole('button', { name: /^Tạo/ })).toBeDisabled();
   });
@@ -321,7 +308,6 @@ describe('MacroBulkDialog', () => {
     const { user } = setup();
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.selectOptions(screen.getByLabelText('Kiểu điều chỉnh'), 'PERCENTAGE');
     await user.type(screen.getByLabelText(/^Giá trị/), '250');
 
@@ -340,14 +326,12 @@ describe('MacroBulkDialog', () => {
 
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
 
     await waitFor(() => expect(toastMock).toHaveBeenCalled());
     expect(toastMock.mock.calls[0][0]).toMatchObject({ variant: 'destructive', title: 'Lỗi tạo hàng loạt' });
     expect(screen.queryByTestId('bulk-result')).not.toBeInTheDocument();
-    expect(screen.getByLabelText(/Tiền tố tên quy tắc/)).toHaveValue('X');
     expect(onDone).not.toHaveBeenCalled();
   });
 
@@ -357,7 +341,6 @@ describe('MacroBulkDialog', () => {
 
     // chỉ chọn cả tỉnh Hưng Yên bên TRẢ, bên ĐÓN để trống
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
 
     const any = screen.getByTestId('bulk-any');
@@ -378,7 +361,6 @@ describe('MacroBulkDialog', () => {
   it('xác nhận "mọi nơi" bị THU HỒI khi đổi danh sách điểm (phải xác nhận lại)', async () => {
     const { user } = setup();
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     const ack = screen.getByRole('checkbox', { name: /Tôi hiểu và muốn áp dụng cho MỌI điểm đón/ });
     await user.click(ack);
@@ -396,7 +378,6 @@ describe('MacroBulkDialog', () => {
     const { user } = setup();
     bulkCreate.mockResolvedValue({ created: [{ id: 1, name: 'a', isBidirectional: false }], skipped: [] });
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('checkbox', { name: /Tôi hiểu và muốn áp dụng cho MỌI điểm đón/ }));
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
@@ -411,7 +392,6 @@ describe('MacroBulkDialog', () => {
   it('đổi hướng (hai chiều ↔ một chiều) làm đổi phạm vi ⇒ xác nhận "mọi nơi" đã tích phải bị thu hồi', async () => {
     const { user } = setup();
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     const ack = screen.getByRole('checkbox', { name: /Tôi hiểu và muốn áp dụng cho MỌI điểm đón/ });
     await user.click(ack);
@@ -449,7 +429,6 @@ describe('MacroBulkDialog', () => {
 
   it('chọn phường/tỉnh mà CHƯA bấm "Thêm": cảnh báo, khoá nút Tạo; bấm Thêm thì hết', async () => {
     const { user } = setup();
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await addWholeProvince(user, 'Điểm trả', '33');
 
@@ -471,7 +450,6 @@ describe('MacroBulkDialog', () => {
 
   it('cả hai bên đã có điểm nhưng còn phường chọn dở chưa Thêm → vẫn khoá (không bị bỏ rơi lặng lẽ)', async () => {
     const { user } = setup();
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await addWholeProvince(user, 'Điểm trả', '33');
     // đón: thêm Nghĩa Đô trước, rồi chọn thêm Cầu Giấy nhưng quên bấm Thêm
@@ -493,7 +471,6 @@ describe('MacroBulkDialog', () => {
 
   it('đã chọn tỉnh nhưng chưa Thêm (danh sách chưa có điểm nào của tỉnh đó) → chờ; chọn lại "— Chọn tỉnh —" thì hết', async () => {
     const { user } = setup();
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await addWholeProvince(user, 'Điểm trả', '33');
     await pickProvince(user, 'Điểm đón', '01'); // chỉ chọn tỉnh
@@ -563,7 +540,6 @@ describe('MacroBulkDialog', () => {
     bulkCreate.mockImplementation(() => new Promise((res) => { release = res; }));
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
     await waitFor(() => expect(bulkCreate).toHaveBeenCalledTimes(1));
@@ -599,7 +575,6 @@ describe('MacroBulkDialog', () => {
     });
     await addWholeProvince(user, 'Điểm đón', '01');
     await addWholeProvince(user, 'Điểm trả', '33');
-    await user.type(screen.getByLabelText(/Tiền tố tên quy tắc/), 'X');
     await user.type(screen.getByLabelText(/^Giá trị/), '10000');
     await user.click(screen.getByRole('button', { name: /^Tạo 1 quy tắc/ }));
 

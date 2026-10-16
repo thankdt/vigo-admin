@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest, WardGroup, UpsertWardGroupRequest, WardLegacyProvince, WardLegacyWard } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, PricingMacroRulePage, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest, WardGroup, UpsertWardGroupRequest, WardLegacyProvince, WardLegacyWard } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -4997,6 +4997,17 @@ export async function adminAdjustVcoin(
 export async function getPricingMacroRules(): Promise<PricingMacroRule[]> {
   const response = await fetchWithAuth('/pricing/macro-rules');
   return unwrap<PricingMacroRule[]>(response);
+}
+
+export async function getPricingMacroRulesPage(params: {
+  page: number;
+  limit: number;
+  search?: string;
+}): Promise<PricingMacroRulePage> {
+  const qs = new URLSearchParams({ page: String(params.page), limit: String(params.limit) });
+  if (params.search?.trim()) qs.set('search', params.search.trim());
+  const response = await fetchWithAuth(`/pricing/macro-rules?${qs.toString()}`);
+  return unwrap<PricingMacroRulePage>(response);
 }
 
 export async function getPricingMacroProvinces(): Promise<ProvinceOption[]> {
