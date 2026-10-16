@@ -16,6 +16,8 @@ import {
   parsePriceInput,
   roundToThousand,
   validateFlatPriceForm,
+  validateFlatPriceBatch,
+  FLAT_PRICE_BATCH_MAX,
 } from './special-zone-flat-price';
 
 const ZONE = { name: 'Sân bay Nội Bài', provinceName: 'Hà Nội', provinceCode: '01' };
@@ -420,5 +422,28 @@ describe('describeFlatPriceDelete', () => {
     const t = describeFlatPriceDelete({ zone: ZONE, row: { ...row, wardCode: '00001', wardName: 'Phường Ba Đình' } });
     expect(t.consequence).toMatch(/hàng mặc định cả tỉnh có giá/);
     expect(t.consequence).toMatch(/loại còn lại tính theo bảng km/);
+  });
+});
+
+describe('validateFlatPriceBatch', () => {
+  const prices = { pricePerSeatGhep: '', priceCar4: '300000', priceCar7: '' };
+  const wards = new Set(['A', 'B']);
+  it('một yêu cầu cho mỗi nơi, theo thứ tự chọn', () => {
+    const v = validateFlatPriceBatch({ targets: ['B', 'A', null], prices, note: '' }, { provinceWardCodes: wards, existing: [] });
+    expect(v.errors.ward).toBeUndefined();
+    expect(v.requests?.map((r) => r.wardCode)).toEqual(['B', 'A', null]);
+  });
+  it('rỗng, quá trần, nơi đã có hàng, phường ngoài tỉnh đều bị chặn (không có requests)', () => {
+    const opts = { provinceWardCodes: wards, existing: [{ wardCode: 'A' }] };
+    expect(validateFlatPriceBatch({ targets: [], prices, note: '' }, opts).requests).toBeUndefined();
+    const many = Array.from({ length: FLAT_PRICE_BATCH_MAX + 1 }, () => 'B');
+    expect(validateFlatPriceBatch({ targets: many, prices, note: '' }, opts).errors.ward).toMatch(/Tối đa/);
+    expect(validateFlatPriceBatch({ targets: ['A'], prices, note: '' }, opts).errors.ward).toMatch(/đã có đồng giá/);
+    expect(validateFlatPriceBatch({ targets: ['Z'], prices, note: '' }, opts).errors.ward).toMatch(/không thuộc tỉnh/);
+  });
+  it('lỗi giá chặn cả lô', () => {
+    const v = validateFlatPriceBatch({ targets: ['A'], prices: { ...prices, priceCar4: '250400' }, note: '' }, { provinceWardCodes: wards, existing: [] });
+    expect(v.requests).toBeUndefined();
+    expect(v.errors.prices.priceCar4).toBeTruthy();
   });
 });

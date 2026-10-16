@@ -6,7 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Combobox } from '@/components/ui/combobox';
+import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
@@ -36,6 +36,8 @@ import {
   FLAT_PRICE_NOTE_MAX,
   FLAT_PRICE_UNIT_VND,
   REFERENCE_PROVENANCE,
+  FLAT_PRICE_BATCH_MAX,
+  describeFlatPriceBatchSave,
   describeFlatPriceDelete,
   describeFlatPriceSave,
   diffFlatPrice,
@@ -43,6 +45,7 @@ import {
   formatVnd,
   hasPriceChange,
   roundToThousand,
+  validateFlatPriceBatch,
   validateFlatPriceForm,
   type ConfirmText,
   type FlatPriceKey,
@@ -194,18 +197,21 @@ export function SpecialZonesManager() {
 type FormState = {
   /** `DEFAULT_TARGET` | mã phường | '' (chưa chọn). */
   target: string;
+  /** Chế độ THÊM: các nơi áp dụng (DEFAULT_TARGET hoặc mã phường) — cùng một mức giá. */
+  targets: string[];
   prices: Record<FlatPriceKey, string>;
   note: string;
 };
 
 const EMPTY_FORM: FormState = {
   target: '',
+  targets: [],
   prices: { pricePerSeatGhep: '', priceCar4: '', priceCar7: '' },
   note: '',
 };
 
 type PendingSave = {
-  request: UpsertSpecialZoneFlatPriceRequest;
+  requests: UpsertSpecialZoneFlatPriceRequest[];
   before: SpecialZoneFlatPrice | null;
   text: ConfirmText;
 };
@@ -271,6 +277,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
     setEditing(row);
     setForm({
       target: row.wardCode === null ? DEFAULT_TARGET : row.wardCode,
+      targets: [],
       prices: {
         pricePerSeatGhep: row.pricePerSeatGhep === null ? '' : String(row.pricePerSeatGhep),
         priceCar4: row.priceCar4 === null ? '' : String(row.priceCar4),
@@ -296,56 +303,93 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
 
   const validation = React.useMemo(() => {
     if (editing === null) return null;
-    // Sửa hàng có sẵn: phường cố định (không đổi được) nên không cần danh sách phường.
-    const wardSet: ReadonlySet<string> | null = editingRow
-      ? new Set(editingRow.wardCode === null ? [] : [editingRow.wardCode])
-      : wards
-        ? new Set(wards.map((w) => w.code))
-        : null;
-    return validateFlatPriceForm(
-      { wardCode: wardCodeOfForm, prices: form.prices, note: form.note },
-      { mode: editingRow ? 'edit' : 'create', provinceWardCodes: wardSet, existing: rows },
+    if (editingRow) {
+      // Sửa hàng có sẵn: phường cố định (không đổi được) nên không cần danh sách phường.
+      const wardSet: ReadonlySet<string> = new Set(editingRow.wardCode === null ? [] : [editingRow.wardCode]);
+      const v = validateFlatPriceForm(
+        { wardCode: wardCodeOfForm, prices: form.prices, note: form.note },
+        { mode: 'edit', provinceWardCodes: wardSet, existing: rows },
+      );
+      return { errors: v.errors, warnings: v.warnings, requests: v.request ? [v.request] : undefined };
+    }
+    return validateFlatPriceBatch(
+      { targets: form.targets.map((t) => (t === DEFAULT_TARGET ? null : t)), prices: form.prices, note: form.note },
+      { provinceWardCodes: wards ? new Set(wards.map((w) => w.code)) : null, existing: rows },
     );
   }, [editing, editingRow, wards, wardCodeOfForm, form, rows]);
 
   const handleReview = (e: React.FormEvent) => {
     e.preventDefault();
     setShowErrors(true);
-    if (!validation?.request) return;
+    const requests = validation?.requests;
+    if (!requests || requests.length === 0) return;
     // "Giá cũ" lấy từ danh sách HIỆN TẠI (đã nạp lại sau lỗi / "Làm mới"), không phải ảnh chụp lúc mở hộp thoại:
     // admin khác có thể đã đổi hoặc xoá hàng này, mà PUT ghi đè cả hàng. Hàng đã bị xoá ⇒ before null ⇒ là THÊM.
     const before = editingRow ? (rows.find((r) => r.wardCode === editingRow.wardCode) ?? null) : null;
-    const noteChanged = (before?.note ?? null) !== (validation.request.note ?? null);
-    if (before && !hasPriceChange(diffFlatPrice(before, validation.request)) && !noteChanged) {
+    const request = requests[0];
+    const noteChanged = (before?.note ?? null) !== (request.note ?? null);
+    if (before && !hasPriceChange(diffFlatPrice(before, request)) && !noteChanged) {
       toast({ title: 'Không có thay đổi để lưu' });
       return;
     }
     setPending({
-      request: validation.request,
+      requests,
       before,
-      text: describeFlatPriceSave({
-        zone,
-        wardCode: validation.request.wardCode,
-        wardName: wardNameOf(validation.request.wardCode),
-        before,
-        after: validation.request,
-        defaultRow,
-        warnings: validation.warnings,
-      }),
+      // Một nơi (kể cả thêm mới): hộp xác nhận đầy đủ như trước; nhiều nơi: gộp một giá + danh sách.
+      text: requests.length === 1
+        ? describeFlatPriceSave({
+            zone,
+            wardCode: request.wardCode,
+            wardName: wardNameOf(request.wardCode),
+            before,
+            after: request,
+            defaultRow,
+            warnings: validation?.warnings,
+          })
+        : describeFlatPriceBatchSave({
+            zone,
+            targets: requests.map((r) => ({ wardCode: r.wardCode, wardName: wardNameOf(r.wardCode) })),
+            after: request,
+            defaultRow,
+            warnings: validation?.warnings,
+          }),
     });
   };
 
   const handleConfirmSave = async () => {
     if (!pending) return;
     setSaving(true);
+    // PUT tuần tự từng nơi (API hiện có, mỗi lần ghi đè một hàng). Dừng ở lỗi đầu tiên: nơi đã lưu giữ nguyên,
+    // phần còn lại ở lại trong form để bấm lưu lại (an toàn vì mỗi PUT là upsert theo nơi).
+    let done = 0;
     try {
-      await upsertSpecialZoneFlatPrice(zone.code, pending.request);
-      toast({ title: 'Đã lưu đồng giá', description: pending.text.title });
+      for (const req of pending.requests) {
+        await upsertSpecialZoneFlatPrice(zone.code, req);
+        done += 1;
+      }
+      toast({
+        title: 'Đã lưu đồng giá',
+        description: pending.requests.length > 1 ? `${pending.requests.length} nơi — ${zone.name}` : pending.text.title,
+      });
       setPending(null);
       setEditing(null);
       await loadRows();
     } catch (err) {
-      toast({ title: 'Lỗi lưu đồng giá', description: errMessage(err, 'Không thể lưu đồng giá'), variant: 'destructive' });
+      const total = pending.requests.length;
+      const failedAt = pending.requests[done];
+      toast({
+        title: total > 1 ? `Đã lưu ${done}/${total} nơi, dừng ở lỗi` : 'Lỗi lưu đồng giá',
+        description:
+          total > 1
+            ? `${flatPriceTargetLabel(zone, failedAt.wardCode, wardNameOf(failedAt.wardCode))}: ${errMessage(err, 'Không thể lưu đồng giá')}`
+            : errMessage(err, 'Không thể lưu đồng giá'),
+        variant: 'destructive',
+      });
+      if (total > 1 && done > 0) {
+        // Giữ lại đúng các nơi CHƯA lưu (nơi lỗi + nơi sau nó).
+        const left = pending.requests.slice(done).map((r) => r.wardCode ?? DEFAULT_TARGET);
+        setForm((p) => ({ ...p, targets: left }));
+      }
       setPending(null);
       // Lỗi có thể do hàng đã đổi/xoá bởi admin khác (404/409…): nạp lại để "giá cũ" của lần xem lại sau không cũ.
       void loadRows();
@@ -377,11 +421,14 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
   // Hàng mặc định cả tỉnh đứng đầu rồi tới phường/xã; ô tìm của Combobox khớp cả tên (không dấu cũng được) lẫn mã.
   const targetOptions = React.useMemo(
     () => [
-      { value: DEFAULT_TARGET, label: `Cả ${provinceLabel} (mặc định)` },
-      ...(wards ?? []).map((w) => ({ value: w.code, label: `${w.name} (${w.code})` })),
+      ...(defaultRow ? [] : [{ value: DEFAULT_TARGET, label: `Cả ${provinceLabel} (mặc định)` }]),
+      ...(wards ?? [])
+        .filter((w) => !rows.some((r) => r.wardCode === w.code))
+        .map((w) => ({ value: w.code, label: `${w.name} (${w.code})` })),
     ],
-    [wards, provinceLabel],
+    [wards, provinceLabel, rows, defaultRow],
   );
+  const takenWardCount = (wards ?? []).filter((w) => rows.some((r) => r.wardCode === w.code)).length;
   const errs = showErrors ? validation?.errors : undefined;
 
   return (
@@ -524,7 +571,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                 // Sửa hàng có sẵn: nơi áp là chữ thường, không có ô nào để `htmlFor` trỏ tới.
                 <div className="text-xs font-semibold leading-none">Áp cho</div>
               ) : (
-                <Label htmlFor={`sz-target-${zone.code}`} className="text-xs font-semibold">Áp cho</Label>
+                <div className="text-xs font-semibold leading-none">Áp cho</div>
               )}
               {editingRow ? (
                 <div className="text-sm font-medium" data-testid="flat-target-fixed">
@@ -532,19 +579,19 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                 </div>
               ) : (
                 <>
-                  <Combobox
-                    id={`sz-target-${zone.code}`}
-                    className="h-9 text-sm"
+                  <MultiSelectComboBox
                     options={targetOptions}
-                    selectedValue={form.target || undefined}
-                    // Bấm lại mục đang chọn làm Combobox trả undefined: bỏ qua, giữ nơi áp dụng đã chọn.
-                    onSelect={(target) => {
-                      if (target !== undefined) setForm((p) => ({ ...p, target }));
-                    }}
-                    placeholder="— Chọn nơi áp dụng —"
+                    selectedValues={form.targets}
+                    onSelectedValuesChange={(targets) => setForm((p) => ({ ...p, targets }))}
+                    placeholder="— Chọn một hoặc nhiều nơi áp dụng —"
                     searchPlaceholder="Tìm phường/xã theo tên hoặc mã..."
                     noResultsText="Không tìm thấy phường/xã"
+                    className="min-h-9 text-sm"
                   />
+                  <div className="text-[11px] text-slate-500" data-testid="flat-target-hint">
+                    Chọn nhiều nơi để áp CÙNG một mức giá (tối đa {FLAT_PRICE_BATCH_MAX} mỗi lần).
+                    {takenWardCount > 0 && ` ${takenWardCount} phường/xã đã có hàng riêng nên không hiện ở đây — sửa trong bảng.`}
+                  </div>
                   {wards === null && !wardsError && (
                     <div className="text-[11px] text-slate-500">Đang tải phường/xã của {provinceLabel}...</div>
                   )}

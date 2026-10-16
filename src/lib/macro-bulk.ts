@@ -48,6 +48,50 @@ export type MacroEndpoint = {
   label: string;
 };
 
+/** Tiền tố mã "phường" của điểm đặc biệt trong luật (khớp backend `MACRO_ZONE_PREFIX`). */
+export const MACRO_ZONE_PREFIX = 'ZONE:';
+
+export function isZoneWardCode(wardCode?: string | null): boolean {
+  return !!wardCode && wardCode.trim().toUpperCase().startsWith(MACRO_ZONE_PREFIX);
+}
+
+export function isZoneEndpoint(e: { wardCode?: string | null }): boolean {
+  return isZoneWardCode(e.wardCode);
+}
+
+/** Một điểm đặc biệt (sân bay…) thành điểm đón/trả: `ZONE:<mã>` + tỉnh của vùng (backend điền lại từ special_zones). */
+export function zoneEndpoint(zone: { code: string; name: string; provinceCode: string }): MacroEndpoint {
+  return { provinceCode: zone.provinceCode, wardCode: `${MACRO_ZONE_PREFIX}${zone.code}`, label: `${zone.name} (điểm đặc biệt)` };
+}
+
+/**
+ * Cảnh báo KHÔNG chặn: chuyến nằm trong vùng đặc biệt và CÙNG tỉnh với vùng thường trúng đồng giá, khi đó mọi
+ * luật điều chỉnh bị bỏ qua. Luật vùng ↔ điểm cùng tỉnh vùng (hoặc ↔ mọi nơi) vì vậy có thể không bao giờ được áp.
+ */
+export function zoneFlatPriceWarnings(
+  origins: MacroEndpoint[],
+  dests: MacroEndpoint[],
+  zones: { code: string; name: string; provinceCode: string }[],
+): string[] {
+  const out: string[] = [];
+  const check = (mine: MacroEndpoint[], other: MacroEndpoint[]) => {
+    for (const e of mine) {
+      if (!isZoneEndpoint(e)) continue;
+      const code = (e.wardCode ?? '').slice(MACRO_ZONE_PREFIX.length).toUpperCase();
+      const zone = zones.find((z) => z.code.toUpperCase() === code);
+      const provinceCode = zone?.provinceCode ?? e.provinceCode;
+      const name = zone?.name ?? code;
+      if (other.length === 0 || other.some((o) => o.provinceCode === provinceCode)) {
+        const msg = `«${name}» ↔ ${other.length === 0 ? 'mọi nơi' : 'điểm cùng tỉnh với vùng'}: chuyến trúng đồng giá của vùng sẽ KHÔNG áp luật điều chỉnh.`;
+        if (!out.includes(msg)) out.push(msg);
+      }
+    }
+  };
+  check(origins, dests);
+  check(dests, origins);
+  return out;
+}
+
 export function endpointKey(e: { provinceCode?: string | null; wardCode?: string | null }): string {
   return `${e.provinceCode ?? ''}|${e.wardCode ?? ''}`;
 }
@@ -131,7 +175,8 @@ export function pendingStagedSelection(args: {
   if (wardCount > 0) {
     return `đã chọn ${wardCount} phường/xã của ${provinceName} nhưng chưa bấm «Thêm ${wardCount} phường/xã»`;
   }
-  if (staged && !items.some((i) => i.provinceCode === provinceCode)) {
+  // Điểm đặc biệt mang mã tỉnh của vùng nhưng KHÔNG phải "cả tỉnh": bỏ qua khi xét đã thêm tỉnh chưa.
+  if (staged && !items.some((i) => !isZoneEndpoint(i) && i.provinceCode === provinceCode)) {
     return `đã chọn tỉnh ${provinceName} nhưng chưa bấm «Thêm cả tỉnh» (nếu không dùng, chọn lại «— Chọn tỉnh —»)`;
   }
   return null;

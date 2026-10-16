@@ -176,6 +176,62 @@ export function validateFlatPriceForm(
   };
 }
 
+/** Trần số phường/xã mỗi lần lưu hàng loạt (PUT tuần tự từng xã; backend giới hạn 300 yêu cầu/phút). */
+export const FLAT_PRICE_BATCH_MAX = 100;
+
+export type FlatPriceBatchValidation = {
+  errors: FlatPriceFormErrors;
+  warnings: string[];
+  /** Có khi KHÔNG có lỗi nào: một yêu cầu cho mỗi nơi áp dụng, theo thứ tự đã chọn. */
+  requests?: UpsertSpecialZoneFlatPriceRequest[];
+};
+
+/**
+ * Kiểm form THÊM đồng giá cho NHIỀU nơi cùng một mức giá (mỗi nơi = hàng riêng; null = hàng mặc định cả tỉnh).
+ * Giá/ghi chú kiểm một lần; nơi áp dụng kiểm từng cái (thuộc tỉnh, chưa có hàng) và báo lỗi nơi đầu tiên sai.
+ */
+export function validateFlatPriceBatch(
+  input: { targets: (string | null)[]; prices: Record<FlatPriceKey, string>; note: string },
+  opts: {
+    provinceWardCodes: ReadonlySet<string> | null;
+    existing: ReadonlyArray<Pick<SpecialZoneFlatPrice, 'wardCode'>>;
+  },
+): FlatPriceBatchValidation {
+  if (input.targets.length === 0) {
+    const base = validateFlatPriceForm(
+      { wardCode: null, prices: input.prices, note: input.note },
+      { mode: 'edit', provinceWardCodes: opts.provinceWardCodes, existing: [] },
+    );
+    return { errors: { ...base.errors, ward: 'Chọn ít nhất một phường/xã, hoặc "Cả tỉnh (mặc định)".' }, warnings: [] };
+  }
+  if (input.targets.length > FLAT_PRICE_BATCH_MAX) {
+    const base = validateFlatPriceForm(
+      { wardCode: null, prices: input.prices, note: input.note },
+      { mode: 'edit', provinceWardCodes: opts.provinceWardCodes, existing: [] },
+    );
+    return {
+      errors: { ...base.errors, ward: `Tối đa ${FLAT_PRICE_BATCH_MAX} phường/xã mỗi lần (đang chọn ${input.targets.length}).` },
+      warnings: [],
+    };
+  }
+  const results = input.targets.map((t) =>
+    validateFlatPriceForm(
+      { wardCode: t, prices: input.prices, note: input.note },
+      { mode: 'create', provinceWardCodes: opts.provinceWardCodes, existing: opts.existing },
+    ),
+  );
+  const first = results[0];
+  const badWard = results.find((r) => r.errors.ward);
+  const errors: FlatPriceFormErrors = { ...first.errors, ward: badWard?.errors.ward };
+  if (!errors.ward) delete errors.ward;
+  const hasError = !!errors.ward || !!errors.form || !!errors.note || Object.keys(errors.prices).length > 0;
+  return {
+    errors,
+    warnings: first.warnings,
+    requests: hasError ? undefined : results.map((r) => r.request!),
+  };
+}
+
 function softWarnings(v: Record<FlatPriceKey, number | null>): string[] {
   const out: string[] = [];
   const f = REFERENCE_DEVIATION_FACTOR;
@@ -300,6 +356,31 @@ export function describeFlatPriceSave(args: {
       after: args.after,
       defaultRow: args.defaultRow ?? null,
     }),
+    warnings: args.warnings ?? [],
+    bypass: FLAT_PRICE_BYPASS_WARNING,
+  };
+}
+
+/** Hộp xác nhận THÊM cùng một mức giá cho nhiều nơi: nêu giá một lần + danh sách nơi áp dụng. */
+export function describeFlatPriceBatchSave(args: {
+  zone: Pick<SpecialZone, 'name' | 'provinceName' | 'provinceCode'>;
+  targets: { wardCode: string | null; wardName?: string | null }[];
+  after: Pick<UpsertSpecialZoneFlatPriceRequest, FlatPriceKey>;
+  defaultRow?: Pick<SpecialZoneFlatPrice, FlatPriceKey> | null;
+  warnings?: string[];
+  listMax?: number;
+}): ConfirmText {
+  const max = args.listMax ?? 10;
+  const labels = args.targets.map((t) => flatPriceTargetLabel(args.zone, t.wardCode, t.wardName));
+  const head = labels.slice(0, max).join(', ');
+  const more = labels.length > max ? ` và ${labels.length - max} nơi khác` : '';
+  const lines = FLAT_PRICE_FIELDS.map(({ key, label }) => `${label}: ${formatVnd(args.after[key])}`);
+  lines.push(`Áp cho ${labels.length} nơi: ${head}${more}`);
+  const firstWard = args.targets.find((t) => t.wardCode !== null)?.wardCode ?? null;
+  return {
+    title: `Thêm đồng giá ${args.zone.name} cho ${labels.length} nơi`,
+    lines,
+    fallbacks: describeBlankFallbacks({ wardCode: firstWard, after: args.after, defaultRow: args.defaultRow ?? null }),
     warnings: args.warnings ?? [],
     bypass: FLAT_PRICE_BYPASS_WARNING,
   };
