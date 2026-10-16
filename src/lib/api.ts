@@ -1,6 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
-import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest } from '@/lib/types';
+import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest, WardGroup, UpsertWardGroupRequest, WardLegacyProvince, WardLegacyWard } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
   buildRankingQuery,
@@ -5111,3 +5111,42 @@ export async function simulatePricingMacro(data: SimulatePricingMacroDto): Promi
   return unwrap<SimulatePricingMacroResult>(response);
 }
 
+
+// ───────────────────────── Nhóm xã & vùng cũ (cần backend có pricing/ward-groups, pricing/ward-legacy) ─────────────────────────
+
+export async function listWardGroups(): Promise<WardGroup[]> {
+  const response = await fetchWithAuth('/pricing/ward-groups');
+  return unwrap<WardGroup[]>(response);
+}
+
+export async function createWardGroup(data: UpsertWardGroupRequest): Promise<WardGroup> {
+  const response = await fetchWithAuth('/pricing/ward-groups', { method: 'POST', body: JSON.stringify(data) });
+  return unwrap<WardGroup>(response);
+}
+
+export async function updateWardGroup(id: number, data: UpsertWardGroupRequest): Promise<WardGroup> {
+  const response = await fetchWithAuth(`/pricing/ward-groups/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  return unwrap<WardGroup>(response);
+}
+
+export async function deleteWardGroup(id: number): Promise<void> {
+  const response = await fetchWithAuth(`/pricing/ward-groups/${id}`, { method: 'DELETE' });
+  await unwrap<unknown>(response);
+}
+
+export async function getWardLegacyOrigins(): Promise<WardLegacyProvince[]> {
+  const response = await fetchWithAuth('/pricing/ward-legacy/origins');
+  return unwrap<WardLegacyProvince[]>(response);
+}
+
+/** Đúng MỘT trong hai tham số. */
+export async function getWardLegacyWards(filter: {
+  legacyProvinceCode?: string;
+  legacyDistrictCode?: string;
+}): Promise<WardLegacyWard[]> {
+  const qs = filter.legacyDistrictCode
+    ? `legacyDistrictCode=${encodeURIComponent(filter.legacyDistrictCode)}`
+    : `legacyProvinceCode=${encodeURIComponent(filter.legacyProvinceCode ?? '')}`;
+  const response = await fetchWithAuth(`/pricing/ward-legacy/wards?${qs}`);
+  return unwrap<WardLegacyWard[]>(response);
+}

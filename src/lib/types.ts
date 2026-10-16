@@ -1258,3 +1258,46 @@ export type SimulatePricingMacroResult = {
   quote: any;
 };
 
+
+/** Nhóm xã do admin đặt (`GET pricing/ward-groups`). `staleCodes` = mã xã không còn trong dữ liệu ranh giới. */
+export type WardGroup = {
+  id: number;
+  name: string;
+  note: string | null;
+  wardCodes: string[];
+  wardCount: number;
+  staleCodes: string[];
+  createdBy: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type UpsertWardGroupRequest = { name: string; note?: string | null; wardCodes: string[] };
+
+export type WardLegacyDistrict = { code: string; name: string; wardCount: number; pureWardCount: number };
+export type WardLegacyProvince = {
+  code: string;
+  name: string;
+  wardCount: number;
+  pureWardCount: number;
+  districts: WardLegacyDistrict[];
+};
+
+/** Xã mới kèm vùng cũ. `selectable=false`: xã KHÔNG thuần ở mức đang lọc (gộp từ nhiều huyện/tỉnh cũ). */
+export type WardLegacyWard = {
+  wardCode: string;
+  wardName: string;
+  provinceCode: string;
+  provinceName: string;
+  provinceLevel: 'PURE_PROVINCE' | 'CROSS_PROVINCE';
+  districtLevel: 'PURE_DISTRICT' | 'MIXED_DISTRICT';
+  selectable: boolean;
+  parts: {
+    legacyProvinceCode: string;
+    legacyProvinceName: string;
+    legacyDistrictCode: string;
+    legacyDistrictName: string;
+    legacyWardNames: string[];
+    hasPartial: boolean;
+  }[];
+};
