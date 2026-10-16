@@ -134,21 +134,3 @@ describe('WardSourcePanel — nhóm xã thiếu dữ liệu xã', () => {
     expect(onAdd).not.toHaveBeenCalled();
   });
 });
-
-describe('WardSourcePanel — dán danh sách', () => {
-  it('khớp tên, hiện preview, chỉ thêm xã đã khớp', async () => {
-    const { onAdd, user } = setup();
-    await user.click(screen.getByRole('button', { name: 'Điểm đón: Dán danh sách' }));
-    await user.selectOptions(screen.getByLabelText('Điểm đón: tỉnh để khớp tên'), '35');
-    await user.type(screen.getByLabelText('Điểm đón: danh sách tên hoặc mã xã'), 'phu ly{Enter}Bình Lục{Enter}Không Có Xã');
-    const match = screen.getByRole('button', { name: 'Điểm đón: khớp danh sách' });
-    await waitFor(() => expect(match).toBeEnabled());
-    await user.click(match);
-    const preview = await screen.findByTestId('paste-preview');
-    expect(preview).toHaveTextContent('Tự khớp (2)');
-    expect(preview).toHaveTextContent('Không khớp (1)');
-    await user.click(screen.getByRole('button', { name: 'Điểm đón: thêm các xã đã khớp' }));
-    expect(onAdd).toHaveBeenCalledTimes(1);
-    expect(onAdd.mock.calls[0][0].map((e: any) => e.wardCode)).toEqual(['13285', '13291']);
-  });
-});

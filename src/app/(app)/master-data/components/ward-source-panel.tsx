@@ -13,22 +13,17 @@ import {
   listWardGroups,
 } from '@/lib/api';
 import type { MacroEndpoint } from '@/lib/macro-bulk';
-import { matchWardNames, splitPasteInput, wardsToEndpoints, type WardMatchResult } from '@/lib/ward-match';
+import { wardsToEndpoints } from '@/lib/ward-match';
 import type { ProvinceOption, WardGroup, WardLegacyProvince, WardLegacyWard, WardOption } from '@/lib/types';
 
-const NATIVE_SELECT =
-  'h-8 w-full rounded-md border border-input bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60';
-
-type Mode = 'legacy' | 'group' | 'paste';
+type Mode = 'legacy' | 'group';
 const MODES: { id: Mode; label: string }[] = [
   { id: 'legacy', label: 'Theo tỉnh cũ / huyện cũ' },
   { id: 'group', label: 'Nhóm xã' },
-  { id: 'paste', label: 'Dán danh sách' },
 ];
 
 /**
- * Cách thêm xã nhanh cho một bên (đón/trả) hoặc một nhóm xã: theo tỉnh/huyện cũ, theo nhóm xã đã lưu, hoặc dán
- * tên/mã. Chỉ SINH điểm (`onAdd`) — cha quyết định gộp/trùng/giới hạn. Danh sách mọi xã nạp một lần khi cần.
+ * Cách thêm xã nhanh cho một bên (đón/trả) hoặc một nhóm xã: theo tỉnh/huyện cũ, theo nhóm xã đã lưu. Chỉ SINH điểm (`onAdd`) — cha quyết định gộp/trùng/giới hạn. Danh sách mọi xã nạp một lần khi cần.
  */
 export function WardSourcePanel({
   title,
@@ -84,9 +79,6 @@ export function WardSourcePanel({
       )}
       {mode === 'group' && (
         <GroupPicker title={title} allWards={allWards} provinceNames={provinceNames} onAdd={onAdd} />
-      )}
-      {mode === 'paste' && (
-        <PastePicker title={title} provinces={provinces} provinceNames={provinceNames} onAdd={onAdd} />
       )}
     </div>
   );
@@ -362,186 +354,6 @@ function GroupPicker({
       >
         {group ? `Thêm nhóm (${live.length} xã)` : 'Thêm nhóm'}
       </Button>
-    </div>
-  );
-}
-
-// ───────────────────────── Dán danh sách ─────────────────────────
-
-function PastePicker({
-  title,
-  provinces,
-  provinceNames,
-  onAdd,
-}: {
-  title: string;
-  provinces: ProvinceOption[];
-  provinceNames: Map<string, string>;
-  onAdd: (endpoints: MacroEndpoint[]) => void;
-}) {
-  const [provinceCode, setProvinceCode] = React.useState('');
-  const [wards, setWards] = React.useState<WardOption[]>([]);
-  const [loading, setLoading] = React.useState(false);
-  const [loadError, setLoadError] = React.useState<string | null>(null);
-  const [text, setText] = React.useState('');
-  const [result, setResult] = React.useState<WardMatchResult | null>(null);
-  // Xã admin chọn tay cho các dòng trùng tên: input → mã xã.
-  const [picked, setPicked] = React.useState<Record<string, string>>({});
-  const seq = React.useRef(0);
-
-  const options = React.useMemo(
-    () => [{ value: '', label: '— Chọn tỉnh —' }, ...provinces.map((p) => ({ value: p.code, label: p.name }))],
-    [provinces],
-  );
-
-  const chooseProvince = async (code: string) => {
-    setProvinceCode(code);
-    setResult(null);
-    setPicked({});
-    setWards([]);
-    setLoadError(null);
-    const mine = ++seq.current;
-    setLoading(false);
-    if (!code) return;
-    setLoading(true);
-    try {
-      const list = await getPricingMacroWards(code);
-      if (mine === seq.current) {
-        setWards(list || []);
-        if (!list || list.length === 0) setLoadError('Tỉnh này không có phường/xã nào trong dữ liệu — không thể khớp tên.');
-      }
-    } catch (e: any) {
-      if (mine === seq.current) {
-        setWards([]);
-        setLoadError(e?.message || 'Không tải được danh sách phường/xã của tỉnh');
-      }
-    } finally {
-      if (mine === seq.current) setLoading(false);
-    }
-  };
-
-  const match = () => {
-    setPicked({});
-    setResult(matchWardNames(splitPasteInput(text), wards));
-  };
-
-  const codes = result
-    ? [...result.matched.map((m) => m.ward.code), ...Object.values(picked).filter(Boolean)]
-    : [];
-  const add = () => {
-    onAdd(wardsToEndpoints([...new Set(codes)], wards, provinceNames));
-    setResult(null);
-    setPicked({});
-    setText('');
-  };
-
-  return (
-    <div className="space-y-2 rounded border border-slate-200 bg-white p-2">
-      <div className="space-y-1">
-        <Label className="text-[11px] text-slate-500">Tỉnh/thành mới chứa các xã sẽ dán (khớp theo tên MỚI)</Label>
-        <Combobox
-          ariaLabel={`${title}: tỉnh để khớp tên`}
-          className="h-8 text-xs bg-white"
-          options={options}
-          selectedValue={provinceCode}
-          onSelect={(c) => {
-            if (c !== undefined) void chooseProvince(c);
-          }}
-          placeholder="— Chọn tỉnh —"
-          searchPlaceholder="Tìm tỉnh / thành phố..."
-          noResultsText="Không tìm thấy tỉnh"
-        />
-      </div>
-      {loadError && (
-        <div role="alert" className="text-[11px] text-red-600">
-          {loadError}
-        </div>
-      )}
-      <textarea
-        className="min-h-20 w-full rounded-md border border-input bg-white p-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring"
-        aria-label={`${title}: danh sách tên hoặc mã xã`}
-        placeholder="Mỗi dòng một tên hoặc mã xã (hoặc ngăn cách bằng dấu phẩy)"
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          setResult(null);
-        }}
-      />
-      <Button
-        type="button"
-        size="sm"
-        variant="outline"
-        className="h-7 text-xs"
-        disabled={!provinceCode || loading || !!loadError || !text.trim()}
-        onClick={match}
-        aria-label={`${title}: khớp danh sách`}
-      >
-        {loading ? 'Đang tải xã...' : 'Khớp danh sách'}
-      </Button>
-
-      {result && (
-        <div className="space-y-2 text-xs" data-testid="paste-preview">
-          <div className="text-emerald-700">Tự khớp ({result.matched.length})</div>
-          {result.matched.length > 0 && (
-            <ul className="list-disc pl-5 text-slate-700">
-              {result.matched.map((m) => (
-                <li key={m.ward.code}>
-                  {m.input} → {m.ward.name}
-                </li>
-              ))}
-            </ul>
-          )}
-          {result.ambiguous.length > 0 && (
-            <div className="space-y-1">
-              <div className="text-amber-800">Cần chọn ({result.ambiguous.length}) — nhiều xã cùng tên</div>
-              {result.ambiguous.map((a) => (
-                <div key={a.input} className="flex items-center gap-2">
-                  <span className="min-w-24">{a.input}</span>
-                  <select
-                    className={NATIVE_SELECT}
-                    aria-label={`Chọn xã cho "${a.input}"`}
-                    value={picked[a.input] ?? ''}
-                    onChange={(e) => setPicked((p) => ({ ...p, [a.input]: e.target.value }))}
-                  >
-                    <option value="">— Chọn —</option>
-                    {a.candidates.map((c) => (
-                      <option key={c.code} value={c.code}>
-                        {c.name} ({c.code})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          )}
-          {result.unmatched.length > 0 && (
-            <div className="space-y-0.5">
-              <div className="text-red-700">Không khớp ({result.unmatched.length}) — sẽ KHÔNG được thêm</div>
-              <ul className="list-disc pl-5 text-slate-700">
-                {result.unmatched.map((u) => (
-                  <li key={u.input}>
-                    {u.input}
-                    {u.suggestions.length > 0 && (
-                      <span className="text-slate-500"> — gợi ý: {u.suggestions.map((s) => s.name).join(', ')}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="h-7 text-xs"
-            disabled={codes.length === 0}
-            onClick={add}
-            aria-label={`${title}: thêm các xã đã khớp`}
-          >
-            Thêm {new Set(codes).size} xã đã khớp
-          </Button>
-        </div>
-      )}
     </div>
   );
 }
