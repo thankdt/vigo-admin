@@ -5,6 +5,9 @@ description: Deploy applications and services to AWS safely and repeatably. Use 
 
 # AWS Deploy
 
+> ⚠️ **LƯU TRỮ (17/10/2026):** 4 cổng của vigo-admin đã chuyển từ S3 + CloudFront sang Cloudflare Pages
+> (`scripts/deploy-pages.ts`, xem CLAUDE.md). Skill này chỉ còn là tài liệu lịch sử — đừng dùng để deploy PROD.
+
 Guidance for deploying this team's services to AWS. Primary target is **ECS/Fargate with containers**; alternatives are covered in reference files.
 
 ## Step 0 — Detect the deploy setup before changing anything

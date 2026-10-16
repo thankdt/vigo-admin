@@ -11,11 +11,11 @@
  *
  * Trên Pages mỗi cổng là MỘT project riêng (cùng nội dung, khác trang gốc):
  *   1. Trang gốc: sao chép file landing của cổng đè lên index.html — đúng byte mà Function cũ chọn, URL trình duyệt vẫn "/"
- *      (không rewrite/redirect vì bundle static-export mã hoá đường dẫn trên đĩa — xem comment htx-rewrite-function.js).
+ *      (không rewrite/redirect vì bundle static-export mã hoá đường dẫn trên đĩa — bản gốc: `git show cf5bec2:scripts/htx-rewrite-function.js`).
  *      `_redirects` KHÔNG làm được việc này: rewrite 200 bị bỏ qua khi đã có file index.html ở đường dẫn nguồn.
  *   2. SPA fallback: Pages tự trả index.html (200) cho URL lạ NẾU không có `404.html` ở gốc; export của Next có 404.html
  *      nên phải XOÁ nó (đã thử thật: để lại thì Pages trả 404.html với mã 404 và bỏ qua `_redirects`). Thư mục `404/` giữ nguyên.
- *   3. `_headers`: chunk băm tên (_next/static/*) cache 1 năm như deploy-s3.ts cũ; còn lại để mặc định (revalidate).
+ *   3. `_headers`: chunk băm tên (_next/static/*) cache 1 năm như deploy-s3.ts cũ (git: cf5bec2); còn lại để mặc định (revalidate).
  *
  * KHÔNG tái hiện: CloudFront Function `vigo-admin-rsc-txt-guard` (lưới đỡ: 302 khi trình duyệt điều hướng thẳng vào
  * "<đường-dẫn>/index.txt"). Bản vá gốc nằm ở patches/next+15.5.9.patch, đã có trong mọi bản build; chỉ còn cứu các tab mở

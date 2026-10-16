@@ -48,8 +48,7 @@ Deploy cần `CLOUDFLARE_API_TOKEN` (quyền Pages:Edit) + `CLOUDFLARE_ACCOUNT_I
 
 ## Deploy note
 `npm run build` in vigo-admin **builds AND auto-deploys to the 4 PROD Cloudflare Pages projects**
-(`scripts/deploy-pages.ts`; trước 17/10/2026 là sync lên S3 — `scripts/deploy-s3.ts` còn lại chỉ để tham khảo, đã
-KHÔNG còn nối vào `npm run build`). Use `npx next build` for a compile/smoke check that does NOT deploy;
+(`scripts/deploy-pages.ts`; trước 17/10/2026 là sync lên S3 — `scripts/deploy-s3.ts` đã xoá, xem git `cf5bec2`). Use `npx next build` for a compile/smoke check that does NOT deploy;
 `npx tsx scripts/deploy-pages.ts --dry-run` dựng `.pages-dist/<cổng>` mà không đẩy lên.
 
 ## Gotchas
