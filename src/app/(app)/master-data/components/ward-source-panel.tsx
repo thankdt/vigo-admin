@@ -184,44 +184,42 @@ function LegacyPicker({
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         <div className="space-y-1">
           <Label className="text-[11px] text-slate-500">Tỉnh cũ (trước 01/07/2025)</Label>
-          <select
-            className={NATIVE_SELECT}
-            aria-label={`${title}: tỉnh cũ`}
-            value={provCode}
+          <Combobox
+            ariaLabel={`${title}: tỉnh cũ`}
+            className="h-8 text-xs bg-white"
+            options={(origins ?? []).map((o) => ({ value: o.code, label: `${o.name} (${o.wardCount} xã mới)` }))}
+            selectedValue={provCode}
             disabled={!origins}
-            onChange={(e) => {
-              setProvCode(e.target.value);
+            onSelect={(c) => {
+              // Bấm lại mục đang chọn ⇒ undefined ⇒ bỏ chọn.
+              const next = c ?? '';
+              setProvCode(next);
               setDistCode('');
-              void load(e.target.value, '');
+              void load(next, '');
             }}
-          >
-            <option value="">{origins ? '— Chọn tỉnh cũ —' : 'Đang tải...'}</option>
-            {(origins ?? []).map((o) => (
-              <option key={o.code} value={o.code}>
-                {o.name} ({o.wardCount} xã mới)
-              </option>
-            ))}
-          </select>
+            placeholder={origins ? '— Chọn tỉnh cũ —' : 'Đang tải...'}
+            searchPlaceholder="Tìm tỉnh cũ..."
+            noResultsText="Không tìm thấy tỉnh cũ"
+          />
         </div>
         <div className="space-y-1">
           <Label className="text-[11px] text-slate-500">Huyện cũ (bỏ trống = cả tỉnh cũ)</Label>
-          <select
-            className={NATIVE_SELECT}
-            aria-label={`${title}: huyện cũ`}
-            value={distCode}
+          <Combobox
+            ariaLabel={`${title}: huyện cũ`}
+            className="h-8 text-xs bg-white"
+            options={(prov?.districts ?? []).map((d) => ({ value: d.code, label: `${d.name} (${d.pureWardCount}/${d.wardCount})` }))}
+            selectedValue={distCode}
             disabled={!prov}
-            onChange={(e) => {
-              setDistCode(e.target.value);
-              void load(provCode, e.target.value);
+            onSelect={(c) => {
+              // Bấm lại huyện đang chọn ⇒ undefined ⇒ quay về cả tỉnh cũ.
+              const next = c ?? '';
+              setDistCode(next);
+              void load(provCode, next);
             }}
-          >
-            <option value="">— Cả tỉnh cũ —</option>
-            {(prov?.districts ?? []).map((d) => (
-              <option key={d.code} value={d.code}>
-                {d.name} ({d.pureWardCount}/{d.wardCount})
-              </option>
-            ))}
-          </select>
+            placeholder="— Cả tỉnh cũ —"
+            searchPlaceholder="Tìm huyện cũ..."
+            noResultsText="Không tìm thấy huyện cũ"
+          />
         </div>
       </div>
       {loading && (
@@ -327,20 +325,17 @@ function GroupPicker({
 
   return (
     <div className="space-y-2 rounded border border-slate-200 bg-white p-2">
-      <select
-        className={NATIVE_SELECT}
-        aria-label={`${title}: chọn nhóm xã`}
-        value={groupId}
+      <Combobox
+        ariaLabel={`${title}: chọn nhóm xã`}
+        className="h-8 text-xs bg-white"
+        options={(groups ?? []).map((g) => ({ value: String(g.id), label: `${g.name} (${g.wardCount} xã)` }))}
+        selectedValue={groupId}
         disabled={!groups}
-        onChange={(e) => setGroupId(e.target.value)}
-      >
-        <option value="">{groups ? (groups.length ? '— Chọn nhóm xã —' : 'Chưa có nhóm xã nào') : 'Đang tải...'}</option>
-        {(groups ?? []).map((g) => (
-          <option key={g.id} value={g.id}>
-            {g.name} ({g.wardCount} xã)
-          </option>
-        ))}
-      </select>
+        onSelect={(c) => setGroupId(c ?? '')}
+        placeholder={groups ? (groups.length ? '— Chọn nhóm xã —' : 'Chưa có nhóm xã nào') : 'Đang tải...'}
+        searchPlaceholder="Tìm nhóm xã..."
+        noResultsText="Không tìm thấy nhóm"
+      />
       {error && (
         <div role="alert" className="text-[11px] text-red-600">
           {error}
