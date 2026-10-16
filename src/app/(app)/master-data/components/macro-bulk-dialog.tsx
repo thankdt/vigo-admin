@@ -19,7 +19,7 @@ import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { WardSourcePanel } from './ward-source-panel';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, MapPin, X } from 'lucide-react';
-import { bulkCreatePricingMacroRules, getPricingMacroWards } from '@/lib/api';
+import { bulkCreatePricingMacroRules, getPricingMacroWards, getSpecialZones } from '@/lib/api';
 import {
   MACRO_BULK_MAX_COMBOS,
   addEndpoints,
@@ -37,6 +37,8 @@ import {
   summarizeEndpoints,
   summarizeWarnings,
   toSelectors,
+  zoneEndpoint,
+  zoneFlatPriceWarnings,
   type MacroEndpoint,
 } from '@/lib/macro-bulk';
 import type {
@@ -45,6 +47,7 @@ import type {
   MacroAdjustmentType,
   MacroEndSelector,
   ProvinceOption,
+  SpecialZone,
   WardOption,
 } from '@/lib/types';
 
@@ -80,6 +83,7 @@ const initialForm = (): FormState => ({
 function EndpointBuilder({
   title,
   provinces,
+  zones,
   items,
   onChange,
   onPendingChange,
@@ -87,6 +91,8 @@ function EndpointBuilder({
 }: {
   title: string;
   provinces: ProvinceOption[];
+  /** Điểm đặc biệt ĐANG BẬT (sân bay…) để chọn làm một đầu của quy tắc. */
+  zones: SpecialZone[];
   items: MacroEndpoint[];
   onChange: (next: MacroEndpoint[]) => void;
   /** Báo lên cha khi có lựa chọn đã nhập mà CHƯA bấm "Thêm" (null = không có). */
@@ -101,6 +107,17 @@ function EndpointBuilder({
   const [staged, setStaged] = React.useState(false);
   // Đổi tỉnh nhanh: chỉ nhận kết quả của lần gọi MỚI NHẤT.
   const requestSeq = React.useRef(0);
+  const [zoneCode, setZoneCode] = React.useState('');
+  const zoneOptions = React.useMemo(
+    () => [{ value: '', label: '— Chọn điểm đặc biệt —' }, ...zones.map((z) => ({ value: z.code, label: z.name }))],
+    [zones],
+  );
+  const addZone = () => {
+    const z = zones.find((x) => x.code === zoneCode);
+    if (!z) return;
+    onChange(addEndpoints(items, [zoneEndpoint(z)]));
+    setZoneCode('');
+  };
 
   const provinceName = provinces.find((p) => p.code === provinceCode)?.name ?? provinceCode;
   // Mục đầu "— Chọn tỉnh —" (mã rỗng) = bỏ chọn, như ô chọn cũ: bỏ chọn tỉnh đã nhập mà chưa "Thêm" là cách gỡ chặn tạo.
@@ -231,6 +248,37 @@ function EndpointBuilder({
         )}
       </div>
 
+      {zones.length > 0 && (
+        <div className="flex flex-wrap items-end gap-2" data-testid={`zone-picker-${title}`}>
+          <div className="space-y-1 flex-1 min-w-[10rem]">
+            <Label className="text-[11px] text-slate-500">Điểm đặc biệt (sân bay…)</Label>
+            <Combobox
+              ariaLabel={`${title}: điểm đặc biệt`}
+              className="h-8 text-xs bg-white"
+              options={zoneOptions}
+              selectedValue={zoneCode}
+              onSelect={(code) => {
+                if (code !== undefined) setZoneCode(code);
+              }}
+              placeholder="— Chọn điểm đặc biệt —"
+              searchPlaceholder="Tìm điểm đặc biệt..."
+              noResultsText="Không tìm thấy"
+            />
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            disabled={!zoneCode}
+            onClick={addZone}
+            aria-label={`${title}: Thêm điểm đặc biệt`}
+          >
+            Thêm điểm đặc biệt
+          </Button>
+        </div>
+      )}
+
       <WardSourcePanel title={title} provinces={provinces} onAdd={(add) => onChange(addEndpoints(items, add))} />
 
       {items.length === 0 ? (
@@ -275,6 +323,7 @@ export function MacroBulkDialog({
   const [origins, setOrigins] = React.useState<MacroEndpoint[]>([]);
   const [dests, setDests] = React.useState<MacroEndpoint[]>([]);
   const [saving, setSaving] = React.useState(false);
+  const [zones, setZones] = React.useState<SpecialZone[]>([]);
   const [pendingOrigin, setPendingOrigin] = React.useState<string | null>(null);
   const [pendingDest, setPendingDest] = React.useState<string | null>(null);
   // Xác nhận "áp cho MỌI điểm" — gắn với danh sách hiện tại, đổi danh sách là phải xác nhận lại.
@@ -284,6 +333,22 @@ export function MacroBulkDialog({
     labels: Record<string, string>;
     requestedBidirectional: boolean;
   } | null>(null);
+
+  // Điểm đặc biệt chỉ để CHỌN thêm: lỗi tải ⇒ không có nhóm này (tạo theo tỉnh/xã vẫn chạy bình thường).
+  React.useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getSpecialZones()
+      .then((list) => {
+        if (!cancelled) setZones((list || []).filter((z) => z.active));
+      })
+      .catch(() => {
+        if (!cancelled) setZones([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   React.useEffect(() => {
     if (open) {
@@ -312,6 +377,8 @@ export function MacroBulkDialog({
       : null;
   const anyError = emptySide && !ackAny ? `Cần xác nhận áp dụng cho MỌI ${emptySideName}.` : null;
   const firstError = selection.error || pendingError || anyError || valueError || prioError;
+
+  const zoneWarnings = React.useMemo(() => zoneFlatPriceWarnings(origins, dests, zones), [origins, dests, zones]);
 
   const labelMap = React.useMemo(() => {
     const m: Record<string, string> = {};
@@ -448,6 +515,7 @@ export function MacroBulkDialog({
                 title="Điểm đón"
                 accent="text-blue-600"
                 provinces={provinces}
+                zones={zones}
                 items={origins}
                 onChange={setOrigins}
                 onPendingChange={setPendingOrigin}
@@ -456,6 +524,7 @@ export function MacroBulkDialog({
                 title="Điểm trả"
                 accent="text-purple-600"
                 provinces={provinces}
+                zones={zones}
                 items={dests}
                 onChange={setDests}
                 onPendingChange={setPendingDest}
@@ -477,6 +546,14 @@ export function MacroBulkDialog({
             {pendingError && (
               <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-800" data-testid="bulk-pending">
                 {pendingError} Lựa chọn chưa bấm «Thêm» sẽ KHÔNG được tạo thành quy tắc.
+              </div>
+            )}
+
+            {zoneWarnings.length > 0 && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-900 space-y-0.5" data-testid="bulk-zone-warning">
+                {zoneWarnings.map((w) => (
+                  <div key={w}>{w}</div>
+                ))}
               </div>
             )}
 

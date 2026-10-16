@@ -36,6 +36,7 @@ import {
 import {
   getPricingMacroRulesPage,
   getPricingMacroProvinces,
+  getSpecialZones,
   getPricingMacroWards,
   updatePricingMacroRule,
   deletePricingMacroRule,
@@ -56,6 +57,8 @@ import {
   formVehicleValue,
   formatMacroAdjustment,
   isLegacyAdjustmentType,
+  isZoneWardCode,
+  MACRO_ZONE_PREFIX,
   priorityError,
   serviceLabel,
   summarizeWarnings,
@@ -65,6 +68,7 @@ import { MacroBulkDialog } from './macro-bulk-dialog';
 import type {
   PricingMacroRule,
   ProvinceOption,
+  SpecialZone,
   WardOption,
   MacroAdjustmentType,
   MacroBandWarnings,
@@ -99,6 +103,8 @@ export function PricingMacroManager() {
 
   const [rules, setRules] = React.useState<PricingMacroRule[]>([]);
   const [provinces, setProvinces] = React.useState<ProvinceOption[]>([]);
+  // Điểm đặc biệt ĐANG BẬT: thêm vào ô "Xã / Phường" của tỉnh chứa vùng (giá trị `ZONE:<mã>`, backend điền tỉnh).
+  const [zones, setZones] = React.useState<SpecialZone[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = React.useState('');
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
@@ -228,6 +234,29 @@ export function PricingMacroManager() {
 
   /** Nạp lại trang hiện tại (sau khi lưu/xoá/tạo, hoặc bấm Làm mới). */
   const loadData = React.useCallback(() => setReloadKey((k) => k + 1), []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => getSpecialZones())
+      .then((list) => {
+        if (!cancelled) setZones((list || []).filter((z) => z.active));
+      })
+      .catch(() => {
+        // Chỉ mất lựa chọn "điểm đặc biệt"; sửa theo tỉnh/xã vẫn chạy.
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  /** Xã của tỉnh + các điểm đặc biệt thuộc tỉnh đó (đứng trước, nhãn rõ là điểm đặc biệt). */
+  const withZones = (wards: { code: string; name: string }[], provinceCode: string) => [
+    ...zones
+      .filter((z) => z.provinceCode === provinceCode)
+      .map((z) => ({ code: `${MACRO_ZONE_PREFIX}${z.code}`, name: `${z.name} (điểm đặc biệt)` })),
+    ...wards,
+  ];
 
   // Load wards when province changes in dialog
   const handleOriginProvinceChange = async (provCode: string) => {
@@ -456,6 +485,7 @@ export function PricingMacroManager() {
   const endLabel = (provinceCode?: string | null, wardCode?: string | null, wardName?: string) => {
     const prov = getProvinceName(provinceCode);
     if (!wardCode) return prov;
+    if (isZoneWardCode(wardCode) && !wardName) return `Điểm đặc biệt ${wardCode.slice(MACRO_ZONE_PREFIX.length)}${provinceCode ? ` (${prov})` : ''}`;
     return `${wardName || `Xã #${wardCode}`}${provinceCode ? ` (${prov})` : ''}`;
   };
 
@@ -492,12 +522,14 @@ export function PricingMacroManager() {
     [provinces, formData.destProvinceCode],
   );
   const originWardOptions = React.useMemo(
-    () => withAllOption('Toàn bộ tỉnh (Mọi xã)', originWards, formData.originWardCode),
-    [originWards, formData.originWardCode],
+    () => withAllOption('Toàn bộ tỉnh (Mọi xã)', withZones(originWards, formData.originProvinceCode), formData.originWardCode),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [originWards, formData.originWardCode, formData.originProvinceCode, zones],
   );
   const destWardOptions = React.useMemo(
-    () => withAllOption('Toàn bộ tỉnh (Mọi xã)', destWards, formData.destWardCode),
-    [destWards, formData.destWardCode],
+    () => withAllOption('Toàn bộ tỉnh (Mọi xã)', withZones(destWards, formData.destProvinceCode), formData.destWardCode),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [destWards, formData.destWardCode, formData.destProvinceCode, zones],
   );
 
   return (
