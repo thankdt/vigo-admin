@@ -17,6 +17,9 @@
 /.next/
 /out/
 
+# cloudflare pages: thư mục triển khai từng cổng, do scripts/deploy-pages.ts dựng từ out/
+/.pages-dist/
+
 # production
 /build
 

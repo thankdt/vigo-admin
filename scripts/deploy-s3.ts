@@ -1,4 +1,5 @@
-
+// ĐÃ NGỪNG DÙNG (17/10/2026): hosting chuyển sang Cloudflare Pages — dùng scripts/deploy-pages.ts. File này giữ lại chỉ để
+// tham khảo/đường lùi cho tới khi tắt hẳn AWS; `npm run build` KHÔNG còn chạy nó. Xoá cùng PR gỡ AWS.
 import { S3Client, PutObjectCommand, PutBucketWebsiteCommand } from "@aws-sdk/client-s3";
 import * as fs from "fs";
 import * as path from "path";
