@@ -180,45 +180,18 @@ describe('PricingMacroManager — danh sách', () => {
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
   });
 
-  it('tìm kiếm theo điểm đón, điểm đi, ghi chú chạy ở SERVER (có chờ gõ xong), về trang 1; không còn tìm theo #mã', async () => {
+  it('tìm kiếm chạy ở SERVER (có chờ gõ xong), về trang 1; không còn tìm theo #mã; "chọn tất cả" chỉ chọn dòng của trang đang xem', async () => {
     const { user } = await setup();
     expect(screen.queryByPlaceholderText(/#mã/i)).not.toBeInTheDocument();
 
-    getRules.mockImplementation(async (p: { originSearch?: string; destSearch?: string; noteSearch?: string }) =>
-      p.originSearch || p.destSearch || p.noteSearch
-        ? { items: [TWO_WAY], total: 1, page: 1, limit: 50 }
-        : [ONE_WAY, TWO_WAY, CANONICAL],
+    getRules.mockImplementation(async (p: { search?: string }) =>
+      p.search ? { items: [TWO_WAY], total: 1, page: 1, limit: 50 } : [ONE_WAY, TWO_WAY, CANONICAL],
     );
-    await user.type(screen.getByPlaceholderText(/Tìm điểm đón/), 'Hà Nội');
-    await waitFor(() =>
-      expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, search: '', originSearch: 'Hà Nội' }),
-    );
+    await user.type(screen.getByPlaceholderText(/Tìm theo điểm đi, điểm đến, ghi chú/), 'Hà Nội');
+    await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, search: 'Hà Nội' }));
     // gõ 6 ký tự chỉ sinh MỘT lần gọi tìm (không gọi mỗi phím)
-    expect(getRules.mock.calls.filter((c) => c[0].originSearch)).toHaveLength(1);
+    expect(getRules.mock.calls.filter((c) => c[0].search)).toHaveLength(1);
     await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
-
-    await user.type(screen.getByPlaceholderText(/Tìm điểm đi/), 'Hưng Yên');
-    await waitFor(() =>
-      expect(getRules).toHaveBeenLastCalledWith({
-        page: 1,
-        limit: 50,
-        search: '',
-        originSearch: 'Hà Nội',
-        destSearch: 'Hưng Yên',
-      }),
-    );
-
-    await user.type(screen.getByPlaceholderText(/Tìm ghi chú/), 'Tết');
-    await waitFor(() =>
-      expect(getRules).toHaveBeenLastCalledWith({
-        page: 1,
-        limit: 50,
-        search: '',
-        originSearch: 'Hà Nội',
-        destSearch: 'Hưng Yên',
-        noteSearch: 'Tết',
-      }),
-    );
 
     await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
@@ -236,7 +209,7 @@ describe('PricingMacroManager — danh sách', () => {
 
     // sang kết quả tìm khác: hai dòng đã chọn không còn ở trang đang xem, chọn thêm dòng đang hiện
     getRules.mockResolvedValue({ items: [CANONICAL], total: 1, page: 1, limit: 50 });
-    await user.type(screen.getByPlaceholderText(/Tìm điểm đón/), 'api');
+    await user.type(screen.getByPlaceholderText(/Tìm theo điểm đi, điểm đến, ghi chú/), 'api');
     await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
     await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (3)' })).toBeInTheDocument();
@@ -838,7 +811,7 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
     getRules.mockImplementation(async () => pageOf([TWO_WAY], 1));
     render(<PricingMacroManager />);
     const user = userEvent.setup();
-    await user.type(screen.getByPlaceholderText(/Tìm điểm đón/), 'x');
+    await user.type(screen.getByPlaceholderText(/Tìm theo điểm đi, điểm đến, ghi chú/), 'x');
     await screen.findByTestId('rule-row-2');
     releaseOld(pageOf([ONE_WAY], 1)); // yêu cầu cũ về muộn
     await new Promise((r) => setTimeout(r, 20));
@@ -847,13 +820,11 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
   });
 
   it('không khớp từ khoá ⇒ báo riêng, không phải "chưa có quy tắc"', async () => {
-    getRules.mockImplementation(async (p: { originSearch?: string; destSearch?: string; noteSearch?: string }) =>
-      pageOf(p.originSearch || p.destSearch || p.noteSearch ? [] : [ONE_WAY], p.originSearch || p.destSearch || p.noteSearch ? 0 : 1),
-    );
+    getRules.mockImplementation(async (p: { search?: string }) => pageOf(p.search ? [] : [ONE_WAY], p.search ? 0 : 1));
     render(<PricingMacroManager />);
     const user = userEvent.setup();
     await screen.findByTestId('rule-row-1');
-    await user.type(screen.getByPlaceholderText(/Tìm điểm đi/), 'zzz');
+    await user.type(screen.getByPlaceholderText(/Tìm theo điểm đi, điểm đến, ghi chú/), 'zzz');
     expect(await screen.findByText('Không có quy tắc nào khớp từ khoá tìm kiếm.')).toBeInTheDocument();
   });
 });
