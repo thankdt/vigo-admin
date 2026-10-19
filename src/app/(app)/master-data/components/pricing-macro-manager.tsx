@@ -106,15 +106,17 @@ export function PricingMacroManager() {
   // Điểm đặc biệt ĐANG BẬT: thêm vào ô "Xã / Phường" của tỉnh chứa vùng (giá trị `ZONE:<mã>`, backend điền tỉnh).
   const [zones, setZones] = React.useState<SpecialZone[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [search, setSearch] = React.useState('');
+  const [searchOrigin, setSearchOrigin] = React.useState('');
+  const [searchDest, setSearchDest] = React.useState('');
+  const [searchNote, setSearchNote] = React.useState('');
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
-  const [debouncedSearch, setDebouncedSearch] = React.useState('');
+  const [debouncedFilters, setDebouncedFilters] = React.useState({ origin: '', dest: '', note: '' });
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = React.useState(0);
   const [reloadKey, setReloadKey] = React.useState(0);
   const loadSeq = React.useRef(0);
-  const lastQuery = React.useRef('');
+  const lastQuery = React.useRef('||');
 
   // Dropdown ward caches per province
   const [originWards, setOriginWards] = React.useState<WardOption[]>([]);
@@ -180,23 +182,35 @@ export function PricingMacroManager() {
       .catch(() => setProvinces([]));
   }, []);
 
-  // Gõ tìm kiếm: chờ 300ms rồi mới gọi server, và về trang 1.
+  // Gõ tìm kiếm: chờ 250ms rồi mới gọi server, và về trang 1.
   React.useEffect(() => {
     const t = setTimeout(() => {
-      const q = search.trim();
-      if (q === lastQuery.current) return;
-      lastQuery.current = q;
+      const origin = searchOrigin.trim();
+      const dest = searchDest.trim();
+      const note = searchNote.trim();
+      const key = `${origin}|${dest}|${note}`;
+      if (key === lastQuery.current) return;
+      lastQuery.current = key;
       setPage(1);
-      setDebouncedSearch(q);
-    }, 300);
+      setDebouncedFilters({ origin, dest, note });
+    }, 250);
     return () => clearTimeout(t);
-  }, [search]);
+  }, [searchOrigin, searchDest, searchNote]);
+
+  const hasActiveSearch = Boolean(debouncedFilters.origin || debouncedFilters.dest || debouncedFilters.note);
 
   // Nạp MỘT trang luật. Có số thứ tự yêu cầu: kết quả của yêu cầu cũ không được đè lên yêu cầu mới.
   React.useEffect(() => {
     const seq = ++loadSeq.current;
     setLoading(true);
-    getPricingMacroRulesPage({ page, limit: pageSize, search: debouncedSearch })
+    getPricingMacroRulesPage({
+      page,
+      limit: pageSize,
+      search: '',
+      ...(debouncedFilters.origin ? { originSearch: debouncedFilters.origin } : {}),
+      ...(debouncedFilters.dest ? { destSearch: debouncedFilters.dest } : {}),
+      ...(debouncedFilters.note ? { noteSearch: debouncedFilters.note } : {}),
+    })
       .then((res) => {
         if (seq !== loadSeq.current) return;
         const items = res?.items ?? [];
@@ -219,7 +233,7 @@ export function PricingMacroManager() {
         });
         setLoading(false);
       });
-  }, [page, pageSize, debouncedSearch, reloadKey, toast]);
+  }, [page, pageSize, debouncedFilters, reloadKey, toast]);
 
   // Cảnh báo băng chặn: phụ — lỗi (backend cũ / thiếu quyền master-data) thì bỏ qua, không làm hỏng danh sách.
   const loadBandWarnings = React.useCallback(() => {
@@ -606,17 +620,38 @@ export function PricingMacroManager() {
                   Xoá đã chọn ({selectedIds.size})
                 </Button>
               )}
-            <div className="w-full sm:w-64">
-              <div className="relative">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm theo tỉnh, xã, ghi chú, #mã..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                />
+              <div className="flex flex-wrap sm:flex-nowrap w-full sm:w-auto items-center gap-2">
+                <div className="relative w-full sm:w-44">
+                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+                  <Input
+                    aria-label="Tìm điểm đón"
+                    className="pl-8 h-9 text-xs"
+                    placeholder="Tìm điểm đón (tỉnh, xã)..."
+                    value={searchOrigin}
+                    onChange={(e) => setSearchOrigin(e.target.value)}
+                  />
+                </div>
+                <div className="relative w-full sm:w-44">
+                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+                  <Input
+                    aria-label="Tìm điểm đi"
+                    className="pl-8 h-9 text-xs"
+                    placeholder="Tìm điểm đi (tỉnh, xã)..."
+                    value={searchDest}
+                    onChange={(e) => setSearchDest(e.target.value)}
+                  />
+                </div>
+                <div className="relative w-full sm:w-44">
+                  <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+                  <Input
+                    aria-label="Tìm ghi chú"
+                    className="pl-8 h-9 text-xs"
+                    placeholder="Tìm ghi chú..."
+                    value={searchNote}
+                    onChange={(e) => setSearchNote(e.target.value)}
+                  />
+                </div>
               </div>
-            </div>
             </div>
           </div>
         </CardHeader>
@@ -660,7 +695,7 @@ export function PricingMacroManager() {
               ) : rules.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-10 text-slate-400 text-xs">
-                    {debouncedSearch
+                    {hasActiveSearch
                       ? 'Không có quy tắc nào khớp từ khoá tìm kiếm.'
                       : 'Chưa có quy tắc macro nào. Bấm "Thêm quy tắc" để bắt đầu cấu hình.'}
                   </TableCell>

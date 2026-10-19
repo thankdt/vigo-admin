@@ -722,4 +722,30 @@ describe('SpecialZonesManager', () => {
       expect(within(dialog).getByTestId('flat-target-fixed')).toHaveTextContent('Cả Hà Nội (mặc định)');
     });
   });
+
+  describe('tìm kiếm trong bảng đồng giá sân bay', () => {
+    it('lọc theo nơi áp dụng (không phân biệt dấu tiếng Việt) và ghi chú; không khớp thì hiện thông báo', async () => {
+      const user = await setup([
+        row({ id: 1, note: 'Mặc định nội thành' }),
+        row({ id: 2, wardCode: '00002', wardName: 'Xã Sóc Sơn', priceCar4: 230000, note: 'Gần sân bay' }),
+      ]);
+      const searchInput = screen.getByPlaceholderText('Tìm theo nơi áp dụng, ghi chú...');
+
+      // Gõ không dấu "soc son" vẫn khớp "Xã Sóc Sơn"
+      await user.type(searchInput, 'soc son');
+      expect(screen.queryByTestId('flat-row-default')).not.toBeInTheDocument();
+      expect(screen.getByTestId('flat-row-00002')).toBeInTheDocument();
+
+      // Lọc theo ghi chú không dấu "noi thanh"
+      await user.clear(searchInput);
+      await user.type(searchInput, 'noi thanh');
+      expect(screen.getByTestId('flat-row-default')).toBeInTheDocument();
+      expect(screen.queryByTestId('flat-row-00002')).not.toBeInTheDocument();
+
+      // Từ khoá không khớp hàng nào
+      await user.clear(searchInput);
+      await user.type(searchInput, 'khong-ton-tai');
+      expect(screen.getByText('Không có hàng nào khớp từ khoá tìm kiếm.')).toBeInTheDocument();
+    });
+  });
 });
