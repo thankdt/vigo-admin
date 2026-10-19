@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, PlaneTakeoff, PlusCircle, RefreshCw, Trash2, Edit } from 'lucide-react';
+import { Loader2, PlaneTakeoff, PlusCircle, RefreshCw, Search, Trash2, Edit } from 'lucide-react';
 import {
   deleteSpecialZoneFlatPrice,
   getPricingMacroWards,
@@ -51,6 +51,7 @@ import {
   type FlatPriceKey,
 } from '@/lib/special-zone-flat-price';
 import type { SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest, WardOption } from '@/lib/types';
+import { foldVietnamese } from '@/components/ui/combobox-filter';
 import { cn } from '@/lib/utils';
 
 /** Cùng quyền với backend: `@RequireFunction('master-data')` ở cấp class của SpecialZonesController. */
@@ -222,6 +223,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
   const [rows, setRows] = React.useState<SpecialZoneFlatPrice[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [search, setSearch] = React.useState('');
 
   // Dialog sửa/thêm: `editing` = hàng đang sửa, 'new' = thêm hàng mới, null = đóng.
   const [editing, setEditing] = React.useState<SpecialZoneFlatPrice | 'new' | null>(null);
@@ -417,6 +419,15 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
   };
 
   const deleteText = deleteRow ? describeFlatPriceDelete({ zone, row: deleteRow }) : null;
+  const filteredRows = React.useMemo(() => {
+    const q = foldVietnamese(search.trim());
+    if (!q) return rows;
+    return rows.filter((r) => {
+      const target = foldVietnamese(flatPriceTargetLabel(zone, r.wardCode, r.wardName));
+      const note = foldVietnamese(r.note ?? '');
+      return target.includes(q) || note.includes(q);
+    });
+  }, [rows, search, zone]);
   const provinceLabel = zone.provinceName ?? `tỉnh ${zone.provinceCode}`;
   // Hàng mặc định cả tỉnh đứng đầu rồi tới phường/xã; ô tìm của Combobox khớp cả tên (không dấu cũng được) lẫn mã.
   const targetOptions = React.useMemo(
@@ -481,6 +492,19 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
             Chưa có đồng giá nào cho vùng này — chuyến ghép/bao xe đi/đến đây đang tính theo bảng km (+ luật macro).
           </div>
         ) : (
+          <>
+          <div className="mb-3">
+            <div className="relative w-full sm:w-64">
+              <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
+              <Input
+                aria-label={`Tìm đồng giá ${zone.name}`}
+                className="pl-8 h-9 text-xs"
+                placeholder="Tìm theo nơi áp dụng, ghi chú..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
@@ -494,7 +518,13 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {rows.map((r) => (
+                {filteredRows.length === 0 && search.trim() ? (
+                  <TableRow>
+                    <TableCell colSpan={FLAT_PRICE_FIELDS.length + 3} className="text-center py-6 text-slate-400 text-xs">
+                      Không có hàng nào khớp từ khoá tìm kiếm.
+                    </TableCell>
+                  </TableRow>
+                ) : filteredRows.map((r) => (
                   <TableRow key={r.id} data-testid={`flat-row-${r.wardCode ?? 'default'}`}>
                     <TableCell className="text-sm font-medium">
                       {flatPriceTargetLabel(zone, r.wardCode, r.wardName)}
@@ -547,6 +577,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
               </TableBody>
             </Table>
           </div>
+          </>
         )}
       </CardContent>
 

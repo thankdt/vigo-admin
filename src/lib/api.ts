@@ -5003,9 +5003,15 @@ export async function getPricingMacroRulesPage(params: {
   page: number;
   limit: number;
   search?: string;
+  originSearch?: string;
+  destSearch?: string;
+  noteSearch?: string;
 }): Promise<PricingMacroRulePage> {
   const qs = new URLSearchParams({ page: String(params.page), limit: String(params.limit) });
   if (params.search?.trim()) qs.set('search', params.search.trim());
+  if (params.originSearch?.trim()) qs.set('originSearch', params.originSearch.trim());
+  if (params.destSearch?.trim()) qs.set('destSearch', params.destSearch.trim());
+  if (params.noteSearch?.trim()) qs.set('noteSearch', params.noteSearch.trim());
   const response = await fetchWithAuth(`/pricing/macro-rules?${qs.toString()}`);
   const data = await unwrap<PricingMacroRulePage | PricingMacroRulePage['items']>(response);
   // Backend cũ (chưa có phân trang) trả mảng đầy đủ ⇒ tự cắt trang phía client để không hiện danh sách rỗng.
