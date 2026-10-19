@@ -180,7 +180,7 @@ export function PricingMacroManager() {
       .catch(() => setProvinces([]));
   }, []);
 
-  // Gõ tìm kiếm: chờ 300ms rồi mới gọi server, và về trang 1.
+  // Gõ tìm kiếm: chờ 250ms rồi mới gọi server, và về trang 1.
   React.useEffect(() => {
     const t = setTimeout(() => {
       const q = search.trim();
@@ -188,7 +188,7 @@ export function PricingMacroManager() {
       lastQuery.current = q;
       setPage(1);
       setDebouncedSearch(q);
-    }, 300);
+    }, 250);
     return () => clearTimeout(t);
   }, [search]);
 
@@ -606,17 +606,16 @@ export function PricingMacroManager() {
                   Xoá đã chọn ({selectedIds.size})
                 </Button>
               )}
-            <div className="w-full sm:w-64">
-              <div className="relative">
+              <div className="relative w-full sm:w-72">
                 <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
                 <Input
+                  aria-label="Tìm quy tắc theo điểm đi, điểm đến, ghi chú"
                   className="pl-8 h-9 text-xs"
-                  placeholder="Tìm theo tỉnh, xã, ghi chú, #mã..."
+                  placeholder="Tìm theo điểm đi, điểm đến, ghi chú..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
               </div>
-            </div>
             </div>
           </div>
         </CardHeader>
