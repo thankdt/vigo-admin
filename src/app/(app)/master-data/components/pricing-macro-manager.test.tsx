@@ -17,6 +17,7 @@ const updateRule = vi.fn();
 const deleteRule = vi.fn();
 const bulkDelete = vi.fn();
 const bandWarnings = vi.fn();
+const aiSearch = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
 vi.mock('@/lib/api', () => ({
@@ -25,6 +26,7 @@ vi.mock('@/lib/api', () => ({
     const r = await getRules(...a);
     return Array.isArray(r) ? { items: r, total: r.length, page: 1, limit: 50 } : r;
   },
+  aiSearchPricingMacroRules: (...a: unknown[]) => aiSearch(...a),
   getPricingMacroProvinces: (...a: unknown[]) => getProvinces(...a),
   getPricingMacroWards: (...a: unknown[]) => getWards(...a),
   getSpecialZones: (...a: unknown[]) => getZones(...a),

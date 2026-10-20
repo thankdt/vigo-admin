@@ -32,9 +32,12 @@ import {
   RefreshCw,
   Compass,
   ArrowLeftRight,
+  Sparkles,
+  X,
 } from 'lucide-react';
 import {
   getPricingMacroRulesPage,
+  aiSearchPricingMacroRules,
   getPricingMacroProvinces,
   getSpecialZones,
   getPricingMacroWards,
@@ -109,6 +112,14 @@ export function PricingMacroManager() {
   const [searchOrigin, setSearchOrigin] = React.useState('');
   const [searchDest, setSearchDest] = React.useState('');
   const [searchNote, setSearchNote] = React.useState('');
+  // Tìm kiếm AI (Gemini)
+  const [aiQuery, setAiQuery] = React.useState('');
+  const [aiSearching, setAiSearching] = React.useState(false);
+  const [aiResult, setAiResult] = React.useState<{
+    query: string;
+    explanation: string;
+    winningRuleId: number | null;
+  } | null>(null);
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
   const [debouncedFilters, setDebouncedFilters] = React.useState({ origin: '', dest: '', note: '' });
   const [page, setPage] = React.useState(1);
@@ -191,16 +202,69 @@ export function PricingMacroManager() {
       const key = `${origin}|${dest}|${note}`;
       if (key === lastQuery.current) return;
       lastQuery.current = key;
+      setAiResult(null);
       setPage(1);
       setDebouncedFilters({ origin, dest, note });
     }, 250);
     return () => clearTimeout(t);
   }, [searchOrigin, searchDest, searchNote]);
 
-  const hasActiveSearch = Boolean(debouncedFilters.origin || debouncedFilters.dest || debouncedFilters.note);
+  const hasActiveSearch = Boolean(
+    debouncedFilters.origin || debouncedFilters.dest || debouncedFilters.note || aiResult,
+  );
+
+  const handleAiSearch = React.useCallback(
+    async (targetPage = 1) => {
+      const q = aiQuery.trim();
+      if (!q) return;
+      const seq = ++loadSeq.current;
+      setAiSearching(true);
+      setLoading(true);
+      try {
+        const res = await aiSearchPricingMacroRules({
+          query: q,
+          page: targetPage,
+          limit: pageSize,
+        });
+        if (seq !== loadSeq.current) return;
+        setRules(res?.items ?? []);
+        setTotal(res?.total ?? 0);
+        setPage(targetPage);
+        setAiResult({
+          query: q,
+          explanation: res?.explanation || `Kết quả tìm kiếm AI cho "${q}"`,
+          winningRuleId: res?.winningRuleId ?? null,
+        });
+      } catch (err: any) {
+        if (seq !== loadSeq.current) return;
+        toast({
+          title: 'Lỗi tìm kiếm AI',
+          description: err.message || 'Không thể thực hiện tìm kiếm bằng Gemini AI',
+          variant: 'destructive',
+        });
+      } finally {
+        if (seq === loadSeq.current) {
+          setAiSearching(false);
+          setLoading(false);
+        }
+      }
+    },
+    [aiQuery, pageSize, toast],
+  );
+
+  const clearAiSearch = React.useCallback(() => {
+    setAiQuery('');
+    setAiResult(null);
+    setPage(1);
+    setReloadKey((k) => k + 1);
+  }, []);
 
   // Nạp MỘT trang luật. Có số thứ tự yêu cầu: kết quả của yêu cầu cũ không được đè lên yêu cầu mới.
   React.useEffect(() => {
+    if (aiResult) {
+      handleAiSearch(page);
+      return;
+    }
     const seq = ++loadSeq.current;
     setLoading(true);
     getPricingMacroRulesPage({
@@ -651,6 +715,66 @@ export function PricingMacroManager() {
               </div>
             </div>
           </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+              <div className="relative flex-1">
+                <Sparkles className="w-4 h-4 absolute left-2.5 top-2.5 text-indigo-500" />
+                <Input
+                  aria-label="Tìm kiếm thông minh bằng AI"
+                  className="pl-8 h-9 text-xs border-indigo-200 focus-visible:ring-indigo-500 bg-indigo-50/30"
+                  placeholder='Hỏi AI tìm quy tắc (vd: "Đông Anh đi Phủ Lý ăn rule nào?", "bao xe 7 chỗ Hà Nội đi Hải Dương cũ", "rule giá trên 2 triệu")...'
+                  value={aiQuery}
+                  onChange={(e) => setAiQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAiSearch(1);
+                    }
+                  }}
+                />
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
+                  disabled={aiSearching || !aiQuery.trim()}
+                  onClick={() => handleAiSearch(1)}
+                >
+                  {aiSearching ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
+                  ) : (
+                    <Sparkles className="w-3.5 h-3.5 mr-1" />
+                  )}
+                  Tìm với AI
+                </Button>
+                {aiResult && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-xs"
+                    onClick={clearAiSearch}
+                  >
+                    <X className="w-3.5 h-3.5 mr-1" />
+                    Xoá lọc AI
+                  </Button>
+                )}
+              </div>
+            </div>
+            {aiResult && (
+              <div
+                data-testid="ai-search-banner"
+                className="rounded-md border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs text-indigo-950 flex items-start gap-2"
+              >
+                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
+                <div className="flex-1 leading-relaxed">
+                  <span className="font-semibold text-indigo-700">Gemini AI: </span>
+                  {aiResult.explanation}
+                </div>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -699,8 +823,16 @@ export function PricingMacroManager() {
                 </TableRow>
               ) : (
                 rules.map((rule) => {
+                  const isWinner = aiResult?.winningRuleId === rule.id;
                   return (
-                    <TableRow key={rule.id} data-testid={`rule-row-${rule.id}`} className="text-xs hover:bg-slate-50/50">
+                    <TableRow
+                      key={rule.id}
+                      data-testid={`rule-row-${rule.id}`}
+                      className={cn(
+                        'text-xs hover:bg-slate-50/50',
+                        isWinner && 'bg-emerald-50/70 hover:bg-emerald-50',
+                      )}
+                    >
                       <TableCell>
                         <Checkbox
                           aria-label={`Chọn quy tắc #${rule.id} ${ruleTitle(rule)}`}
@@ -709,11 +841,17 @@ export function PricingMacroManager() {
                         />
                       </TableCell>
                       <TableCell className="text-center font-bold text-slate-600">
-                        {rule.priority}
+                        <div>{rule.priority}</div>
+                        <div className="text-[10px] font-normal text-slate-400">#{rule.id}</div>
                       </TableCell>
                       <TableCell>
-                        <div className="text-slate-700 font-medium">
-                          {getProvinceName(rule.originProvinceCode)}
+                        <div className="text-slate-700 font-medium flex items-center gap-1.5 flex-wrap">
+                          <span>{getProvinceName(rule.originProvinceCode)}</span>
+                          {isWinner && (
+                            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-4 px-1.5">
+                              ⚡ Đang áp dụng
+                            </Badge>
+                          )}
                         </div>
                         {rule.originWardCode && (
                           <Badge variant="outline" className="text-[10px] h-4 px-1 mt-0.5 bg-blue-50 text-blue-700">
