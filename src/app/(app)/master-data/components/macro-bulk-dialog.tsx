@@ -611,6 +611,7 @@ export function MacroBulkDialog({
                 >
                   <option value="DELTA_AMOUNT">Cộng/Trừ tiền cố định (± VNĐ)</option>
                   <option value="PERCENTAGE">Theo phần trăm (± %)</option>
+                  <option value="FIXED_PRICE">Ghi đè giá cố định (VNĐ)</option>
                 </select>
               </div>
               <div className="space-y-1">

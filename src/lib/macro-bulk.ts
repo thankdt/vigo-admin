@@ -198,6 +198,8 @@ export function formatMacroAdjustment(type: MacroAdjustmentType, value: number, 
       return `${sign}${money(value)} đ${applyPerSeat ? '/ghế' : ''}`;
     case 'PERCENTAGE':
       return `${sign}${value}%`;
+    case 'FIXED_PRICE':
+      return `Ghi đè: ${money(value)} đ${applyPerSeat ? '/ghế' : ''}`;
     case 'MIN_FLOOR':
       return `Sàn: ${money(value)} đ`;
     case 'MAX_CEILING':
@@ -230,6 +232,12 @@ export function adjustmentValueError(type: MacroAdjustmentType, value: number): 
     case 'PERCENTAGE':
       if (value < L.PERCENT_MIN || value > L.PERCENT_MAX) {
         return `Phần trăm phải từ ${L.PERCENT_MIN}% đến ${L.PERCENT_MAX}%.`;
+      }
+      return null;
+    case 'FIXED_PRICE':
+      if (!Number.isInteger(value)) return 'Giá ghi đè phải là số nguyên đồng.';
+      if (value < L.CEILING_MIN || value > L.PRICE_MAX) {
+        return `Giá ghi đè phải từ ${money(L.CEILING_MIN)}đ đến ${money(L.PRICE_MAX)}đ.`;
       }
       return null;
     case 'MIN_FLOOR':
@@ -344,6 +352,8 @@ export function adjustmentValueHint(type: MacroAdjustmentType): string {
       return `Cộng/trừ tiền cố định, tối đa ±${money(L.DELTA_ABS_MAX)}đ. Ví dụ: -20000 hoặc 50000.`;
     case 'PERCENTAGE':
       return `Phần trăm theo giá hiện tại, từ ${L.PERCENT_MIN}% đến ${L.PERCENT_MAX}%. Ví dụ: 10 hoặc -5.`;
+    case 'FIXED_PRICE':
+      return `Ghi đè thẳng giá vận chuyển từ ${money(L.CEILING_MIN)}đ đến ${money(L.PRICE_MAX)}đ (thay cho giá theo km).`;
     case 'MIN_FLOOR':
       return 'Giá tối thiểu của chuyến (VNĐ). Chuyến rẻ hơn sẽ được nâng lên mức này.';
     case 'MAX_CEILING':
@@ -362,6 +372,8 @@ export function adjustmentValueRange(type: MacroAdjustmentType): { min: number; 
     case 'PERCENTAGE':
       // Backend cho số lẻ (cột numeric(12,2)); step=1 làm trình duyệt chặn 2.5% bằng tooltip gốc.
       return { min: L.PERCENT_MIN, max: L.PERCENT_MAX, step: 0.01 };
+    case 'FIXED_PRICE':
+      return { min: L.CEILING_MIN, max: L.PRICE_MAX, step: 1 };
     case 'MIN_FLOOR':
       return { min: L.FLOOR_MIN, max: L.PRICE_MAX, step: 1 };
     case 'MAX_CEILING':

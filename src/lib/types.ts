@@ -1092,9 +1092,9 @@ export type TeamMemberRow = {
 
 /**
  * `MIN_FLOOR`/`MAX_CEILING` chỉ còn để ĐỌC/hiển thị luật cũ: backend không còn áp và từ chối tạo mới
- * (spec bỏ-tuyến §5). Form tạo/sửa chỉ được đưa ra DELTA_AMOUNT và PERCENTAGE.
+ * (spec bỏ-tuyến §5). Form tạo/sửa đưa ra DELTA_AMOUNT, PERCENTAGE và FIXED_PRICE (ghi đè giá).
  */
-export type MacroAdjustmentType = 'DELTA_AMOUNT' | 'PERCENTAGE' | 'MIN_FLOOR' | 'MAX_CEILING';
+export type MacroAdjustmentType = 'DELTA_AMOUNT' | 'PERCENTAGE' | 'FIXED_PRICE' | 'MIN_FLOOR' | 'MAX_CEILING';
 
 /** Cảnh báo KHÔNG chặn của backend khi lưu luật (xung đột cùng cặp tỉnh, % lọt băng chặn, rút gọn). */
 export type MacroRuleWarning = {

@@ -261,6 +261,8 @@ describe('macro-bulk — hiển thị mức điều chỉnh và ô nhập số',
     expect(formatMacroAdjustment('DELTA_AMOUNT', 30000, true)).toBe('+30.000 đ/ghế');
     expect(formatMacroAdjustment('DELTA_AMOUNT', -20000, false)).toBe('-20.000 đ');
     expect(formatMacroAdjustment('PERCENTAGE', 7.5, true)).toBe('+7.5%');
+    expect(formatMacroAdjustment('FIXED_PRICE', 250000, true)).toBe('Ghi đè: 250.000 đ/ghế');
+    expect(formatMacroAdjustment('FIXED_PRICE', 600000, false)).toBe('Ghi đè: 600.000 đ');
     expect(formatMacroAdjustment('MIN_FLOOR', 150000, true)).toBe('Sàn: 150.000 đ');
     expect(formatMacroAdjustment('MAX_CEILING', 900000, false)).toBe('Trần: 900.000 đ');
   });
@@ -268,19 +270,23 @@ describe('macro-bulk — hiển thị mức điều chỉnh và ô nhập số',
   it('phần trăm cho số lẻ (step 0.01); các loại tiền chỉ nhận số nguyên (step 1)', () => {
     expect(adjustmentValueRange('PERCENTAGE')).toMatchObject({ min: -80, max: 200, step: 0.01 });
     expect(adjustmentValueRange('DELTA_AMOUNT').step).toBe(1);
+    expect(adjustmentValueRange('FIXED_PRICE')).toMatchObject({ min: 20_000, max: 20_000_000, step: 1 });
     expect(adjustmentValueRange('MIN_FLOOR').step).toBe(1);
     expect(adjustmentValueRange('MAX_CEILING').step).toBe(1);
     // và kiểm tra JS khớp: 2.5% hợp lệ
     expect(adjustmentValueError('PERCENTAGE', 2.5)).toBeNull();
+    expect(adjustmentValueError('FIXED_PRICE', 250_000)).toBeNull();
+    expect(adjustmentValueError('FIXED_PRICE', 19_999)).toMatch(/20\.000/);
   });
 });
 
 describe('macro-bulk — loại điều chỉnh đã ngừng áp dụng', () => {
-  it('chỉ MIN_FLOOR / MAX_CEILING là "cũ"; cộng/trừ tiền và % thì không', () => {
+  it('chỉ MIN_FLOOR / MAX_CEILING là "cũ"; cộng/trừ tiền, % và ghi đè giá thì không', () => {
     expect(isLegacyAdjustmentType('MIN_FLOOR')).toBe(true);
     expect(isLegacyAdjustmentType('MAX_CEILING')).toBe(true);
     expect(isLegacyAdjustmentType('DELTA_AMOUNT')).toBe(false);
     expect(isLegacyAdjustmentType('PERCENTAGE')).toBe(false);
+    expect(isLegacyAdjustmentType('FIXED_PRICE')).toBe(false);
   });
 });
 

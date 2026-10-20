@@ -725,6 +725,7 @@ export function PricingMacroManager() {
                             rule.adjustmentType === 'DELTA_AMOUNT' && Number(rule.adjustmentValue) > 0 && 'text-amber-600',
                             rule.adjustmentType === 'DELTA_AMOUNT' && Number(rule.adjustmentValue) < 0 && 'text-emerald-600',
                             rule.adjustmentType === 'PERCENTAGE' && 'text-indigo-600',
+                            rule.adjustmentType === 'FIXED_PRICE' && 'text-blue-700',
                           )}
                         >
                           {formatAdjustment(rule.adjustmentType, Number(rule.adjustmentValue), rule.applyPerSeat)}
@@ -1009,6 +1010,7 @@ export function PricingMacroManager() {
                   <SelectContent>
                     <SelectItem value="DELTA_AMOUNT">Cộng/Trừ tiền cố định (± VNĐ)</SelectItem>
                     <SelectItem value="PERCENTAGE">Theo phần trăm (± %)</SelectItem>
+                    <SelectItem value="FIXED_PRICE">Ghi đè giá cố định (VNĐ)</SelectItem>
                     {/* Sàn/trần: backend đã ngừng áp dụng và không cho tạo mới — chỉ hiện khi đang mở một luật cũ. */}
                     {isLegacyAdjustmentType(formData.adjustmentType) && (
                       <SelectItem value={formData.adjustmentType} disabled>
@@ -1019,7 +1021,7 @@ export function PricingMacroManager() {
                 </Select>
                 {isLegacyAdjustmentType(formData.adjustmentType) && (
                   <div role="note" className="text-[11px] text-amber-700">
-                    Quy tắc kiểu sàn/trần không còn được áp dụng vào giá. Hãy đổi sang cộng/trừ tiền hoặc %, hoặc xoá quy tắc.
+                    Quy tắc kiểu sàn/trần không còn được áp dụng vào giá. Hãy đổi sang cộng/trừ tiền, % hoặc ghi đè giá, hoặc xoá quy tắc.
                   </div>
                 )}
               </div>
@@ -1032,7 +1034,13 @@ export function PricingMacroManager() {
                   className="h-8 text-xs"
                   type="number"
                   {...adjustmentValueRange(formData.adjustmentType)}
-                  placeholder={formData.adjustmentType === 'PERCENTAGE' ? 'Ví dụ: 10 hoặc -5' : 'Ví dụ: -20000 hoặc 50000'}
+                  placeholder={
+                    formData.adjustmentType === 'PERCENTAGE'
+                      ? 'Ví dụ: 10 hoặc -5'
+                      : formData.adjustmentType === 'FIXED_PRICE'
+                        ? 'Ví dụ: 250000'
+                        : 'Ví dụ: -20000 hoặc 50000'
+                  }
                   value={formData.adjustmentValue}
                   onChange={(e) =>
                     setFormData((prev) => ({ ...prev, adjustmentValue: parseFloat(e.target.value) || 0 }))
