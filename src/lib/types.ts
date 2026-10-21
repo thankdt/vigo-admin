@@ -261,6 +261,13 @@ export type PriceBreakdown = {
   // chuyến không phải CARPOOL không có field này (hoặc = 0).
   seatDiscountPercent?: number;
   seatDiscountAmount?: number;
+  // Nguồn giá & quy tắc điều chỉnh khu vực (backend stamp lúc tạo chuyến)
+  priceSource?: 'KM' | 'FLAT_DEFAULT' | 'FLAT_PROVINCE' | 'FLAT_WARD' | string | null;
+  flatPriceId?: number | null;
+  macroRuleId?: number | null;
+  macroRuleName?: string | null;
+  macroAdjustmentType?: 'FIXED_PRICE' | 'DELTA_AMOUNT' | 'PERCENTAGE' | string | null;
+  macroDeltaAmount?: number | null;
 };
 
 export type DriverEarnings = {
@@ -422,7 +429,11 @@ export type Booking = {
   // Snapshot địa lý gis (34 tỉnh) hai đầu chuyến, BE stamp lúc tạo từ toạ độ. null/thiếu = chuyến
   // cũ chưa backfill hoặc BE chưa deploy — luôn xử lý tường minh. '01' = Nội đô Hà Nội.
   pickupProvinceCode?: string | null;
+  pickupWardCode?: string | null;
+  pickupZoneCode?: string | null;
   dropoffProvinceCode?: string | null;
+  dropoffWardCode?: string | null;
+  dropoffZoneCode?: string | null;
   // Vi-now: customer shows a 6-digit code to a nearby driver to claim the
   // trip directly, bypassing dispatch. Admin needs to spot these at a
   // glance because the customer journey + UI flow differ from a normal

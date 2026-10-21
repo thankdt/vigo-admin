@@ -37,6 +37,7 @@ import { Switch } from '@/components/ui/switch';
 // Dùng CHUNG hàm suy pha với hàng đợi CSKH — hai màn lệch nhau là bỏ qua bước nhận việc.
 import { rowIsBeforePhase } from '../../crm-queue/queue-tabs';
 import { Label } from '@/components/ui/label';
+import { MacroRuleBadge, MacroRuleQuickEditDialog } from './macro-rule-quick-edit-dialog';
 
 
 const paymentMethodMap: Record<string, string> = {
@@ -50,6 +51,7 @@ const vehicleTypeMap: Record<string, string> = {
 };
 
 export function PriceBreakdownCard({ booking }: { booking: Booking }) {
+  const [editingRuleId, setEditingRuleId] = React.useState<number | null>(null);
   const fmtVnd = (v: number | string | null | undefined) =>
     new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(Number(v ?? 0));
 
@@ -268,6 +270,76 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
         </div>
       )}
 
+      {/* Quy tắc giá áp dụng (Rule #ID / Đồng giá vùng đặc biệt / Tính theo KM) */}
+      {(breakdown?.macroRuleId != null || breakdown?.priceSource) && (
+        <div className="rounded-md border border-indigo-200/80 bg-indigo-50/60 p-2.5 space-y-1.5 text-xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-semibold text-indigo-900">Quy tắc giá áp dụng</span>
+            {breakdown?.macroRuleId != null && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-[11px] border-indigo-300 bg-white text-indigo-700 hover:bg-indigo-100"
+                onClick={() => setEditingRuleId(Number(breakdown.macroRuleId))}
+              >
+                Xem & Sửa Rule #{breakdown.macroRuleId}
+              </Button>
+            )}
+          </div>
+          {breakdown?.macroRuleId != null ? (
+            <div className="space-y-1">
+              <div className="flex items-center flex-wrap gap-1.5">
+                <MacroRuleBadge
+                  ruleId={Number(breakdown.macroRuleId)}
+                  ruleName={breakdown.macroRuleName}
+                  adjustmentType={breakdown.macroAdjustmentType}
+                  onClick={(id) => setEditingRuleId(id)}
+                />
+              </div>
+              {breakdown.macroAdjustmentType && (
+                <div className="text-[11px] text-indigo-800/90">
+                  Kiểu:{' '}
+                  <span className="font-medium">
+                    {breakdown.macroAdjustmentType === 'FIXED_PRICE'
+                      ? 'Ghi đè giá cố định'
+                      : breakdown.macroAdjustmentType === 'PERCENTAGE'
+                        ? 'Tăng/giảm theo %'
+                        : 'Cộng/trừ tiền cố định'}
+                  </span>
+                  {breakdown.macroDeltaAmount != null && Number(breakdown.macroDeltaAmount) !== 0 && (
+                    <span>
+                      {' '}
+                      (Chênh lệch so với KM gốc:{' '}
+                      <span className="font-medium">
+                        {Number(breakdown.macroDeltaAmount) > 0 ? '+' : ''}
+                        {fmtVnd(breakdown.macroDeltaAmount)}
+                      </span>
+                      )
+                    </span>
+                  )}
+                </div>
+              )}
+              {(booking.pickupWardCode || booking.dropoffWardCode) && (
+                <div className="text-[11px] text-muted-foreground">
+                  Mã xã khớp: Đón <span className="font-mono">{booking.pickupWardCode || '—'}</span> → Trả{' '}
+                  <span className="font-mono">{booking.dropoffWardCode || '—'}</span>
+                </div>
+              )}
+            </div>
+          ) : breakdown?.priceSource?.startsWith('FLAT_') ? (
+            <div className="text-indigo-800">
+              ✈️ Đồng giá vùng đặc biệt
+              {breakdown.flatPriceId != null ? ` (Mã bảng giá #${breakdown.flatPriceId})` : ''}
+            </div>
+          ) : (
+            <div className="text-muted-foreground">
+              📏 Tính theo bảng giá KM mặc định (không áp quy tắc vùng)
+            </div>
+          )}
+        </div>
+      )}
+
       {breakdown ? (
         <div className="space-y-1.5 text-sm">
           <div className="text-xs font-medium text-muted-foreground">Giá cước</div>
@@ -334,6 +406,10 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
       )}
 
       {allocation}
+      <MacroRuleQuickEditDialog
+        ruleId={editingRuleId}
+        onClose={() => setEditingRuleId(null)}
+      />
     </Card>
   );
 }

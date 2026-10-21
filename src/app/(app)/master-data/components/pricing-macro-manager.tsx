@@ -109,9 +109,12 @@ export function PricingMacroManager() {
   // Điểm đặc biệt ĐANG BẬT: thêm vào ô "Xã / Phường" của tỉnh chứa vùng (giá trị `ZONE:<mã>`, backend điền tỉnh).
   const [zones, setZones] = React.useState<SpecialZone[]>([]);
   const [loading, setLoading] = React.useState(true);
+  const initialNote = typeof window !== 'undefined' && /^\d+$/.test(new URLSearchParams(window.location.search).get('ruleId')?.trim() || '')
+    ? `#${new URLSearchParams(window.location.search).get('ruleId')!.trim()}`
+    : '';
   const [searchOrigin, setSearchOrigin] = React.useState('');
   const [searchDest, setSearchDest] = React.useState('');
-  const [searchNote, setSearchNote] = React.useState('');
+  const [searchNote, setSearchNote] = React.useState(initialNote);
   // Tìm kiếm AI (Gemini)
   const [aiQuery, setAiQuery] = React.useState('');
   const [aiSearching, setAiSearching] = React.useState(false);
@@ -121,13 +124,13 @@ export function PricingMacroManager() {
     winningRuleId: number | null;
   } | null>(null);
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
-  const [debouncedFilters, setDebouncedFilters] = React.useState({ origin: '', dest: '', note: '' });
+  const [debouncedFilters, setDebouncedFilters] = React.useState({ origin: '', dest: '', note: initialNote });
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = React.useState(0);
   const [reloadKey, setReloadKey] = React.useState(0);
   const loadSeq = React.useRef(0);
-  const lastQuery = React.useRef('||');
+  const lastQuery = React.useRef(`||${initialNote}`);
 
   // Dropdown ward caches per province
   const [originWards, setOriginWards] = React.useState<WardOption[]>([]);

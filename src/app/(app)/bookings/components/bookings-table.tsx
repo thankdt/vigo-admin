@@ -45,6 +45,7 @@ import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
+import { MacroRuleBadge, MacroRuleQuickEditDialog } from './macro-rule-quick-edit-dialog';
 import { buildTripPassText } from './booking-pass-utils';
 import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, ProvincePairLine, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
@@ -470,6 +471,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [pageSize, setPageSize] = React.useState(20);
 
   const [selectedBookingId, setSelectedBookingId] = React.useState<string | null>(null);
+  const [quickEditRuleId, setQuickEditRuleId] = React.useState<number | null>(null);
   const [reassigningBooking, setReassigningBooking] = React.useState<Booking | null>(null);
   const [voidBookingId, setVoidBookingId] = React.useState<string | null>(null);
   // Nhân bản chuyến: bản nháp điền sẵn cho form Tạo chuyến (null = không nhân bản).
@@ -1063,7 +1065,18 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}
+                      <div className="flex flex-col gap-1 items-start">
+                        <span>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</span>
+                        {booking.priceBreakdown?.macroRuleId != null && (
+                          <MacroRuleBadge
+                            ruleId={Number(booking.priceBreakdown.macroRuleId)}
+                            ruleName={booking.priceBreakdown.macroRuleName}
+                            adjustmentType={booking.priceBreakdown.macroAdjustmentType}
+                            onClick={(id) => setQuickEditRuleId(id)}
+                            compact
+                          />
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
@@ -1356,6 +1369,10 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
         open={!!voidBookingId}
         onOpenChange={(o) => { if (!o) setVoidBookingId(null); }}
         onDone={() => reload()}
+      />
+      <MacroRuleQuickEditDialog
+        ruleId={quickEditRuleId}
+        onClose={() => setQuickEditRuleId(null)}
       />
       {/* [DISABLED 2026-07-09] Dialog "admin ôm chuyến về operator" — vỡ dòng tiền (gán về tài khoản ảo, 0 commission).
       <AlertDialog open={!!acceptingBookingId} onOpenChange={(open) => !open && setAcceptingBookingId(null)}>

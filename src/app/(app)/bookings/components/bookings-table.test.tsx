@@ -11,6 +11,9 @@ import type { Booking, PriceBreakdown } from '@/lib/types';
 vi.mock('@/lib/api', () => ({
   getBookingDetails: vi.fn(),
   getCustomerCallReasons: vi.fn(async () => []),
+  getPricingMacroRulesPage: vi.fn(async () => ({ items: [], total: 0, page: 1, limit: 10 })),
+  getPricingMacroProvinces: vi.fn(async () => []),
+  updatePricingMacroRule: vi.fn(),
 }));
 
 const breakdown: PriceBreakdown = {
@@ -104,6 +107,31 @@ describe('PriceBreakdownCard — CỘT GIÁ PHẢI CỘNG RA ĐƯỢC (chuyến 
     ]) {
       expect(screen.getByText(n)).toBeInTheDocument();
     }
+  });
+});
+
+describe('PriceBreakdownCard — hiển thị quy tắc giá áp dụng (macroRuleId)', () => {
+  it('hiển thị Rule #14 và tên quy tắc khi priceBreakdown có macroRuleId', () => {
+    render(
+      <PriceBreakdownCard
+        booking={{
+          ...baseBooking,
+          pickupWardCode: '00070',
+          dropoffWardCode: '05002',
+          priceBreakdown: {
+            ...breakdown,
+            transportPrice: 300000,
+            macroRuleId: 14,
+            macroRuleName: 'Hà Nội ↔ Minh Xuân (Huyện Yên Sơn)',
+            macroAdjustmentType: 'FIXED_PRICE',
+            macroDeltaAmount: -97000,
+          },
+        }}
+      />,
+    );
+    expect(screen.getByText('Rule #14')).toBeInTheDocument();
+    expect(screen.getByText(/Hà Nội ↔ Minh Xuân/)).toBeInTheDocument();
+    expect(screen.getByText('Xem & Sửa Rule #14')).toBeInTheDocument();
   });
 });
 
