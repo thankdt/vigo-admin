@@ -17,6 +17,7 @@ import {
 import { Combobox } from '@/components/ui/combobox';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { WardSourcePanel } from './ward-source-panel';
+import { WardQuickAdd, isQuickAddEscape, type WardsStatus, type ZonesStatus } from './ward-quick-add';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, MapPin, X } from 'lucide-react';
 import { bulkCreatePricingMacroRules, getPricingMacroWards, getSpecialZones } from '@/lib/api';
@@ -41,6 +42,7 @@ import {
   zoneFlatPriceWarnings,
   type MacroEndpoint,
 } from '@/lib/macro-bulk';
+import { buildSearchIndex, type SearchTarget } from '@/lib/ward-search';
 import type {
   BulkCreatePricingMacroRulesRequest,
   BulkCreatePricingMacroRulesResult,
@@ -84,6 +86,11 @@ function EndpointBuilder({
   title,
   provinces,
   zones,
+  searchIndex,
+  wardsStatus,
+  wardsError,
+  zonesStatus,
+  onNeedWards,
   items,
   onChange,
   onPendingChange,
@@ -93,9 +100,16 @@ function EndpointBuilder({
   provinces: ProvinceOption[];
   /** Điểm đặc biệt ĐANG BẬT (sân bay…) để chọn làm một đầu của quy tắc. */
   zones: SpecialZone[];
+  /** Chỉ mục cho ô «Tìm nhanh» (xã mọi tỉnh + cả tỉnh + điểm đặc biệt), dựng một lần ở cha, dùng chung hai bên. */
+  searchIndex: SearchTarget[];
+  wardsStatus: WardsStatus;
+  wardsError: string | null;
+  zonesStatus: ZonesStatus;
+  /** Ô «Tìm nhanh» được focus (hoặc bấm «Thử tải lại»): cha nạp danh sách mọi xã nếu chưa có. */
+  onNeedWards: () => void;
   items: MacroEndpoint[];
   onChange: (next: MacroEndpoint[]) => void;
-  /** Báo lên cha khi có lựa chọn đã nhập mà CHƯA bấm "Thêm" (null = không có). */
+  /** Báo lên cha khi có lựa chọn đã nhập mà CHƯA thêm vào danh sách (null = không có). */
   onPendingChange: (pending: string | null) => void;
   accent: string;
 }) {
@@ -135,9 +149,12 @@ function EndpointBuilder({
     items,
     staged,
   });
+  // Cùng lý do cho chữ gõ ở ô «Tìm nhanh» mà chưa chọn dòng kết quả nào.
+  const [quickPending, setQuickPending] = React.useState<string | null>(null);
+  const pending = pendingMsg ?? quickPending;
   React.useEffect(() => {
-    onPendingChange(pendingMsg);
-  }, [pendingMsg, onPendingChange]);
+    onPendingChange(pending);
+  }, [pending, onPendingChange]);
 
   const handleProvince = async (code: string) => {
     setProvinceCode(code);
@@ -179,6 +196,19 @@ function EndpointBuilder({
         <span className="font-normal text-slate-400">({items.length})</span>
       </div>
 
+      <WardQuickAdd
+        title={title}
+        index={searchIndex}
+        wardsStatus={wardsStatus}
+        wardsError={wardsError}
+        zonesStatus={zonesStatus}
+        items={items}
+        onNeedWards={onNeedWards}
+        onAdd={(endpoint) => onChange(addEndpoints(items, [endpoint]))}
+        onPendingChange={setQuickPending}
+      />
+
+      <div className="text-[11px] text-slate-500">Hoặc chọn theo tỉnh:</div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1">
           <Label className="text-[11px] text-slate-500">Tỉnh / Thành phố</Label>
@@ -324,6 +354,44 @@ export function MacroBulkDialog({
   const [dests, setDests] = React.useState<MacroEndpoint[]>([]);
   const [saving, setSaving] = React.useState(false);
   const [zones, setZones] = React.useState<SpecialZone[]>([]);
+  const [zonesStatus, setZonesStatus] = React.useState<ZonesStatus>('loading');
+  // Danh sách MỌI xã cho ô «Tìm nhanh» (~3.300 dòng): nạp ở lần focus đầu tiên vào ô — máy có chuột là ngay khi mở hộp
+  // thoại (ô được focus sẵn), máy cảm ứng là khi chạm vào ô; một lần cho cả hai bên và giữ qua các lần mở hộp thoại vì
+  // dữ liệu ranh giới gần như tĩnh. Lỗi thì lần focus sau, hoặc nút «Thử tải lại», nạp lại.
+  const [allWards, setAllWards] = React.useState<WardOption[] | null>(null);
+  const [wardsStatus, setWardsStatus] = React.useState<WardsStatus>('idle');
+  const [wardsError, setWardsError] = React.useState<string | null>(null);
+  const wardsInFlight = React.useRef(false);
+  const contentRef = React.useRef<HTMLDivElement>(null);
+  const ensureWards = React.useCallback(() => {
+    if (allWards || wardsInFlight.current) return;
+    wardsInFlight.current = true;
+    setWardsStatus('loading');
+    setWardsError(null);
+    getPricingMacroWards()
+      .then((list) => {
+        // Backend `listWards` nuốt lỗi DB và trả []: rỗng KHÔNG được coi là "đã nạp" (sẽ không bao giờ thử lại và báo
+        // nhầm «Không có kết quả») — cùng quy ước với màn Sân bay & đồng giá / Nhóm xã.
+        if (!Array.isArray(list) || list.length === 0) {
+          setWardsError('danh sách rỗng, máy chủ có thể đang lỗi');
+          setWardsStatus('error');
+          return;
+        }
+        setAllWards(list);
+        setWardsStatus('ready');
+      })
+      .catch((e: any) => {
+        setWardsError(e?.message || 'Không tải được danh sách phường/xã');
+        setWardsStatus('error');
+      })
+      .finally(() => {
+        wardsInFlight.current = false;
+      });
+  }, [allWards]);
+  const searchIndex = React.useMemo(
+    () => buildSearchIndex({ provinces, wards: allWards ?? [], zones }),
+    [provinces, allWards, zones],
+  );
   const [pendingOrigin, setPendingOrigin] = React.useState<string | null>(null);
   const [pendingDest, setPendingDest] = React.useState<string | null>(null);
   // Xác nhận "áp cho MỌI điểm" — gắn với danh sách hiện tại, đổi danh sách là phải xác nhận lại.
@@ -334,16 +402,22 @@ export function MacroBulkDialog({
     requestedBidirectional: boolean;
   } | null>(null);
 
-  // Điểm đặc biệt chỉ để CHỌN thêm: lỗi tải ⇒ không có nhóm này (tạo theo tỉnh/xã vẫn chạy bình thường).
+  // Điểm đặc biệt chỉ để CHỌN thêm: lỗi tải ⇒ không có nhóm này (tạo theo tỉnh/xã vẫn chạy bình thường), nhưng ô «Tìm
+  // nhanh» biết là chỉ mục thiếu sân bay nên không tự chọn bằng Enter (`zonesStatus`).
   React.useEffect(() => {
     if (!open) return;
     let cancelled = false;
+    setZonesStatus('loading');
     getSpecialZones()
       .then((list) => {
-        if (!cancelled) setZones((list || []).filter((z) => z.active));
+        if (cancelled) return;
+        setZones((list || []).filter((z) => z.active));
+        setZonesStatus('ready');
       })
       .catch(() => {
-        if (!cancelled) setZones([]);
+        if (cancelled) return;
+        setZones([]);
+        setZonesStatus('error');
       });
     return () => {
       cancelled = true;
@@ -452,7 +526,22 @@ export function MacroBulkDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent
+        ref={contentRef}
+        className="max-w-3xl max-h-[90vh] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        // Ô «Tìm nhanh» là ô nhập đầu tiên: máy có CHUỘT thì focus thẳng vào đó (mở ra là gõ được, Shift+Tab vẫn vòng
+        // về nút Đóng); máy CẢM ỨNG thì chỉ focus khung hộp thoại, vì tự focus ô nhập sẽ bật bàn phím ảo che nửa hộp thoại.
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          const fine = typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: fine)').matches;
+          const first = fine ? contentRef.current?.querySelector<HTMLElement>('input[data-quick-add-input]') : null;
+          (first ?? contentRef.current)?.focus();
+        }}
+        // Esc trong ô «Tìm nhanh» đang có chữ chỉ xoá chữ (ô đó tự xử lý); đóng cả hộp thoại là mất hết điểm đã chọn.
+        onEscapeKeyDown={(e) => {
+          if (isQuickAddEscape(e)) e.preventDefault();
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-base font-bold text-slate-900">Thêm quy tắc macro định giá mới</DialogTitle>
           <DialogDescription className="text-xs text-slate-500">
@@ -516,6 +605,11 @@ export function MacroBulkDialog({
                 accent="text-blue-600"
                 provinces={provinces}
                 zones={zones}
+                searchIndex={searchIndex}
+                wardsStatus={wardsStatus}
+                wardsError={wardsError}
+                zonesStatus={zonesStatus}
+                onNeedWards={ensureWards}
                 items={origins}
                 onChange={setOrigins}
                 onPendingChange={setPendingOrigin}
@@ -525,6 +619,11 @@ export function MacroBulkDialog({
                 accent="text-purple-600"
                 provinces={provinces}
                 zones={zones}
+                searchIndex={searchIndex}
+                wardsStatus={wardsStatus}
+                wardsError={wardsError}
+                zonesStatus={zonesStatus}
+                onNeedWards={ensureWards}
                 items={dests}
                 onChange={setDests}
                 onPendingChange={setPendingDest}
@@ -544,8 +643,15 @@ export function MacroBulkDialog({
             </div>
 
             {pendingError && (
-              <div role="alert" className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-800" data-testid="bulk-pending">
-                {pendingError} Lựa chọn chưa bấm «Thêm» sẽ KHÔNG được tạo thành quy tắc.
+              // role=status (không phải alert): hộp này hiện ngay từ phím đầu tiên gõ ở ô «Tìm nhanh», đọc ngắt ngang bằng
+              // alert sẽ át tiếng gõ/kết quả đang được đọc.
+              <div
+                role="status"
+                aria-live="polite"
+                className="rounded border border-amber-300 bg-amber-50 p-2 text-amber-800"
+                data-testid="bulk-pending"
+              >
+                {pendingError} Lựa chọn chưa được thêm vào danh sách sẽ KHÔNG được tạo thành quy tắc.
               </div>
             )}
 
