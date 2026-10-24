@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ghepBiTranKeoXuong, previewKmPrice, validateKmTable, type KmTables } from './km-tables';
+import { ghepBiTranKeoXuong, sortPointsByKm, previewKmPrice, validateKmTable, type KmTable, type KmTables } from './km-tables';
 
 const T: KmTables = {
   GHEP: { points: [{ km: 50, price: 200_000 }, { km: 100, price: 300_000 }], tailPerKm: 1_400 },
@@ -40,5 +40,21 @@ describe('ghepBiTranKeoXuong', () => {
     expect(ghepBiTranKeoXuong(T)).toEqual([]);
     const low: KmTables = { ...T, CAR_4: { points: [{ km: 10, price: 100_000 }, { km: 50, price: 120_000 }], tailPerKm: 0 } };
     expect(ghepBiTranKeoXuong(low)).toEqual([50, 100]);
+  });
+});
+
+describe('sortPointsByKm', () => {
+  it('dòng mới thêm cuối có km ở giữa ⇒ vào đúng chỗ, mốc khác giữ nguyên', () => {
+    const t: KmTable = {
+      points: [{ km: 10, price: 150_000 }, { km: 50, price: 500_000 }, { km: 30, price: 325_000 }],
+      tailPerKm: 0,
+    };
+    expect(sortPointsByKm(t).points.map((p) => p.km)).toEqual([10, 30, 50]);
+    expect(sortPointsByKm(t).points[2]).toEqual({ km: 50, price: 500_000 });
+  });
+  it('đã đúng thứ tự hoặc km chưa nhập (NaN) ⇒ không đổi', () => {
+    expect(sortPointsByKm(T.CAR_4)).toBe(T.CAR_4);
+    const nan: KmTable = { points: [{ km: 10, price: 1 }, { km: NaN, price: 2 }], tailPerKm: 0 };
+    expect(sortPointsByKm(nan)).toBe(nan);
   });
 });
