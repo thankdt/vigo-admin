@@ -153,6 +153,7 @@ describe('PricingMacroManager — danh sách', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    aiSearch.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -183,44 +184,27 @@ describe('PricingMacroManager — danh sách', () => {
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
   });
 
-  it('tìm kiếm chạy ở SERVER theo 3 ô riêng (điểm đón, điểm đi, ghi chú), có chờ gõ xong, về trang 1; không còn tìm theo #mã; "chọn tất cả" chỉ chọn dòng của trang đang xem', async () => {
+  it('không còn 3 ô tìm điểm đón/điểm đi/ghi chú; tìm bằng AI gọi server, về trang 1; "chọn tất cả" chỉ chọn dòng của trang đang xem', async () => {
     const { user } = await setup();
-    expect(screen.queryByPlaceholderText(/#mã/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tìm điểm đón')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tìm điểm đi')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tìm ghi chú')).not.toBeInTheDocument();
 
-    getRules.mockImplementation(
-      async (p: { originSearch?: string; destSearch?: string; noteSearch?: string }) =>
-        p.originSearch || p.destSearch || p.noteSearch
-          ? { items: [TWO_WAY], total: 1, page: 1, limit: 50 }
-          : [ONE_WAY, TWO_WAY, CANONICAL],
-    );
-    await user.type(screen.getByLabelText('Tìm điểm đón'), 'Hà Nội');
+    aiSearch.mockResolvedValue({
+      items: [TWO_WAY],
+      total: 1,
+      page: 1,
+      limit: 50,
+      explanation: 'Quy tắc Hà Nội ↔ Hưng Yên',
+      winningRuleId: 2,
+    });
+    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'hà nội đi hưng yên');
+    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
     await waitFor(() =>
-      expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, originSearch: 'Hà Nội' }),
+      expect(aiSearch).toHaveBeenCalledWith({ query: 'hà nội đi hưng yên', page: 1, limit: 50 }),
     );
-    // gõ 6 ký tự chỉ sinh MỘT lần gọi tìm (không gọi mỗi phím)
-    expect(getRules.mock.calls.filter((c) => c[0].originSearch)).toHaveLength(1);
+    expect(await screen.findByTestId('ai-search-banner')).toHaveTextContent('Quy tắc Hà Nội ↔ Hưng Yên');
     await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
-
-    await user.type(screen.getByLabelText('Tìm điểm đi'), 'Lào Cai');
-    await waitFor(() =>
-      expect(getRules).toHaveBeenLastCalledWith({
-        page: 1,
-        limit: 50,
-        originSearch: 'Hà Nội',
-        destSearch: 'Lào Cai',
-      }),
-    );
-
-    await user.type(screen.getByLabelText('Tìm ghi chú'), 'cao điểm');
-    await waitFor(() =>
-      expect(getRules).toHaveBeenLastCalledWith({
-        page: 1,
-        limit: 50,
-        originSearch: 'Hà Nội',
-        destSearch: 'Lào Cai',
-        noteSearch: 'cao điểm',
-      }),
-    );
 
     await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
@@ -237,8 +221,9 @@ describe('PricingMacroManager — danh sách', () => {
     await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #2\b/ }));
 
     // sang kết quả tìm khác: hai dòng đã chọn không còn ở trang đang xem, chọn thêm dòng đang hiện
-    getRules.mockResolvedValue({ items: [CANONICAL], total: 1, page: 1, limit: 50 });
-    await user.type(screen.getByLabelText('Tìm ghi chú'), 'api');
+    aiSearch.mockResolvedValue({ items: [CANONICAL], total: 1, page: 1, limit: 50, explanation: 'api', winningRuleId: null });
+    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'api');
+    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
     await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
     await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (3)' })).toBeInTheDocument();
@@ -440,6 +425,7 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    aiSearch.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -652,6 +638,7 @@ describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)'
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    aiSearch.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -789,6 +776,7 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    aiSearch.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -912,10 +900,11 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
   it('kết quả của yêu cầu CŨ không đè lên yêu cầu mới (gõ tìm nhanh)', async () => {
     let releaseOld: (v: unknown) => void = () => {};
     getRules.mockImplementationOnce(() => new Promise((r) => (releaseOld = r))); // lần nạp đầu: treo
-    getRules.mockImplementation(async () => pageOf([TWO_WAY], 1));
+    aiSearch.mockResolvedValue({ ...pageOf([TWO_WAY], 1), explanation: 'x', winningRuleId: null });
     render(<PricingMacroManager />);
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Tìm điểm đón'), 'x');
+    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'x');
+    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
     await screen.findByTestId('rule-row-2');
     releaseOld(pageOf([ONE_WAY], 1)); // yêu cầu cũ về muộn
     await new Promise((r) => setTimeout(r, 20));
@@ -924,13 +913,13 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
   });
 
   it('không khớp từ khoá ⇒ báo riêng, không phải "chưa có quy tắc"', async () => {
-    getRules.mockImplementation(async (p: { originSearch?: string }) =>
-      pageOf(p.originSearch ? [] : [ONE_WAY], p.originSearch ? 0 : 1),
-    );
+    getRules.mockImplementation(async () => pageOf([ONE_WAY], 1));
+    aiSearch.mockResolvedValue({ ...pageOf([], 0), explanation: 'zzz', winningRuleId: null });
     render(<PricingMacroManager />);
     const user = userEvent.setup();
     await screen.findByTestId('rule-row-1');
-    await user.type(screen.getByLabelText('Tìm điểm đón'), 'zzz');
+    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'zzz');
+    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
     expect(await screen.findByText('Không có quy tắc nào khớp từ khoá tìm kiếm.')).toBeInTheDocument();
   });
 });
