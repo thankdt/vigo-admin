@@ -259,11 +259,11 @@ describe('MacroBulkDialog', () => {
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
-  it('không còn Giá sàn/Giá trần và không còn ô "Nhân theo số ghế" (backend từ chối cả hai)', () => {
+  it('không còn Giá sàn/Giá trần (backend từ chối) và ô "Nhân theo số ghế"; có thêm Ghi đè giá cố định', () => {
     setup();
     const select = screen.getByLabelText('Kiểu điều chỉnh') as HTMLSelectElement;
     const options = within(select).getAllByRole('option').map((o) => (o as HTMLOptionElement).value);
-    expect(options).toEqual(['DELTA_AMOUNT', 'PERCENTAGE']);
+    expect(options).toEqual(['DELTA_AMOUNT', 'PERCENTAGE', 'FIXED_PRICE']);
     expect(screen.queryByRole('checkbox', { name: /Nhân theo số ghế/ })).not.toBeInTheDocument();
   });
 
