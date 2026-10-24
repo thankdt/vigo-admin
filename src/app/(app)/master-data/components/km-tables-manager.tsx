@@ -24,6 +24,7 @@ import {
   KM_TABLE_LABEL,
   KM_TABLE_TYPES,
   ghepBiTranKeoXuong,
+  sortPointsByKm,
   previewKmPrice,
   validateKmTable,
   type KmTable,
@@ -140,7 +141,7 @@ export function KmTablesManager() {
             <CardHeader>
               <CardTitle>{KM_TABLE_LABEL[type]}</CardTitle>
               <CardDescription>
-                Mỗi dòng: tại số km đó, giá là bao nhiêu. Giữa hai mốc giá tăng đều; dưới mốc đầu là giá sàn; sau mốc cuối
+                Mỗi dòng: tại số km đó, giá là bao nhiêu. Bấm "Thêm mốc" rồi nhập km — dòng tự vào đúng vị trí, các mốc khác giữ nguyên. Giữa hai mốc giá tăng đều; dưới mốc đầu là giá sàn; sau mốc cuối
                 tính thêm theo đơn giá/km. Giá tính xong được làm tròn nghìn.
               </CardDescription>
             </CardHeader>
@@ -164,6 +165,8 @@ export function KmTablesManager() {
                           inputMode="decimal"
                           aria-label={`${type} mốc ${i + 1} km`}
                           value={show(p.km)}
+                          // Nhập xong km thì dòng tự vào đúng chỗ (thêm mốc ở giữa không phải dịch lại các dòng sau).
+                          onBlur={() => update(type, sortPointsByKm)}
                           onChange={(e) =>
                             update(type, (tb) => ({
                               ...tb,
