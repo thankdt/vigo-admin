@@ -1,5 +1,6 @@
 'use client';
 import type { DriverPresence } from './driver-presence';
+import { KM_TABLES_KEY, serializeKmTables, type KmTables, type KmTablesResponse } from '@/lib/km-tables';
 import { Driver, User, Booking, AdminUnit, Route, BookingStatus, SystemConfig, Promotion, PromotionAssignee, VoucherCampaign, VoucherCampaignStats, ScheduledNotification, NotificationTargetType, NotificationTargetData, NotificationAudience, News, Banner, TransportCompany, AppPopup, DriverFeedback, LeakageTraceRow, LeakageTraceStatus, LeakageVerdict, DriverCancelStat, DriverCancelTrip, DriverCancelCheckStatus, DriverCancelCheckEvent, CustomerCallStatus, CustomerCallFilter, TestTripFilter, DuplicateTripFilter, BookingCustomerCallEvent, AdminMe, AdminRole, FunctionOverride, FunctionCatalogItem, AdminAssignmentUser, DriverReputation, DriverTripRating, DriverReputationRanking, RecentDriverRating, DriverTeamStage, TeamMemberState, TeamProvinceRow, TeamDriverRow, TeamSummary, DriverTeamEvent, DriverTeamDetail, TeamOwner, TeamMemberRow, PricingMacroRule, PricingMacroRulePage, SavedPricingMacroRule, MacroBandWarnings, BulkCreatePricingMacroRulesRequest, BulkCreatePricingMacroRulesResult, BulkDeletePricingMacroRulesResult, ProvinceOption, WardOption, SimulatePricingMacroDto, SimulatePricingMacroResult, SpecialZone, SpecialZoneFlatPrice, UpsertSpecialZoneFlatPriceRequest, WardGroup, UpsertWardGroupRequest, WardLegacyProvince, WardLegacyWard } from '@/lib/types';
 import type { DriverOnlineState } from '@/lib/driver-presence';
 import {
@@ -1445,6 +1446,18 @@ export async function updateSystemConfig(key: string, value: string, description
     body: JSON.stringify({ key, value, description }),
   });
   return response.json();
+}
+
+// Bảng giá theo km (tab "Bảng giá theo km" ở master-data). Đọc: GET master-data/km-tables (luôn trả bảng
+// hiệu lực, mặc định nếu chưa chỉnh). Ghi: MỘT đường duy nhất là system-config (quyền settings.pricing);
+// `version` là số phiên bản đã tải — lệch ⇒ BE từ chối vì có người vừa lưu.
+export async function getKmTables(): Promise<KmTablesResponse> {
+  const response = await fetchWithAuth('/master-data/km-tables');
+  return unwrap<KmTablesResponse>(response);
+}
+
+export async function saveKmTables(version: number, tables: KmTables): Promise<void> {
+  await updateSystemConfig(KM_TABLES_KEY, serializeKmTables(version, tables), 'Bảng giá theo km (ghép / bao xe 4–5 chỗ / bao xe 7 chỗ)');
 }
 
 // Promotions API
