@@ -27,7 +27,6 @@ import {
   PlusCircle,
   Trash2,
   Edit,
-  Search,
   MapPin,
   RefreshCw,
   Compass,
@@ -121,9 +120,8 @@ export function PricingMacroManager() {
   const initialNote = typeof window !== 'undefined' && /^\d+$/.test(new URLSearchParams(window.location.search).get('ruleId')?.trim() || '')
     ? `#${new URLSearchParams(window.location.search).get('ruleId')!.trim()}`
     : '';
-  const [searchOrigin, setSearchOrigin] = React.useState('');
-  const [searchDest, setSearchDest] = React.useState('');
-  const [searchNote, setSearchNote] = React.useState(initialNote);
+  // Bộ lọc duy nhất ngoài AI: liên kết sâu `?ruleId=` từ trang đơn (hiện thành chip, bấm ✕ để bỏ).
+  const [noteFilter, setNoteFilter] = React.useState(initialNote);
   // Tìm kiếm AI (Gemini)
   const [aiQuery, setAiQuery] = React.useState('');
   const [aiSearching, setAiSearching] = React.useState(false);
@@ -133,13 +131,11 @@ export function PricingMacroManager() {
     winningRuleId: number | null;
   } | null>(null);
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
-  const [debouncedFilters, setDebouncedFilters] = React.useState({ origin: '', dest: '', note: initialNote });
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = React.useState(0);
   const [reloadKey, setReloadKey] = React.useState(0);
   const loadSeq = React.useRef(0);
-  const lastQuery = React.useRef(`||${initialNote}`);
 
   // Dropdown ward caches per province
   const [originWards, setOriginWards] = React.useState<WardOption[]>([]);
@@ -210,25 +206,7 @@ export function PricingMacroManager() {
       .catch(() => setProvinces([]));
   }, []);
 
-  // Gõ tìm kiếm: chờ 250ms rồi mới gọi server, và về trang 1.
-  React.useEffect(() => {
-    const t = setTimeout(() => {
-      const origin = searchOrigin.trim();
-      const dest = searchDest.trim();
-      const note = searchNote.trim();
-      const key = `${origin}|${dest}|${note}`;
-      if (key === lastQuery.current) return;
-      lastQuery.current = key;
-      setAiResult(null);
-      setPage(1);
-      setDebouncedFilters({ origin, dest, note });
-    }, 250);
-    return () => clearTimeout(t);
-  }, [searchOrigin, searchDest, searchNote]);
-
-  const hasActiveSearch = Boolean(
-    debouncedFilters.origin || debouncedFilters.dest || debouncedFilters.note || aiResult,
-  );
+  const hasActiveSearch = Boolean(noteFilter || aiResult);
 
   const handleAiSearch = React.useCallback(
     async (targetPage = 1) => {
@@ -287,9 +265,7 @@ export function PricingMacroManager() {
     getPricingMacroRulesPage({
       page,
       limit: pageSize,
-      ...(debouncedFilters.origin ? { originSearch: debouncedFilters.origin } : {}),
-      ...(debouncedFilters.dest ? { destSearch: debouncedFilters.dest } : {}),
-      ...(debouncedFilters.note ? { noteSearch: debouncedFilters.note } : {}),
+      ...(noteFilter ? { noteSearch: noteFilter } : {}),
     })
       .then((res) => {
         if (seq !== loadSeq.current) return;
@@ -313,7 +289,7 @@ export function PricingMacroManager() {
         });
         setLoading(false);
       });
-  }, [page, pageSize, debouncedFilters, reloadKey, toast]);
+  }, [page, pageSize, noteFilter, reloadKey, toast]);
 
   // Cảnh báo băng chặn: phụ — lỗi (backend cũ / thiếu quyền master-data) thì bỏ qua, không làm hỏng danh sách.
   const loadBandWarnings = React.useCallback(() => {
@@ -761,7 +737,7 @@ export function PricingMacroManager() {
                 biên cho phép, nếu vượt thì báo giá bị từ chối (khách không đặt được chuyến).
               </CardDescription>
             </div>
-            <div className="flex w-full sm:w-auto items-center gap-2">
+            <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
               {selectedIds.size > 0 && (
                 <Button variant="outline" size="sm" className="h-9 text-xs" onClick={openBulkEdit}>
                   <Edit className="w-3.5 h-3.5 mr-1" />
@@ -779,36 +755,21 @@ export function PricingMacroManager() {
                   Xoá đã chọn ({selectedIds.size})
                 </Button>
               )}
-              <div className="relative w-full sm:w-52">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  aria-label="Tìm điểm đón"
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm điểm đón (tỉnh, xã)..."
-                  value={searchOrigin}
-                  onChange={(e) => setSearchOrigin(e.target.value)}
-                />
-              </div>
-              <div className="relative w-full sm:w-52">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  aria-label="Tìm điểm đi"
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm điểm đi (tỉnh, xã)..."
-                  value={searchDest}
-                  onChange={(e) => setSearchDest(e.target.value)}
-                />
-              </div>
-              <div className="relative w-full sm:w-44">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  aria-label="Tìm ghi chú"
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm ghi chú..."
-                  value={searchNote}
-                  onChange={(e) => setSearchNote(e.target.value)}
-                />
-              </div>
+              {noteFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs"
+                  aria-label="Bỏ lọc quy tắc"
+                  onClick={() => {
+                    setNoteFilter('');
+                    setPage(1);
+                  }}
+                >
+                  Đang lọc {noteFilter}
+                  <X className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
