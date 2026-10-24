@@ -86,3 +86,13 @@ export function ghepBiTranKeoXuong(tables: KmTables): number[] {
 export function serializeKmTables(version: number, tables: KmTables): string {
   return JSON.stringify({ version, tables });
 }
+
+/**
+ * Xếp mốc theo km tăng dần (ổn định). Dùng khi admin nhập xong km của một dòng mới thêm để dòng đó tự
+ * vào đúng chỗ ở giữa; các mốc khác giữ nguyên số. Dòng km chưa hợp lệ (NaN) để nguyên chỗ.
+ */
+export function sortPointsByKm(table: KmTable): KmTable {
+  if (table.points.some((p) => !Number.isFinite(p.km))) return table;
+  const points = table.points.map((p, i) => ({ p, i })).sort((a, b) => a.p.km - b.p.km || a.i - b.i).map((x) => x.p);
+  return points.every((p, i) => p === table.points[i]) ? table : { ...table, points };
+}
