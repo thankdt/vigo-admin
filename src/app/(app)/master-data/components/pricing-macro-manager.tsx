@@ -27,7 +27,6 @@ import {
   PlusCircle,
   Trash2,
   Edit,
-  Search,
   MapPin,
   RefreshCw,
   Compass,
@@ -85,6 +84,10 @@ const DEFAULT_PAGE_SIZE = 50;
 /** Giá trị của mục "Toàn quốc / Toàn bộ tỉnh" trong ô chọn tỉnh / xã (form lưu '' cho "không giới hạn"). */
 const ALL_CODE = '__ALL__';
 
+/** Luật tính THEO GHẾ (đi ghép) hay THEO CHUYẾN (bao xe) — cùng quy ước với cột "Điều chỉnh" của bảng. */
+const isPerSeatRule = (r: PricingMacroRule) =>
+  r.applyPerSeat && r.serviceType !== 'RIDE' && r.serviceType !== 'CONVENIENT';
+
 /**
  * Lựa chọn cho ô chọn tỉnh / xã có thể tìm: mục "tất cả" đứng đầu rồi tới danh sách.
  * Mã đang chọn mà chưa có trong danh sách (đang nạp xã, hoặc nạp lỗi) vẫn được hiện — bằng mã — thay vì ô trống.
@@ -105,6 +108,11 @@ export function PricingMacroManager() {
   const { toast } = useToast();
 
   const [rules, setRules] = React.useState<PricingMacroRule[]>([]);
+  // Bản chụp các luật đã từng hiển thị: vùng chọn xuyên trang nên hộp sửa hàng loạt cần dữ liệu cả luật đang ẩn.
+  const ruleCache = React.useRef(new Map<number, PricingMacroRule>());
+  React.useEffect(() => {
+    rules.forEach((r) => ruleCache.current.set(r.id, r));
+  }, [rules]);
   const [provinces, setProvinces] = React.useState<ProvinceOption[]>([]);
   // Điểm đặc biệt ĐANG BẬT: thêm vào ô "Xã / Phường" của tỉnh chứa vùng (giá trị `ZONE:<mã>`, backend điền tỉnh).
   const [zones, setZones] = React.useState<SpecialZone[]>([]);
@@ -112,9 +120,8 @@ export function PricingMacroManager() {
   const initialNote = typeof window !== 'undefined' && /^\d+$/.test(new URLSearchParams(window.location.search).get('ruleId')?.trim() || '')
     ? `#${new URLSearchParams(window.location.search).get('ruleId')!.trim()}`
     : '';
-  const [searchOrigin, setSearchOrigin] = React.useState('');
-  const [searchDest, setSearchDest] = React.useState('');
-  const [searchNote, setSearchNote] = React.useState(initialNote);
+  // Bộ lọc duy nhất ngoài AI: liên kết sâu `?ruleId=` từ trang đơn (hiện thành chip, bấm ✕ để bỏ).
+  const [noteFilter, setNoteFilter] = React.useState(initialNote);
   // Tìm kiếm AI (Gemini)
   const [aiQuery, setAiQuery] = React.useState('');
   const [aiSearching, setAiSearching] = React.useState(false);
@@ -124,13 +131,11 @@ export function PricingMacroManager() {
     winningRuleId: number | null;
   } | null>(null);
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
-  const [debouncedFilters, setDebouncedFilters] = React.useState({ origin: '', dest: '', note: initialNote });
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
   const [total, setTotal] = React.useState(0);
   const [reloadKey, setReloadKey] = React.useState(0);
   const loadSeq = React.useRef(0);
-  const lastQuery = React.useRef(`||${initialNote}`);
 
   // Dropdown ward caches per province
   const [originWards, setOriginWards] = React.useState<WardOption[]>([]);
@@ -183,6 +188,11 @@ export function PricingMacroManager() {
   const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  // Sửa giá hàng loạt: đặt CÙNG kiểu + giá trị cho mọi luật đã chọn (gọi PUT từng luật, backend chưa có API bulk-update).
+  const [bulkEditOpen, setBulkEditOpen] = React.useState(false);
+  const [bulkEditing, setBulkEditing] = React.useState(false);
+  const [bulkEditType, setBulkEditType] = React.useState<MacroAdjustmentType>('DELTA_AMOUNT');
+  const [bulkEditValue, setBulkEditValue] = React.useState('');
 
   // Delete State
   const [deleteRuleId, setDeleteRuleId] = React.useState<number | null>(null);
@@ -196,25 +206,7 @@ export function PricingMacroManager() {
       .catch(() => setProvinces([]));
   }, []);
 
-  // Gõ tìm kiếm: chờ 250ms rồi mới gọi server, và về trang 1.
-  React.useEffect(() => {
-    const t = setTimeout(() => {
-      const origin = searchOrigin.trim();
-      const dest = searchDest.trim();
-      const note = searchNote.trim();
-      const key = `${origin}|${dest}|${note}`;
-      if (key === lastQuery.current) return;
-      lastQuery.current = key;
-      setAiResult(null);
-      setPage(1);
-      setDebouncedFilters({ origin, dest, note });
-    }, 250);
-    return () => clearTimeout(t);
-  }, [searchOrigin, searchDest, searchNote]);
-
-  const hasActiveSearch = Boolean(
-    debouncedFilters.origin || debouncedFilters.dest || debouncedFilters.note || aiResult,
-  );
+  const hasActiveSearch = Boolean(noteFilter || aiResult);
 
   const handleAiSearch = React.useCallback(
     async (targetPage = 1) => {
@@ -273,9 +265,7 @@ export function PricingMacroManager() {
     getPricingMacroRulesPage({
       page,
       limit: pageSize,
-      ...(debouncedFilters.origin ? { originSearch: debouncedFilters.origin } : {}),
-      ...(debouncedFilters.dest ? { destSearch: debouncedFilters.dest } : {}),
-      ...(debouncedFilters.note ? { noteSearch: debouncedFilters.note } : {}),
+      ...(noteFilter ? { noteSearch: noteFilter } : {}),
     })
       .then((res) => {
         if (seq !== loadSeq.current) return;
@@ -299,7 +289,7 @@ export function PricingMacroManager() {
         });
         setLoading(false);
       });
-  }, [page, pageSize, debouncedFilters, reloadKey, toast]);
+  }, [page, pageSize, noteFilter, reloadKey, toast]);
 
   // Cảnh báo băng chặn: phụ — lỗi (backend cũ / thiếu quyền master-data) thì bỏ qua, không làm hỏng danh sách.
   const loadBandWarnings = React.useCallback(() => {
@@ -554,6 +544,65 @@ export function PricingMacroManager() {
     }
   };
 
+  const openBulkEdit = () => {
+    setBulkEditType('DELTA_AMOUNT');
+    setBulkEditValue('');
+    setBulkEditOpen(true);
+  };
+
+  const bulkEditValueError =
+    bulkEditValue.trim() === '' ? 'Nhập giá trị.' : adjustmentValueError(bulkEditType, Number(bulkEditValue));
+
+  const handleBulkEdit = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0 || bulkEditValueError) return;
+    const payload = { adjustmentType: bulkEditType, adjustmentValue: Number(bulkEditValue) };
+    setBulkEditing(true);
+    const okIds: number[] = [];
+    const failed: { id: number; message: string }[] = [];
+    let warningCount = 0;
+    try {
+      // 5 yêu cầu song song mỗi đợt: đủ nhanh, không dồn tải lên máy chủ/trình duyệt.
+      for (const part of chunk(ids, 5)) {
+        const results = await Promise.allSettled(part.map((id) => updatePricingMacroRule(id, payload)));
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            okIds.push(part[i]);
+            warningCount += r.value?.warnings?.length ?? 0;
+          } else {
+            failed.push({ id: part[i], message: r.reason?.message || 'Lỗi không xác định' });
+          }
+        });
+      }
+      toast({
+        title: failed.length ? `Đã sửa ${okIds.length}/${ids.length} quy tắc` : `Đã sửa ${okIds.length} quy tắc`,
+        description:
+          [
+            failed.length
+              ? `${failed.length} quy tắc lỗi (giữ nguyên chọn để thử lại): ${failed
+                  .slice(0, 3)
+                  .map((f) => `${selected.get(f.id) ?? `#${f.id}`} — ${f.message}`)
+                  .join('; ')}${failed.length > 3 ? '…' : ''}`
+              : '',
+            warningCount ? `Có ${warningCount} cảnh báo biên (không chặn).` : '',
+          ]
+            .filter(Boolean)
+            .join(' ') || undefined,
+        variant: failed.length ? 'destructive' : undefined,
+      });
+      // Chỉ bỏ chọn các luật đã sửa xong; luật lỗi vẫn được chọn để thử lại.
+      setSelected((prev) => {
+        const next = new Map(prev);
+        okIds.forEach((id) => next.delete(id));
+        return next;
+      });
+      if (failed.length === 0) setBulkEditOpen(false);
+    } finally {
+      setBulkEditing(false);
+      loadData();
+    }
+  };
+
   // Helper name lookups
   const getProvinceName = (code?: string | null) => {
     if (!code) return 'Toàn quốc';
@@ -591,6 +640,20 @@ export function PricingMacroManager() {
     return Array.from(selected.keys()).filter((id) => !onPage.has(id)).length;
   }, [selected, rules]);
   const BULK_DELETE_LIST_MAX = 8;
+
+  // Bản xem trước sửa hàng loạt: luật đã chọn (kể cả luật đang ẩn do trang/bộ lọc) với giá trị CŨ → MỚI.
+  const bulkEditRules = React.useMemo(
+    () =>
+      bulkEditOpen
+        ? Array.from(selected.keys()).map((id) => ({ id, title: selected.get(id)!, rule: ruleCache.current.get(id) }))
+        : [],
+    [bulkEditOpen, selected],
+  );
+  const bulkEditNewValue = Number(bulkEditValue);
+  const bulkEditPerSeatCount = bulkEditRules.filter((r) => r.rule && isPerSeatRule(r.rule)).length;
+  const bulkEditWholeCarCount = bulkEditRules.filter((r) => r.rule && !isPerSeatRule(r.rule)).length;
+  const bulkEditMixesUnits = bulkEditType !== 'PERCENTAGE' && bulkEditPerSeatCount > 0 && bulkEditWholeCarCount > 0;
+  const bulkEditLegacyCount = bulkEditRules.filter((r) => r.rule && isLegacyAdjustmentType(r.rule.adjustmentType)).length;
 
   // Ô chọn tỉnh / xã có ô tìm (gõ không dấu vẫn khớp): xã mỗi tỉnh có thể hơn 100 mục.
   const originProvinceOptions = React.useMemo(
@@ -674,7 +737,13 @@ export function PricingMacroManager() {
                 biên cho phép, nếu vượt thì báo giá bị từ chối (khách không đặt được chuyến).
               </CardDescription>
             </div>
-            <div className="flex w-full sm:w-auto items-center gap-2">
+            <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
+              {selectedIds.size > 0 && (
+                <Button variant="outline" size="sm" className="h-9 text-xs" onClick={openBulkEdit}>
+                  <Edit className="w-3.5 h-3.5 mr-1" />
+                  Sửa giá đã chọn ({selectedIds.size})
+                </Button>
+              )}
               {selectedIds.size > 0 && (
                 <Button
                   variant="outline"
@@ -686,36 +755,21 @@ export function PricingMacroManager() {
                   Xoá đã chọn ({selectedIds.size})
                 </Button>
               )}
-              <div className="relative w-full sm:w-52">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  aria-label="Tìm điểm đón"
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm điểm đón (tỉnh, xã)..."
-                  value={searchOrigin}
-                  onChange={(e) => setSearchOrigin(e.target.value)}
-                />
-              </div>
-              <div className="relative w-full sm:w-52">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  aria-label="Tìm điểm đi"
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm điểm đi (tỉnh, xã)..."
-                  value={searchDest}
-                  onChange={(e) => setSearchDest(e.target.value)}
-                />
-              </div>
-              <div className="relative w-full sm:w-44">
-                <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
-                <Input
-                  aria-label="Tìm ghi chú"
-                  className="pl-8 h-9 text-xs"
-                  placeholder="Tìm ghi chú..."
-                  value={searchNote}
-                  onChange={(e) => setSearchNote(e.target.value)}
-                />
-              </div>
+              {noteFilter && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-9 text-xs"
+                  aria-label="Bỏ lọc quy tắc"
+                  onClick={() => {
+                    setNoteFilter('');
+                    setPage(1);
+                  }}
+                >
+                  Đang lọc {noteFilter}
+                  <X className="w-3.5 h-3.5 ml-1" />
+                </Button>
+              )}
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
@@ -905,7 +959,7 @@ export function PricingMacroManager() {
                           {formatAdjustment(
                             rule.adjustmentType,
                             Number(rule.adjustmentValue),
-                            rule.applyPerSeat && rule.serviceType !== 'RIDE' && rule.serviceType !== 'CONVENIENT',
+                            isPerSeatRule(rule),
                           )}
                         </span>
                         {isLegacyAdjustmentType(rule.adjustmentType) && (
@@ -1354,6 +1408,103 @@ export function PricingMacroManager() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* ───────── BULK EDIT VALUE DIALOG ───────── */}
+      <Dialog open={bulkEditOpen} onOpenChange={(open) => !open && !bulkEditing && setBulkEditOpen(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-sm font-bold">Sửa giá {selectedIds.size} quy tắc đã chọn</DialogTitle>
+            <DialogDescription className="text-xs">
+              Kiểu và giá trị bên dưới sẽ GHI ĐÈ lên kiểu/giá trị hiện tại của mọi quy tắc đã chọn. Các thông số khác
+              (khu vực, dịch vụ, loại xe, ưu tiên…) giữ nguyên.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Kiểu điều chỉnh</Label>
+              <Select value={bulkEditType} onValueChange={(v) => setBulkEditType(v as MacroAdjustmentType)}>
+                <SelectTrigger aria-label="Kiểu điều chỉnh hàng loạt" className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="DELTA_AMOUNT">Cộng/Trừ tiền cố định (± VNĐ)</SelectItem>
+                  <SelectItem value="PERCENTAGE">Theo phần trăm (± %)</SelectItem>
+                  <SelectItem value="FIXED_PRICE">Ghi đè giá cố định (VNĐ)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Giá trị chung ({bulkEditType === 'PERCENTAGE' ? '%' : 'VNĐ'})</Label>
+              <Input
+                aria-label="Giá trị chung"
+                className="h-8 text-xs"
+                type="number"
+                {...adjustmentValueRange(bulkEditType)}
+                value={bulkEditValue}
+                onChange={(e) => setBulkEditValue(e.target.value)}
+              />
+              {bulkEditValue.trim() !== '' && bulkEditValueError ? (
+                <div role="alert" className="text-[11px] text-red-600">{bulkEditValueError}</div>
+              ) : (
+                <div className="text-[11px] text-slate-400">{adjustmentValueHint(bulkEditType)}</div>
+              )}
+            </div>
+          </div>
+          <div className="text-xs space-y-1.5" data-testid="bulk-edit-list">
+            <ul className="list-disc pl-5 text-slate-700 max-h-40 overflow-y-auto">
+              {bulkEditRules.slice(0, BULK_DELETE_LIST_MAX).map(({ id, title, rule }) => (
+                <li key={id}>
+                  {title}
+                  {rule && (
+                    <span className="text-slate-500">
+                      {' '}
+                      — {formatAdjustment(rule.adjustmentType, Number(rule.adjustmentValue), isPerSeatRule(rule))}
+                      {!bulkEditValueError && (
+                        <>
+                          {' → '}
+                          <b className="text-slate-800">
+                            {formatAdjustment(bulkEditType, bulkEditNewValue, isPerSeatRule(rule))}
+                          </b>
+                        </>
+                      )}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+            {bulkEditRules.length > BULK_DELETE_LIST_MAX && (
+              <div className="text-slate-500">… và {bulkEditRules.length - BULK_DELETE_LIST_MAX} quy tắc khác.</div>
+            )}
+            {offPageSelectedCount > 0 && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-1.5 text-amber-800" role="alert">
+                Trong đó {offPageSelectedCount} quy tắc không nằm ở trang đang xem (trang khác hoặc bị bộ lọc ẩn) — chúng
+                VẪN sẽ bị sửa.
+              </div>
+            )}
+            {bulkEditMixesUnits && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-1.5 text-amber-800" role="alert">
+                Lựa chọn trộn {bulkEditPerSeatCount} quy tắc tính THEO GHẾ (đi ghép) với {bulkEditWholeCarCount} quy tắc
+                tính THEO CHUYẾN (bao xe): cùng một số tiền sẽ có nghĩa khác nhau. Nên sửa riêng từng nhóm.
+              </div>
+            )}
+            {bulkEditLegacyCount > 0 && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-1.5 text-amber-800" role="alert">
+                {bulkEditLegacyCount} quy tắc đang là kiểu sàn/trần (đã ngừng áp dụng). Đổi kiểu sẽ khiến chúng BẮT ĐẦU
+                ảnh hưởng giá nếu đang bật.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" className="text-xs" disabled={bulkEditing} onClick={() => setBulkEditOpen(false)}>
+              Huỷ
+            </Button>
+            <Button size="sm" className="text-xs" disabled={bulkEditing || !!bulkEditValueError} onClick={handleBulkEdit}>
+              {bulkEditing && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+              Áp dụng cho {selectedIds.size} quy tắc
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ───────── DELETE CONFIRM ALERT DIALOG ───────── */}
       <AlertDialog open={!!deleteRuleId} onOpenChange={(open) => !open && setDeleteRuleId(null)}>
