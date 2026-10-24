@@ -274,6 +274,81 @@ describe('PricingMacroManager — danh sách', () => {
     expect(getRules).toHaveBeenCalledTimes(2); // lần nạp đầu + nạp lại
   });
 
+  it('sửa giá hàng loạt: đặt cùng kiểu + giá trị cho mọi dòng đã chọn, báo kết quả, nạp lại và bỏ vùng chọn', async () => {
+    const { user } = await setup();
+    updateRule.mockResolvedValue({});
+    expect(screen.queryByRole('button', { name: /Sửa giá đã chọn/ })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
+    await user.click(screen.getByRole('button', { name: 'Sửa giá đã chọn (2)' }));
+
+    const apply = await screen.findByRole('button', { name: 'Áp dụng cho 2 quy tắc' });
+    expect(apply).toBeDisabled(); // chưa nhập giá trị
+    await user.type(screen.getByLabelText('Giá trị chung'), '50000');
+    expect(updateRule).not.toHaveBeenCalled();
+    await user.click(apply);
+
+    await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(2));
+    expect(updateRule).toHaveBeenCalledWith(1, { adjustmentType: 'DELTA_AMOUNT', adjustmentValue: 50000 });
+    expect(updateRule).toHaveBeenCalledWith(3, { adjustmentType: 'DELTA_AMOUNT', adjustmentValue: 50000 });
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Đã sửa 2 quy tắc' })),
+    );
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Sửa giá đã chọn/ })).not.toBeInTheDocument());
+    expect(getRules).toHaveBeenCalledTimes(2);
+  });
+
+  it('sửa giá hàng loạt: giá trị ngoài biên bị chặn ngay trong hộp thoại', async () => {
+    const { user } = await setup();
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('button', { name: 'Sửa giá đã chọn (1)' }));
+    await user.type(await screen.findByLabelText('Giá trị chung'), '1.5'); // tiền cộng/trừ phải nguyên đồng
+    expect(await screen.findByRole('alert')).toHaveTextContent('số nguyên');
+    expect(screen.getByRole('button', { name: 'Áp dụng cho 1 quy tắc' })).toBeDisabled();
+  });
+
+  it('sửa giá hàng loạt: một luật lỗi → báo X/N, giữ lại dòng lỗi được chọn để thử lại, hộp thoại vẫn mở', async () => {
+    const { user } = await setup();
+    updateRule.mockImplementation(async (id: number) => {
+      if (id === 3) throw new Error('Giá vượt biên');
+      return {};
+    });
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
+    await user.click(screen.getByRole('button', { name: 'Sửa giá đã chọn (2)' }));
+    await user.type(await screen.findByLabelText('Giá trị chung'), '10000');
+    await user.click(screen.getByRole('button', { name: 'Áp dụng cho 2 quy tắc' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Đã sửa 1/2 quy tắc', variant: 'destructive' }),
+      ),
+    );
+    expect(screen.getByRole('button', { name: 'Áp dụng cho 1 quy tắc' })).toBeInTheDocument();
+    // checkbox nằm sau lớp modal (aria-hidden) nên phải tìm với hidden: true
+    expect(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/, hidden: true })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/, hidden: true })).not.toBeChecked();
+  });
+
+  it('sửa giá hàng loạt: xem trước cũ → mới, cảnh báo trộn theo ghế/theo chuyến và luật sàn/trần', async () => {
+    const carpool = rule({ id: 1, name: 'Ghép A', serviceType: 'CARPOOL' });
+    const wholeCar = rule({ id: 2, name: 'Bao B', serviceType: 'CONVENIENT' });
+    const legacy = rule({ id: 3, name: 'Sàn C', serviceType: 'CONVENIENT', adjustmentType: 'MIN_FLOOR' });
+    const { user } = await setup([carpool, wholeCar, legacy]);
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
+    await user.click(screen.getByRole('button', { name: 'Sửa giá đã chọn (3)' }));
+    await user.type(await screen.findByLabelText('Giá trị chung'), '50000');
+
+    const list = screen.getByTestId('bulk-edit-list');
+    expect(list).toHaveTextContent('+30.000 đ/ghế → +50.000 đ/ghế'); // Ghép A
+    expect(list).toHaveTextContent('+30.000 đ → +50.000 đ'); // Bao B (theo chuyến)
+    expect(list).toHaveTextContent('Sàn: 30.000 đ → +50.000 đ');
+    expect(list).toHaveTextContent('trộn 1 quy tắc tính THEO GHẾ');
+    expect(list).toHaveTextContent('1 quy tắc đang là kiểu sàn/trần');
+    expect(within(list).queryByText(/không nằm ở trang đang xem/)).not.toBeInTheDocument();
+  });
+
   it('danh sách trong hộp xác nhận rút gọn sau 8 tên, ghi số còn lại; không có cảnh báo ẩn khi mọi dòng đang hiện', async () => {
     const many = Array.from({ length: 12 }, (_, i) => rule({ id: i + 1, name: `Luật ${i + 1}` }));
     const { user } = await setup(many);
