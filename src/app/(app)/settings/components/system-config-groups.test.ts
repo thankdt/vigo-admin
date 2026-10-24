@@ -3,7 +3,7 @@ import { buildConfigGroups, groupIdFor } from './system-config-groups';
 import type { AdminMe } from '@/lib/types';
 
 const CONFIGS = [
-  { key: 'PRICING_BASE_FARE', value: '10000', description: 'Giá cơ bản' },
+  { key: 'PRICING_VAT_PERCENT', value: '8', description: 'VAT' },
   { key: 'DISPATCH_RADIUS', value: '5', description: 'Bán kính điều phối' },
 ];
 
@@ -157,5 +157,20 @@ describe('groupIdFor — cờ kênh đánh thức WAKE_*', () => {
     const groups = buildConfigGroups(configs, '', canFor(mkMe({ functions: ['settings.dispatch'] })));
     expect(groups.map((g) => g.group.id)).toEqual(['dispatch']);
     expect(groups[0].items.map((c) => c.key)).toEqual(['WAKE_PUSH_ENABLED']);
+  });
+});
+
+describe('HIDDEN_CONFIG_KEYS', () => {
+  it('ẩn key không còn dùng + bảng km, giữ key còn dùng; không rơi sang nhóm misc', () => {
+    const configs = [
+      { key: 'PRICING_BASE_FARE', value: '1' },
+      { key: 'PRICING_MODE', value: 'km' },
+      { key: 'PRICING_KM_TABLES', value: '{}' },
+      { key: 'PRICING_BASE_PRICE', value: '15000' },
+      { key: 'PRICING_RIDE_5SEAT_PER_KM', value: '12000' },
+    ];
+    const groups = buildConfigGroups(configs, '', () => true);
+    expect(groups.map((g) => g.group.id)).toEqual(['pricing']);
+    expect(groups[0].items.map((c) => c.key)).toEqual(['PRICING_BASE_PRICE', 'PRICING_RIDE_5SEAT_PER_KM']);
   });
 });

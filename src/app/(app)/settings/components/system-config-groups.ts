@@ -76,6 +76,20 @@ export const CONFIG_GROUPS: ConfigGroup[] = [
   { id: 'misc', label: 'Tích hợp & Khác', icon: Plug, match: () => true }, // catch-all — must stay last
 ];
 
+// Key KHÔNG hiện ở Cài đặt:
+//  - Không còn code nào đọc (BE đã bỏ giá theo tuyến / công tắc PRICING_MODE, đã grep 2026-10-24).
+//    `PRICING_MODE` vẫn nằm trong DB với giá trị 'km' — image BE cũ khi rollback còn đọc — nên chỉ ẩn UI.
+//  - `PRICING_KM_TABLES`: JSON lớn, có màn riêng ở Vùng & Giá khu vực → "Bảng giá theo km".
+// Lọc ở ĐÂY chứ không sửa `match` của nhóm: key không khớp nhóm nào sẽ rơi vào 'misc' (gate `settings.misc`)
+// trong khi BE vẫn tính nó thuộc `settings.pricing` — lệch quyền.
+export const HIDDEN_CONFIG_KEYS: ReadonlySet<string> = new Set([
+  'PRICING_BASE_FARE',
+  'PRICING_MODE',
+  'PRICING_PIT_PERCENT',
+  'PRICING_REQUIRE_CROSS_SIDE',
+  'PRICING_KM_TABLES',
+]);
+
 export const groupIdFor = (key: string) =>
   (CONFIG_GROUPS.find((g) => g.match(key)) ?? CONFIG_GROUPS[CONFIG_GROUPS.length - 1]).id;
 
@@ -88,9 +102,10 @@ export function buildConfigGroups<T extends { key: string; description?: string 
   canGroup: (groupId: string) => boolean,
 ): { group: ConfigGroup; items: T[] }[] {
   const q = query.trim().toLowerCase();
+  const shown = configs.filter((c) => !HIDDEN_CONFIG_KEYS.has(c.key));
   const visible = q
-    ? configs.filter((c) => c.key.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q))
-    : configs;
+    ? shown.filter((c) => c.key.toLowerCase().includes(q) || (c.description ?? '').toLowerCase().includes(q))
+    : shown;
   return CONFIG_GROUPS
     .filter((g) => canGroup(g.id))
     .map((g) => ({ group: g, items: visible.filter((c) => groupIdFor(c.key) === g.id) }))

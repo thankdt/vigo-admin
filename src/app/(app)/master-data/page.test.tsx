@@ -11,6 +11,10 @@ vi.mock('./components/ward-groups-manager', () => ({
   WardGroupsManager: () => <div data-testid="ward-groups-manager">ward-groups</div>,
 }));
 
+vi.mock('./components/km-tables-manager', () => ({
+  KmTablesManager: () => <div data-testid="km-tables-manager">km-tables</div>,
+}));
+
 vi.mock('./components/special-zones-manager', () => ({
   SpecialZonesManager: () => <div data-testid="special-zones-manager">special-zones</div>,
 }));
@@ -18,10 +22,10 @@ vi.mock('./components/special-zones-manager', () => ({
 import MasterDataPage from './page';
 
 describe('MasterDataPage — khung trang', () => {
-  it('ba tab: "Điều chỉnh khu vực", "Sân bay & đồng giá", "Nhóm xã"; không còn Tuyến đường / Bảng giá', () => {
+  it('bốn tab: "Điều chỉnh khu vực", "Bảng giá theo km", "Sân bay & đồng giá", "Nhóm xã"; không còn Tuyến đường / Bảng giá', () => {
     render(<MasterDataPage />);
     const tabs = screen.getAllByRole('tab').map((t) => t.textContent);
-    expect(tabs).toEqual(['Điều chỉnh khu vực', 'Sân bay & đồng giá', 'Nhóm xã']);
+    expect(tabs).toEqual(['Điều chỉnh khu vực', 'Bảng giá theo km', 'Sân bay & đồng giá', 'Nhóm xã']);
     expect(screen.queryByRole('tab', { name: 'Tuyến đường' })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: 'Bảng giá' })).not.toBeInTheDocument();
   });
