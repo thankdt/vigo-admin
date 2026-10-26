@@ -7,9 +7,10 @@
  *   npx tsx scripts/deploy-pages.ts --dry-run          # chỉ dựng .pages-dist/<cổng>, KHÔNG đẩy lên
  *   npx tsx scripts/deploy-pages.ts --only=htx,kol     # chỉ các cổng liệt kê (vẫn phải qua ship)
  *
- * Bản thật (không --dry-run) từ chối khi: chạy trong môi trường tác tử AI; thiếu `.release/build-info.json` do prepare
+ * Gọi thẳng bản thật (có token, worktree đã prepare) VẪN đẩy được nhưng bỏ qua TTY/cụm xác nhận/so lại main/rào PROD lần 2
+ * của ship — đừng. Bản thật (không --dry-run) từ chối khi: chạy trong môi trường tác tử AI; thiếu `.release/build-info.json` do prepare
  * ghi; sha trong đó ≠ HEAD; `out/` đổi sau prepare (release-lib.ts `checkBuildInfo`). Token CLOUDFLARE_API_TOKEN
- * (quyền Pages:Edit) + CLOUDFLARE_ACCOUNT_ID chỉ lấy từ env (ship đọc `~/.config/vigo/cloudflare.env`) — KHÔNG còn đọc `.env`.
+ * (quyền Pages:Edit) + CLOUDFLARE_ACCOUNT_ID chỉ lấy từ env do ship truyền (ship lấy từ env/tệp 600/nhập tay) — KHÔNG đọc `.env`.
  * Dùng `wrangler` ghim phiên bản qua npx (không thêm vào package.json). Cloudflare thi thoảng trả lỗi nội bộ tạm thời
  * "Failed to publish your Function ... Unknown internal error" ở lần đầu (đã gặp thật 17/10/2026) — thử lại là qua, nên
  * script tự thử lại tối đa 3 lần mỗi cổng.
@@ -102,7 +103,7 @@ async function main() {
       process.exit(1);
     }
     if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID) {
-      console.error('Thiếu CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID — chạy qua `npm run deploy:prod` (ship nạp từ ~/.config/vigo/cloudflare.env).');
+      console.error('Thiếu CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID — chạy qua `ship` (scripts/release-prod.sh, docs/DEPLOY.md §3.2).');
       process.exit(1);
     }
   }

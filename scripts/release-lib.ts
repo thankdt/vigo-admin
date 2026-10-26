@@ -4,9 +4,7 @@
  * Test: scripts/release-lib.node.test.ts (`npm run test:pages`). Quy trình: docs/DEPLOY.md.
  *
  * Phần kiểm phải chạy TRƯỚC khi có node_modules (cây sạch, ref == origin/main, build-id PROD là tổ tiên,
- * mode tệp token, TTY) buộc phải viết bằng bash trong release-prod.sh. `parseBuildId`/`prodGate`/`isPrivateMode`
- * dưới đây là đặc tả của CÙNG luật đó (test ở release-lib.node.test.ts); release-prod.node.test.ts kiểm bản bash
- * trên đúng các ca ấy. Sửa luật thì sửa CẢ HAI nơi.
+ * mode tệp token, TTY) chỉ có MỘT bản: bash trong release-prod.sh (test: release-prod.node.test.ts).
  */
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
@@ -26,43 +24,6 @@ const SHA40 = /^[0-9a-f]{40}$/;
 
 export function isSha40(s: string): boolean {
   return SHA40.test(s);
-}
-
-/**
- * Nội dung `/build-id.txt` lấy từ PROD → sha hoặc null.
- * Pages trả index.html (200) cho URL không có tệp (SPA fallback, xem pages-lib.ts) ⇒ "có phản hồi 200" KHÔNG có nghĩa là
- * có build-id; chỉ chấp nhận đúng 40 hex.
- */
-export function parseBuildId(text: string | null | undefined): string | null {
-  if (text == null) return null;
-  const t = text.trim();
-  return isSha40(t) ? t : null;
-}
-
-export interface ProdGateInput {
-  /** sha đang chạy trên PROD (null = không đọc được / chưa có build-id.txt). */
-  prodSha: string | null;
-  /** `git merge-base --is-ancestor prodSha target` (bỏ qua khi prodSha null). */
-  isAncestor: boolean;
-  /** Người đã xác nhận bằng `--first-ship` rằng ref đích chứa mọi thứ đang chạy trên PROD. */
-  firstShip: boolean;
-}
-
-/** Rào "PROD có code chưa vào main". `--first-ship` CHỈ nới ca thiếu build-id, không bao giờ nới ca không-phải-tổ-tiên. */
-export function prodGate(i: ProdGateInput): { ok: boolean; reason: string } {
-  if (i.prodSha) {
-    return i.isAncestor
-      ? { ok: true, reason: `PROD ${i.prodSha} là tổ tiên của ref đích` }
-      : { ok: false, reason: `PROD đang chạy ${i.prodSha} — KHÔNG phải tổ tiên của ref đích (PROD có code chưa vào ref này)` };
-  }
-  return i.firstShip
-    ? { ok: true, reason: 'PROD chưa có build-id.txt — người đã xác nhận bằng --first-ship' }
-    : { ok: false, reason: 'PROD chưa có/không đọc được build-id.txt — cần --first-ship (người xác nhận)' };
-}
-
-/** Tệp token chỉ được chủ sở hữu đọc/ghi: không bit nào cho group/other (600, 400, 700…). */
-export function isPrivateMode(mode: number): boolean {
-  return (mode & 0o077) === 0;
 }
 
 function sha256(buf: Buffer | string): string {

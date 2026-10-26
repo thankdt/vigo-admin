@@ -13,12 +13,9 @@ import {
   BUILD_INFO_REL,
   checkBuildInfo,
   compareTypecheck,
-  isPrivateMode,
   makeBuildInfo,
   parseBaseline,
-  parseBuildId,
   parseTscErrors,
-  prodGate,
   scanBundle,
   treeHash,
 } from './release-lib';
@@ -35,32 +32,6 @@ function write(root: string, rel: string, body: string) {
 function tmp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'release-lib-'));
 }
-
-test('parseBuildId: chỉ nhận đúng 40 hex (SPA fallback trả index.html 200 ⇒ null)', () => {
-  assert.equal(parseBuildId(`${SHA_A}\n`), SHA_A);
-  assert.equal(parseBuildId(`  ${SHA_A}  `), SHA_A);
-  assert.equal(parseBuildId('<!DOCTYPE html><html>…</html>'), null);
-  assert.equal(parseBuildId(SHA_A.toUpperCase()), null);
-  assert.equal(parseBuildId(SHA_A.slice(0, 39)), null);
-  assert.equal(parseBuildId(''), null);
-  assert.equal(parseBuildId(null), null);
-});
-
-test('prodGate: không phải tổ tiên ⇒ dừng, kể cả có --first-ship', () => {
-  assert.equal(prodGate({ prodSha: SHA_A, isAncestor: true, firstShip: false }).ok, true);
-  assert.equal(prodGate({ prodSha: SHA_A, isAncestor: false, firstShip: false }).ok, false);
-  assert.equal(prodGate({ prodSha: SHA_A, isAncestor: false, firstShip: true }).ok, false);
-});
-
-test('prodGate: thiếu build-id ⇒ chỉ qua khi người xác nhận --first-ship', () => {
-  assert.equal(prodGate({ prodSha: null, isAncestor: false, firstShip: false }).ok, false);
-  assert.equal(prodGate({ prodSha: null, isAncestor: false, firstShip: true }).ok, true);
-});
-
-test('isPrivateMode: chỉ chủ sở hữu (600/400/700) — 644/640/660 bị từ chối', () => {
-  for (const m of [0o600, 0o400, 0o700]) assert.equal(isPrivateMode(m), true, m.toString(8));
-  for (const m of [0o644, 0o640, 0o660, 0o604, 0o601, 0o666]) assert.equal(isPrivateMode(m), false, m.toString(8));
-});
 
 test('scanBundle: đạt khi _next chứa API PROD và không có vigodev.online', () => {
   const out = path.join(tmp(), 'out');

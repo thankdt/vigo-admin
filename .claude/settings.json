@@ -66,6 +66,7 @@
       "Bash(*npm run deploy:prod*)",
       "Bash(*release-prod.sh*ship*)",
       "Bash(*--first-ship*)",
+      "Bash(*--allow-ref*)",
       "Bash(*wrangler*)",
       "Bash(*deploy-pages.ts*)",
       "Skill(aws-deploy)",
