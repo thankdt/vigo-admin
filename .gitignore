@@ -19,6 +19,8 @@
 
 # cloudflare pages: thư mục triển khai từng cổng, do scripts/deploy-pages.ts dựng từ out/
 /.pages-dist/
+# build-info của scripts/release-prod.sh prepare (ngoài out/, không public)
+/.release/
 
 # production
 /build
