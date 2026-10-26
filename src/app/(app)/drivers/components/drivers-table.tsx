@@ -1147,15 +1147,15 @@ export function DriversTable() {
                           )}
                           {(() => {
                             const ds = getDriverApprovalStatus(driver);
-                            // Approved drivers also need a way back to rejected
-                            // (compliance / re-review). Show reject directly;
-                            // approve stays hidden since they're already
-                            // approved. Pending drivers see both. Rejected sees
-                            // "move back to pending" + approve shortcut.
+                            // Approved drivers also need a way back to pending
+                            // or rejected (compliance / re-review). Show move-back
+                            // + reject; approve stays hidden since they're already
+                            // approved. Pending drivers see approve + reject.
+                            // Rejected sees move-back + approve shortcut.
                             return (
                               <>
                                 <DropdownMenuSeparator />
-                                {ds === 'rejected' && (
+                                {ds !== 'pending' && (
                                   <DropdownMenuItem onSelect={() => setTimeout(() => setMoveBackTarget(driver), 0)}>
                                     <RotateCcw className="mr-2 h-4 w-4" /> Đưa lại Chờ duyệt
                                   </DropdownMenuItem>
@@ -2027,7 +2027,7 @@ export function DriversTable() {
                       )}
                     </div>
                   )}
-                  {status === 'rejected' && (
+                  {status !== 'pending' && (
                     <Button
                       onClick={() => {
                         if (!viewDriver) return;
@@ -2130,7 +2130,15 @@ export function DriversTable() {
           <AlertDialogHeader>
             <AlertDialogTitle>Đưa lại Chờ duyệt</AlertDialogTitle>
             <AlertDialogDescription>
-              Tài xế <span className="font-semibold text-foreground">{moveBackTarget?.name || moveBackTarget?.user?.fullName || 'N/A'}</span> sẽ chuyển từ "Từ chối" về "Chờ duyệt". Lý do từ chối cũ sẽ bị xoá.
+              {getDriverApprovalStatus(moveBackTarget) === 'approved' ? (
+                <>
+                  Tài xế <span className="font-semibold text-foreground">{moveBackTarget?.name || moveBackTarget?.user?.fullName || 'N/A'}</span> sẽ chuyển từ "Đã duyệt" về "Chờ duyệt".
+                </>
+              ) : (
+                <>
+                  Tài xế <span className="font-semibold text-foreground">{moveBackTarget?.name || moveBackTarget?.user?.fullName || 'N/A'}</span> sẽ chuyển từ "Từ chối" về "Chờ duyệt". Lý do từ chối cũ sẽ bị xoá.
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-1.5">
