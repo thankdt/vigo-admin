@@ -86,4 +86,4 @@ The `vigo-admin` project (Next.js `15.5.9`, React `19`, TypeScript):
 - **Commands**:
   - Dev: `npm run dev` (`next dev --turbopack -p 9002`) · Lint: `npm run lint` (`next lint`) · Typecheck: `npm run typecheck` (`tsc --noEmit`)
   - Tests: `npm test` (`vitest run`), watch `npm run test:watch` — Vitest + `@testing-library/react`. **No Playwright/e2e** is set up.
-  - Build/deploy: `npm run build` runs `next build && npm run deploy:prod`, where `deploy:prod` (`tsx scripts/deploy-pages.ts`) ships the static build to the 4 Cloudflare Pages projects (admin/htx/kol/daily; was S3 `vigo-admin` before 17/10/2026). See `scripts/pages-lib.ts` and `CLAUDE.md`.
+  - Build/deploy: `npm run build` = `next build` only — it does NOT deploy. PROD (4 Cloudflare Pages projects admin/htx/kol/daily) goes only through `scripts/release-prod.sh` (`npm run release:prepare`, then a HUMAN runs `npm run deploy:prod`); see the `vigo-deploy` skill and `docs/DEPLOY.md`. Portal layout: `scripts/pages-lib.ts`.

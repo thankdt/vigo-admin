@@ -1,5 +1,9 @@
 # Vigo Admin — agent guide
 
+@AGENTS.md
+
+Luật hạ tầng/deploy cho MỌI agent nằm ở `AGENTS.md` (dòng trên nạp nó cho Claude Code; Cursor/Antigravity/Copilot đọc AGENTS.md trực tiếp). Deploy: `docs/DEPLOY.md`.
+
 ## ⏰ Timezone: ALWAYS Vietnam Time (Asia/Ho_Chi_Minh, GMT+7 / UTC+7) — MANDATORY
 
 Every date the user sees or filters by — date pickers, "today", chart axes/buckets,
@@ -30,8 +34,9 @@ Hai khu vực tách biệt trong `src/app/`:
 - `htx/*` — portal cho hợp tác xã, có `htx/login` riêng. ĐỪNG nhầm với admin.
 
 Key files:
-- `src/lib/api.ts` — API client tập trung (~1600 dòng). Base URL hardcode
-  `https://api.vigogroup.vn`, token trong `localStorage`, có refresh-token flow.
+- `src/lib/api.ts` — API client tập trung (~1600 dòng). Base URL =
+  `NEXT_PUBLIC_API_BASE_URL || 'https://api.vigogroup.vn'` (nhúng lúc build: DEV đặt
+  `api.vigodev.online` qua docker-compose; bản PROD KHÔNG đặt biến), token trong `localStorage`, có refresh-token flow.
   Dùng lại client này, đừng tự viết fetch wrapper mới.
 - `src/lib/types.ts` — domain types dùng chung.
 - `src/ai/flows/*` — Genkit (Google GenAI) cho executive summary.
@@ -42,14 +47,16 @@ npm run dev        # dev server trên port 9002 (turbopack)
 npm run typecheck  # tsc --noEmit — CỔNG KIỂM THẬT SỰ (xem gotcha bên dưới)
 npm test           # vitest run
 npm run lint       # next lint
-npx next build     # compile/smoke check, KHÔNG deploy
+npm run build      # = next build, KHÔNG deploy (từ 26/10/2026)
+npm run test:pages # node:test cho scripts/ (pages-lib, release-lib, release-prod, deploy-guard)
 ```
-Deploy cần `CLOUDFLARE_API_TOKEN` (quyền Pages:Edit) + `CLOUDFLARE_ACCOUNT_ID` trong `.env` (xem `cloudflare-config.template`).
 
 ## Deploy note
-`npm run build` in vigo-admin **builds AND auto-deploys to the 4 PROD Cloudflare Pages projects**
-(`scripts/deploy-pages.ts`; trước 17/10/2026 là sync lên S3 — `scripts/deploy-s3.ts` đã xoá, xem git `cf5bec2`). Use `npx next build` for a compile/smoke check that does NOT deploy;
-`npx tsx scripts/deploy-pages.ts --dry-run` dựng `.pages-dist/<cổng>` mà không đẩy lên.
+Toàn bộ đường DEV/PROD: **`docs/DEPLOY.md`** (nguồn duy nhất). Tóm tắt: `npm run build` chỉ build — KHÔNG còn
+deploy. Lên PROD (4 project Cloudflare Pages): `npm run release:prepare` (AI chạy được, không cần token) → NGƯỜI chạy
+`npm run deploy:prod -- --dir <worktree>` (= `scripts/release-prod.sh ship`, terminal thật + cụm xác nhận) → `verify`.
+Token Cloudflare nằm ở `~/.config/vigo/cloudflare.env` (mode 600), KHÔNG trong `.env` của repo.
+`npx tsx scripts/deploy-pages.ts --dry-run` vẫn dựng `.pages-dist/<cổng>` mà không đẩy lên.
 
 ## Gotchas
 - `next.config.ts` bật `ignoreBuildErrors` + `ignoreDuringBuilds` → **build KHÔNG chặn
@@ -67,7 +74,7 @@ Mỗi feature/fix:
 1. `git checkout -b feat/X main` — cắt từ main.
 2. merge `feat/X` → `dev` → môi trường DEV deploy → **test trên DEV (cổng bắt buộc)**.
 3. **PR `feat/X` → `main`** (review/CI) — KHÔNG phải PR `dev → main`.
-4. merge → deploy PROD từ `main` (`npm run build`).
+4. merge vào `main` (người merge). Merge KHÔNG deploy — lên PROD theo `docs/DEPLOY.md` (`release:prepare` → NGƯỜI `deploy:prod`).
 5. **resync: `git checkout dev && git merge main`**, rồi xoá `feat/X`.
 
 Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
@@ -113,15 +120,15 @@ Quy tắc cứng (vi phạm từng gây lệch dev/main + commit trùng):
    - Kiểm cả app tài xế nếu đụng endpoint dùng chung.
 5. **Push nhánh feat**.
 6. **Merge vào `dev` → test trên môi trường DEV** (verify runtime). Không PR→main khi chưa test DEV.
-7. **PR `feature→main`** — review của người = cổng cuối → merge = deploy/build production.
+7. **PR `feature→main`** — review của người = cổng cuối → merge. Merge `main` KHÔNG deploy. Lên PROD: xem `docs/DEPLOY.md`.
 8. **Resync `main→dev`**. KHÔNG PR `dev→main`, KHÔNG cherry-pick.
 
 **Đa repo / đổi API contract:** chốt contract trước khi code FE/admin; rollout **backend TRƯỚC** app; điều phối PR các repo cùng đợt.
 
 **Lệnh kiểm tĩnh theo repo:**
-- backend (`vigo-backend`): `npx tsc --noEmit` + `npx jest`
+- backend (`vigo-backend`): `npx tsc --noEmit` + `npm test` (KHÔNG chạy jest trần: test backend đòi process ở UTC, script `npm test` đã đặt `TZ=UTC`)
 - app khách/tài xế (`vigo`, `vigo-driver`): `dart analyze` (+ `dart run build_runner build` nếu đổi model/DTO)
-- admin (`vigo-admin`): `npx tsc --noEmit` + `npx vitest run`
+- admin (`vigo-admin`): `npx tsc --noEmit` (so với `scripts/typecheck-baseline.txt`) + `npx vitest run` + `npm run test:pages`
 
 ## 💸 Độ dài session — KHUYẾN NGHỊ (cảnh báo, KHÔNG bắt buộc)
 

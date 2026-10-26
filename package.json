@@ -10,7 +10,7 @@
     "build": "next build && echo \"build KHÔNG còn tự deploy — lên PROD: npm run release:prepare rồi NGƯỜI chạy npm run deploy:prod (docs/DEPLOY.md)\"",
     "release:prepare": "bash scripts/release-prod.sh prepare",
     "deploy:prod": "bash scripts/release-prod.sh ship",
-    "test:pages": "tsx --test scripts/pages-lib.node.test.ts scripts/release-lib.node.test.ts scripts/release-prod.node.test.ts",
+    "test:pages": "tsx --test scripts/pages-lib.node.test.ts scripts/release-lib.node.test.ts scripts/release-prod.node.test.ts scripts/deploy-guard.node.test.ts",
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
