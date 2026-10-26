@@ -73,4 +73,17 @@ describe('BookingDetail — hành trình theo tỉnh', () => {
     expect(await screen.findByText('Tuyến cũ: Hà Nội - Bắc Giang')).toBeInTheDocument();
     expect(screen.getByText('Chưa có mã tỉnh')).toBeInTheDocument();
   });
+
+  it('hiển thị thời gian khách đặt và thời gian tài xế nhận (đầy đủ giờ:phút:giây ngày/tháng/năm giờ VN)', async () => {
+    vi.mocked(getBookingDetails).mockResolvedValue({
+      ...baseBooking,
+      createdAt: '2026-10-26T07:15:30.000Z',
+      acceptedAt: '2026-10-26T07:16:05.000Z',
+      driver: { id: 'd1', fullName: 'Nguyễn Văn Tài', phone: '0901234567' },
+    } as Booking);
+    render(<BookingDetail bookingId="b1" onClose={() => {}} />);
+
+    expect((await screen.findAllByText(/14:15:30.*26\/10\/2026/)).length).toBeGreaterThanOrEqual(1);
+    expect((await screen.findAllByText(/14:16:05.*26\/10\/2026/)).length).toBeGreaterThanOrEqual(1);
+  });
 });
