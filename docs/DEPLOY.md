@@ -3,8 +3,6 @@
 Một nơi duy nhất cho đường lên DEV và PROD của repo này. Luật cho AI: [AGENTS.md](../AGENTS.md). Backend: repo vigo-backend `docs/DEPLOY.md`.
 Mọi sự thật dưới đây có nguồn `tệp:dòng` (mục 9) hoặc ghi `[CHƯA KIỂM]`.
 
-**Thứ tự merge đợt 26/10/2026:** backend (b1 + b2 + b3 CÙNG một đợt) TRƯỚC, rồi admin (tệp này), rồi 2 app, rồi infra — tài liệu ở đây trỏ vigo-backend `docs/DEPLOY.md`, tệp đó chỉ có trên `main` của backend sau khi backend merge.
-
 ## 0. Tóm tắt
 
 | | |
