@@ -370,6 +370,9 @@ export type Booking = {
   shareLink?: string;
   createdAt: string;
   updatedAt?: string;
+  // Thời điểm tài xế nhận chuyến (set ở mọi luồng nhận/gán chuyến). Null khi chưa có tài hoặc
+  // chuyến lịch sử trước khi có cột.
+  acceptedAt?: string | null;
   // Thời điểm chuyến chuyển COMPLETED (nguồn thật cho "Ngày hoàn thành"). Null cho rows cũ trước
   // khi có cột → UI fallback về updatedAt.
   completedAt?: string | null;

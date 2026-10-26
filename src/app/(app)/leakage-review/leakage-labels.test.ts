@@ -5,6 +5,7 @@ import {
   verdictBadgeClass,
   statusBadgeVariant,
   formatVnDateTime,
+  formatVnDateTimeFull,
   describeEvidence,
   addressText,
 } from './leakage-labels';
@@ -51,6 +52,14 @@ describe('leakage-labels', () => {
   it('formatVnDateTime is browser-timezone independent (explicit VN zone)', () => {
     // 2026-07-14T18:30:00Z is 2026-07-15 01:30 VN — the VN date must roll over
     expect(formatVnDateTime('2026-07-14T18:30:00Z')).toContain('15/07/2026');
+  });
+
+  it('formatVnDateTimeFull includes seconds (HH:mm:ss dd/MM/yyyy) in VN time', () => {
+    expect(formatVnDateTimeFull(null)).toBe('—');
+    expect(formatVnDateTimeFull(undefined)).toBe('—');
+    expect(formatVnDateTimeFull('invalid')).toBe('—');
+    expect(formatVnDateTimeFull('2026-10-26T07:05:09Z')).toContain('14:05:09');
+    expect(formatVnDateTimeFull('2026-10-26T07:05:09Z')).toContain('26/10/2026');
   });
 
   it('describeEvidence explains the serving tags in plain Vietnamese, incl. coords', () => {
