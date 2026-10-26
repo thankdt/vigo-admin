@@ -1,6 +1,6 @@
 # Vigo Admin - API Booking Management
 
-> **Base URL**: `https://d2072mg5s4gnpc.cloudfront.net`
+> **Base URL**: `https://api.vigogroup.vn` (PROD) · `https://api.vigodev.online` (DEV)
 >
 > **Authentication**: Tất cả API đều yêu cầu header `Authorization: Bearer <admin_token>`
 >
@@ -108,7 +108,7 @@ GET /bookings/admin/:id
   "status": "ACCEPTED",
   "price": 150000,
   "finalPrice": 135000,
-  "shareLink": "https://d2072mg5s4gnpc.cloudfront.net/share/uuid",
+  "shareLink": "https://api.vigogroup.vn/share/uuid",
   ...
 }
 ```
@@ -175,7 +175,7 @@ POST /bookings/admin/create
   "finalPrice": 185000,
   "paymentMethod": "CASH",
   "note": "[Admin] Khách VIP, cần xe 7 chỗ",
-  "shareLink": "https://d2072mg5s4gnpc.cloudfront.net/share/booking-uuid",
+  "shareLink": "https://api.vigogroup.vn/share/booking-uuid",
   "createdAt": "2026-04-14T22:30:00.000Z"
 }
 ```

@@ -69,7 +69,7 @@ Lint + `tsc` clean, unit and relevant e2e tests green, DTO validation in place, 
 The `vigo-backend` service (NestJS 11):
 
 - **Transport**: **REST** (`@Controller` + method decorators). No GraphQL.
-- **Data layer**: **TypeORM** + **PostgreSQL with PostGIS** (geospatial). Read `references/db-typeorm.md`. Connection is via `DATABASE_URL` (Neon serverless Postgres) with host/port/user/password fallback; pool size from `DB_POOL_SIZE`.
+- **Data layer**: **TypeORM** + **PostgreSQL with PostGIS** (geospatial). Read `references/db-typeorm.md`. Connection is via `DATABASE_URL` (PROD = self-hosted PostgreSQL 17 on `pg-prod-1` since 17/10/2026; Neon is a frozen copy, never use it) with host/port/user/password fallback; pool size from `DB_POOL_SIZE`.
 - **Module structure**: modules-based, one folder per domain (`auth/`, `users/`, `drivers/`, `booking/`, `wallet/`, `dispatch/`, `notification/`, `scheduler/`, `finance/`, `pricing/`, `promotions/`, …). Entities are `*.entity.ts`; cross-cutting code lives in `common/` (filters, guards, interceptors, vitals middleware), env validation in `config/`, migrations in `database/migrations/`.
 - **Auth**: **JWT + Passport**. Guards: `JwtAuthGuard`, `OptionalJwtAuthGuard`, `RolesGuard`, `DriverApprovedGuard`. Strategies: `JwtStrategy`, plus social `GoogleStrategy` / `AppleStrategy`. Role gating via `@Roles()` + `UserRole` enum; token revocation via a `tokenVersion` field on User.
 - **Validation**: global `ValidationPipe({ transform: true, whitelist: true, transformOptions: { enableImplicitConversion: true } })` in `main.ts`; DTOs use `class-validator`.
@@ -78,4 +78,4 @@ The `vigo-backend` service (NestJS 11):
   - Lint: `npm run lint` · Build: `npm run build` (`nest build`)
   - Unit tests: `npm test` (Jest) · e2e: `npm run test:e2e` · integration: `npm run test:integration` · coverage: `npm run test:cov`
   - Migrations: `npm run migration:generate -- src/database/migrations/<Name>`, `npm run migration:run`, `npm run migration:revert`; **prod** runs `npm run migration:run:prod` (`node dist/database/run-migration.js`).
-- **Deploy note**: `main.ts` refuses to boot with pending migrations (override `SKIP_MIGRATION_CHECK=true`). WebSocket scaling uses a Redis socket.io adapter; background jobs use BullMQ. See the `aws-deploy` skill for shipping.
+- **Deploy note**: `main.ts` refuses to boot with pending migrations (override `SKIP_MIGRATION_CHECK=true`). WebSocket scaling uses a Redis socket.io adapter; background jobs use BullMQ. Shipping: see the `vigo-deploy` skill and vigo-backend `docs/DEPLOY.md` (the old `aws-deploy` skill is retired).

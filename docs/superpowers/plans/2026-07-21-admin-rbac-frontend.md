@@ -1,5 +1,7 @@
 # Admin RBAC — Frontend Implementation Plan (`vigo-admin`)
 
+> ⚠ LỊCH SỬ (banner 26/10/2026): plan này viết khi `npm run build` = build + deploy PROD. Nay `build` KHÔNG deploy và merge `main` KHÔNG deploy — đường PROD hiện tại: `docs/DEPLOY.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Gate the admin UI by the caller's function permissions (hide menu items + block routes), replace the mock `/roles` page with a real role/assignment manager, and clean up the identity UI — all driven by a new `GET /admin/me`.
