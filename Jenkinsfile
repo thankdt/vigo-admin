@@ -4,10 +4,10 @@
 // Deploy-in-place: the Jenkins container mounts the parent projects dir, so
 // `docker compose` here drives the same containers as running it on the host.
 //
-// IMPORTANT: never run `npm run build` here — for this repo `build` =
-// `next build && deploy:prod`, which publishes to the production Cloudflare Pages projects.
-// Dev just (re)starts the `next dev` container; the bind-mount + dev watcher
-// pick up source changes with no rebuild.
+// DEV builds its own static image (Dockerfile: `npx next build` with the DEV API URL from
+// docker-compose.yml) and serves it via nginx :9002 — it never runs the package.json scripts.
+// PROD is NOT deployed from here: production goes only through scripts/release-prod.sh
+// (prepare, then a HUMAN runs ship) — see docs/DEPLOY.md. Merging to main deploys nothing.
 //
 // Prereqs in Jenkins (already set up for the backend, reused here):
 //   - Username+password credential `github-creds` (GitHub user + PAT, repo scope)

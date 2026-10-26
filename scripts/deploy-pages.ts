@@ -1,13 +1,15 @@
 /**
- * Triển khai bản static export (`out/`) lên 4 project Cloudflare Pages (admin / htx / kol / daily).
- * Thay `scripts/deploy-s3.ts` (S3 + CloudFront) sau khi chuyển hosting khỏi AWS — xem scripts/pages-lib.ts để biết cách
- * mỗi cổng được dựng.
+ * Lõi triển khai bản static export (`out/`) lên 4 project Cloudflare Pages (admin / htx / kol / daily) — xem
+ * scripts/pages-lib.ts để biết cách mỗi cổng được dựng. KHÔNG gọi trực tiếp để lên PROD: đường duy nhất là
+ * `scripts/release-prod.sh` (docs/DEPLOY.md) — `prepare` build trong worktree sạch rồi gọi bản `--dry-run` ở đây,
+ * `ship` (CHỈ NGƯỜI) gọi bản thật và truyền token qua env cho riêng tiến trình này.
  *
- *   npm run deploy:prod                      # = tsx scripts/deploy-pages.ts, cũng chạy ở cuối `npm run build`
  *   npx tsx scripts/deploy-pages.ts --dry-run          # chỉ dựng .pages-dist/<cổng>, KHÔNG đẩy lên
- *   npx tsx scripts/deploy-pages.ts --only=htx,kol     # chỉ các cổng liệt kê
+ *   npx tsx scripts/deploy-pages.ts --only=htx,kol     # chỉ các cổng liệt kê (vẫn phải qua ship)
  *
- * Cần trong `.env` (xem cloudflare-config.template): CLOUDFLARE_API_TOKEN (quyền Pages:Edit) + CLOUDFLARE_ACCOUNT_ID.
+ * Bản thật (không --dry-run) từ chối khi: chạy trong môi trường tác tử AI; thiếu `.release/build-info.json` do prepare
+ * ghi; sha trong đó ≠ HEAD; `out/` đổi sau prepare (release-lib.ts `checkBuildInfo`). Token CLOUDFLARE_API_TOKEN
+ * (quyền Pages:Edit) + CLOUDFLARE_ACCOUNT_ID chỉ lấy từ env (ship đọc `~/.config/vigo/cloudflare.env`) — KHÔNG còn đọc `.env`.
  * Dùng `wrangler` ghim phiên bản qua npx (không thêm vào package.json). Cloudflare thi thoảng trả lỗi nội bộ tạm thời
  * "Failed to publish your Function ... Unknown internal error" ở lần đầu (đã gặp thật 17/10/2026) — thử lại là qua, nên
  * script tự thử lại tối đa 3 lần mỗi cổng.
@@ -16,11 +18,9 @@ import { spawnSync } from 'node:child_process';
 import * as crypto from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import * as dotenv from 'dotenv';
 
 import { PORTALS, Portal, preparePortalDir, validateOut } from './pages-lib';
-
-dotenv.config();
+import { checkBuildInfo } from './release-lib';
 
 const WRANGLER = 'wrangler@4.145.0';
 const OUT_DIR = path.join(process.cwd(), 'out');
@@ -37,10 +37,14 @@ function sleep(ms: number) {
   return new Promise((r) => setTimeout(r, ms));
 }
 
+const git = (a: string[]) => (spawnSync('git', a, { encoding: 'utf8' }).stdout ?? '').trim();
+
+/** Biến mà Claude Code / tác tử AI đặt trong tiến trình con (cùng danh sách với refuse_agent_env ở release-prod.sh). */
+const AGENT_ENV_VARS = ['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_SESSION_ID', 'AI_AGENT'];
+
 function gitMessage(): string {
-  const run = (a: string[]) => spawnSync('git', a, { encoding: 'utf8' }).stdout.trim();
-  const sha = run(['rev-parse', '--short', 'HEAD']);
-  const subject = run(['log', '-1', '--format=%s']).slice(0, 200);
+  const sha = git(['rev-parse', '--short', 'HEAD']);
+  const subject = git(['log', '-1', '--format=%s']).slice(0, 200);
   return sha ? `${sha} ${subject}` : 'manual deploy';
 }
 
@@ -51,7 +55,7 @@ function sha256(buf: Buffer | string): string {
 function wranglerDeploy(portal: Portal, dir: string, message: string): { ok: boolean; url?: string; tail: string } {
   const r = spawnSync(
     'npx',
-    ['--yes', WRANGLER, 'pages', 'deploy', dir, '--project-name', portal.project, '--branch', 'main', '--commit-dirty=true', '--commit-message', message],
+    ['--yes', WRANGLER, 'pages', 'deploy', dir, '--project-name', portal.project, '--branch', 'main', '--commit-message', message],
     { encoding: 'utf8', env: { ...process.env, WRANGLER_SEND_METRICS: 'false', CI: '1' } },
   );
   const text = `${r.stdout ?? ''}\n${r.stderr ?? ''}`;
@@ -86,9 +90,21 @@ async function main() {
     console.error(`--only chứa cổng lạ. Hợp lệ: ${PORTALS.map((p) => p.key).join(', ')}`);
     process.exit(1);
   }
-  if (!dryRun && (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID)) {
-    console.error('Thiếu CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID trong .env (xem cloudflare-config.template).');
-    process.exit(1);
+  if (!dryRun) {
+    const agentVar = AGENT_ENV_VARS.find((v) => process.env[v]);
+    if (agentVar) {
+      console.error(`Từ chối đẩy PROD: đang chạy trong môi trường tác tử AI (${agentVar}). Chỉ NGƯỜI, qua \`npm run deploy:prod\` (docs/DEPLOY.md).`);
+      process.exit(1);
+    }
+    const problems = checkBuildInfo(process.cwd(), git(['rev-parse', 'HEAD']));
+    if (problems.length) {
+      console.error(`Từ chối đẩy PROD — bản build không phải do \`scripts/release-prod.sh prepare\` tạo cho HEAD này:\n  - ${problems.join('\n  - ')}`);
+      process.exit(1);
+    }
+    if (!process.env.CLOUDFLARE_API_TOKEN || !process.env.CLOUDFLARE_ACCOUNT_ID) {
+      console.error('Thiếu CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID — chạy qua `npm run deploy:prod` (ship nạp từ ~/.config/vigo/cloudflare.env).');
+      process.exit(1);
+    }
   }
 
   const message = gitMessage();
@@ -115,7 +131,10 @@ async function main() {
     if (!good) failed.push(`${portal.key}(verify)`);
   }
 
-  if (dryRun) console.log('Dry-run xong: chưa đẩy gì lên Cloudflare.');
+  if (dryRun) {
+    console.log('Dry-run xong: chưa đẩy gì lên Cloudflare.');
+    return;
+  }
   if (failed.length) {
     console.error(`THẤT BẠI: ${failed.join(', ')}`);
     process.exit(1);
