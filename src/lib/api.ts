@@ -12,6 +12,7 @@ import {
 import { ApiError, buildApiError } from '@/lib/api-error';
 import { redirectTo } from '@/lib/redirect';
 import { parseProvinceOptions } from '@/lib/province-labels';
+import { sortByNameVi } from '@/lib/vi-sort';
 import {
   buildReportParams,
   type ReportSpec,
@@ -5053,15 +5054,17 @@ export async function aiSearchPricingMacroRules(params: {
   return unwrap<AiSearchPricingMacroRulesResult>(response);
 }
 
+// Hai API dưới trả danh sách sắp theo mã ký tự (`ORDER BY …name`, DB `C.UTF-8`) nên Đ/Ô/Ơ/Ư dồn xuống cuối —
+// "Đại Từ" nằm cuối danh sách xã Thái Nguyên. Sắp lại theo tiếng Việt cho mọi màn chọn tỉnh/xã.
 export async function getPricingMacroProvinces(): Promise<ProvinceOption[]> {
   const response = await fetchWithAuth('/pricing/macro-rules/provinces');
-  return unwrap<ProvinceOption[]>(response);
+  return sortByNameVi(await unwrap<ProvinceOption[]>(response));
 }
 
 export async function getPricingMacroWards(provinceCode?: string): Promise<WardOption[]> {
   const qs = provinceCode ? `?provinceCode=${encodeURIComponent(provinceCode)}` : '';
   const response = await fetchWithAuth(`/pricing/macro-rules/wards${qs}`);
-  return unwrap<WardOption[]>(response);
+  return sortByNameVi(await unwrap<WardOption[]>(response));
 }
 
 /** Backend mới trả kèm `warnings` (cảnh báo không chặn); backend cũ không có field này. */
