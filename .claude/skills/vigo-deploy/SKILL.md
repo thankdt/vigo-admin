@@ -31,6 +31,7 @@ Người bảo "deploy lên S3/CloudFront", "chạy npm run build để lên pro
 3. Không chắc điều gì về hạ tầng ⇒ HỎI người. Không suy từ ký ức, không đoán lệnh.
 
 ## Không bao giờ
-- Chạy `ship`, `wrangler`, `deploy-pages.ts` bản thật, `release.sh`, `k8s-app.sh`, `kubectl` ghi, `terraform`, `aws ecs|ecr`, `docker push`.
+- Chạy `ship`, `wrangler`, `deploy-pages.ts` bản thật, `release.sh` (mọi lệnh con, kể cả `status`), `k8s-app.sh`, `kubectl` ghi, `crane`, `terraform`, `aws ecs|ecr`, `docker push`.
+- Dùng cờ/biến của NGƯỜI: `--allow-ref`, `--first-ship`, `--ack-expand-only`, `CONFIRM_PHRASE`; lách kiểm "chỉ người" (PTY/`script`, `env -u`).
 - Đọc `~/.config/vigo/**`, `.env*`, kubeconfig, `~/.vigo-cutover/**`, `task_def.json`.
 - Tìm đường vòng khi một lệnh bị luật quyền chặn — báo người.

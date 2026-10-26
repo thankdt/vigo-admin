@@ -24,6 +24,14 @@ test('AGENTS.md có khối "HẠ TẦNG ĐÃ ĐỔI"; CLAUDE.md nạp nó bằng
   assert.doesNotMatch(claude, /auto-deploys/);
 });
 
+test('AGENTS.md luật 2: release.sh MỌI lệnh con (kể cả status), crane, cờ của NGƯỜI; GEMINI.md trỏ AGENTS.md', () => {
+  const rule2 = read('AGENTS.md').split('\n').find((l) => l.startsWith('2. ')) ?? '';
+  for (const w of ['`release.sh` (MỌI lệnh con, kể cả `status`)', '`k8s-app.sh`', '`gh workflow run`', '`crane`', '`terraform`', '`docker push`', 'scripts/release-prod.sh ship', '`--allow-ref`', '`--first-ship`', '`--ack-expand-only`', '`CONFIRM_PHRASE`']) {
+    assert.ok(rule2.includes(w), `AGENTS.md luật 2 thiếu ${w}`);
+  }
+  assert.match(read('GEMINI.md'), /AGENTS\.md/);
+});
+
 test('docs/DEPLOY.md mô tả prepare → ship → verify', () => {
   const d = read('docs/DEPLOY.md');
   for (const w of ['release-prod.sh', 'prepare', 'ship', 'verify', 'rollback', '~/.config/vigo/cloudflare.env']) {
@@ -93,6 +101,7 @@ test('settings.json: deny chứa bộ luật bắt buộc (cú pháp ở .claude
     'Bash(*npm run deploy:prod*)',
     'Bash(*release-prod.sh*ship*)',
     'Bash(*--first-ship*)',
+    'Bash(*--allow-ref*)',
     'Bash(*wrangler*)',
     'Bash(*deploy-pages.ts*)',
     'Skill(aws-deploy)',

@@ -1,4 +1,5 @@
-# Mẫu tệp token cho `npm run deploy:prod` (= scripts/release-prod.sh ship — CHỈ NGƯỜI chạy, xem docs/DEPLOY.md).
+# Mẫu tệp token cho `npm run deploy:prod` (= scripts/release-prod.sh ship — CHỈ NGƯỜI chạy, xem docs/DEPLOY.md §4).
+# Máy có chạy AI: ĐỪNG tạo tệp này — để trống thì ship hỏi nhập token tay (không hiện, không lưu).
 # Đặt nội dung dưới vào ~/.config/vigo/cloudflare.env (NGOÀI repo) rồi: chmod 600 ~/.config/vigo/cloudflare.env
 # KHÔNG đặt vào .env của repo (deploy-pages.ts không còn đọc .env). ship đọc tệp bằng grep, không `source`.
 #

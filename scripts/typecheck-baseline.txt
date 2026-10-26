@@ -1,4 +1,5 @@
 # Lỗi `npm run typecheck` CÓ SẴN trên main (26/10/2026) — `scripts/release-prod.sh prepare` chỉ dừng khi có lỗi NGOÀI danh sách này.
+# Đo ở CẢ hai trạng thái prepare gặp (worktree sạch, 26/10/2026): trước `next build` 6 lỗi; sau build (có `.next/types`) đúng 6 lỗi đó.
 # Mỗi dòng một lỗi, dạng `<tệp>:<mã TS>` (không ghi số dòng vì xê dịch khi sửa tệp). So theo bội: 2 dòng giống nhau = 2 lỗi.
 # Sửa được lỗi nào thì XOÁ dòng tương ứng; KHÔNG thêm dòng để "cho qua" lỗi mới.
 src/app/(app)/bookings/components/macro-rule-quick-edit-dialog.tsx:TS2322

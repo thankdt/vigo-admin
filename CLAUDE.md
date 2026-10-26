@@ -2,7 +2,7 @@
 
 @AGENTS.md
 
-Luật hạ tầng/deploy cho MỌI agent nằm ở `AGENTS.md` (dòng trên nạp nó cho Claude Code; Cursor/Antigravity/Copilot đọc AGENTS.md trực tiếp). Deploy: `docs/DEPLOY.md`.
+Luật hạ tầng/deploy cho MỌI agent nằm ở `AGENTS.md` (dòng trên nạp nó cho Claude Code; Cursor/Antigravity/Copilot đọc AGENTS.md trực tiếp, `GEMINI.md` trỏ về đó [CHƯA KIỂM tài liệu Antigravity có đọc GEMINI.md/AGENTS.md]). Deploy: `docs/DEPLOY.md`.
 
 ## ⏰ Timezone: ALWAYS Vietnam Time (Asia/Ho_Chi_Minh, GMT+7 / UTC+7) — MANDATORY
 
@@ -54,9 +54,9 @@ npm run test:pages # node:test cho scripts/ (pages-lib, release-lib, release-pro
 ## Deploy note
 Toàn bộ đường DEV/PROD: **`docs/DEPLOY.md`** (nguồn duy nhất). Tóm tắt: `npm run build` chỉ build — KHÔNG còn
 deploy. Lên PROD (4 project Cloudflare Pages): `npm run release:prepare` (AI chạy được, không cần token) → NGƯỜI chạy
-`npm run deploy:prod -- --dir <worktree>` (= `scripts/release-prod.sh ship`, terminal thật + cụm xác nhận) → `verify`.
-Token Cloudflare nằm ở `~/.config/vigo/cloudflare.env` (mode 600), KHÔNG trong `.env` của repo.
-`npx tsx scripts/deploy-pages.ts --dry-run` vẫn dựng `.pages-dist/<cổng>` mà không đẩy lên.
+lệnh `ship` mà prepare in ra (`bash <worktree>/scripts/release-prod.sh ship --dir <worktree>`, terminal thật + cụm xác nhận) → `verify`.
+Token Cloudflare: người nhập tay lúc ship (khuyến nghị trên máy có chạy AI), hoặc `~/.config/vigo/cloudflare.env` (mode 600) — KHÔNG trong `.env` của repo.
+Bản `--dry-run` của `scripts/deploy-pages.ts` do `prepare` tự gọi; AI KHÔNG gọi `deploy-pages.ts` trực tiếp (deny `Bash(*deploy-pages.ts*)`).
 
 ## Gotchas
 - `next.config.ts` bật `ignoreBuildErrors` + `ignoreDuringBuilds` → **build KHÔNG chặn
