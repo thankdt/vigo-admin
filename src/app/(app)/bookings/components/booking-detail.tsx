@@ -14,7 +14,7 @@ import * as React from 'react';
 // KHÔNG dùng date-fns `format` cho mốc người dùng thấy: nó theo múi giờ TRÌNH DUYỆT.
 // Bảng /crm-queue hiển thị giờ VN, nên admin ở TZ khác sẽ thấy cùng một chuyến lệch
 // 7 tiếng giữa dòng và dialog mở từ chính dòng đó. CLAUDE.md: mọi mốc là giờ VN.
-import { formatVnDateTime } from '../../leakage-review/leakage-labels';
+import { formatVnDateTime, formatVnDateTimeFull } from '../../leakage-review/leakage-labels';
 import { Button } from '@/components/ui/button';
 import { Loader2, Car, User, Clock, Zap, CopyPlus, Store, Copy, Check } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -893,6 +893,10 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                     {booking.companionPhone && (
                       <div className="text-muted-foreground">Người đi cùng: {booking.companionPhone}</div>
                     )}
+                    <div className="text-xs text-muted-foreground mt-1 pt-1 border-t border-border/60">
+                      <span className="font-medium text-foreground/80">Thời gian đặt:</span>{' '}
+                      <span className="font-mono font-medium text-foreground">{formatVnDateTimeFull(booking.createdAt)}</span>
+                    </div>
                   </div>
                 </div>
               </Card>
@@ -927,10 +931,24 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                         <span className="text-muted-foreground">{booking.driver?.user?.phone ?? booking.driver?.phone ?? 'N/A'}</span>
                         <DriverAlertBadges driver={booking.driver} />
                       </div>
+                      <div className="text-xs text-muted-foreground mt-1 pt-1 border-t border-border/60">
+                        <span className="font-medium text-foreground/80">Thời gian nhận:</span>{' '}
+                        <span className="font-mono font-medium text-foreground">
+                          {booking.acceptedAt ? formatVnDateTimeFull(booking.acceptedAt) : 'Chưa ghi nhận'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground italic">Chưa có tài xế</p>
+                  <div className="space-y-1">
+                    <p className="text-sm text-muted-foreground italic">Chưa có tài xế</p>
+                    {booking.acceptedAt && (
+                      <div className="text-xs text-muted-foreground">
+                        <span className="font-medium text-foreground/80">Thời gian nhận:</span>{' '}
+                        <span className="font-mono font-medium text-foreground">{formatVnDateTimeFull(booking.acceptedAt)}</span>
+                      </div>
+                    )}
+                  </div>
                 )}
               </Card>
 
@@ -1173,15 +1191,21 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
               )}
 
               {/* Timestamps */}
-              <div className="grid grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-muted-foreground border-t pt-3">
                 <div>
-                  <span className="font-medium">Thời gian đặt:</span>{' '}
-                  {formatVnDateTime(booking.createdAt)}
+                  <span className="font-medium">Thời gian khách đặt:</span>{' '}
+                  <span className="font-mono text-foreground">{formatVnDateTimeFull(booking.createdAt)}</span>
+                </div>
+                <div>
+                  <span className="font-medium">Thời gian tài xế nhận:</span>{' '}
+                  <span className="font-mono text-foreground">
+                    {booking.acceptedAt ? formatVnDateTimeFull(booking.acceptedAt) : 'Chưa nhận'}
+                  </span>
                 </div>
                 {booking.updatedAt && (
                   <div>
                     <span className="font-medium">Cập nhật:</span>{' '}
-                    {formatVnDateTime(booking.updatedAt)}
+                    <span className="font-mono">{formatVnDateTimeFull(booking.updatedAt)}</span>
                   </div>
                 )}
               </div>

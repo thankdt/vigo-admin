@@ -54,12 +54,31 @@ const VN_DATETIME = new Intl.DateTimeFormat('vi-VN', {
   year: 'numeric',
 });
 
+const VN_DATETIME_FULL = new Intl.DateTimeFormat('vi-VN', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  hour: '2-digit',
+  minute: '2-digit',
+  second: '2-digit',
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour12: false,
+});
+
 /** Always renders in VN time regardless of the admin's browser timezone. */
 export function formatVnDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '—';
   return VN_DATETIME.format(d);
+}
+
+/** Always renders full HH:mm:ss dd/MM/yyyy in VN time regardless of browser timezone. */
+export function formatVnDateTimeFull(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return VN_DATETIME_FULL.format(d);
 }
 
 /** Booking addresses are untyped JSONB with inconsistent shapes. */
