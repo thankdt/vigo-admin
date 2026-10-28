@@ -765,6 +765,31 @@ export async function getRecentDriverRatings(
   };
 }
 
+export type EInvoiceStatus =
+  | 'PENDING'
+  | 'SUBMITTING'
+  | 'SUBMITTED'
+  | 'ISSUED'
+  | 'FAILED_RETRYABLE'
+  | 'FAILED_PERMANENT'
+  | 'SKIPPED';
+
+export type AdminInvoiceState = {
+  id: string;
+  status: EInvoiceStatus | string;
+  skipReason: string | null;
+  invNo: string | null;
+  invSeries?: string | null;
+  lookupCode: string | null;
+  lookupUrl: string | null;
+  issuedAt: string | null;
+  invDate: string;
+  attempts: number;
+  lastErrorCode: string | null;
+  lastError: string | null;
+  nextAttemptAt: string | null;
+};
+
 export type AdminInvoiceRow = {
   id: string;
   tripDate: string;
@@ -784,12 +809,42 @@ export type AdminInvoiceRow = {
     companyAddress?: string | null;
     invoiceEmail?: string | null;
   } | null;
+  // Trạng thái hoá đơn điện tử MISA (S6). null = chưa có dòng `invoices` (cờ MISA tắt / ngoài cửa sổ START_AT / chưa tới lượt).
+  invoice?: AdminInvoiceState | null;
 };
 
 export type AdminInvoiceListResponse = {
   data: AdminInvoiceRow[];
   meta: { page: number; limit: number; total: number; totalPages: number };
 };
+
+export type ReopenAdminInvoiceBody = {
+  reason: string;
+  confirmNotIssuedManually: boolean;
+};
+
+export type ReopenAdminInvoiceResponse = {
+  id: string;
+  status: 'PENDING';
+};
+
+/**
+ * Mở lại một dòng hoá đơn MISA đang kẹt (FAILED_RETRYABLE / FAILED_PERMANENT / SKIPPED) về PENDING.
+ * Gate bằng quyền đặc biệt `invoice-reopen` ở backend (`POST /admin/invoices/:id/reopen`).
+ */
+export async function reopenAdminInvoice(
+  invoiceId: string,
+  body: ReopenAdminInvoiceBody,
+): Promise<ReopenAdminInvoiceResponse> {
+  const response = await fetchWithAuth(`/admin/invoices/${encodeURIComponent(invoiceId)}/reopen`, {
+    method: 'POST',
+    body: JSON.stringify({
+      reason: body.reason.trim(),
+      confirmNotIssuedManually: body.confirmNotIssuedManually,
+    }),
+  });
+  return unwrap<ReopenAdminInvoiceResponse>(response);
+}
 
 // Returns a Blob of the contract PDF. Caller wires the download (object URL + click).
 export async function downloadAdminContractPdf(bookingId: string): Promise<Blob> {

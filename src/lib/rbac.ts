@@ -89,6 +89,10 @@ export const SPECIAL_FUNCTIONS: { key: string; label: string }[] = [
     key: 'driver-note-presets',
     label: 'Quản lý danh sách ghi chú tài xế (thêm / đổi tên / xoá mục)',
   },
+  {
+    key: 'invoice-reopen',
+    label: 'Mở lại hoá đơn MISA lỗi / bị bỏ qua để phát hành lại (CHỨNG TỪ THUẾ)',
+  },
 ];
 
 // 11 nhóm cấu hình = đúng CONFIG_GROUPS.id (system-config-groups.ts).
