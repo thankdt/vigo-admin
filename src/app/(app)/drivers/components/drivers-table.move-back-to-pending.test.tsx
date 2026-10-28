@@ -9,7 +9,6 @@ vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast }) }));
 
 vi.mock('@/lib/api', () => ({
   getDrivers: vi.fn(),
-  getDriversNeedsReviewCount: vi.fn(),
   getSurvivingProvinces: vi.fn(),
   moveDriverBackToPending: vi.fn(),
 }));
@@ -24,7 +23,6 @@ vi.mock('./driver-detail-dialog', async (importOriginal) => ({
 
 import {
   getDrivers,
-  getDriversNeedsReviewCount,
   getSurvivingProvinces,
   moveDriverBackToPending,
 } from '@/lib/api';
@@ -58,7 +56,6 @@ beforeEach(() => {
     data: [approvedDriver, rejectedDriver],
     meta: { total: 2, limit: 20 },
   } as never);
-  vi.mocked(getDriversNeedsReviewCount).mockResolvedValue({ count: 0 } as never);
   vi.mocked(getSurvivingProvinces).mockResolvedValue([]);
   vi.mocked(moveDriverBackToPending).mockResolvedValue({} as never);
 });

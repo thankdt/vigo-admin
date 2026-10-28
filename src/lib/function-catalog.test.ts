@@ -28,7 +28,7 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 36 menu + 11 settings + 3 đặc biệt = 50 unique keys', () => {
+  it('allFunctionKeys = 36 menu + 11 settings + 4 đặc biệt = 51 unique keys', () => {
     const keys = allFunctionKeys();
     // 2026-08-18 (CRM GĐ3-7): +crm-tickets, +crm-segments, +crm-campaigns, +crm-accounts,
     // +crm-insights (menu) và +crm-compensate (đặc biệt).
@@ -36,8 +36,9 @@ describe('buildFunctionCatalog', () => {
     // 2026-08-28: +pooling (màn quan sát gợi ý gom chuyến).
     // 2026-09-21: +loyalty-adjust (đặc biệt — cộng/trừ Vcoin tay, tách khỏi `users`).
     // 2026-10-12: +driver-note-presets (đặc biệt — thêm/đổi tên/xoá mục ghi chú tài xế).
-    expect(keys).toHaveLength(50);
-    expect(new Set(keys).size).toBe(50);
+    // 2026-10-27: +invoice-reopen (đặc biệt — mở lại hoá đơn MISA lỗi/bỏ qua, tách khỏi `invoices`).
+    expect(keys).toHaveLength(51);
+    expect(new Set(keys).size).toBe(51);
   });
 
   /**
@@ -75,6 +76,16 @@ describe('buildFunctionCatalog', () => {
     const item = special!.items.find((i) => i.key === 'loyalty-adjust');
     expect(item).toBeDefined();
     expect(item!.label).toMatch(/TIỀN THẬT/i);
+  });
+
+  // 2026-10-27: invoice-reopen tách khỏi `invoices` (quyền đọc đang ở cả tai-chinh và hop-tac-xa).
+  it('nhóm "Chức năng đặc biệt" chứa invoice-reopen, nhãn cảnh báo chứng từ thuế', () => {
+    const special = buildFunctionCatalog().find((g) => g.group.includes('đặc biệt'));
+    const item = special!.items.find((i) => i.key === 'invoice-reopen');
+    expect(item).toBeDefined();
+    expect(item!.label).toMatch(/CHỨNG TỪ THUẾ/i);
+    const menu = buildFunctionCatalog().find((g) => g.group.includes('menu'));
+    expect(menu!.items.map((i) => i.key)).not.toContain('invoice-reopen');
   });
 });
 
