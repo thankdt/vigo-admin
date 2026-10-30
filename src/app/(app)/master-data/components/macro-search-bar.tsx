@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { serviceLabel, vehicleLabel } from '@/lib/macro-bulk';
-import { EMPTY_FILTERS, hasActiveFilters, type MacroSearchFilters } from '@/lib/macro-search';
+import { EMPTY_FILTERS, MACRO_NOTE_SEARCH_MAX, hasActiveFilters, type MacroSearchFilters } from '@/lib/macro-search';
 import type { SearchTarget } from '@/lib/ward-search';
 import { cn } from '@/lib/utils';
 import { MacroPlacePicker } from './macro-place-picker';
@@ -46,6 +46,9 @@ export type MacroSearchBarProps = {
 export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError, zonesStatus, onNeedWards }: MacroSearchBarProps) {
   // «Xoá lọc» dựng lại hai ô chọn điểm để bỏ cả chữ đang gõ dở (chưa chọn) trong ô.
   const [resetKey, setResetKey] = React.useState(0);
+  // Ô điểm có chữ gõ mà chưa chọn (không lọc gì): vẫn cho «Xoá lọc» để xoá chữ đó.
+  const [originPending, setOriginPending] = React.useState(false);
+  const [destPending, setDestPending] = React.useState(false);
   const coverId = React.useId();
   const set = <K extends keyof MacroSearchFilters>(key: K, v: MacroSearchFilters[K]) => onChange({ ...value, [key]: v });
   const hasExactPlace = value.origin?.kind === 'place' || value.dest?.kind === 'place';
@@ -61,6 +64,7 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
             idPrefix="macro-search-origin"
             value={value.origin}
             onChange={(origin) => set('origin', origin)}
+            onPendingChange={setOriginPending}
             {...placeProps}
           />
         </div>
@@ -71,6 +75,7 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
             idPrefix="macro-search-dest"
             value={value.dest}
             onChange={(dest) => set('dest', dest)}
+            onPendingChange={setDestPending}
             {...placeProps}
           />
         </div>
@@ -137,13 +142,14 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
             placeholder="Ghi chú hoặc mã quy tắc (vd #123)"
             value={value.q}
             onChange={(e) => set('q', e.target.value)}
+            maxLength={MACRO_NOTE_SEARCH_MAX}
             autoComplete="off"
             // 16px trên máy cảm ứng (iOS Safari tự phóng to khi chữ nhỏ hơn).
             className="h-9 pl-8 text-base sm:text-xs md:text-xs [@media(pointer:coarse)]:text-base"
           />
         </div>
 
-        {hasActiveFilters(value) && (
+        {(hasActiveFilters(value) || originPending || destPending) && (
           <Button
             type="button"
             variant="outline"
@@ -151,6 +157,8 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
             className="h-9 text-xs"
             onClick={() => {
               setResetKey((k) => k + 1);
+              setOriginPending(false);
+              setDestPending(false);
               onChange({ ...EMPTY_FILTERS });
             }}
           >
@@ -172,7 +180,7 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
         </Label>
         <span className="text-[11px] text-slate-500">
           {hasExactPlace
-            ? '(tắt: chỉ quy tắc gắn đúng điểm đã chọn)'
+            ? 'Bật: gồm cả quy tắc cấp tỉnh / mọi nơi áp cho điểm đã chọn. Tắt: chỉ quy tắc gắn đúng điểm đã chọn (chọn cả tỉnh thì vẫn thấy mọi quy tắc cấp xã của tỉnh đó).'
             : 'Chọn một điểm cụ thể ở ô Điểm đón / Điểm đến (không phải «Tìm theo chữ») để dùng tuỳ chọn này.'}
         </span>
       </div>

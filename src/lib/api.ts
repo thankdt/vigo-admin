@@ -5140,25 +5140,49 @@ export type MacroMatchRankingRow = {
   score: number;
 };
 
-/** Một tổ hợp dịch vụ × loại xe. Máy chủ luôn trả 4 tổ hợp theo thứ tự ghép/4, ghép/7, bao xe/4, bao xe/7. */
+/**
+ * Đồng giá điểm đặc biệt (sân bay…) của một tổ hợp — hàng của bảng «Sân bay & đồng giá»: FLAT_WARD = hàng đúng
+ * phường đầu kia, FLAT_DEFAULT = hàng cả tỉnh của vùng. `price` = giá trên hàng; `unit` SEAT = một ghế, TRIP = cả xe.
+ */
+export type MacroFlatPrice = {
+  source: 'FLAT_WARD' | 'FLAT_DEFAULT';
+  rowId: number;
+  price: number;
+  unit: 'SEAT' | 'TRIP';
+};
+
+/**
+ * Một tổ hợp dịch vụ × loại xe. Máy chủ luôn trả 5 tổ hợp theo thứ tự ghép/4, ghép KHÔNG chọn xe, ghép/7, bao xe/4,
+ * bao xe/7.
+ */
 export type MacroMatchCombo = {
   serviceType: 'CARPOOL' | 'RIDE';
-  vehicleType: 'CAR_4' | 'CAR_7';
-  /** Luật máy tính giá THẬT sẽ áp; null = không luật nào (giữ giá gốc). */
+  /**
+   * null = chuyến KHÔNG chọn loại xe (ghép cho phép bỏ trống): máy giá khi đó bỏ mọi luật chỉ định loại xe, chỉ luật
+   * «Mọi loại xe» còn áp.
+   */
+  vehicleType: 'CAR_4' | 'CAR_7' | null;
+  /** Luật máy giá MACRO chọn; null = không luật nào (giữ giá gốc). Có `flatPrice` thì luật này cũng bị bỏ qua. */
   winnerRuleId: number | null;
   orientation: 'FORWARD' | 'REVERSE' | null;
   score: number | null;
   ranking: MacroMatchRankingRow[];
   /** Bảng xếp hạng bị cắt (máy chủ chỉ trả các dòng đầu). */
   truncated: boolean;
+  /**
+   * Khác null = cặp điểm trúng bảng ĐỒNG GIÁ ở tổ hợp này: giá thật lấy theo đồng giá, MỌI luật macro bị bỏ qua
+   * (`winnerRuleId`/`ranking` chỉ còn là thứ máy giá macro SẼ chọn nếu không có đồng giá). null = không có, hoặc tra lỗi
+   * (khi đó `warnings` có FLAT_PRICE_LOOKUP_FAILED). Thiếu trường (máy chủ đời trước) coi như null.
+   */
+  flatPrice?: MacroFlatPrice | null;
 };
 
 /** Một đầu như máy chủ đã hiểu: `zoneCode` khi đầu là điểm đặc biệt (`ZONE:<mã>`). */
 export type MacroMatchPlace = { provinceCode: string; wardCode: string | null; zoneCode: string | null };
 
 /**
- * `GET /pricing/macro-rules/match`. Chỉ xét luật ĐANG BẬT. Chuyến trúng bảng đồng giá thì máy giá bỏ MỌI luật — route
- * này không biết điều đó, giao diện phải tự ghi chú.
+ * `GET /pricing/macro-rules/match`. Chỉ xét luật ĐANG BẬT. Chuyến trúng bảng đồng giá thì máy giá bỏ MỌI luật — mỗi
+ * tổ hợp báo điều đó ở `flatPrice`.
  */
 export type MacroMatchResponse = {
   origin: MacroMatchPlace;
@@ -5166,7 +5190,10 @@ export type MacroMatchResponse = {
   combos: MacroMatchCombo[];
   /** Hợp mọi luật có trong các bảng xếp hạng (kèm tên xã hai đầu). */
   rules: PricingMacroRule[];
-  /** Vd 'RANKING_MISMATCH': xếp hạng lệch máy tính giá — phải báo kỹ thuật. */
+  /**
+   * 'RANKING_MISMATCH': xếp hạng lệch máy tính giá — phải báo kỹ thuật. 'FLAT_PRICE_LOOKUP_FAILED': tra bảng đồng giá
+   * lỗi ở ít nhất một tổ hợp (`flatPrice` của tổ hợp đó là null = CHƯA BIẾT). Giá trị lạ (máy chủ mới hơn) hiện nguyên.
+   */
   warnings: string[];
 };
 
@@ -5213,7 +5240,7 @@ export async function searchPricingMacroRules(params: MacroSearchParams): Promis
   return unwrap<PricingMacroRulePage>(response);
 }
 
-/** «Quy tắc đang áp» cho một chuyến đón → đến: 4 tổ hợp, mỗi tổ hợp luật thắng + bảng xếp hạng kèm lý do thua. */
+/** «Quy tắc đang áp» cho một chuyến đón → đến: 5 tổ hợp, mỗi tổ hợp luật thắng + bảng xếp hạng kèm lý do thua. */
 export async function matchPricingMacroRules(params: MacroMatchParams): Promise<MacroMatchResponse> {
   const qs = macroQueryString([
     ['originProvinceCode', params.originProvinceCode],

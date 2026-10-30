@@ -58,6 +58,7 @@ function Harness({
   onNeed,
   onSubmit,
   idPrefix,
+  onPendingChange,
 }: {
   wards?: WardOption[];
   provinces?: ProvinceOption[];
@@ -69,6 +70,7 @@ function Harness({
   onNeed?: () => void;
   onSubmit?: () => void;
   idPrefix?: string;
+  onPendingChange?: (pending: boolean) => void;
 }) {
   const [value, setValue] = React.useState<MacroPlaceFilter | null>(initial);
   const index = React.useMemo(() => buildSearchIndex({ provinces, wards, zones: ZONES }), [provinces, wards]);
@@ -92,6 +94,7 @@ function Harness({
         zonesStatus={zonesStatus}
         onNeedWards={onNeed ?? noop}
         idPrefix={idPrefix}
+        onPendingChange={onPendingChange}
       />
       <button type="submit">Lọc</button>
       <button type="button">ô khác</button>
@@ -112,6 +115,9 @@ const hint = () => screen.getByTestId('place-picker-hint-Điểm đón');
 const chip = () => screen.getByTestId('place-picker-chip-Điểm đón');
 const clearChip = () => screen.getByRole('button', { name: 'Bỏ Điểm đón' });
 const textRow = (t: string) => `Tìm theo chữ «${t}» (gồm tên huyện/tỉnh cũ)`;
+const pendingLine = () => screen.getByTestId('place-picker-pending-Điểm đón');
+const PENDING_TEXT =
+  'Chữ gõ ở ô Điểm đón chưa được chọn — danh sách CHƯA lọc theo điểm này. Chọn một dòng gợi ý hoặc «Tìm theo chữ».';
 
 beforeEach(() => {
   getWards.mockReset();
@@ -126,7 +132,7 @@ describe('MacroPlacePicker — gõ rõ ràng thì Enter/bấm là chọn', () =>
     expect(hint()).toBeEmptyDOMElement();
   });
 
-  it('"dai tu": dòng xã rồi dòng «Tìm theo chữ» ở CUỐI; dòng xã được tô sẵn; Enter chọn ĐIỂM, hiện chip, focus sang nút bỏ', async () => {
+  it('"dai tu": dòng xã rồi dòng «Tìm theo chữ» ở CUỐI; dòng xã được tô sẵn; Enter chọn ĐIỂM, hiện chip, focus vào CHIP (không vào nút bỏ)', async () => {
     const user = userEvent.setup();
     const onChange = vi.fn();
     render(<Harness onChange={onChange} />);
@@ -143,7 +149,24 @@ describe('MacroPlacePicker — gõ rõ ràng thì Enter/bấm là chọn', () =>
     expect(onChange).toHaveBeenCalledWith({ kind: 'place', endpoint: DAI_TU });
     expect(chip()).toHaveTextContent('Đại Từ (Thái Nguyên)');
     expect(queryInput()).not.toBeInTheDocument();
-    expect(clearChip()).toHaveFocus();
+    expect(chip()).toHaveFocus();
+    expect(clearChip()).not.toHaveFocus();
+    expect(chip()).toHaveAccessibleName('Điểm đón: Đại Từ (Thái Nguyên)');
+
+    // Enter lần hai (gõ đúp / giữ phím) KHÔNG bỏ lựa chọn vừa chọn
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(chip()).toHaveTextContent('Đại Từ (Thái Nguyên)');
+  });
+
+  it('bấm chọn một dòng (chuột) cũng đưa focus vào chip, không vào nút bỏ', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.type(input(), 'phu binh');
+    await user.click(screen.getByRole('option', { name: 'Phú Bình, Hà Nội' }));
+    expect(chip()).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(chip()).toHaveTextContent('Phú Bình (Hà Nội)');
   });
 
   it('bấm vào một dòng: chọn đúng dòng được bấm (kể cả khi đang hoà, không phải dòng đầu)', async () => {
@@ -486,6 +509,8 @@ describe('MacroPlacePicker — bàn phím, focus và chip', () => {
     await user.click(screen.getByRole('button', { name: 'ô khác' }));
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(input()).toHaveAttribute('aria-expanded', 'false');
+    // chữ gõ dở vẫn còn mà chưa chọn ⇒ dòng vàng cố định báo danh sách CHƯA lọc
+    expect(pendingLine()).toHaveTextContent(PENDING_TEXT);
     await user.click(input());
     expect(highlighted()).toEqual(['Đại Từ, Thái Nguyên']);
   });
@@ -555,6 +580,54 @@ describe('MacroPlacePicker — bàn phím, focus và chip', () => {
     render(<Harness wards={[]} status="error" error="x" zonesStatus="error" />);
     await user.type(input(), 'noi bai');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('MacroPlacePicker — chữ gõ dở CHƯA chọn: báo cố định + báo cha', () => {
+  it('gõ mà chưa chọn ⇒ dòng vàng HIỆN (không sr-only) cả khi đã rời ô; không nhắc lại chữ đã gõ; báo cha true', async () => {
+    const user = userEvent.setup();
+    const onPending = vi.fn();
+    render(<Harness onPendingChange={onPending} />);
+    expect(pendingLine()).toBeEmptyDOMElement();
+    expect(onPending).toHaveBeenLastCalledWith(false);
+
+    await user.type(input(), 'huyen Soc Son');
+    expect(pendingLine()).toHaveTextContent(PENDING_TEXT);
+    expect(onPending).toHaveBeenLastCalledWith(true);
+
+    await user.click(screen.getByRole('button', { name: 'ô khác' })); // rời ô
+    const line = pendingLine();
+    expect(line).toHaveTextContent(PENDING_TEXT);
+    expect(line.className).not.toContain('sr-only');
+    expect(line.className).toContain('amber');
+    expect(line).not.toHaveTextContent('Soc Son'); // vùng đọc to: không đọc lại chữ gõ
+    expect(line).toHaveAttribute('role', 'status');
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(input()).toHaveAttribute('aria-describedby', expect.stringContaining(line.id));
+  });
+
+  it('chọn một dòng / xoá chữ (× hoặc Esc) ⇒ hết dòng vàng, báo cha false; chỉ khoảng trắng thì không tính', async () => {
+    const user = userEvent.setup();
+    const onPending = vi.fn();
+    render(<Harness onPendingChange={onPending} />);
+    await user.type(input(), 'dai tu');
+    expect(onPending).toHaveBeenLastCalledWith(true);
+    await user.keyboard('{Enter}');
+    expect(screen.queryByTestId('place-picker-pending-Điểm đón')).not.toBeInTheDocument(); // chip: không còn chữ gõ
+    expect(onPending).toHaveBeenLastCalledWith(false);
+
+    await user.click(clearChip());
+    await user.type(input(), 'phu');
+    expect(pendingLine()).toHaveTextContent(PENDING_TEXT);
+    await user.click(screen.getByRole('button', { name: 'Điểm đón: xoá chữ đang gõ' }));
+    expect(pendingLine()).toBeEmptyDOMElement();
+    expect(onPending).toHaveBeenLastCalledWith(false);
+
+    await user.type(input(), 'phu{Escape}');
+    expect(pendingLine()).toBeEmptyDOMElement();
+    await user.type(input(), '   ');
+    expect(pendingLine()).toBeEmptyDOMElement();
+    expect(onPending).toHaveBeenLastCalledWith(false);
   });
 });
 

@@ -192,6 +192,13 @@ describe('MacroSearchBar — mỗi ô phát đúng giá trị mới, giữ nguy�
     expect(last(onChange).dest).toEqual({ kind: 'place', endpoint: CAU_GIAY });
     expect(cover()).toBeEnabled();
     expect(screen.queryByText(/Chọn một điểm cụ thể/)).not.toBeInTheDocument();
+    // chú thích đúng cho CẢ điểm cụ thể lẫn «Cả tỉnh» (tắt: chọn cả tỉnh vẫn thấy mọi quy tắc cấp xã của tỉnh đó)
+    expect(
+      screen.getByText(
+        'Bật: gồm cả quy tắc cấp tỉnh / mọi nơi áp cho điểm đã chọn. Tắt: chỉ quy tắc gắn đúng điểm đã chọn (chọn cả tỉnh thì vẫn thấy mọi quy tắc cấp xã của tỉnh đó).',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('(tắt: chỉ quy tắc gắn đúng điểm đã chọn)')).not.toBeInTheDocument();
     onChange.mockClear();
     await user.click(cover());
     expect(onChange).toHaveBeenCalledTimes(1);
@@ -227,6 +234,45 @@ describe('MacroSearchBar — «Xoá lọc»', () => {
   it('chỉ có khoảng trắng ở ô ghi chú thì chưa tính là đang lọc', () => {
     render(<Harness initial={{ ...EMPTY_FILTERS, q: '   ' }} />);
     expect(clearAll()).not.toBeInTheDocument();
+  });
+
+  it('CHƯA lọc gì nhưng ô điểm có chữ gõ dở (chưa chọn) ⇒ vẫn hiện «Xoá lọc»; bấm ⇒ dựng lại ô, mất chữ, hết dòng vàng', async () => {
+    const user = setup();
+    const onChange = vi.fn();
+    render(<Harness onChange={onChange} />);
+    expect(clearAll()).not.toBeInTheDocument();
+    await user.type(originInput(), 'huyen Soc Son');
+    await user.type(destInput(), 'phu');
+    await user.click(qInput()); // rời hai ô điểm
+    expect(onChange).not.toHaveBeenCalled(); // chữ gõ dở KHÔNG phải bộ lọc
+    expect(screen.getByTestId('place-picker-pending-Điểm đón')).toHaveTextContent('chưa được chọn');
+    expect(screen.getByTestId('place-picker-pending-Điểm đến')).toHaveTextContent('chưa được chọn');
+    expect(clearAll()).toBeInTheDocument();
+
+    await user.click(clearAll()!);
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(last(onChange)).toEqual(EMPTY_FILTERS);
+    expect(originInput()).toHaveValue('');
+    expect(destInput()).toHaveValue('');
+    expect(screen.getByTestId('place-picker-pending-Điểm đón')).toBeEmptyDOMElement();
+    expect(screen.getByTestId('place-picker-pending-Điểm đến')).toBeEmptyDOMElement();
+    expect(clearAll()).not.toBeInTheDocument();
+  });
+
+  it('chỉ MỘT ô điểm gõ dở cũng đủ; xoá chữ bằng tay ⇒ «Xoá lọc» ẩn lại', async () => {
+    const user = setup();
+    render(<Harness />);
+    await user.type(destInput(), 'phu');
+    expect(clearAll()).toBeInTheDocument();
+    await user.clear(destInput());
+    expect(clearAll()).not.toBeInTheDocument();
+  });
+});
+
+describe('MacroSearchBar — ô ghi chú/mã', () => {
+  it('giới hạn 200 ký tự (trần `q` của máy chủ)', () => {
+    render(<Harness />);
+    expect(qInput()).toHaveAttribute('maxLength', '200');
   });
 });
 

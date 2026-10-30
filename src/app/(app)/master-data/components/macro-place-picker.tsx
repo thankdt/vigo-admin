@@ -28,6 +28,11 @@ export type MacroPlacePickerProps = {
   onNeedWards: () => void;
   /** Tiền tố id cho ô / danh sách / dòng (mặc định tự sinh). */
   idPrefix?: string;
+  /**
+   * Báo cha khi ô có chữ gõ mà CHƯA chọn dòng nào (true) / hết (false) — như `WardQuickAdd.onPendingChange`: chữ đó
+   * KHÔNG lọc gì, cha cần biết để không coi danh sách là đã lọc (vd hiện «Xoá lọc»).
+   */
+  onPendingChange?: (pending: boolean) => void;
 };
 
 /**
@@ -42,6 +47,9 @@ export type MacroPlacePickerProps = {
  *  - Rê chuột chỉ để NHÌN, không đổi dòng mà Enter sẽ chọn. Lựa chọn bằng ↑↓ chỉ có hiệu lực cho ĐÚNG danh sách kết quả
  *    lúc đó: gõ thêm hay chỉ mục đổi (xã nạp xong) là mất.
  *  - Tự dựng ô nhập + danh sách ARIA (không dùng cmdk/Popover) — cùng lý do với ô «Tìm nhanh».
+ *  - Chữ gõ mà chưa chọn dòng nào KHÔNG lọc gì: ô hiện CỐ ĐỊNH một dòng vàng (cả khi đã rời ô) và báo cha
+ *    (`onPendingChange`) — nếu không, rời ô là danh sách không lọc mà không một lời báo.
+ *  - Chọn xong, focus nằm ở CHIP (không phải nút bỏ): Enter lần hai (gõ đúp, giữ phím) không được bỏ lựa chọn vừa chọn.
  * Danh sách gợi ý nổi đè lên nội dung bên dưới và đóng khi focus rời ô (không che bảng).
  */
 export function MacroPlacePicker({
@@ -54,20 +62,28 @@ export function MacroPlacePicker({
   zonesStatus,
   onNeedWards,
   idPrefix,
+  onPendingChange,
 }: MacroPlacePickerProps) {
   const [query, setQuery] = React.useState('');
   // Dòng chọn bằng ↑↓, gắn với ĐÚNG kết quả tìm lúc đó (xem ghi chú đầu hàm).
   const [nav, setNav] = React.useState<{ outcome: unknown; key: string } | null>(null);
   const [focused, setFocused] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
-  const clearRef = React.useRef<HTMLButtonElement>(null);
+  const chipRef = React.useRef<HTMLDivElement>(null);
   const focusAfterChange = React.useRef<'input' | 'chip' | null>(null);
   const autoId = React.useId();
   const baseId = idPrefix || autoId;
   const listId = `${baseId}-list`;
   const hintId = `${baseId}-hint`;
+  const pendingId = `${baseId}-pending`;
   const optionId = (i: number) => `${baseId}-o${i}`;
   const trimmed = query.trim();
+  // Có chữ mà chưa chọn: danh sách CHƯA lọc theo ô này.
+  const pending = !value && trimmed !== '';
+
+  React.useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
 
   const outcome = React.useMemo(() => searchTargets(index, query), [index, query]);
   const results = outcome.results;
@@ -99,7 +115,8 @@ export function MacroPlacePicker({
     const target = focusAfterChange.current;
     focusAfterChange.current = null;
     if (value) setQuery(''); // giá trị đặt từ ngoài (vd «Xoá lọc» rồi liên kết sâu): không giữ chữ cũ ẩn sau chip
-    if (target === 'chip') clearRef.current?.focus();
+    // Chọn xong: focus vào CHIP (Enter ở đó không làm gì), KHÔNG vào nút bỏ — Enter thứ hai sẽ bỏ lựa chọn vừa chọn.
+    if (target === 'chip') chipRef.current?.focus();
     else if (target === 'input') inputRef.current?.focus();
   }, [value]);
 
@@ -152,8 +169,12 @@ export function MacroPlacePicker({
     return (
       <div className="relative" data-place-picker="" {...focusHandlers}>
         <div
+          ref={chipRef}
+          tabIndex={-1}
+          role="group"
+          aria-label={`${label}: ${text}`}
           data-testid={`place-picker-chip-${label}`}
-          className="flex h-9 w-full min-w-0 items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 pl-2 pr-1 text-xs text-indigo-950"
+          className="flex h-9 w-full min-w-0 items-center gap-1.5 rounded-md border border-indigo-200 bg-indigo-50 pl-2 pr-1 text-xs text-indigo-950 focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           {value.kind === 'place' ? (
             <MapPin aria-hidden className="h-3.5 w-3.5 shrink-0 text-indigo-500" />
@@ -165,7 +186,6 @@ export function MacroPlacePicker({
             {text}
           </span>
           <button
-            ref={clearRef}
             type="button"
             aria-label={`Bỏ ${label}`}
             title={`Bỏ ${label}`}
@@ -273,7 +293,7 @@ export function MacroPlacePicker({
           aria-expanded={listOpen}
           aria-controls={listOpen ? listId : undefined}
           aria-activedescendant={listOpen && activeIndex >= 0 ? optionId(activeIndex) : undefined}
-          aria-describedby={hintId}
+          aria-describedby={`${hintId} ${pendingId}`}
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="off"
@@ -302,8 +322,9 @@ export function MacroPlacePicker({
         )}
       </div>
 
-      {/* Bấm vào phần nổi (kể cả thanh cuộn, «Thử tải lại») không được làm ô mất focus. */}
-      <div className="absolute inset-x-0 top-full z-30 mt-1 space-y-1" onMouseDown={(e) => e.preventDefault()}>
+      {/* Bấm vào phần nổi (kể cả thanh cuộn, «Thử tải lại») không được làm ô mất focus. Neo ngay dưới Ô NHẬP (top-9 = cao
+          ô nhập h-9), đè lên dòng vàng «chưa được chọn» bên dưới khi đang gõ. */}
+      <div className="absolute inset-x-0 top-9 z-30 mt-1 space-y-1" onMouseDown={(e) => e.preventDefault()}>
         {listOpen && (
           <ul
             id={listId}
@@ -398,6 +419,17 @@ export function MacroPlacePicker({
             </button>
           </div>
         )}
+      </div>
+
+      {/* CỐ ĐỊNH (cả khi đã rời ô): chữ gõ dở không lọc gì. Không nhắc lại chữ đã gõ — vùng này đọc to (aria-live). */}
+      <div
+        id={pendingId}
+        role="status"
+        data-testid={`place-picker-pending-${label}`}
+        className={pending ? 'mt-1 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800' : undefined}
+      >
+        {pending &&
+          `Chữ gõ ở ô ${label} chưa được chọn — danh sách CHƯA lọc theo điểm này. Chọn một dòng gợi ý hoặc «Tìm theo chữ».`}
       </div>
     </div>
   );

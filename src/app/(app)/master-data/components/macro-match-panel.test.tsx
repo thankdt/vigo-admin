@@ -45,6 +45,7 @@ const row = (ruleId: number, verdict: MacroMatchRankingRow['verdict'], orientati
   score: 100,
 });
 
+// Thứ tự máy chủ: ghép 4, ghép KHÔNG chọn xe, ghép 7, bao xe 4, bao xe 7.
 const COMBOS: MacroMatchCombo[] = [
   {
     serviceType: 'CARPOOL',
@@ -53,6 +54,15 @@ const COMBOS: MacroMatchCombo[] = [
     orientation: 'FORWARD',
     score: 200,
     ranking: [row(13, 'WINNER'), row(12, 'LOSES_ID'), row(14, 'LOSES_PRIORITY'), row(5, 'LOSES_SPECIFICITY'), row(7, 'IGNORED_TYPE')],
+    truncated: false,
+  },
+  {
+    serviceType: 'CARPOOL',
+    vehicleType: null,
+    winnerRuleId: 13,
+    orientation: 'FORWARD',
+    score: 200,
+    ranking: [row(13, 'WINNER'), row(12, 'LOSES_ID')],
     truncated: false,
   },
   { serviceType: 'CARPOOL', vehicleType: 'CAR_7', winnerRuleId: null, orientation: null, score: null, ranking: [], truncated: false },
@@ -64,6 +74,7 @@ const COMBOS: MacroMatchCombo[] = [
     score: 300,
     ranking: [row(3, 'WINNER', 'REVERSE'), ...Array.from({ length: 49 }, () => row(13, 'LOSES_SPECIFICITY'))],
     truncated: true,
+    flatPrice: null,
   },
   { serviceType: 'RIDE', vehicleType: 'CAR_7', winnerRuleId: 99, orientation: 'FORWARD', score: 1, ranking: [row(99, 'WINNER')], truncated: false },
 ];
@@ -111,45 +122,110 @@ describe('MacroMatchPanel — chưa đủ điều kiện tra', () => {
   });
 });
 
-describe('MacroMatchPanel — 4 tổ hợp và quy tắc thắng', () => {
-  it('READY: tiêu đề chuyến (đón → đến), đúng 4 dòng theo thứ tự máy chủ, mỗi dòng nhãn dịch vụ · xe', () => {
+describe('MacroMatchPanel — 5 tổ hợp và quy tắc thắng', () => {
+  it('READY: tiêu đề chuyến (đón → đến), đúng 5 dòng theo thứ tự máy chủ (gồm «ghép không chọn loại xe»), mỗi dòng nhãn dịch vụ · xe', () => {
     renderPanel();
     expect(screen.getByRole('heading')).toHaveTextContent('Quy tắc đang áp dụng cho chuyến Đại Từ (Thái Nguyên) → Cầu Giấy (Hà Nội)');
     const buttons = comboButtons();
-    expect(buttons).toHaveLength(4);
+    expect(buttons).toHaveLength(5);
     expect(buttons[0]).toHaveTextContent('Ghép xe · Xe 4 chỗ');
-    expect(buttons[1]).toHaveTextContent('Ghép xe · Xe 7 chỗ');
-    expect(buttons[2]).toHaveTextContent('Bao xe · Xe 4 chỗ');
-    expect(buttons[3]).toHaveTextContent('Bao xe · Xe 7 chỗ');
+    expect(buttons[1]).toHaveTextContent('Ghép xe · không chọn loại xe');
+    expect(buttons[1]).not.toHaveTextContent('Mọi loại xe');
+    expect(buttons[2]).toHaveTextContent('Ghép xe · Xe 7 chỗ');
+    expect(buttons[3]).toHaveTextContent('Bao xe · Xe 4 chỗ');
+    expect(buttons[4]).toHaveTextContent('Bao xe · Xe 7 chỗ');
   });
 
   it('quy tắc thắng: #mã + mức điều chỉnh + đường đi + ưu tiên; không có thì «giữ giá gốc»; chiều ngược ghi rõ', () => {
     renderPanel();
-    const [b0, b1, b2, b3] = comboButtons();
+    const [b0, , b2, b3, b4] = comboButtons();
     expect(b0).toHaveTextContent('#13');
     expect(b0).toHaveTextContent('+20.000 đ/ghế');
     expect(b0).toHaveTextContent('Đại Từ (Thái Nguyên) → Cầu Giấy (Hà Nội)');
     expect(b0).toHaveTextContent('ưu tiên 1');
-    expect(b1).toHaveTextContent('Không có quy tắc nào áp (giữ giá gốc)');
-    expect(b1).not.toHaveTextContent('#');
-    expect(b2).toHaveTextContent('#3');
-    expect(b2).toHaveTextContent('Ghi đè: 400.000 đ');
-    expect(b2).not.toHaveTextContent('/ghế'); // bao xe: không theo ghế
-    expect(b2).toHaveTextContent('Cầu Giấy (Hà Nội) ↔ Đại Từ (Thái Nguyên)');
-    expect(b2).toHaveTextContent('khớp chiều ngược');
-    expect(b3).toHaveTextContent('#99'); // luật thắng thiếu trong `rules`: vẫn hiện mã, không vỡ
+    expect(b2).toHaveTextContent('Không có quy tắc nào áp (giữ giá gốc)');
+    expect(b2).not.toHaveTextContent('#');
+    expect(b3).toHaveTextContent('#3');
+    expect(b3).toHaveTextContent('Ghi đè: 400.000 đ/chuyến'); // bao xe: giá CẢ XE
+    expect(b3).not.toHaveTextContent('/ghế');
+    expect(b3).toHaveTextContent('Cầu Giấy (Hà Nội) ↔ Đại Từ (Thái Nguyên)');
+    expect(b3).toHaveTextContent('khớp chiều ngược');
+    expect(b4).toHaveTextContent('#99'); // luật thắng thiếu trong `rules`: vẫn hiện mã, không vỡ
+  });
+
+  it('bao xe: mức điều chỉnh của luật «Mọi dịch vụ» ghi «/chuyến», KHÔNG «/ghế» (cả dòng tổ hợp lẫn bảng xếp hạng)', () => {
+    renderPanel({ selectedCombo: 3 });
+    // #13 là luật «Mọi dịch vụ» +20.000 (applyPerSeat): ở tổ hợp bao xe nó cộng vào giá cả xe
+    const r13 = rankingRows().find((r) => r.textContent?.startsWith('#13'))!;
+    expect(r13).toHaveTextContent('+20.000 đ/chuyến');
+    expect(r13).not.toHaveTextContent('/ghế');
+    expect(within(ranking()).queryAllByText(/\/ghế/)).toHaveLength(0);
+    // cùng luật ở tổ hợp ghép: theo ghế
+    expect(comboButtons()[0]).toHaveTextContent('+20.000 đ/ghế');
   });
 
   it('dòng đang chọn được tô (aria-pressed); bấm dòng khác gọi onSelectCombo(i)', async () => {
     const user = userEvent.setup();
     const onSelectCombo = vi.fn();
-    renderPanel({ selectedCombo: 2, onSelectCombo });
+    renderPanel({ selectedCombo: 3, onSelectCombo });
     const buttons = comboButtons();
-    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'true', 'false']);
-    expect(buttons[2].className).toContain('emerald');
+    expect(buttons.map((b) => b.getAttribute('aria-pressed'))).toEqual(['false', 'false', 'false', 'true', 'false']);
+    expect(buttons[3].className).toContain('emerald');
     expect(buttons[0].className).not.toContain('bg-emerald');
     await user.click(buttons[1]);
     expect(onSelectCombo).toHaveBeenCalledWith(1);
+  });
+});
+
+describe('MacroMatchPanel — đồng giá điểm đặc biệt (máy giá bỏ MỌI quy tắc)', () => {
+  const FLAT = { source: 'FLAT_WARD' as const, rowId: 7, price: 150000, unit: 'SEAT' as const };
+  const withFlat = (patch: Record<number, MacroMatchCombo['flatPrice']>): MacroMatchResponse => ({
+    ...MATCH,
+    combos: COMBOS.map((c, i) => (i in patch ? { ...c, flatPrice: patch[i] } : c)),
+  });
+  const BANNER =
+    'Cặp điểm này có bảng ĐỒNG GIÁ điểm đặc biệt (sân bay…): giá thật lấy theo đồng giá, mọi quy tắc macro bị bỏ qua ở các tổ hợp bên dưới đánh dấu đồng giá. Xem tab «Sân bay & đồng giá».';
+
+  it('tổ hợp có đồng giá: ghi «Đồng giá …đ/ghế (hàng #…) — mọi quy tắc bị bỏ qua», KHÔNG trình bày luật macro như đang áp', () => {
+    renderPanel({ match: withFlat({ 0: FLAT, 3: { ...FLAT, rowId: 9, price: 900000, unit: 'TRIP' } }) });
+    const [b0, b1, , b3] = comboButtons();
+    expect(b0).toHaveTextContent('Đồng giá 150.000đ/ghế (hàng #7) — mọi quy tắc bị bỏ qua');
+    expect(b0).not.toHaveTextContent('#13');
+    expect(b3).toHaveTextContent('Đồng giá 900.000đ/chuyến (hàng #9) — mọi quy tắc bị bỏ qua');
+    expect(b3).not.toHaveTextContent('#3');
+    expect(b1).toHaveTextContent('#13'); // tổ hợp không đồng giá: như cũ
+    expect(b1).not.toHaveTextContent('Đồng giá');
+  });
+
+  it('bảng xếp hạng của tổ hợp đồng giá: luật macro đứng đầu ghi «Bị đồng giá bỏ qua», không «Đang áp dụng»', () => {
+    renderPanel({ match: withFlat({ 0: FLAT }), selectedCombo: 0 });
+    const rows = rankingRows();
+    expect(rows[0]).toHaveTextContent('#13');
+    expect(rows[0]).toHaveTextContent('Bị đồng giá bỏ qua');
+    expect(rows[0]).not.toHaveTextContent('Đang áp dụng');
+    expect(rows[1]).toHaveTextContent('Thua: mã nhỏ hơn');
+  });
+
+  it('có tổ hợp đồng giá ⇒ băng vàng nổi bật đầu khung trỏ sang tab «Sân bay & đồng giá»; không có ⇒ không băng', () => {
+    const { unmount } = renderPanel({ match: withFlat({ 4: { ...FLAT, unit: 'TRIP' } }) });
+    const banner = screen.getByTestId('macro-match-flat-banner');
+    expect(banner).toHaveTextContent(BANNER);
+    expect(banner.className).toContain('amber');
+    // nằm ngay dưới tiêu đề, TRƯỚC danh sách tổ hợp
+    expect(screen.getByRole('heading').nextElementSibling).toBe(banner);
+    unmount();
+    renderPanel();
+    expect(screen.queryByTestId('macro-match-flat-banner')).not.toBeInTheDocument();
+  });
+
+  it('FLAT_PRICE_LOOKUP_FAILED ⇒ câu vàng «Không kiểm được bảng đồng giá…» (không hiện mã thô)', () => {
+    renderPanel({ match: { ...MATCH, warnings: ['FLAT_PRICE_LOOKUP_FAILED'] } });
+    const line = screen.getByTestId('macro-match-flat-unknown');
+    expect(line).toHaveTextContent(
+      'Không kiểm được bảng đồng giá — nếu cặp này có đồng giá thì mọi quy tắc đều bị bỏ qua.',
+    );
+    expect(line.className).toContain('amber');
+    expect(screen.getByTestId('macro-match-panel')).not.toHaveTextContent('Cảnh báo từ máy chủ');
   });
 });
 
@@ -178,20 +254,22 @@ describe('MacroMatchPanel — vì sao các quy tắc khác thua (tổ hợp đan
     const { rerender } = renderPanel({ selectedCombo: 0 });
     expect(ranking()).toHaveAccessibleName('Thứ tự xét quy tắc — Ghép xe · Xe 4 chỗ');
     expect(screen.getAllByRole('list', { name: /^Thứ tự xét quy tắc/ })).toHaveLength(1);
-    rerender(<MacroMatchPanel {...base} selectedCombo={3} />);
+    rerender(<MacroMatchPanel {...base} selectedCombo={4} />);
     expect(ranking()).toHaveAccessibleName('Thứ tự xét quy tắc — Bao xe · Xe 7 chỗ');
     expect(rankingRows()).toHaveLength(1);
     expect(rankingRows()[0]).toHaveTextContent('#99');
+    rerender(<MacroMatchPanel {...base} selectedCombo={1} />);
+    expect(ranking()).toHaveAccessibleName('Thứ tự xét quy tắc — Ghép xe · không chọn loại xe');
   });
 
   it('tổ hợp không có quy tắc nào khớp: nói rõ, không có danh sách rỗng', () => {
-    renderPanel({ selectedCombo: 1 });
+    renderPanel({ selectedCombo: 2 });
     expect(screen.queryByRole('list', { name: /^Thứ tự xét quy tắc/ })).not.toBeInTheDocument();
     expect(screen.getByText('Không có quy tắc đang bật nào khớp chuyến này.')).toBeInTheDocument();
   });
 
   it('danh sách bị cắt: báo «còn nữa, chỉ hiện 50 dòng đầu»', () => {
-    renderPanel({ selectedCombo: 2 });
+    renderPanel({ selectedCombo: 3 });
     expect(rankingRows()).toHaveLength(50);
     expect(screen.getByTestId('macro-match-panel')).toHaveTextContent('Danh sách còn nữa, chỉ hiện 50 dòng đầu.');
   });
@@ -209,11 +287,12 @@ describe('MacroMatchPanel — vì sao các quy tắc khác thua (tổ hợp đan
 });
 
 describe('MacroMatchPanel — ghi chú, cảnh báo, đang tải, lỗi', () => {
-  it('chú thích cố định: chỉ quy tắc đang bật; chuyến trúng đồng giá thì bỏ mọi quy tắc', () => {
+  it('chú thích cố định: chỉ quy tắc đang bật; chuyến trúng đồng giá thì bỏ mọi quy tắc; hiệu lực trong 30 giây', () => {
     renderPanel();
     const panel = screen.getByTestId('macro-match-panel');
     expect(panel).toHaveTextContent('Chỉ tính quy tắc đang bật.');
     expect(panel).toHaveTextContent('Chuyến trúng bảng đồng giá thì mọi quy tắc đều bị bỏ.');
+    expect(panel).toHaveTextContent('Thay đổi quy tắc có hiệu lực trong vòng 30 giây.');
   });
 
   it('PROVINCE_ONLY: nhắc chọn xã/phường nhưng VẪN hiện kết quả', () => {
@@ -221,7 +300,7 @@ describe('MacroMatchPanel — ghi chú, cảnh báo, đang tải, lỗi', () => 
     expect(screen.getByTestId('macro-match-panel')).toHaveTextContent(
       'Bạn chọn cả tỉnh nên quy tắc cấp xã không được xét — chọn xã/phường để biết chính xác.',
     );
-    expect(comboButtons()).toHaveLength(4);
+    expect(comboButtons()).toHaveLength(5);
   });
 
   it('READY thì không có câu nhắc của PROVINCE_ONLY/TEXT_SIDE', () => {
@@ -251,8 +330,8 @@ describe('MacroMatchPanel — ghi chú, cảnh báo, đang tải, lỗi', () => 
   });
 
   it('lỗi: chữ đỏ, KHÔNG hiện kết quả (có thể đã cũ)', () => {
-    renderPanel({ error: 'Máy chủ chưa hỗ trợ tìm kiếm mới (cần cập nhật backend).' });
-    const err = screen.getByText('Máy chủ chưa hỗ trợ tìm kiếm mới (cần cập nhật backend).');
+    renderPanel({ error: 'Máy chủ chưa hỗ trợ tra quy tắc đang áp dụng (cần cập nhật backend).' });
+    const err = screen.getByText('Máy chủ chưa hỗ trợ tra quy tắc đang áp dụng (cần cập nhật backend).');
     expect(err.className).toContain('text-red');
     expect(comboButtons()).toHaveLength(0);
   });

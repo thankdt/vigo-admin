@@ -3,13 +3,19 @@ import type { MacroMatchCombo, MacroMatchVerdict } from './api';
 import { serviceLabel, vehicleLabel, type MacroEndpoint } from './macro-bulk';
 import {
   EMPTY_FILTERS,
+  MACRO_NOTE_SEARCH_MAX,
   MACRO_TEXT_SEARCH_MAX,
   comboLabel,
+  comboMatchesFilters,
+  comboShortLabel,
+  defaultComboIndex,
+  flatPriceText,
   hasActiveFilters,
   macroRuleAdjustmentText,
   macroRuleEndText,
   macroRuleRouteText,
   matchAvailability,
+  noteOnlyQuery,
   placeFilterLabel,
   toMatchParams,
   toSearchParams,
@@ -165,7 +171,7 @@ describe('toMatchParams / matchAvailability — «đang áp dụng» chỉ khi C
     });
   });
 
-  it('dịch vụ / xe / bật-tắt / ghi chú / cover KHÔNG ảnh hưởng tra «đang áp» (máy chủ trả đủ 4 tổ hợp)', () => {
+  it('dịch vụ / xe / bật-tắt / ghi chú / cover KHÔNG ảnh hưởng tra «đang áp» (máy chủ trả đủ 5 tổ hợp)', () => {
     const base = f({ origin: place(DAI_TU), dest: place(CAU_GIAY) });
     const noisy = { ...base, serviceType: 'RIDE' as const, vehicleType: 'CAR_7' as const, isActive: 'false' as const, q: '#1', cover: false };
     expect(toMatchParams(noisy)).toStrictEqual(toMatchParams(base));
@@ -229,6 +235,109 @@ describe('nhãn', () => {
     expect(comboLabel(combo('CARPOOL', 'CAR_7'))).toBe('Ghép xe · Xe 7 chỗ');
     expect(comboLabel(combo('RIDE', 'CAR_4'))).toBe('Bao xe · Xe 4 chỗ');
     expect(comboLabel(combo('RIDE', 'CAR_7'))).toBe(`${serviceLabel('RIDE')} · ${vehicleLabel('CAR_7')}`);
+    // chuyến KHÔNG chọn loại xe: không phải «Mọi loại xe» (luật chỉ định xe bị bỏ ở tổ hợp này)
+    expect(comboLabel(combo('CARPOOL', null))).toBe('Ghép xe · không chọn loại xe');
+  });
+
+  it('comboShortLabel (nhãn «ĐANG ÁP · …» trong bảng): ngắn, đủ 5 tổ hợp', () => {
+    const c = (serviceType: MacroMatchCombo['serviceType'], vehicleType: MacroMatchCombo['vehicleType']) => ({ serviceType, vehicleType });
+    expect(comboShortLabel(c('CARPOOL', 'CAR_4'))).toBe('Ghép 4 chỗ');
+    expect(comboShortLabel(c('CARPOOL', null))).toBe('Ghép, không chọn xe');
+    expect(comboShortLabel(c('CARPOOL', 'CAR_7'))).toBe('Ghép 7 chỗ');
+    expect(comboShortLabel(c('RIDE', 'CAR_4'))).toBe('Bao xe 4 chỗ');
+    expect(comboShortLabel(c('RIDE', 'CAR_7'))).toBe('Bao xe 7 chỗ');
+  });
+
+  it('flatPriceText: giá định dạng vi-VN + đơn vị ghế/chuyến + mã hàng đồng giá', () => {
+    expect(flatPriceText({ source: 'FLAT_WARD', rowId: 7, price: 150000, unit: 'SEAT' })).toBe('Đồng giá 150.000đ/ghế (hàng #7)');
+    expect(flatPriceText({ source: 'FLAT_DEFAULT', rowId: 12, price: 1250000, unit: 'TRIP' })).toBe(
+      'Đồng giá 1.250.000đ/chuyến (hàng #12)',
+    );
+  });
+
+  it('MACRO_NOTE_SEARCH_MAX khớp trần 200 ký tự của ô ghi chú/mã (`q`) ở máy chủ', () => {
+    expect(MACRO_NOTE_SEARCH_MAX).toBe(200);
+  });
+});
+
+describe('tổ hợp mặc định theo bộ lọc Dịch vụ / Loại xe (khung «đang áp» + nhãn trong bảng)', () => {
+  const combo = (
+    serviceType: MacroMatchCombo['serviceType'],
+    vehicleType: MacroMatchCombo['vehicleType'],
+    winnerRuleId: number | null,
+  ): MacroMatchCombo => ({
+    serviceType,
+    vehicleType,
+    winnerRuleId,
+    orientation: winnerRuleId === null ? null : 'FORWARD',
+    score: winnerRuleId === null ? null : 200,
+    ranking: [],
+    truncated: false,
+    flatPrice: null,
+  });
+  // Thứ tự máy chủ: ghép 4, ghép không chọn xe, ghép 7, bao xe 4, bao xe 7.
+  const FIVE = [
+    combo('CARPOOL', 'CAR_4', 10),
+    combo('CARPOOL', null, 10),
+    combo('CARPOOL', 'CAR_7', 10),
+    combo('RIDE', 'CAR_4', 10),
+    combo('RIDE', 'CAR_7', 11),
+  ];
+  const sv = (serviceType: MacroSearchFilters['serviceType'], vehicleType: MacroSearchFilters['vehicleType']) => ({
+    serviceType,
+    vehicleType,
+  });
+
+  it('comboMatchesFilters: ô trống = mọi giá trị (Loại xe trống gồm cả «không chọn loại xe»); có giá trị = đúng giá trị đó', () => {
+    expect(FIVE.map((c) => comboMatchesFilters(c, sv('', '')))).toEqual([true, true, true, true, true]);
+    expect(FIVE.map((c) => comboMatchesFilters(c, sv('CARPOOL', '')))).toEqual([true, true, true, false, false]);
+    expect(FIVE.map((c) => comboMatchesFilters(c, sv('RIDE', '')))).toEqual([false, false, false, true, true]);
+    expect(FIVE.map((c) => comboMatchesFilters(c, sv('', 'CAR_4')))).toEqual([true, false, false, true, false]);
+    expect(FIVE.map((c) => comboMatchesFilters(c, sv('', 'CAR_7')))).toEqual([false, false, true, false, true]);
+    expect(FIVE.map((c) => comboMatchesFilters(c, sv('RIDE', 'CAR_7')))).toEqual([false, false, false, false, true]);
+  });
+
+  it('defaultComboIndex: tổ hợp ĐẦU khớp bộ lọc VÀ có luật thắng (Bao xe + Xe 7 chỗ ⇒ bao xe/7, KHÔNG phải ghép/4)', () => {
+    expect(defaultComboIndex(FIVE, sv('', ''))).toBe(0);
+    expect(defaultComboIndex(FIVE, sv('RIDE', 'CAR_7'))).toBe(4);
+    expect(defaultComboIndex(FIVE, sv('RIDE', ''))).toBe(3);
+    expect(defaultComboIndex(FIVE, sv('', 'CAR_7'))).toBe(2);
+  });
+
+  it('defaultComboIndex: bỏ qua tổ hợp không có luật thắng; khớp mà không ai thắng ⇒ tổ hợp khớp đầu tiên; rỗng ⇒ 0', () => {
+    const someEmpty = [
+      combo('CARPOOL', 'CAR_4', null),
+      combo('CARPOOL', null, null),
+      combo('CARPOOL', 'CAR_7', 13),
+      combo('RIDE', 'CAR_4', null),
+      combo('RIDE', 'CAR_7', null),
+    ];
+    expect(defaultComboIndex(someEmpty, sv('', ''))).toBe(2);
+    expect(defaultComboIndex(someEmpty, sv('RIDE', ''))).toBe(3); // không ai thắng ⇒ tổ hợp khớp đầu tiên
+    expect(defaultComboIndex(someEmpty, sv('RIDE', 'CAR_7'))).toBe(4);
+    expect(defaultComboIndex([], sv('RIDE', 'CAR_7'))).toBe(0);
+    expect(defaultComboIndex(null, sv('', ''))).toBe(0);
+    // không tổ hợp nào khớp (máy chủ lạ) ⇒ 0, không vỡ
+    expect(defaultComboIndex([combo('CARPOOL', 'CAR_4', 1)], sv('RIDE', ''))).toBe(0);
+  });
+});
+
+describe('noteOnlyQuery — chỉ lọc ghi chú/mã ⇒ route danh sách cũ (noteSearch)', () => {
+  it('chỉ có ô ghi chú/mã ⇒ chữ đã cắt; «gồm cấp tỉnh/mọi nơi» không tính là lọc', () => {
+    expect(noteOnlyQuery(f({ q: ' #12 ' }))).toBe('#12');
+    expect(noteOnlyQuery(f({ q: 'dịp lễ', cover: false }))).toBe('dịp lễ');
+  });
+
+  it('ô ghi chú trống/khoảng trắng, hoặc có thêm BẤT KỲ ô lọc nào khác ⇒ null (đi tìm kiếm mới / danh sách thường)', () => {
+    expect(noteOnlyQuery(f({}))).toBeNull();
+    expect(noteOnlyQuery(f({ q: '   ' }))).toBeNull();
+    expect(noteOnlyQuery(f({ q: '#12', origin: place(DAI_TU) }))).toBeNull();
+    expect(noteOnlyQuery(f({ q: '#12', dest: text('Đông Anh') }))).toBeNull();
+    expect(noteOnlyQuery(f({ q: '#12', serviceType: 'RIDE' }))).toBeNull();
+    expect(noteOnlyQuery(f({ q: '#12', vehicleType: 'CAR_7' }))).toBeNull();
+    expect(noteOnlyQuery(f({ q: '#12', isActive: 'false' }))).toBeNull();
+    // đầu theo chữ chỉ có khoảng trắng = không lọc ⇒ vẫn là «chỉ ghi chú»
+    expect(noteOnlyQuery(f({ q: '#12', dest: text('  ') }))).toBe('#12');
   });
 
   it('placeFilterLabel: điểm ⇒ nhãn điểm; chữ ⇒ «Chữ: … (gồm tên cũ)»; trống ⇒ chuỗi rỗng', () => {
@@ -285,5 +394,19 @@ describe('mô tả một quy tắc trong khung «đang áp dụng»', () => {
     expect(macroRuleAdjustmentText(rule({ adjustmentType: 'FIXED_PRICE', adjustmentValue: 300000, applyPerSeat: false }))).toBe(
       'Ghi đè: 300.000 đ',
     );
+  });
+
+  it('macroRuleAdjustmentText theo TỔ HỢP: bao xe ⇒ «/chuyến» (không «/ghế»), ghép ⇒ «/ghế» (máy giá cộng trên giá 1 ghế / cả xe)', () => {
+    const all = rule({ adjustmentValue: 30000 }); // luật «Mọi dịch vụ»
+    expect(macroRuleAdjustmentText(all, 'RIDE')).toBe('+30.000 đ/chuyến');
+    expect(macroRuleAdjustmentText(all, 'CARPOOL')).toBe('+30.000 đ/ghế');
+    const fixed = rule({ adjustmentType: 'FIXED_PRICE', adjustmentValue: 400000 });
+    expect(macroRuleAdjustmentText(fixed, 'RIDE')).toBe('Ghi đè: 400.000 đ/chuyến');
+    expect(macroRuleAdjustmentText(fixed, 'CARPOOL')).toBe('Ghi đè: 400.000 đ/ghế');
+    // cờ applyPerSeat không còn tác dụng ở máy giá: ghép vẫn theo ghế
+    expect(macroRuleAdjustmentText(rule({ adjustmentValue: -5000, applyPerSeat: false }), 'CARPOOL')).toBe('-5.000 đ/ghế');
+    // phần trăm / loại cũ: không có đơn vị
+    expect(macroRuleAdjustmentText(rule({ adjustmentType: 'PERCENTAGE', adjustmentValue: 5 }), 'RIDE')).toBe('+5%');
+    expect(macroRuleAdjustmentText(rule({ adjustmentType: 'MIN_FLOOR', adjustmentValue: 50000 }), 'RIDE')).toBe('Sàn: 50.000 đ');
   });
 });

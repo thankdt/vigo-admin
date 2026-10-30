@@ -1,4 +1,4 @@
-import type { MacroMatchCombo, MacroMatchParams, MacroMatchVerdict, MacroSearchParams } from './api';
+import type { MacroFlatPrice, MacroMatchCombo, MacroMatchParams, MacroMatchVerdict, MacroSearchParams } from './api';
 import {
   MACRO_ZONE_PREFIX,
   formServiceValue,
@@ -22,6 +22,9 @@ import type { PricingMacroRule } from './types';
 
 /** Trần độ dài chữ tìm theo tên của máy chủ (`SEARCH_TEXT_MAX`); dài hơn ⇒ 400. */
 export const MACRO_TEXT_SEARCH_MAX = 100;
+
+/** Trần độ dài ô «Ghi chú hoặc mã quy tắc» (`q`) của `GET …/search`; dài hơn ⇒ 400. */
+export const MACRO_NOTE_SEARCH_MAX = 200;
 
 export type MacroPlaceFilter = { kind: 'place'; endpoint: MacroEndpoint } | { kind: 'text'; text: string };
 
@@ -85,6 +88,18 @@ function putSide(
 }
 
 /**
+ * Bộ lọc CHỈ có ô ghi chú/mã (không điểm, dịch vụ, xe, bật/tắt) ⇒ chữ đã cắt; còn lại ⇒ null. Trang dùng route danh
+ * sách CŨ (`getPricingMacroRulesPage({ noteSearch })`, cùng nghĩa `#mã`) cho trường hợp này: liên kết sâu `?ruleId=`
+ * từ trang đơn vẫn chạy trên backend chưa có `GET …/search`.
+ */
+export function noteOnlyQuery(f: MacroSearchFilters): string | null {
+  const q = f.q.trim();
+  if (!q) return null;
+  if (isActiveSide(f.origin) || isActiveSide(f.dest) || f.serviceType || f.vehicleType || f.isActive) return null;
+  return q;
+}
+
+/**
  * Bộ lọc → tham số tìm kiếm. Mỗi đầu: điểm ⇒ mã tỉnh (+ mã xã nếu có); chữ ⇒ `originSearch`/`destSearch` đã cắt.
  * Ô trống không gửi. `cover` chỉ gửi khi bật VÀ có ít nhất một đầu là điểm cụ thể (máy chủ chỉ áp nó cho đầu theo mã).
  */
@@ -103,7 +118,7 @@ export function toSearchParams(f: MacroSearchFilters, paging: { page: number; li
 
 /**
  * Tham số tra «quy tắc đang áp» — chỉ khi CẢ HAI đầu là điểm cụ thể có mã tỉnh (máy chủ bắt buộc tỉnh). Dịch vụ / xe /
- * bật-tắt / ghi chú không dùng: máy chủ luôn trả đủ 4 tổ hợp và chỉ xét luật đang bật.
+ * bật-tắt / ghi chú không dùng: máy chủ luôn trả đủ 5 tổ hợp và chỉ xét luật đang bật.
  */
 export function toMatchParams(f: MacroSearchFilters): MacroMatchParams | null {
   if (!isExactPlace(f.origin) || !isExactPlace(f.dest)) return null;
@@ -153,9 +168,59 @@ export function verdictLabel(verdict: MacroMatchVerdict): string {
   return VERDICT_LABEL[verdict] ?? String(verdict);
 }
 
-/** «Ghép xe · Xe 4 chỗ» — dùng ĐÚNG nhãn dịch vụ / loại xe của bảng quy tắc. */
+/**
+ * «Ghép xe · Xe 4 chỗ» — dùng ĐÚNG nhãn dịch vụ / loại xe của bảng quy tắc. Tổ hợp không chọn loại xe (null):
+ * «Ghép xe · không chọn loại xe» (KHÔNG phải «Mọi loại xe»: luật chỉ định xe bị bỏ ở tổ hợp này).
+ */
 export function comboLabel(combo: Pick<MacroMatchCombo, 'serviceType' | 'vehicleType'>): string {
-  return `${serviceLabel(combo.serviceType)} · ${vehicleLabel(combo.vehicleType)}`;
+  const vehicle = combo.vehicleType ? vehicleLabel(combo.vehicleType) : 'không chọn loại xe';
+  return `${serviceLabel(combo.serviceType)} · ${vehicle}`;
+}
+
+const SHORT_SERVICE: Record<string, string> = { CARPOOL: 'Ghép', RIDE: 'Bao xe' };
+
+/** Nhãn ngắn cho nhãn «ĐANG ÁP · …» trong bảng: «Ghép 4 chỗ», «Ghép, không chọn xe», «Bao xe 7 chỗ». */
+export function comboShortLabel(combo: Pick<MacroMatchCombo, 'serviceType' | 'vehicleType'>): string {
+  const service = SHORT_SERVICE[combo.serviceType] ?? serviceLabel(combo.serviceType);
+  if (!combo.vehicleType) return `${service}, không chọn xe`;
+  return `${service} ${vehicleLabel(combo.vehicleType).replace(/^Xe /, '')}`;
+}
+
+/**
+ * Tổ hợp có khớp ô Dịch vụ / Loại xe của thanh tìm không. Ô trống = mọi giá trị; ô Loại xe trống gồm cả tổ hợp
+ * «không chọn loại xe» (null), còn «Xe 4 chỗ» / «Xe 7 chỗ» chỉ khớp đúng loại đó.
+ */
+export function comboMatchesFilters(
+  combo: Pick<MacroMatchCombo, 'serviceType' | 'vehicleType'>,
+  filters: Pick<MacroSearchFilters, 'serviceType' | 'vehicleType'>,
+): boolean {
+  if (filters.serviceType && combo.serviceType !== filters.serviceType) return false;
+  if (filters.vehicleType && combo.vehicleType !== filters.vehicleType) return false;
+  return true;
+}
+
+/**
+ * Tổ hợp chọn sẵn ở khung «đang áp» (và là tổ hợp bảng tô «ĐANG ÁP»): tổ hợp ĐẦU TIÊN khớp ô Dịch vụ / Loại xe VÀ có
+ * luật thắng; không có ⇒ tổ hợp đầu tiên khớp bộ lọc; không tổ hợp nào khớp ⇒ 0. Bỏ qua bộ lọc là tô nhầm luật: lọc
+ * «Bao xe» + «Xe 7 chỗ» mà bảng tô luật thắng của «Ghép xe · Xe 4 chỗ».
+ */
+export function defaultComboIndex(
+  combos: readonly MacroMatchCombo[] | null | undefined,
+  filters: Pick<MacroSearchFilters, 'serviceType' | 'vehicleType'>,
+): number {
+  const list = combos ?? [];
+  const withWinner = list.findIndex(
+    (c) => comboMatchesFilters(c, filters) && c.winnerRuleId !== null && c.winnerRuleId !== undefined,
+  );
+  if (withWinner >= 0) return withWinner;
+  const matching = list.findIndex((c) => comboMatchesFilters(c, filters));
+  return matching >= 0 ? matching : 0;
+}
+
+/** «Đồng giá 150.000đ/ghế (hàng #7)» — một hàng của bảng đồng giá điểm đặc biệt. */
+export function flatPriceText(fp: MacroFlatPrice): string {
+  const price = new Intl.NumberFormat('vi-VN').format(Number(fp.price));
+  return `Đồng giá ${price}đ/${fp.unit === 'TRIP' ? 'chuyến' : 'ghế'} (hàng #${fp.rowId})`;
 }
 
 /** Nhãn một đầu đã chọn: điểm ⇒ nhãn của điểm; chữ ⇒ «Chữ: … (gồm tên cũ)»; chưa chọn ⇒ ''. */
@@ -191,10 +256,22 @@ export function macroRuleRouteText(rule: PricingMacroRule, provinceName: (code: 
 }
 
 /**
- * Mức điều chỉnh như cột "Điều chỉnh" của bảng: theo GHẾ khi `applyPerSeat` và luật không chỉ dành cho bao xe.
- * `adjustmentValue` có thể về dạng chuỗi (cột numeric) ⇒ đổi số trước khi định dạng.
+ * Mức điều chỉnh của một luật. `adjustmentValue` có thể về dạng chuỗi (cột numeric) ⇒ đổi số trước khi định dạng.
+ *  - Có `comboService` (khung «đang áp»: luật đang xét cho MỘT tổ hợp): theo đúng máy giá — điều chỉnh cộng vào giá MỘT
+ *    ghế (ghép ⇒ «/ghế») hoặc giá CẢ XE (bao xe ⇒ «/chuyến»), cờ `applyPerSeat` không còn tác dụng. Luật «Mọi dịch vụ»
+ *    +30.000 ở tổ hợp bao xe là +30.000 đ cho cả chuyến, không phải mỗi ghế.
+ *  - Không có: như cột "Điều chỉnh" của bảng — theo GHẾ khi `applyPerSeat` và luật không chỉ dành cho bao xe.
  */
-export function macroRuleAdjustmentText(rule: Pick<PricingMacroRule, 'adjustmentType' | 'adjustmentValue' | 'applyPerSeat' | 'serviceType'>): string {
+export function macroRuleAdjustmentText(
+  rule: Pick<PricingMacroRule, 'adjustmentType' | 'adjustmentValue' | 'applyPerSeat' | 'serviceType'>,
+  comboService?: MacroMatchCombo['serviceType'],
+): string {
+  const value = Number(rule.adjustmentValue);
+  if (comboService) {
+    const text = formatMacroAdjustment(rule.adjustmentType, value, comboService === 'CARPOOL');
+    const isAmount = rule.adjustmentType === 'DELTA_AMOUNT' || rule.adjustmentType === 'FIXED_PRICE';
+    return comboService === 'RIDE' && isAmount ? `${text}/chuyến` : text;
+  }
   const perSeat = Boolean(rule.applyPerSeat) && formServiceValue(rule.serviceType) !== 'CONVENIENT';
-  return formatMacroAdjustment(rule.adjustmentType, Number(rule.adjustmentValue), perSeat);
+  return formatMacroAdjustment(rule.adjustmentType, value, perSeat);
 }
