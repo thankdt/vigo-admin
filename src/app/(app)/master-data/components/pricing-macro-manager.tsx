@@ -31,12 +31,12 @@ import {
   RefreshCw,
   Compass,
   ArrowLeftRight,
-  Sparkles,
-  X,
 } from 'lucide-react';
 import {
   getPricingMacroRulesPage,
-  aiSearchPricingMacroRules,
+  searchPricingMacroRules,
+  matchPricingMacroRules,
+  isMacroSearchUnsupported,
   getPricingMacroProvinces,
   getSpecialZones,
   getPricingMacroWards,
@@ -44,7 +44,27 @@ import {
   deletePricingMacroRule,
   bulkDeletePricingMacroRules,
   getPricingMacroBandWarnings,
+  type MacroMatchParams,
+  type MacroMatchResponse,
+  type MacroMatchVerdict,
+  type MacroSearchParams,
 } from '@/lib/api';
+import {
+  EMPTY_FILTERS,
+  comboLabel,
+  comboMatchesFilters,
+  comboShortLabel,
+  defaultComboIndex,
+  hasActiveFilters,
+  matchAvailability,
+  noteOnlyQuery,
+  placeFilterLabel,
+  toMatchParams,
+  toSearchParams,
+  verdictLabel,
+  type MacroSearchFilters,
+} from '@/lib/macro-search';
+import { useMacroPlaceIndex } from '@/lib/use-macro-place-index';
 import {
   FORM_SERVICE_VALUES,
   FORM_VEHICLE_VALUES,
@@ -67,6 +87,9 @@ import {
   vehicleLabel,
 } from '@/lib/macro-bulk';
 import { MacroBulkDialog } from './macro-bulk-dialog';
+import { MacroMatchPanel } from './macro-match-panel';
+import { MacroSearchBar } from './macro-search-bar';
+import type { ZonesStatus } from './ward-quick-add';
 import type {
   PricingMacroRule,
   ProvinceOption,
@@ -80,6 +103,28 @@ import { cn } from '@/lib/utils';
 /** Số dòng mỗi trang: admin chọn được; mặc định 50. */
 const PAGE_SIZE_OPTIONS = [20, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
+
+/** Ô «Ghi chú hoặc mã quy tắc» chỉ gọi máy chủ khi đã ngừng gõ chừng này (ms); các ô lọc khác áp ngay. */
+const Q_DEBOUNCE_MS = 300;
+
+/**
+ * Máy chủ CŨ chưa có `GET …/search` / `…/match` (admin mới phát hành trước backend mới). Bảng khi đó KHÔNG hiện dòng
+ * nào: một danh sách không lọc nằm dưới thanh tìm đang lọc trông như kết quả thật.
+ */
+const SEARCH_UNSUPPORTED_TEXT =
+  'Máy chủ chưa hỗ trợ tìm kiếm mới (cần cập nhật backend) nên chưa có kết quả tìm để hiện — bấm «Xoá lọc» để xem toàn bộ danh sách.';
+/** Như trên, cho khung «Quy tắc đang áp dụng» (`GET …/match`). */
+const MATCH_UNSUPPORTED_TEXT = 'Máy chủ chưa hỗ trợ tra quy tắc đang áp dụng (cần cập nhật backend).';
+
+/**
+ * Bộ lọc ban đầu: liên kết sâu `?ruleId=<số>` (từ trang đơn) điền sẵn ô ghi chú/mã bằng `#<id>`; còn lại để trống.
+ * Bộ lọc chỉ có ô ghi chú/mã đi route danh sách CŨ (`noteSearch`, xem `noteOnlyQuery`) ⇒ chạy cả trên backend cũ.
+ */
+function initialFilters(): MacroSearchFilters {
+  const ruleId =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('ruleId')?.trim() || '' : '';
+  return /^\d+$/.test(ruleId) ? { ...EMPTY_FILTERS, q: `#${ruleId}` } : EMPTY_FILTERS;
+}
 
 /** Giá trị của mục "Toàn quốc / Toàn bộ tỉnh" trong ô chọn tỉnh / xã (form lưu '' cho "không giới hạn"). */
 const ALL_CODE = '__ALL__';
@@ -116,20 +161,28 @@ export function PricingMacroManager() {
   const [provinces, setProvinces] = React.useState<ProvinceOption[]>([]);
   // Điểm đặc biệt ĐANG BẬT: thêm vào ô "Xã / Phường" của tỉnh chứa vùng (giá trị `ZONE:<mã>`, backend điền tỉnh).
   const [zones, setZones] = React.useState<SpecialZone[]>([]);
+  // Ô chọn điểm của thanh «Tìm quy tắc» chỉ tô sẵn (Enter tự chọn) khi biết chắc danh sách điểm đặc biệt đã về.
+  const [zonesStatus, setZonesStatus] = React.useState<ZonesStatus>('loading');
   const [loading, setLoading] = React.useState(true);
-  const initialNote = typeof window !== 'undefined' && /^\d+$/.test(new URLSearchParams(window.location.search).get('ruleId')?.trim() || '')
-    ? `#${new URLSearchParams(window.location.search).get('ruleId')!.trim()}`
-    : '';
-  // Bộ lọc duy nhất ngoài AI: liên kết sâu `?ruleId=` từ trang đơn (hiện thành chip, bấm ✕ để bỏ).
-  const [noteFilter, setNoteFilter] = React.useState(initialNote);
-  // Tìm kiếm AI (Gemini)
-  const [aiQuery, setAiQuery] = React.useState('');
-  const [aiSearching, setAiSearching] = React.useState(false);
-  const [aiResult, setAiResult] = React.useState<{
-    query: string;
-    explanation: string;
-    winningRuleId: number | null;
-  } | null>(null);
+  // Thanh «Tìm quy tắc». Ô ghi chú/mã gọi máy chủ theo bản đã ngừng gõ (`appliedQ`); liên kết sâu áp ngay lần nạp đầu.
+  const [filters, setFilters] = React.useState<MacroSearchFilters>(initialFilters);
+  const [appliedQ, setAppliedQ] = React.useState(filters.q);
+  // Lượt tìm gần nhất lỗi: 'unsupported' = máy chủ cũ chưa có route tìm mới; 'error' = lỗi khác (đã toast).
+  const [searchFailure, setSearchFailure] = React.useState<'unsupported' | 'error' | null>(null);
+  // Danh sách THƯỜNG nạp lỗi ngay sau một lượt có lọc: đã xoá dòng cũ (đã lọc) ⇒ câu trống nói rõ là lỗi tải.
+  const [listFailed, setListFailed] = React.useState(false);
+  // Bảng đang hiện gì: 'list' = danh sách thường; 'search' = kết quả của một bộ lọc (kể cả lượt lọc lỗi đã xoá dòng).
+  // Danh sách thường nạp lỗi khi bảng đang là 'search' thì không được giữ dòng đã lọc dưới thanh lọc đã trống.
+  const shownKind = React.useRef<'list' | 'search' | null>(null);
+  // «Quy tắc đang áp» cho chuyến đón → đến (khung trên bảng + tô dòng). `key` = đúng tham số đã tra.
+  const [match, setMatch] = React.useState<{ key: string; data: MacroMatchResponse } | null>(null);
+  const [matchLoading, setMatchLoading] = React.useState(false);
+  const [matchError, setMatchError] = React.useState<string | null>(null);
+  // Tổ hợp đang xem ở khung «đang áp», gắn với cặp điểm (`key` = matchKey): người dùng bấm (`byUser`), hoặc tổ hợp mặc
+  // định được GIỮ qua một lần nạp lại. Không có ⇒ mặc định theo bộ lọc Dịch vụ / Loại xe (`defaultComboIndex`). Nạp lại
+  // cùng cặp (lưu/xoá/«Làm mới») GIỮ; đổi cặp điểm bỏ; đổi bộ lọc thì chỉ giữ lựa chọn của người dùng còn khớp bộ lọc mới.
+  const [comboChoice, setComboChoice] = React.useState<{ key: string; index: number; byUser: boolean } | null>(null);
+  const matchSeq = React.useRef(0);
   // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
@@ -206,67 +259,64 @@ export function PricingMacroManager() {
       .catch(() => setProvinces([]));
   }, []);
 
-  const hasActiveSearch = Boolean(noteFilter || aiResult);
+  const place = useMacroPlaceIndex({ provinces, zones });
 
-  const handleAiSearch = React.useCallback(
-    async (targetPage = 1) => {
-      const q = aiQuery.trim();
-      if (!q) return;
-      const seq = ++loadSeq.current;
-      setAiSearching(true);
-      setLoading(true);
-      try {
-        const res = await aiSearchPricingMacroRules({
-          query: q,
-          page: targetPage,
-          limit: pageSize,
-        });
-        if (seq !== loadSeq.current) return;
-        setRules(res?.items ?? []);
-        setTotal(res?.total ?? 0);
-        setPage(targetPage);
-        setAiResult({
-          query: q,
-          explanation: res?.explanation || `Kết quả tìm kiếm AI cho "${q}"`,
-          winningRuleId: res?.winningRuleId ?? null,
-        });
-      } catch (err: any) {
-        if (seq !== loadSeq.current) return;
-        toast({
-          title: 'Lỗi tìm kiếm AI',
-          description: err.message || 'Không thể thực hiện tìm kiếm bằng Gemini AI',
-          variant: 'destructive',
-        });
-      } finally {
-        if (seq === loadSeq.current) {
-          setAiSearching(false);
-          setLoading(false);
-        }
-      }
-    },
-    [aiQuery, pageSize, toast],
-  );
-
-  const clearAiSearch = React.useCallback(() => {
-    setAiQuery('');
-    setAiResult(null);
-    setPage(1);
-    setReloadKey((k) => k + 1);
-  }, []);
-
-  // Nạp MỘT trang luật. Có số thứ tự yêu cầu: kết quả của yêu cầu cũ không được đè lên yêu cầu mới.
-  React.useEffect(() => {
-    if (aiResult) {
-      handleAiSearch(page);
-      return;
+  /**
+   * Đổi bộ lọc từ thanh «Tìm quy tắc». Chỉ gõ ô ghi chú/mã (còn chữ) thì đợi ngừng gõ — effect bên dưới áp và về trang
+   * 1. Mọi thay đổi khác (điểm, ô chọn, «gồm cấp tỉnh», xoá trắng ô, «Xoá lọc») áp NGAY, kèm cả chữ đang gõ dở, và về
+   * trang 1 trong cùng một lần vẽ (một yêu cầu duy nhất).
+   */
+  const changeFilters = (next: MacroSearchFilters) => {
+    setFilters(next);
+    // Đổi Dịch vụ / Loại xe: tổ hợp NGƯỜI DÙNG đã bấm chỉ được giữ nếu còn khớp bộ lọc mới; tổ hợp mặc định thì chọn lại
+    // theo bộ lọc mới — bảng không được tô luật của tổ hợp mà admin đã lọc bỏ.
+    if (comboChoice && (next.serviceType !== filters.serviceType || next.vehicleType !== filters.vehicleType)) {
+      const chosen = matchData?.combos?.[comboChoice.index];
+      if (!comboChoice.byUser || !chosen || !comboMatchesFilters(chosen, next)) setComboChoice(null);
     }
+    const typingOnly =
+      next.q.trim() !== '' &&
+      next.origin === filters.origin &&
+      next.dest === filters.dest &&
+      next.serviceType === filters.serviceType &&
+      next.vehicleType === filters.vehicleType &&
+      next.isActive === filters.isActive &&
+      next.cover === filters.cover;
+    if (typingOnly) return;
+    setAppliedQ(next.q);
+    setPage(1);
+  };
+
+  React.useEffect(() => {
+    // So bản đã cắt: thêm/bớt khoảng trắng hai đầu không gọi lại máy chủ, không đổi trang.
+    if (filters.q.trim() === appliedQ.trim()) return;
+    const timer = window.setTimeout(() => {
+      setAppliedQ(filters.q);
+      setPage(1);
+    }, Q_DEBOUNCE_MS);
+    return () => window.clearTimeout(timer);
+  }, [filters.q, appliedQ]);
+
+  const effectiveFilters = React.useMemo(() => ({ ...filters, q: appliedQ }), [filters, appliedQ]);
+  const searching = hasActiveFilters(effectiveFilters);
+  // Chỉ lọc ghi chú/mã ⇒ route danh sách CŨ `noteSearch` (cùng nghĩa `#mã`): liên kết sâu `?ruleId=` chạy cả trên backend
+  // chưa có `GET …/search`.
+  const noteQ = searching ? noteOnlyQuery(effectiveFilters) : null;
+  // Đúng tham số gửi `GET …/search` (null = danh sách thường, có hoặc không `noteSearch`). Dạng chuỗi để effect nạp chỉ
+  // chạy lại khi điều GỬI ĐI thật sự đổi.
+  const searchKey =
+    searching && noteQ === null ? JSON.stringify(toSearchParams(effectiveFilters, { page, limit: pageSize })) : null;
+
+  // Nạp MỘT trang luật: không lọc gì ⇒ danh sách thường (y như trước); chỉ ghi chú/mã ⇒ danh sách thường + `noteSearch`;
+  // còn lại ⇒ tìm kiếm mới. Có số thứ tự yêu cầu: kết quả của yêu cầu cũ không được đè lên yêu cầu mới.
+  React.useEffect(() => {
     const seq = ++loadSeq.current;
+    const filtered = Boolean(searchKey || noteQ);
     setLoading(true);
-    getPricingMacroRulesPage({
-      page,
-      limit: pageSize,
-      ...(noteFilter ? { noteSearch: noteFilter } : {}),
-    })
+    const request = searchKey
+      ? searchPricingMacroRules(JSON.parse(searchKey) as MacroSearchParams)
+      : getPricingMacroRulesPage(noteQ ? { page, limit: pageSize, noteSearch: noteQ } : { page, limit: pageSize });
+    request
       .then((res) => {
         if (seq !== loadSeq.current) return;
         const items = res?.items ?? [];
@@ -276,20 +326,122 @@ export function PricingMacroManager() {
           setPage(Math.max(1, Math.ceil(count / pageSize)));
           return;
         }
+        shownKind.current = filtered ? 'search' : 'list';
+        setSearchFailure(null);
+        setListFailed(false);
         setRules(items);
         setTotal(count);
         setLoading(false);
       })
       .catch((err: any) => {
         if (seq !== loadSeq.current) return;
-        toast({
-          title: 'Lỗi tải dữ liệu Macro',
-          description: err.message || 'Không thể tải danh sách quy tắc macro',
-          variant: 'destructive',
-        });
+        if (!filtered) {
+          toast({
+            title: 'Lỗi tải dữ liệu Macro',
+            description: err.message || 'Không thể tải danh sách quy tắc macro',
+            variant: 'destructive',
+          });
+          // Bảng đang là kết quả ĐÃ LỌC: không để nó nằm dưới thanh lọc đã trống như thể là toàn bộ danh sách. (Đang là
+          // danh sách thường thì giữ như cũ.)
+          if (shownKind.current === 'search') {
+            shownKind.current = null;
+            setRules([]);
+            setTotal(0);
+            setListFailed(true);
+          }
+        } else {
+          shownKind.current = 'search';
+          // Không để lại dòng của lượt trước (danh sách không lọc / bộ lọc khác) dưới thanh tìm đang lọc.
+          setRules([]);
+          setTotal(0);
+          if (isMacroSearchUnsupported(err)) {
+            setSearchFailure('unsupported');
+          } else {
+            setSearchFailure('error');
+            toast({
+              title: 'Lỗi tìm kiếm',
+              description: err?.message || 'Không thể tìm quy tắc macro',
+              variant: 'destructive',
+            });
+          }
+        }
         setLoading(false);
       });
-  }, [page, pageSize, noteFilter, reloadKey, toast]);
+  }, [searchKey, noteQ, page, pageSize, reloadKey, toast]);
+
+  // «Quy tắc đang áp»: chỉ khi hai đầu là điểm cụ thể (xã/điểm đặc biệt, hoặc «Cả tỉnh»). Đầu theo chữ / thiếu đầu thì
+  // không gọi máy chủ (khung tự giải thích). Tra lại sau mỗi lần nạp lại (quy tắc có thể vừa đổi).
+  const availability = matchAvailability(filters);
+  const matchParams =
+    availability === 'READY' || availability === 'PROVINCE_ONLY' ? toMatchParams(filters) : null;
+  const matchKey = matchParams ? JSON.stringify(matchParams) : null;
+
+  // Kết quả tra chỉ dùng khi đúng cặp điểm đang chọn (không bao giờ tô dòng theo cặp điểm cũ).
+  const matchData = match && match.key === matchKey && !matchLoading && !matchError ? match.data : null;
+  // Tổ hợp đang xem: lựa chọn cho ĐÚNG cặp này (còn trong câu trả lời), không thì mặc định theo bộ lọc Dịch vụ / Loại xe
+  // — tính lại mỗi lần vẽ nên đổi bộ lọc là đồng bộ ngay.
+  const chosenIndex =
+    comboChoice && comboChoice.key === matchKey && matchData?.combos?.[comboChoice.index] ? comboChoice.index : null;
+  const selectedCombo = chosenIndex ?? defaultComboIndex(matchData?.combos, filters);
+
+  React.useEffect(() => {
+    const seq = ++matchSeq.current;
+    // Nạp lại CÙNG cặp (lưu/xoá/«Làm mới»; đổi cặp thì `matchData` của lần vẽ này đã là null): GIỮ đúng tổ hợp đang xem —
+    // kể cả khi đó là tổ hợp mặc định — để câu trả lời mới không tự nhảy sang tổ hợp khác (admin dễ hiểu nhầm «quy tắc
+    // vừa sửa không còn áp»). Chỉ chọn lại khi tổ hợp đó không còn khớp bộ lọc Dịch vụ / Loại xe.
+    if (matchKey && matchData) {
+      const shown = matchData.combos?.[selectedCombo];
+      setComboChoice(
+        shown && comboMatchesFilters(shown, filters)
+          ? { key: matchKey, index: selectedCombo, byUser: chosenIndex !== null && Boolean(comboChoice?.byUser) }
+          : null,
+      );
+    }
+    setMatch(null);
+    setMatchError(null);
+    if (!matchKey) {
+      setMatchLoading(false);
+      return;
+    }
+    setMatchLoading(true);
+    matchPricingMacroRules(JSON.parse(matchKey) as MacroMatchParams)
+      .then((res) => {
+        if (seq !== matchSeq.current) return;
+        setMatch(res ? { key: matchKey, data: res } : null);
+        setMatchLoading(false);
+      })
+      .catch((err: any) => {
+        if (seq !== matchSeq.current) return;
+        setMatchError(
+          isMacroSearchUnsupported(err)
+            ? MATCH_UNSUPPORTED_TEXT
+            : `Không tra được quy tắc đang áp dụng: ${err?.message || 'lỗi không rõ'}`,
+        );
+        setMatchLoading(false);
+      });
+  }, [matchKey, reloadKey]);
+
+  // Đổi cặp điểm ⇒ bỏ tổ hợp đã giữ (cả khi quay lại đúng cặp cũ: câu trả lời mới, chọn lại mặc định). Nạp lại cùng cặp
+  // (reloadKey) KHÔNG đi qua đây ⇒ giữ lựa chọn.
+  React.useEffect(() => {
+    setComboChoice(null);
+  }, [matchKey]);
+
+  const selectCombo = (index: number) => {
+    if (matchKey) setComboChoice({ key: matchKey, index, byUser: true });
+  };
+  const shownCombo = matchData?.combos?.[selectedCombo] ?? null;
+  const winnerRuleId = shownCombo?.winnerRuleId ?? null;
+  // Luật thắng của tổ hợp KHÔNG được áp thật: đồng giá (máy giá bỏ mọi luật) / «Cả tỉnh» (luật cấp xã của chuyến thật
+  // có thể thắng). Bảng tô khác màu, không ghi «ĐANG ÁP».
+  const winnerFlatIgnored = Boolean(shownCombo?.flatPrice);
+  const winnerProvinceOnly = availability === 'PROVINCE_ONLY';
+  // Lý do thua của từng luật trong tổ hợp đang chọn (dòng đầu tiên của mỗi luật = vị trí tốt nhất).
+  const rankedVerdicts = React.useMemo(() => {
+    const byId = new Map<number, MacroMatchVerdict>();
+    for (const r of shownCombo?.ranking ?? []) if (!byId.has(r.ruleId)) byId.set(r.ruleId, r.verdict);
+    return byId;
+  }, [shownCombo]);
 
   // Cảnh báo băng chặn: phụ — lỗi (backend cũ / thiếu quyền master-data) thì bỏ qua, không làm hỏng danh sách.
   const loadBandWarnings = React.useCallback(() => {
@@ -310,10 +462,14 @@ export function PricingMacroManager() {
     Promise.resolve()
       .then(() => getSpecialZones())
       .then((list) => {
-        if (!cancelled) setZones((list || []).filter((z) => z.active));
+        if (cancelled) return;
+        setZones((list || []).filter((z) => z.active));
+        setZonesStatus('ready');
       })
       .catch(() => {
-        // Chỉ mất lựa chọn "điểm đặc biệt"; sửa theo tỉnh/xã vẫn chạy.
+        // Chỉ mất lựa chọn "điểm đặc biệt"; sửa theo tỉnh/xã vẫn chạy. Ô chọn điểm biết là thiếu sân bay nên không tự
+        // chọn bằng Enter.
+        if (!cancelled) setZonesStatus('error');
       });
     return () => {
       cancelled = true;
@@ -755,81 +911,39 @@ export function PricingMacroManager() {
                   Xoá đã chọn ({selectedIds.size})
                 </Button>
               )}
-              {noteFilter && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-9 text-xs"
-                  aria-label="Bỏ lọc quy tắc"
-                  onClick={() => {
-                    setNoteFilter('');
-                    setPage(1);
-                  }}
-                >
-                  Đang lọc {noteFilter}
-                  <X className="w-3.5 h-3.5 ml-1" />
-                </Button>
-              )}
             </div>
           </div>
           <div className="mt-3 pt-3 border-t border-slate-100 flex flex-col gap-2">
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-              <div className="relative flex-1">
-                <Sparkles className="w-4 h-4 absolute left-2.5 top-2.5 text-indigo-500" />
-                <Input
-                  aria-label="Tìm kiếm thông minh bằng AI"
-                  className="pl-8 h-9 text-xs border-indigo-200 focus-visible:ring-indigo-500 bg-indigo-50/30"
-                  placeholder='Hỏi AI tìm quy tắc (vd: "Đông Anh đi Phủ Lý ăn rule nào?", "bao xe 7 chỗ Hà Nội đi Hải Dương cũ", "rule giá trên 2 triệu")...'
-                  value={aiQuery}
-                  onChange={(e) => setAiQuery(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleAiSearch(1);
-                    }
-                  }}
-                />
-              </div>
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  size="sm"
-                  className="h-9 text-xs bg-indigo-600 hover:bg-indigo-700 text-white"
-                  disabled={aiSearching || !aiQuery.trim()}
-                  onClick={() => handleAiSearch(1)}
-                >
-                  {aiSearching ? (
-                    <Loader2 className="w-3.5 h-3.5 mr-1 animate-spin" />
-                  ) : (
-                    <Sparkles className="w-3.5 h-3.5 mr-1" />
-                  )}
-                  Tìm với AI
-                </Button>
-                {aiResult && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-9 text-xs"
-                    onClick={clearAiSearch}
-                  >
-                    <X className="w-3.5 h-3.5 mr-1" />
-                    Xoá lọc AI
-                  </Button>
-                )}
-              </div>
-            </div>
-            {aiResult && (
-              <div
-                data-testid="ai-search-banner"
-                className="rounded-md border border-indigo-200 bg-indigo-50/70 px-3 py-2 text-xs text-indigo-950 flex items-start gap-2"
+            <MacroSearchBar
+              value={filters}
+              onChange={changeFilters}
+              index={place.index}
+              wardsStatus={place.wardsStatus}
+              wardsError={place.wardsError}
+              zonesStatus={zonesStatus}
+              onNeedWards={place.ensureLoaded}
+            />
+            {(filters.origin || filters.dest) && (
+              <MacroMatchPanel
+                availability={availability}
+                originLabel={placeFilterLabel(filters.origin)}
+                destLabel={placeFilterLabel(filters.dest)}
+                loading={matchLoading}
+                error={matchError}
+                match={matchData}
+                selectedCombo={selectedCombo}
+                onSelectCombo={selectCombo}
+                provinces={provinces}
+              />
+            )}
+            {searching && searchFailure === 'unsupported' && (
+              <p
+                role="alert"
+                data-testid="macro-search-unsupported"
+                className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs font-medium text-red-700"
               >
-                <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                <div className="flex-1 leading-relaxed">
-                  <span className="font-semibold text-indigo-700">Gemini AI: </span>
-                  {aiResult.explanation}
-                </div>
-              </div>
+                {SEARCH_UNSUPPORTED_TEXT}
+              </p>
             )}
           </div>
         </CardHeader>
@@ -873,21 +987,40 @@ export function PricingMacroManager() {
               ) : rules.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-10 text-slate-400 text-xs">
-                    {hasActiveSearch
-                      ? 'Không có quy tắc nào khớp từ khoá tìm kiếm.'
-                      : 'Chưa có quy tắc macro nào. Bấm "Thêm quy tắc" để bắt đầu cấu hình.'}
+                    {!searching
+                      ? listFailed
+                        ? 'Không tải được danh sách quy tắc — bấm «Làm mới» để thử lại.'
+                        : 'Chưa có quy tắc macro nào. Bấm "Thêm quy tắc" để bắt đầu cấu hình.'
+                      : searchFailure === 'unsupported'
+                        ? 'Không hiện quy tắc nào vì máy chủ chưa hỗ trợ tìm kiếm mới — bấm «Xoá lọc» để xem toàn bộ danh sách.'
+                        : searchFailure === 'error'
+                          ? 'Không tải được kết quả tìm kiếm — bấm «Làm mới» để thử lại.'
+                          : 'Không có quy tắc nào khớp bộ lọc.'}
                   </TableCell>
                 </TableRow>
               ) : (
                 rules.map((rule) => {
-                  const isWinner = aiResult?.winningRuleId === rule.id;
+                  // Tô theo tổ hợp đang chọn ở khung «Quy tắc đang áp dụng» (mặc định: tổ hợp khớp bộ lọc Dịch vụ / Loại
+                  // xe). Luật máy giá chọn: áp thật ⇒ xanh + «ĐANG ÁP · <tổ hợp>»; chỉ chọn «Cả tỉnh» ⇒ vàng «CẤP TỈNH»
+                  // (luật cấp xã của chuyến thật có thể thắng); tổ hợp trúng đồng giá ⇒ nhãn xám «Bị đồng giá bỏ qua».
+                  // Luật khác trong bảng xếp hạng ⇒ nhãn xám lý do thua; luật không có trong bảng xếp hạng ⇒ không gì cả.
+                  const isWinner = winnerRuleId === rule.id;
+                  const winnerKind = !isWinner
+                    ? null
+                    : winnerFlatIgnored
+                      ? 'flat'
+                      : winnerProvinceOnly
+                        ? 'province'
+                        : 'applied';
+                  const verdict = isWinner ? undefined : rankedVerdicts.get(rule.id);
                   return (
                     <TableRow
                       key={rule.id}
                       data-testid={`rule-row-${rule.id}`}
                       className={cn(
                         'text-xs hover:bg-slate-50/50',
-                        isWinner && 'bg-emerald-50/70 hover:bg-emerald-50',
+                        winnerKind === 'applied' && 'bg-emerald-50/70 hover:bg-emerald-50',
+                        winnerKind === 'province' && 'bg-amber-50/70 hover:bg-amber-50',
                       )}
                     >
                       <TableCell>
@@ -900,15 +1033,43 @@ export function PricingMacroManager() {
                       <TableCell className="text-center font-bold text-slate-600">
                         <div>{rule.priority}</div>
                         <div className="text-[10px] font-normal text-slate-400">#{rule.id}</div>
+                        {winnerKind === 'applied' && shownCombo && (
+                          <Badge
+                            className="mt-0.5 h-auto max-w-[6rem] whitespace-normal bg-emerald-600 px-1 text-[9px] leading-tight text-white hover:bg-emerald-700"
+                            title={`Máy tính giá đang áp quy tắc này cho tổ hợp «${comboLabel(shownCombo)}» (đang chọn ở khung «Quy tắc đang áp dụng»)`}
+                          >
+                            ĐANG ÁP · {comboShortLabel(shownCombo)}
+                          </Badge>
+                        )}
+                        {winnerKind === 'province' && shownCombo && (
+                          <Badge
+                            className="mt-0.5 h-auto max-w-[6rem] whitespace-normal bg-amber-500 px-1 text-[9px] leading-tight text-white hover:bg-amber-600"
+                            title={`Thắng ở tổ hợp «${comboLabel(shownCombo)}» khi chỉ xét quy tắc cấp tỉnh / mọi nơi. Bạn đang chọn cả tỉnh nên quy tắc cấp xã chưa được xét: chuyến thật ở một xã có quy tắc riêng sẽ áp quy tắc của xã đó. Chọn xã/phường để biết chính xác.`}
+                          >
+                            CẤP TỈNH — xã có luật riêng thì thắng
+                          </Badge>
+                        )}
+                        {winnerKind === 'flat' && shownCombo && (
+                          <Badge
+                            variant="secondary"
+                            className="mt-0.5 h-auto max-w-[6rem] whitespace-normal bg-slate-200 px-1 text-[9px] font-normal leading-tight text-slate-700 hover:bg-slate-200"
+                            title={`Tổ hợp «${comboLabel(shownCombo)}» trúng bảng đồng giá điểm đặc biệt: giá thật lấy theo đồng giá, quy tắc này (và mọi quy tắc khác) bị bỏ qua.`}
+                          >
+                            Bị đồng giá bỏ qua
+                          </Badge>
+                        )}
+                        {verdict && (
+                          <Badge
+                            variant="secondary"
+                            className="mt-0.5 max-w-[6rem] whitespace-normal bg-slate-100 px-1 text-[9px] font-normal leading-tight text-slate-600 hover:bg-slate-100"
+                          >
+                            {verdictLabel(verdict)}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell>
-                        <div className="text-slate-700 font-medium flex items-center gap-1.5 flex-wrap">
-                          <span>{getProvinceName(rule.originProvinceCode)}</span>
-                          {isWinner && (
-                            <Badge className="bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-4 px-1.5">
-                              ⚡ Đang áp dụng
-                            </Badge>
-                          )}
+                        <div className="text-slate-700 font-medium">
+                          {getProvinceName(rule.originProvinceCode)}
                         </div>
                         {rule.originWardCode && (
                           <Badge variant="outline" className="text-[10px] h-4 px-1 mt-0.5 bg-blue-50 text-blue-700">
