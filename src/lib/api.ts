@@ -1187,6 +1187,104 @@ export async function reassignBooking(bookingId: string, driverId: string): Prom
   return result.data;
 }
 
+// ─── Pass chuyến vào Nhóm Zalo qua Vizio MCP ────────────────────────────────
+
+export interface ZaloPassProvinceCatalogEntry {
+  provinceKey: string;
+  provinceLabel: string;
+  defaultGroupId: string;
+  defaultGroupName: string;
+}
+
+export interface ZaloPassConfig {
+  vizioUrl: string;
+  mcpKey: string;
+  channelId: string;
+  defaultGroupId: string;
+  defaultGroupName: string;
+  mentionAll: boolean;
+  autoPassOnCreate: boolean;
+  provinceGroupMap: Record<string, { groupId: string; groupName?: string }>;
+  provinceCatalog: ZaloPassProvinceCatalogEntry[];
+}
+
+export interface VizioZaloGroup {
+  id: string;
+  name: string;
+  totalMember?: number;
+  avatar?: string;
+}
+
+export interface VizioZaloChannel {
+  channel_id: string;
+  name: string;
+  type: string;
+  status: string;
+  phone?: string;
+  zalo_name?: string;
+}
+
+export interface SendBookingZaloPassResult {
+  success: boolean;
+  bookingId: string;
+  groupId: string;
+  groupName: string;
+  mentionAll: boolean;
+  matchedProvinceKey: string | null;
+  matchedProvinceLabel: string | null;
+  isFallbackDefault: boolean;
+  message: string;
+}
+
+export async function getZaloPassConfig(): Promise<ZaloPassConfig> {
+  const response = await fetchWithAuth('/bookings/admin/zalo-pass/config');
+  return unwrap<ZaloPassConfig>(response);
+}
+
+export async function updateZaloPassConfig(
+  dto: Partial<Omit<ZaloPassConfig, 'provinceCatalog'>>,
+): Promise<ZaloPassConfig> {
+  const response = await fetchWithAuth('/bookings/admin/zalo-pass/config', {
+    method: 'PUT',
+    body: JSON.stringify(dto),
+  });
+  return unwrap<ZaloPassConfig>(response);
+}
+
+export async function getZaloPassGroups(opts?: {
+  vizioUrl?: string;
+  mcpKey?: string;
+  channelId?: string;
+  refresh?: boolean;
+}): Promise<{
+  channels: VizioZaloChannel[];
+  channelId: string;
+  channelName: string;
+  total: number;
+  groups: VizioZaloGroup[];
+}> {
+  const q = new URLSearchParams();
+  if (opts?.vizioUrl) q.set('vizioUrl', opts.vizioUrl);
+  if (opts?.mcpKey) q.set('mcpKey', opts.mcpKey);
+  if (opts?.channelId) q.set('channelId', opts.channelId);
+  if (opts?.refresh) q.set('refresh', '1');
+  const qs = q.toString();
+  const response = await fetchWithAuth(`/bookings/admin/zalo-pass/groups${qs ? `?${qs}` : ''}`);
+  return unwrap(response);
+}
+
+export async function sendBookingPassToZalo(
+  bookingId: string,
+  body?: { message?: string; groupId?: string; mentionAll?: boolean },
+): Promise<SendBookingZaloPassResult> {
+  const response = await fetchWithAuth(`/bookings/admin/zalo-pass/${bookingId}/send`, {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
+  });
+  return unwrap<SendBookingZaloPassResult>(response);
+}
+
+
 // Look up a customer by exact phone (create-booking form "Kiểm tra" button, và ô
 // chọn khách khi gán voucher TARGETED ở trang khuyến mãi).
 //

@@ -16,11 +16,11 @@ import * as React from 'react';
 // 7 tiếng giữa dòng và dialog mở từ chính dòng đó. CLAUDE.md: mọi mốc là giờ VN.
 import { formatVnDateTime, formatVnDateTimeFull } from '../../leakage-review/leakage-labels';
 import { Button } from '@/components/ui/button';
-import { Loader2, Car, User, Clock, Zap, CopyPlus, Store, Copy, Check } from 'lucide-react';
+import { Loader2, Car, User, Clock, Zap, CopyPlus, Store, Copy, Check, Send } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag } from '@/lib/api';
+import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag, sendBookingPassToZalo } from '@/lib/api';
 import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, getStatusBadge, ProvincePairLine, TestTripBadge } from './booking-shared';
 import { useProvinceOptions } from '@/hooks/use-province-options';
 import { provincePairLabel } from '@/lib/province-labels';
@@ -663,6 +663,8 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
   );
 
   const [copiedPass, setCopiedPass] = React.useState(false);
+  const [sendingZalo, setSendingZalo] = React.useState(false);
+  const [sentZalo, setSentZalo] = React.useState(false);
 
   const handleCopyPass = async () => {
     if (!booking) return;
@@ -695,11 +697,39 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
     }
   };
 
+  const handleSendZaloPass = async () => {
+    if (!booking || sendingZalo) return;
+    const text = buildTripPassText(booking, provinceNames);
+    setSendingZalo(true);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+      const res = await sendBookingPassToZalo(booking.id, { message: text });
+      setSentZalo(true);
+      setTimeout(() => setSentZalo(false), 3000);
+      toast({
+        title: 'Đã pass chuyến vào nhóm Zalo (@All)',
+        description: `Đã gửi vào nhóm "${res.groupName}"${
+          res.matchedProvinceLabel ? ` (Tỉnh: ${res.matchedProvinceLabel})` : ' (Nhóm mặc định)'
+        }.`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Gửi vào nhóm Zalo thất bại',
+        description: err.message || 'Vui lòng kiểm tra cấu hình Vizio MCP.',
+      });
+    } finally {
+      setSendingZalo(false);
+    }
+  };
+
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
       <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
         <DialogHeader>
-          <div className="flex items-start justify-between gap-3 pr-6">
+          <div className="flex items-start justify-between gap-2 pr-6">
             <div>
               <DialogTitle>Chi tiết chuyến đi</DialogTitle>
               <DialogDescription>
@@ -707,16 +737,35 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
               </DialogDescription>
             </div>
             {booking && (
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={handleCopyPass}
-                className="shrink-0 h-8 gap-1.5 text-xs font-medium bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
-              >
-                {copiedPass ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
-                {copiedPass ? 'Đã copy' : 'Copy pass chuyến'}
-              </Button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleSendZaloPass}
+                  disabled={sendingZalo}
+                  className="h-8 gap-1.5 text-xs font-medium bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200"
+                >
+                  {sendingZalo ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-600" />
+                  ) : sentZalo ? (
+                    <Check className="h-3.5 w-3.5 text-green-600" />
+                  ) : (
+                    <Send className="h-3.5 w-3.5 text-blue-600" />
+                  )}
+                  {sendingZalo ? 'Đang gửi...' : sentZalo ? 'Đã gửi Zalo' : 'Pass nhóm Zalo'}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleCopyPass}
+                  className="h-8 gap-1.5 text-xs font-medium bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+                >
+                  {copiedPass ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+                  {copiedPass ? 'Đã copy' : 'Copy'}
+                </Button>
+              </div>
             )}
           </div>
         </DialogHeader>
@@ -1223,16 +1272,34 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
           )}
         </div>
         {booking && (
-          <DialogFooter className="flex-row justify-between sm:justify-between items-center gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleCopyPass}
-              className="bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
-            >
-              {copiedPass ? <Check className="mr-2 h-4 w-4 text-green-600" /> : <Copy className="mr-2 h-4 w-4" />}
-              {copiedPass ? 'Đã copy' : 'Copy pass chuyến'}
-            </Button>
+          <DialogFooter className="flex-row flex-wrap justify-between sm:justify-between items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleSendZaloPass}
+                disabled={sendingZalo}
+                className="bg-blue-50 hover:bg-blue-100 text-blue-900 border-blue-300 dark:bg-blue-950/40 dark:border-blue-800 dark:text-blue-200"
+              >
+                {sendingZalo ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin text-blue-600" />
+                ) : sentZalo ? (
+                  <Check className="mr-2 h-4 w-4 text-green-600" />
+                ) : (
+                  <Send className="mr-2 h-4 w-4 text-blue-600" />
+                )}
+                {sendingZalo ? 'Đang gửi Zalo...' : sentZalo ? 'Đã gửi nhóm Zalo' : 'Pass nhóm Zalo (@All)'}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleCopyPass}
+                className="bg-amber-50 hover:bg-amber-100 text-amber-900 border-amber-300 dark:bg-amber-950/40 dark:border-amber-800 dark:text-amber-200"
+              >
+                {copiedPass ? <Check className="mr-2 h-4 w-4 text-green-600" /> : <Copy className="mr-2 h-4 w-4" />}
+                {copiedPass ? 'Đã copy' : 'Copy pass chuyến'}
+              </Button>
+            </div>
             {onDuplicate && (
               <Button variant="outline" onClick={() => onDuplicate(booking)}>
                 <CopyPlus className="mr-2 h-4 w-4" />
