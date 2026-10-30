@@ -5091,24 +5091,6 @@ export async function getPricingMacroRulesPage(params: {
   return data;
 }
 
-export interface AiSearchPricingMacroRulesResult extends PricingMacroRulePage {
-  explanation: string;
-  winningRuleId: number | null;
-  intent?: Record<string, unknown>;
-}
-
-export async function aiSearchPricingMacroRules(params: {
-  query: string;
-  page?: number;
-  limit?: number;
-}): Promise<AiSearchPricingMacroRulesResult> {
-  const response = await fetchWithAuth('/pricing/macro-rules/ai-search', {
-    method: 'POST',
-    body: JSON.stringify(params),
-  });
-  return unwrap<AiSearchPricingMacroRulesResult>(response);
-}
-
 // ───────── Tìm quy tắc macro theo MÃ + «quy tắc đang áp» (thay ô «Hỏi AI») — cần backend có 2 route mới ─────────
 
 /**
