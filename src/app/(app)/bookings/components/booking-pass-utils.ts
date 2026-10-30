@@ -82,12 +82,12 @@ export function buildTripPassText(booking: Booking, provinceNames: ProvinceNameM
 
   const lines = [
     `💰 Cước phí: ${priceText}`,
+    `👥 Số khách: ${seatsText}`,
     `⏰ Thời gian: ${timeText}`,
     `📍 Điểm đón: ${pickup}`,
     `📍 Điểm trả: ${dropoff}`,
     routeLine,
     `🚗 Loại xe: ${vehicleInfo}`,
-    `👥 Số khách: ${seatsText}`,
     booking.note ? `📝 Ghi chú: ${booking.note}` : null,
     `🚕 CHƯA CÓ TÀI XẾ`,
   ].filter(Boolean);
