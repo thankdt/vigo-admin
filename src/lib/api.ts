@@ -5109,6 +5109,153 @@ export async function aiSearchPricingMacroRules(params: {
   return unwrap<AiSearchPricingMacroRulesResult>(response);
 }
 
+// ───────── Tìm quy tắc macro theo MÃ + «quy tắc đang áp» (thay ô «Hỏi AI») — cần backend có 2 route mới ─────────
+
+/**
+ * Tham số `GET /pricing/macro-rules/search` — mọi trường tuỳ chọn. Mỗi đầu (đón / đến) lọc theo MỘT cách: MÃ
+ * (`…ProvinceCode` + `…WardCode`, nhận `ZONE:<mã>` cho điểm đặc biệt) HOẶC CHỮ (`originSearch` / `destSearch`, máy chủ
+ * hiểu cả tên huyện/tỉnh CŨ) — gửi cả hai cho cùng một đầu thì máy chủ trả 400. `serviceType` / `vehicleType` nghĩa là
+ * «áp dụng cho» (gồm cả luật ALL). `cover`: gồm cả luật rộng hơn (cấp tỉnh, mọi nơi) phủ điểm đã chọn theo mã.
+ * `q`: ghi chú, hoặc `#123` / `123` = mã quy tắc.
+ */
+export type MacroSearchParams = {
+  originProvinceCode?: string;
+  originWardCode?: string;
+  destProvinceCode?: string;
+  destWardCode?: string;
+  originSearch?: string;
+  destSearch?: string;
+  serviceType?: 'CARPOOL' | 'RIDE';
+  vehicleType?: 'CAR_4' | 'CAR_7';
+  isActive?: boolean;
+  adjustmentType?: PricingMacroRule['adjustmentType'];
+  q?: string;
+  cover?: boolean;
+  page?: number;
+  limit?: number;
+};
+
+/** Tham số `GET /pricing/macro-rules/match`: tỉnh hai đầu BẮT BUỘC; xã (hoặc `ZONE:<mã>`) tuỳ chọn. */
+export type MacroMatchParams = {
+  originProvinceCode: string;
+  originWardCode?: string;
+  destProvinceCode: string;
+  destWardCode?: string;
+};
+
+/**
+ * Vì sao một luật thắng/thua trong bảng xếp hạng — CÙNG thứ tự máy tính giá: xã > tỉnh > đúng dịch vụ > đúng loại xe,
+ * rồi độ ưu tiên, rồi mã lớn hơn. `IGNORED_TYPE` = loại cũ (sàn/trần) máy giá không còn áp.
+ */
+export type MacroMatchVerdict = 'WINNER' | 'LOSES_SPECIFICITY' | 'LOSES_PRIORITY' | 'LOSES_ID' | 'IGNORED_TYPE';
+
+export type MacroMatchRankingRow = {
+  ruleId: number;
+  verdict: MacroMatchVerdict;
+  /** REVERSE = luật hai chiều khớp theo hướng ngược (trả → đón). */
+  orientation: 'FORWARD' | 'REVERSE';
+  specificity: { wardEnds: number; provinceEnds: number; serviceExact: number; vehicleExact: number };
+  score: number;
+};
+
+/** Một tổ hợp dịch vụ × loại xe. Máy chủ luôn trả 4 tổ hợp theo thứ tự ghép/4, ghép/7, bao xe/4, bao xe/7. */
+export type MacroMatchCombo = {
+  serviceType: 'CARPOOL' | 'RIDE';
+  vehicleType: 'CAR_4' | 'CAR_7';
+  /** Luật máy tính giá THẬT sẽ áp; null = không luật nào (giữ giá gốc). */
+  winnerRuleId: number | null;
+  orientation: 'FORWARD' | 'REVERSE' | null;
+  score: number | null;
+  ranking: MacroMatchRankingRow[];
+  /** Bảng xếp hạng bị cắt (máy chủ chỉ trả các dòng đầu). */
+  truncated: boolean;
+};
+
+/** Một đầu như máy chủ đã hiểu: `zoneCode` khi đầu là điểm đặc biệt (`ZONE:<mã>`). */
+export type MacroMatchPlace = { provinceCode: string; wardCode: string | null; zoneCode: string | null };
+
+/**
+ * `GET /pricing/macro-rules/match`. Chỉ xét luật ĐANG BẬT. Chuyến trúng bảng đồng giá thì máy giá bỏ MỌI luật — route
+ * này không biết điều đó, giao diện phải tự ghi chú.
+ */
+export type MacroMatchResponse = {
+  origin: MacroMatchPlace;
+  dest: MacroMatchPlace;
+  combos: MacroMatchCombo[];
+  /** Hợp mọi luật có trong các bảng xếp hạng (kèm tên xã hai đầu). */
+  rules: PricingMacroRule[];
+  /** Vd 'RANKING_MISMATCH': xếp hạng lệch máy tính giá — phải báo kỹ thuật. */
+  warnings: string[];
+};
+
+/**
+ * Chuỗi truy vấn chỉ gồm giá trị CÓ NGHĨA, theo đúng thứ tự `entries`: bỏ undefined/null, chuỗi rỗng (sau khi cắt
+ * khoảng trắng), số không hữu hạn; boolean thành 'true'/'false'. Trả '' khi không còn gì (không để dấu "?" thừa).
+ */
+function macroQueryString(entries: [string, string | number | boolean | null | undefined][]): string {
+  const qs = new URLSearchParams();
+  for (const [key, value] of entries) {
+    if (value === undefined || value === null) continue;
+    if (typeof value === 'boolean') qs.set(key, value ? 'true' : 'false');
+    else if (typeof value === 'number') {
+      if (Number.isFinite(value)) qs.set(key, String(value));
+    } else {
+      const text = value.trim();
+      if (text) qs.set(key, text);
+    }
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
+/** Danh sách luật đã lọc, CÙNG dạng trang với `getPricingMacroRulesPage` (`originWardName`/`destWardName` có sẵn). */
+export async function searchPricingMacroRules(params: MacroSearchParams): Promise<PricingMacroRulePage> {
+  const qs = macroQueryString([
+    ['originProvinceCode', params.originProvinceCode],
+    ['originWardCode', params.originWardCode],
+    ['destProvinceCode', params.destProvinceCode],
+    ['destWardCode', params.destWardCode],
+    ['originSearch', params.originSearch],
+    ['destSearch', params.destSearch],
+    ['serviceType', params.serviceType],
+    ['vehicleType', params.vehicleType],
+    ['isActive', params.isActive],
+    ['adjustmentType', params.adjustmentType],
+    ['q', params.q],
+    // Chỉ gửi khi BẬT: máy chủ coi có mặt tham số là bật.
+    ['cover', params.cover === true ? true : undefined],
+    ['page', params.page],
+    ['limit', params.limit],
+  ]);
+  const response = await fetchWithAuth(`/pricing/macro-rules/search${qs}`);
+  return unwrap<PricingMacroRulePage>(response);
+}
+
+/** «Quy tắc đang áp» cho một chuyến đón → đến: 4 tổ hợp, mỗi tổ hợp luật thắng + bảng xếp hạng kèm lý do thua. */
+export async function matchPricingMacroRules(params: MacroMatchParams): Promise<MacroMatchResponse> {
+  const qs = macroQueryString([
+    ['originProvinceCode', params.originProvinceCode],
+    ['originWardCode', params.originWardCode],
+    ['destProvinceCode', params.destProvinceCode],
+    ['destWardCode', params.destWardCode],
+  ]);
+  const response = await fetchWithAuth(`/pricing/macro-rules/match${qs}`);
+  return unwrap<MacroMatchResponse>(response);
+}
+
+/**
+ * Máy chủ CHƯA có hai route mới (admin mới chạy trước backend mới)? Khi đó `GET …/search` và `GET …/match` rơi vào route
+ * `GET macro-rules/:id` ⇒ 400 «Validation failed (numeric string is expected)» (đã đo trên backend cũ), hoặc 404. Nơi gọi
+ * phải báo «máy chủ chưa cập nhật» thay vì lặng lẽ hiện danh sách KHÔNG lọc. Câu tiếng Anh thường đã bị thay bằng câu
+ * chuẩn tiếng Việt ở `message` (câu gốc còn ở `rawMessage`); riêng mã VAL_001 giữ câu gốc ở `message` ⇒ xét cả hai.
+ */
+export function isMacroSearchUnsupported(err: unknown): boolean {
+  if (!(err instanceof ApiError)) return false;
+  if (err.httpStatus === 404) return true;
+  if (err.httpStatus !== 400) return false;
+  return /numeric string/i.test(`${err.rawMessage ?? ''}\n${err.message ?? ''}`);
+}
+
 // Hai API dưới trả danh sách sắp theo mã ký tự (`ORDER BY …name`, DB `C.UTF-8`) nên Đ/Ô/Ơ/Ư dồn xuống cuối —
 // "Đại Từ" nằm cuối danh sách xã Thái Nguyên. Sắp lại theo tiếng Việt cho mọi màn chọn tỉnh/xã.
 export async function getPricingMacroProvinces(): Promise<ProvinceOption[]> {
