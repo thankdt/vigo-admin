@@ -697,7 +697,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
       }
       const res = await sendBookingPassToZalo(booking.id, { message: text });
       toast({
-        title: 'Đã pass chuyến vào nhóm Zalo (@All)',
+        title: 'Đã pass chuyến vào nhóm Zalo',
         description: `Đã gửi vào nhóm "${res.groupName}"${
           res.matchedProvinceLabel ? ` (Tỉnh: ${res.matchedProvinceLabel})` : ' (Nhóm mặc định)'
         }.`,
@@ -1231,7 +1231,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                             disabled={sendingZaloId === booking.id}
                           >
                             <Send className="mr-2 h-4 w-4 text-blue-600" />
-                            {sendingZaloId === booking.id ? 'Đang gửi Zalo...' : 'Pass vào nhóm Zalo (@All)'}
+                            {sendingZaloId === booking.id ? 'Đang gửi Zalo...' : 'Pass vào nhóm Zalo'}
                           </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => handleCopyPass(booking)}>
                             <Copy className="mr-2 h-4 w-4" />

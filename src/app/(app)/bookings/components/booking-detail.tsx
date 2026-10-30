@@ -709,7 +709,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
       setSentZalo(true);
       setTimeout(() => setSentZalo(false), 3000);
       toast({
-        title: 'Đã pass chuyến vào nhóm Zalo (@All)',
+        title: 'Đã pass chuyến vào nhóm Zalo',
         description: `Đã gửi vào nhóm "${res.groupName}"${
           res.matchedProvinceLabel ? ` (Tỉnh: ${res.matchedProvinceLabel})` : ' (Nhóm mặc định)'
         }.`,
@@ -1288,7 +1288,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 ) : (
                   <Send className="mr-2 h-4 w-4 text-blue-600" />
                 )}
-                {sendingZalo ? 'Đang gửi Zalo...' : sentZalo ? 'Đã gửi nhóm Zalo' : 'Pass nhóm Zalo (@All)'}
+                {sendingZalo ? 'Đang gửi Zalo...' : sentZalo ? 'Đã gửi nhóm Zalo' : 'Pass nhóm Zalo'}
               </Button>
               <Button
                 type="button"
