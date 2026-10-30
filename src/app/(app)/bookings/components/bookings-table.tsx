@@ -33,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy, Send } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
 // Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
@@ -43,7 +43,7 @@ import { Combobox } from '@/components/ui/combobox';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
-import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes} from '@/lib/api';
+import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking, /* adminAcceptBooking, */ claimProcessingBooking, getRoutes, sendBookingPassToZalo } from '@/lib/api';
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
 import { MacroRuleBadge, MacroRuleQuickEditDialog } from './macro-rule-quick-edit-dialog';
 import { buildTripPassText } from './booking-pass-utils';
@@ -59,6 +59,7 @@ import { getImageUrl } from '@/lib/utils';
 import { useProvinceOptions } from '@/hooks/use-province-options';
 import { GEO_FILTER_ALL, geoFilterParams, legacyRouteFilterOptions, provinceFilterOptions } from './geo-filter';
 import { CreateBookingDialog } from './create-booking-dialog';
+import { ZaloPassConfigDialog } from './zalo-pass-config-dialog';
 import { DriverCommitmentBadge } from './driver-commitment-badge';
 import { bookingToDraft, type BookingDraft } from './duplicate-utils';
 import type { Booking, BookingStatus, CustomerCallFilter, DuplicateTripFilter, Driver, TestTripFilter } from '@/lib/types';
@@ -657,6 +658,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
     setDuplicateDraft(bookingToDraft(booking));
   }
 
+  const [sendingZaloId, setSendingZaloId] = React.useState<string | null>(null);
+
   const handleCopyPass = async (booking: Booking) => {
     const text = buildTripPassText(booking, provinceNames);
     try {
@@ -682,6 +685,31 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
         title: 'Không thể sao chép',
         description: 'Vui lòng thử lại hoặc cấp quyền clipboard cho trình duyệt.',
       });
+    }
+  };
+
+  const handleSendZaloPass = async (booking: Booking) => {
+    const text = buildTripPassText(booking, provinceNames);
+    setSendingZaloId(booking.id);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        navigator.clipboard.writeText(text).catch(() => {});
+      }
+      const res = await sendBookingPassToZalo(booking.id, { message: text });
+      toast({
+        title: 'Đã pass chuyến vào nhóm Zalo',
+        description: `Đã gửi vào nhóm "${res.groupName}"${
+          res.matchedProvinceLabel ? ` (Tỉnh: ${res.matchedProvinceLabel})` : ' (Nhóm mặc định)'
+        }.`,
+      });
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Gửi vào nhóm Zalo thất bại',
+        description: err.message || 'Vui lòng kiểm tra cấu hình Vizio MCP.',
+      });
+    } finally {
+      setSendingZaloId(null);
     }
   };
 
@@ -928,7 +956,8 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               </Button>
             )}
           </div>
-          <div className='ml-auto'>
+          <div className='ml-auto flex items-center gap-2'>
+            <ZaloPassConfigDialog />
             <CreateBookingDialog onSuccess={() => reload()} />
           </div>
         </div>
@@ -1197,6 +1226,13 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                               🛎️ Nhận xử lý
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onSelect={() => handleSendZaloPass(booking)}
+                            disabled={sendingZaloId === booking.id}
+                          >
+                            <Send className="mr-2 h-4 w-4 text-blue-600" />
+                            {sendingZaloId === booking.id ? 'Đang gửi Zalo...' : 'Pass vào nhóm Zalo'}
+                          </DropdownMenuItem>
                           <DropdownMenuItem onSelect={() => handleCopyPass(booking)}>
                             <Copy className="mr-2 h-4 w-4" />
                             Copy pass chuyến

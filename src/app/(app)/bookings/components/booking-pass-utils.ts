@@ -81,15 +81,16 @@ export function buildTripPassText(booking: Booking, provinceNames: ProvinceNameM
   const priceText = fmtVnd(finalPrice);
 
   const lines = [
-    `🚕 CHƯA CÓ TÀI XẾ`,
+    `💰 Cước phí: ${priceText}`,
+    `👥 Số khách: ${seatsText}`,
     `⏰ Thời gian: ${timeText}`,
     `📍 Điểm đón: ${pickup}`,
     `📍 Điểm trả: ${dropoff}`,
     routeLine,
     `🚗 Loại xe: ${vehicleInfo}`,
-    `👥 Số khách: ${seatsText}`,
-    `💰 Cước phí: ${priceText}`,
     booking.note ? `📝 Ghi chú: ${booking.note}` : null,
+    `🚕 CHƯA CÓ TÀI XẾ`,
+    `@all`,
   ].filter(Boolean);
 
   return lines.join('\n');
