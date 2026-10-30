@@ -90,6 +90,7 @@ export function buildTripPassText(booking: Booking, provinceNames: ProvinceNameM
     `🚗 Loại xe: ${vehicleInfo}`,
     booking.note ? `📝 Ghi chú: ${booking.note}` : null,
     `🚕 CHƯA CÓ TÀI XẾ`,
+    `@all`,
   ].filter(Boolean);
 
   return lines.join('\n');
