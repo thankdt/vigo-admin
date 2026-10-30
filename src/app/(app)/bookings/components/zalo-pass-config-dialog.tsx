@@ -37,7 +37,7 @@ export function ZaloPassConfigDialog() {
   const [channelId, setChannelId] = React.useState('');
   const [defaultGroupId, setDefaultGroupId] = React.useState('');
   const [defaultGroupName, setDefaultGroupName] = React.useState('');
-  const [mentionAll, setMentionAll] = React.useState(true);
+  const [mentionAll, setMentionAll] = React.useState(false);
   const [autoPassOnCreate, setAutoPassOnCreate] = React.useState(true);
   const [provinceGroupMap, setProvinceGroupMap] = React.useState<
     Record<string, { groupId: string; groupName?: string }>
@@ -58,7 +58,7 @@ export function ZaloPassConfigDialog() {
       setChannelId(cfg.channelId || '');
       setDefaultGroupId(cfg.defaultGroupId || '');
       setDefaultGroupName(cfg.defaultGroupName || '');
-      setMentionAll(cfg.mentionAll ?? true);
+      setMentionAll(cfg.mentionAll ?? false);
       setAutoPassOnCreate(cfg.autoPassOnCreate ?? true);
       setProvinceGroupMap(cfg.provinceGroupMap || {});
       setCatalog(cfg.provinceCatalog || []);
