@@ -1,14 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { PricingMacroRule } from '@/lib/types';
+import type { MacroMatchCombo, MacroMatchRankingRow, MacroMatchResponse } from '@/lib/api';
+import { buildApiError } from '@/lib/api-error';
+import type { PricingMacroRule, ProvinceOption, SpecialZone, WardOption } from '@/lib/types';
 
 // `toast` PHẢI là cùng một hàm qua mọi lần render: loadData() phụ thuộc vào nó, nếu mỗi lần một hàm mới
 // thì effect nạp dữ liệu chạy lại vô hạn.
 const toastMock = vi.fn();
 const getRules = vi.fn();
+const searchRules = vi.fn();
+const matchRules = vi.fn();
 const getProvinces = vi.fn();
 const getWards = vi.fn();
 const getZones = vi.fn();
@@ -17,25 +21,36 @@ const updateRule = vi.fn();
 const deleteRule = vi.fn();
 const bulkDelete = vi.fn();
 const bandWarnings = vi.fn();
-const aiSearch = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
-vi.mock('@/lib/api', () => ({
+vi.mock('@/lib/api', async (importOriginal) => {
+  // Phân loại lỗi «máy chủ chưa có route mới» dùng bản THẬT: test máy chủ cũ phải đi đúng đường của trang.
+  const actual = await importOriginal<typeof import('@/lib/api')>();
   // Mock trả mảng cho gọn; bọc lại thành trang { items, total, page, limit } như backend.
-  getPricingMacroRulesPage: async (...a: unknown[]) => {
-    const r = await getRules(...a);
-    return Array.isArray(r) ? { items: r, total: r.length, page: 1, limit: 50 } : r;
-  },
-  aiSearchPricingMacroRules: (...a: unknown[]) => aiSearch(...a),
-  getPricingMacroProvinces: (...a: unknown[]) => getProvinces(...a),
-  getPricingMacroWards: (...a: unknown[]) => getWards(...a),
-  getSpecialZones: (...a: unknown[]) => getZones(...a),
-  createPricingMacroRule: (...a: unknown[]) => createRule(...a),
-  updatePricingMacroRule: (...a: unknown[]) => updateRule(...a),
-  deletePricingMacroRule: (...a: unknown[]) => deleteRule(...a),
-  bulkDeletePricingMacroRules: (...a: unknown[]) => bulkDelete(...a),
-  getPricingMacroBandWarnings: (...a: unknown[]) => bandWarnings(...a),
-}));
+  const asPage = (r: unknown) => (Array.isArray(r) ? { items: r, total: r.length, page: 1, limit: 50 } : r);
+  return {
+    isMacroSearchUnsupported: actual.isMacroSearchUnsupported,
+    getPricingMacroRulesPage: async (...a: unknown[]) => asPage(await getRules(...a)),
+    searchPricingMacroRules: async (...a: unknown[]) => asPage(await searchRules(...a)),
+    matchPricingMacroRules: (...a: unknown[]) => matchRules(...a),
+    getPricingMacroProvinces: (...a: unknown[]) => getProvinces(...a),
+    getPricingMacroWards: (...a: unknown[]) => getWards(...a),
+    getSpecialZones: (...a: unknown[]) => getZones(...a),
+    createPricingMacroRule: (...a: unknown[]) => createRule(...a),
+    updatePricingMacroRule: (...a: unknown[]) => updateRule(...a),
+    deletePricingMacroRule: (...a: unknown[]) => deleteRule(...a),
+    bulkDeletePricingMacroRules: (...a: unknown[]) => bulkDelete(...a),
+    getPricingMacroBandWarnings: (...a: unknown[]) => bandWarnings(...a),
+  };
+});
+
+// Select của Radix (ô Dịch vụ / Loại xe / Trạng thái) cần mấy API con trỏ mà jsdom không có (như macro-search-bar.test.tsx).
+beforeAll(() => {
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+  window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  if (!window.PointerEvent) (window as any).PointerEvent = MouseEvent;
+});
 // Hộp thoại tạo hàng loạt có test riêng (macro-bulk-dialog.test.tsx). Ở đây chỉ kiểm manager mở nó đúng
 // lúc và nạp lại danh sách khi nó báo xong.
 vi.mock('./macro-bulk-dialog', () => ({
@@ -143,17 +158,41 @@ function rowOf(name: string): HTMLElement {
   return screen.getByTestId(`rule-row-${NAME_ID[name]}`);
 }
 
+const pageOf = (items: PricingMacroRule[], total: number, page = 1, limit = 50) => ({ items, total, page, limit });
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const qBox = () => screen.getByRole('textbox', { name: 'Ghi chú hoặc mã quy tắc' });
+const ruleRows = () => screen.queryAllByTestId(/^rule-row-/);
+/**
+ * Đợi KẾT QUẢ của lượt nạp mới: các dòng `shown` có mặt VÀ các dòng `gone` đã biến mất. Chỉ đợi «dòng cũ biến mất» là
+ * chưa đủ — lúc đang tải bảng chỉ có vòng xoay nên điều kiện đó đúng cả TRƯỚC khi kết quả về.
+ */
+const waitForResult = ({ shown, gone = [] }: { shown: number[]; gone?: number[] }) =>
+  waitFor(() => {
+    for (const id of gone) expect(screen.queryByTestId(`rule-row-${id}`)).not.toBeInTheDocument();
+    for (const id of shown) expect(screen.getByTestId(`rule-row-${id}`)).toBeInTheDocument();
+  });
+type ListParams = { page: number; limit: number; noteSearch?: string };
+/**
+ * Bộ lọc CHỈ có ô ghi chú/mã đi route danh sách CŨ (`getPricingMacroRulesPage({ noteSearch })`). Mock: có noteSearch ⇒
+ * `byNote(...)`; không có ⇒ giữ đúng cách trả của mock hiện tại (danh sách thường).
+ */
+function noteListReturns(byNote: (q: string, p: ListParams) => unknown) {
+  const plain = getRules.getMockImplementation();
+  getRules.mockImplementation(async (p: ListParams) => (p?.noteSearch ? byNote(p.noteSearch, p) : plain?.(p)));
+}
+
 describe('PricingMacroManager — danh sách', () => {
   beforeEach(() => {
     toastMock.mockReset();
     getRules.mockReset();
+    searchRules.mockReset();
+    matchRules.mockReset();
     getProvinces.mockReset().mockResolvedValue(PROVINCES);
     getWards.mockReset().mockResolvedValue([]);
     createRule.mockReset();
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
-    aiSearch.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -184,27 +223,21 @@ describe('PricingMacroManager — danh sách', () => {
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
   });
 
-  it('không còn 3 ô tìm điểm đón/điểm đi/ghi chú; tìm bằng AI gọi server, về trang 1; "chọn tất cả" chỉ chọn dòng của trang đang xem', async () => {
+  it('không còn 3 ô tìm cũ lẫn ô AI; lọc bằng thanh «Tìm quy tắc» gọi server; "chọn tất cả" chỉ chọn dòng của trang đang xem', async () => {
     const { user } = await setup();
     expect(screen.queryByLabelText('Tìm điểm đón')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Tìm điểm đi')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Tìm ghi chú')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText('Tìm kiếm thông minh bằng AI')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Tìm với AI' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Gemini/)).not.toBeInTheDocument();
 
-    aiSearch.mockResolvedValue({
-      items: [TWO_WAY],
-      total: 1,
-      page: 1,
-      limit: 50,
-      explanation: 'Quy tắc Hà Nội ↔ Hưng Yên',
-      winningRuleId: 2,
-    });
-    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'hà nội đi hưng yên');
-    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
-    await waitFor(() =>
-      expect(aiSearch).toHaveBeenCalledWith({ query: 'hà nội đi hưng yên', page: 1, limit: 50 }),
-    );
-    expect(await screen.findByTestId('ai-search-banner')).toHaveTextContent('Quy tắc Hà Nội ↔ Hưng Yên');
-    await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
+    // chỉ ô ghi chú/mã ⇒ route danh sách cũ với noteSearch (chạy cả trên backend chưa có …/search)
+    noteListReturns(() => pageOf([TWO_WAY], 1));
+    await user.type(qBox(), 'hưng yên');
+    await waitFor(() => expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 50, noteSearch: 'hưng yên' }));
+    await waitForResult({ shown: [2], gone: [1] });
+    expect(searchRules).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
@@ -221,10 +254,9 @@ describe('PricingMacroManager — danh sách', () => {
     await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #2\b/ }));
 
     // sang kết quả tìm khác: hai dòng đã chọn không còn ở trang đang xem, chọn thêm dòng đang hiện
-    aiSearch.mockResolvedValue({ items: [CANONICAL], total: 1, page: 1, limit: 50, explanation: 'api', winningRuleId: null });
-    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'api');
-    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
-    await waitFor(() => expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument());
+    noteListReturns(() => pageOf([CANONICAL], 1));
+    await user.type(qBox(), 'api');
+    await waitForResult({ shown: [3], gone: [1, 2] });
     await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
     expect(screen.getByRole('button', { name: 'Xoá đã chọn (3)' })).toBeInTheDocument();
 
@@ -425,7 +457,8 @@ describe('PricingMacroManager — tạo/sửa một quy tắc', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
-    aiSearch.mockReset();
+    searchRules.mockReset();
+    matchRules.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -638,7 +671,8 @@ describe('PricingMacroManager — ô chọn tỉnh / xã (Combobox có ô tìm)'
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
-    aiSearch.mockReset();
+    searchRules.mockReset();
+    matchRules.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -776,11 +810,10 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
-    aiSearch.mockReset();
+    searchRules.mockReset();
+    matchRules.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
-
-  const pageOf = (items: PricingMacroRule[], total: number, page = 1, limit = 50) => ({ items, total, page, limit });
 
   it('không còn cột/ô "Tên quy tắc"; dòng hiện điểm đón/trả (tên xã nếu có) + nhãn 2 chiều + ghi chú', async () => {
     const r = rule({
@@ -897,29 +930,971 @@ describe('PricingMacroManager — bỏ tên quy tắc + phân trang', () => {
     expect(await screen.findByTestId('rule-row-1')).toBeInTheDocument();
   });
 
-  it('kết quả của yêu cầu CŨ không đè lên yêu cầu mới (gõ tìm nhanh)', async () => {
-    let releaseOld: (v: unknown) => void = () => {};
-    getRules.mockImplementationOnce(() => new Promise((r) => (releaseOld = r))); // lần nạp đầu: treo
-    aiSearch.mockResolvedValue({ ...pageOf([TWO_WAY], 1), explanation: 'x', winningRuleId: null });
+  it('kết quả của yêu cầu CŨ không đè lên yêu cầu mới (danh sách treo → gõ tìm; tìm A treo → tìm B)', async () => {
+    let releaseList: (v: unknown) => void = () => {};
+    let releaseA: (v: unknown) => void = () => {};
+    // Chỉ ô ghi chú/mã ⇒ cùng route danh sách (noteSearch): lần nạp đầu treo, «a» treo, «ab» về ngay.
+    getRules.mockImplementation((p: ListParams) => {
+      if (!p.noteSearch) return new Promise((r) => (releaseList = r));
+      if (p.noteSearch === 'a') return new Promise((r) => (releaseA = r));
+      return Promise.resolve(pageOf([TWO_WAY], 1));
+    });
     render(<PricingMacroManager />);
     const user = userEvent.setup();
-    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'x');
-    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
-    await screen.findByTestId('rule-row-2');
-    releaseOld(pageOf([ONE_WAY], 1)); // yêu cầu cũ về muộn
-    await new Promise((r) => setTimeout(r, 20));
+    await user.type(qBox(), 'a');
+    await waitFor(() => expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 50, noteSearch: 'a' }));
+    await user.type(qBox(), 'b');
+    await screen.findByTestId('rule-row-2'); // tìm «ab» về trước
+    releaseList(pageOf([ONE_WAY], 1)); // danh sách thường về muộn
+    releaseA(pageOf([CANONICAL], 1)); // tìm «a» về muộn
+    await sleep(30);
     expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('rule-row-3')).not.toBeInTheDocument();
     expect(screen.getByTestId('rule-row-2')).toBeInTheDocument();
   });
 
-  it('không khớp từ khoá ⇒ báo riêng, không phải "chưa có quy tắc"', async () => {
-    getRules.mockImplementation(async () => pageOf([ONE_WAY], 1));
-    aiSearch.mockResolvedValue({ ...pageOf([], 0), explanation: 'zzz', winningRuleId: null });
+  it('lọc mà không có kết quả ⇒ «Không có quy tắc nào khớp bộ lọc.»; không lọc mà trống ⇒ câu cũ', async () => {
+    getRules.mockResolvedValue(pageOf([], 0));
+    searchRules.mockResolvedValue(pageOf([], 0));
     render(<PricingMacroManager />);
     const user = userEvent.setup();
+    expect(
+      await screen.findByText('Chưa có quy tắc macro nào. Bấm "Thêm quy tắc" để bắt đầu cấu hình.'),
+    ).toBeInTheDocument();
+    await user.type(qBox(), 'zzz');
+    expect(await screen.findByText('Không có quy tắc nào khớp bộ lọc.')).toBeInTheDocument();
+    expect(screen.queryByText(/Chưa có quy tắc macro nào/)).not.toBeInTheDocument();
+  });
+});
+
+// ───────── Thanh «Tìm quy tắc»: lọc theo mã + «quy tắc đang áp» ─────────
+
+// Cùng bộ dữ liệu với macro-place-picker.test.tsx / ward-quick-add.test.tsx: «dai tu» = Đại Từ (chắc chắn), «cau giay» =
+// Cầu Giấy, «thai nguyen» = Cả tỉnh Thái Nguyên, «Dong Anh» = chỉ có dòng «Tìm theo chữ», «san bay noi bai» = điểm đặc biệt.
+const PICK_PROVINCES: ProvinceOption[] = [
+  { code: '01', name: 'Hà Nội' },
+  { code: '15', name: 'Lào Cai' },
+  { code: '19', name: 'Thái Nguyên' },
+  { code: '20', name: 'Lạng Sơn' },
+  { code: '92', name: 'Cần Thơ' },
+];
+const PICK_WARDS: WardOption[] = [
+  { code: '19001', name: 'Đại Từ', provinceCode: '19' },
+  { code: '19002', name: 'Đại Phúc', provinceCode: '19' },
+  { code: '19003', name: 'Phú Bình', provinceCode: '19' },
+  { code: '19004', name: 'Phú Lương', provinceCode: '19' },
+  { code: '01001', name: 'Phú Bình', provinceCode: '01' },
+  { code: '01002', name: 'Cầu Giấy', provinceCode: '01' },
+  { code: '01003', name: 'Nội Bài', provinceCode: '01' },
+  { code: '01004', name: 'Láng', provinceCode: '01' },
+  { code: '01005', name: 'Thanh Xuân', provinceCode: '01' },
+  { code: '92001', name: 'Thạnh Xuân', provinceCode: '92' },
+  { code: '15001', name: 'Lào Cai', provinceCode: '15' },
+];
+const PICK_ZONES: SpecialZone[] = [
+  { code: 'NOIBAI', name: 'Sân bay Nội Bài', provinceCode: '01', provinceName: 'Hà Nội', kind: 'AIRPORT', active: true },
+];
+const DAI_TU = { originProvinceCode: '19', originWardCode: '19001' };
+const CAU_GIAY = { destProvinceCode: '01', destWardCode: '01002' };
+
+// Luật Đại Từ → Cầu Giấy — dữ liệu MÁY GIÁ SINH RA ĐƯỢC (rankMacroRules: độ cụ thể xã › tỉnh › đúng dịch vụ › đúng xe,
+// rồi ưu tiên, rồi mã lớn hơn; xe null = chỉ luật «Mọi loại xe» khớp):
+//  - 13, 12: xã→xã, mọi dịch vụ, Xe 7 chỗ, cùng ưu tiên 1 ⇒ 13 thắng ở ghép/7 và bao xe/7, 12 thua vì mã nhỏ hơn;
+//  - 5: tỉnh→tỉnh, Xe 7 chỗ ⇒ thua vì kém cụ thể;
+//  - 14, 15: xã→xã, Bao xe · Xe 4 chỗ, ưu tiên 3 / 1 ⇒ 14 thắng ở bao xe/4, 15 thua vì ưu tiên thấp hơn;
+//  - ghép/4 và ghép KHÔNG chọn xe: không luật nào khớp ⇒ giữ giá gốc (tổ hợp chọn sẵn phải bỏ qua chúng);
+//  - 77: khớp bộ lọc nhưng ĐANG TẮT ⇒ không có trong bảng xếp hạng nào (/match chỉ xét luật đang bật).
+const TN_HN: Partial<PricingMacroRule> = {
+  originProvinceCode: '19',
+  originWardCode: '19001',
+  originWardName: 'Đại Từ',
+  destProvinceCode: '01',
+  destWardCode: '01002',
+  destWardName: 'Cầu Giấy',
+};
+const R13 = rule({ ...TN_HN, id: 13, priority: 1, vehicleType: 'CAR_7' });
+const R12 = rule({ ...TN_HN, id: 12, priority: 1, vehicleType: 'CAR_7', adjustmentValue: 15000 });
+const R5 = rule({
+  id: 5,
+  priority: 9,
+  originProvinceCode: '19',
+  destProvinceCode: '01',
+  vehicleType: 'CAR_7',
+  adjustmentType: 'PERCENTAGE',
+  adjustmentValue: 5,
+});
+const R14 = rule({ ...TN_HN, id: 14, priority: 3, serviceType: 'RIDE', vehicleType: 'CAR_4' });
+const R15 = rule({ ...TN_HN, id: 15, priority: 1, serviceType: 'RIDE', vehicleType: 'CAR_4' });
+const R77 = rule({ id: 77, originProvinceCode: '19', destProvinceCode: '01', serviceType: 'RIDE', isActive: false });
+
+type Spec = MacroMatchRankingRow['specificity'];
+const WARD_VEH: Spec = { wardEnds: 2, provinceEnds: 0, serviceExact: 0, vehicleExact: 1 };
+const rank = (ruleId: number, verdict: MacroMatchRankingRow['verdict'], specificity: Spec = WARD_VEH): MacroMatchRankingRow => ({
+  ruleId,
+  verdict,
+  orientation: 'FORWARD',
+  specificity,
+  score: specificity.wardEnds * 100 + specificity.provinceEnds * 50 + specificity.serviceExact * 10 + specificity.vehicleExact * 10,
+});
+const combo = (
+  serviceType: MacroMatchCombo['serviceType'],
+  vehicleType: MacroMatchCombo['vehicleType'],
+  winnerRuleId: number | null,
+  ranking: MacroMatchRankingRow[] = [],
+  flatPrice: MacroMatchCombo['flatPrice'] = null,
+): MacroMatchCombo => ({
+  serviceType,
+  vehicleType,
+  winnerRuleId,
+  orientation: winnerRuleId === null ? null : 'FORWARD',
+  score: winnerRuleId === null ? null : (ranking[0]?.score ?? 1),
+  ranking,
+  truncated: false,
+  flatPrice,
+});
+const matchOf = (combos: MacroMatchCombo[], rules: PricingMacroRule[] = [R13, R12, R5, R14, R15]): MacroMatchResponse => ({
+  origin: { provinceCode: '19', wardCode: '19001', zoneCode: null },
+  dest: { provinceCode: '01', wardCode: '01002', zoneCode: null },
+  combos,
+  rules,
+  warnings: [],
+});
+const R7_RANKING = () => [
+  rank(13, 'WINNER'),
+  rank(12, 'LOSES_ID'),
+  rank(5, 'LOSES_SPECIFICITY', { wardEnds: 0, provinceEnds: 2, serviceExact: 0, vehicleExact: 1 }),
+];
+// Năm tổ hợp đúng thứ tự máy chủ. Hai tổ hợp ĐẦU không có luật thắng ⇒ tổ hợp chọn sẵn (không lọc) là ghép/7.
+const MATCH = matchOf([
+  combo('CARPOOL', 'CAR_4', null),
+  combo('CARPOOL', null, null),
+  combo('CARPOOL', 'CAR_7', 13, R7_RANKING()),
+  combo('RIDE', 'CAR_4', 14, [
+    rank(14, 'WINNER', { wardEnds: 2, provinceEnds: 0, serviceExact: 1, vehicleExact: 1 }),
+    rank(15, 'LOSES_PRIORITY', { wardEnds: 2, provinceEnds: 0, serviceExact: 1, vehicleExact: 1 }),
+  ]),
+  combo('RIDE', 'CAR_7', 13, R7_RANKING()),
+]);
+
+// Máy chủ CŨ: `GET …/search` rơi vào route `:id` ⇒ 400 «numeric string» (đã đo ở FE1).
+const UNSUPPORTED = (path = 'GET /pricing/macro-rules/search') =>
+  buildApiError({
+    httpStatus: 400,
+    path,
+    body: { success: false, error: { code: 'Bad Request', message: 'Validation failed (numeric string is expected)' } },
+  });
+const UNSUPPORTED_TEXT =
+  'Máy chủ chưa hỗ trợ tìm kiếm mới (cần cập nhật backend) nên chưa có kết quả tìm để hiện — bấm «Xoá lọc» để xem toàn bộ danh sách.';
+const MATCH_UNSUPPORTED_TEXT = 'Máy chủ chưa hỗ trợ tra quy tắc đang áp dụng (cần cập nhật backend).';
+
+type UE = ReturnType<typeof userEvent.setup>;
+type Side = 'Điểm đón' | 'Điểm đến';
+const ue = () => userEvent.setup({ pointerEventsCheck: 0 });
+const placeBox = (side: Side) =>
+  screen.getByRole('combobox', { name: `${side}: tìm phường/xã, tỉnh hoặc điểm đặc biệt` });
+const placeHint = (side: Side) => screen.getByTestId(`place-picker-hint-${side}`);
+const panel = () => screen.getByTestId('macro-match-panel');
+const comboButton = (label: string) => within(panel()).getByRole('button', { name: new RegExp(`^${label}`) });
+/** Nhãn «ĐANG ÁP · <tổ hợp>» của một dòng (null nếu không có). */
+const winnerBadgeOf = (id: number) => within(screen.getByTestId(`rule-row-${id}`)).queryByText(/^ĐANG ÁP/);
+const allWinnerBadges = () => screen.queryAllByText(/^ĐANG ÁP/);
+
+async function choose(u: UE, name: 'Dịch vụ' | 'Loại xe' | 'Trạng thái', option: string) {
+  await u.click(screen.getByRole('combobox', { name }));
+  await u.click(await screen.findByRole('option', { name: option }));
+}
+
+/** Chọn một điểm bằng ô chọn điểm THẬT (của FE1): gõ rồi bấm đúng dòng gợi ý. */
+async function pickPlace(u: UE, side: Side, text: string, option: string) {
+  await u.type(placeBox(side), text);
+  await u.click(await screen.findByRole('option', { name: option }));
+  await screen.findByTestId(`place-picker-chip-${side}`);
+}
+
+async function renderManager() {
+  render(<PricingMacroManager />);
+  await screen.findByTestId('rule-row-1');
+  return ue();
+}
+
+describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => {
+  beforeEach(() => {
+    toastMock.mockReset();
+    getRules.mockReset().mockResolvedValue(pageOf([ONE_WAY, TWO_WAY, CANONICAL], 3));
+    searchRules.mockReset().mockResolvedValue(pageOf([], 0));
+    matchRules.mockReset().mockResolvedValue(MATCH);
+    getProvinces.mockReset().mockResolvedValue(PICK_PROVINCES);
+    // Không mã tỉnh = ô chọn điểm nạp MỌI xã; có mã = form sửa nạp xã của một tỉnh.
+    getWards.mockReset().mockImplementation(async (code?: string) => (code ? [] : PICK_WARDS));
+    getZones.mockReset().mockResolvedValue(PICK_ZONES);
+    updateRule.mockReset();
+    deleteRule.mockReset();
+    bulkDelete.mockReset();
+    bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
+  });
+  afterEach(() => {
+    window.history.pushState({}, '', '/');
+  });
+
+  it('mặc định: gọi danh sách thường y như trước, KHÔNG gọi tìm kiếm / tra «đang áp»; chưa có khung «đang áp», chưa báo gì', async () => {
+    await renderManager();
+    expect(getRules).toHaveBeenCalledTimes(1);
+    expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 50 });
+    await sleep(50);
+    expect(searchRules).not.toHaveBeenCalled();
+    expect(matchRules).not.toHaveBeenCalled();
+    expect(qBox()).toHaveValue('');
+    expect(screen.queryByTestId('macro-match-panel')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('macro-search-unsupported')).not.toBeInTheDocument();
+    expect(allWinnerBadges()).toHaveLength(0);
+  });
+
+  it('gõ ô ghi chú/mã (MỘT MÌNH): đợi ngừng gõ ~300 ms rồi gọi route danh sách CŨ với noteSearch MỘT lần (đã cắt, trang 1), KHÔNG gọi tìm kiếm mới', async () => {
+    noteListReturns(() => pageOf([TWO_WAY], 1));
+    const u = await renderManager();
+    await u.type(qBox(), ' dịp lễ ');
+    expect(getRules).toHaveBeenCalledTimes(1); // vừa gõ xong: chưa gọi
+    await waitFor(() => expect(getRules).toHaveBeenCalledTimes(2));
+    expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, noteSearch: 'dịp lễ' });
+    await waitForResult({ shown: [2], gone: [1, 3] });
+    await sleep(400);
+    expect(getRules).toHaveBeenCalledTimes(2);
+    expect(searchRules).not.toHaveBeenCalled();
+  });
+
+  it('ô ghi chú/mã + BẤT KỲ ô lọc nào khác ⇒ tìm kiếm mới (q đi cùng các tham số khác)', async () => {
+    noteListReturns(() => pageOf([TWO_WAY], 1));
+    searchRules.mockResolvedValue(pageOf([CANONICAL], 1));
+    const u = await renderManager();
+    await u.type(qBox(), '#3');
+    await waitForResult({ shown: [2], gone: [1, 3] });
+    await choose(u, 'Trạng thái', 'Đang bật');
+    expect(searchRules).toHaveBeenLastCalledWith({ isActive: true, q: '#3', page: 1, limit: 50 });
+    await waitForResult({ shown: [3], gone: [2] });
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, isActive: true, q: '#3', cover: true, page: 1, limit: 50 });
+    expect(getRules).toHaveBeenCalledTimes(2); // lần đầu + «#3» một mình
+  });
+
+  it('đang ở trang 2: đổi bộ lọc ⇒ về trang 1; sang trang khi đang lọc ⇒ GIỮ bộ lọc', async () => {
+    getRules.mockImplementation(async (p: ListParams) =>
+      p.noteSearch ? pageOf([rule({ id: 200 + p.page })], 120, p.page) : pageOf([ONE_WAY], 120),
+    );
+    searchRules.mockImplementation(async (p: { page: number }) => pageOf([rule({ id: 300 + p.page })], 120, p.page));
+    const u = await renderManager();
+    await u.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 2, limit: 50 }));
+    await waitFor(() => expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 2 / 3'));
+
+    await u.type(qBox(), 'lễ');
+    await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, noteSearch: 'lễ' }));
+    await screen.findByTestId('rule-row-201');
+    expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 1 / 3');
+
+    await u.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByTestId('rule-row-202');
+    expect(getRules).toHaveBeenLastCalledWith({ page: 2, limit: 50, noteSearch: 'lễ' });
+
+    // ô chọn áp NGAY: cũng về trang 1 và giữ chữ đang lọc (giờ là tìm kiếm mới)
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    expect(searchRules).toHaveBeenLastCalledWith({ q: 'lễ', serviceType: 'RIDE', page: 1, limit: 50 });
+    await screen.findByTestId('rule-row-301');
+    expect(searchRules).toHaveBeenCalledTimes(1);
+    expect(getRules).toHaveBeenCalledTimes(4); // đầu, trang 2, «lễ» trang 1, «lễ» trang 2 — đổi dịch vụ không gọi lại danh sách
+  });
+
+  it('ĐANG LỌC mà trang cuối bị làm trống (vd quy tắc vừa bị xoá) ⇒ tự lùi về trang cuối còn dữ liệu, GIỮ bộ lọc', async () => {
+    let emptied = false;
+    searchRules.mockImplementation(async (p: { page: number }) => {
+      if (emptied) return p.page === 1 ? pageOf([rule({ id: 301 })], 50, 1) : pageOf([], 50, p.page);
+      return pageOf([rule({ id: 300 + p.page })], 120, p.page);
+    });
+    const u = await renderManager();
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    await screen.findByTestId('rule-row-301');
+    await u.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByTestId('rule-row-302');
+    await u.click(screen.getByRole('button', { name: 'Trang sau' }));
+    await screen.findByTestId('rule-row-303');
+    expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 3 / 3');
+
+    emptied = true; // còn 50 quy tắc ⇒ chỉ còn 1 trang
+    await u.click(screen.getByRole('button', { name: 'Làm mới' }));
+    await screen.findByTestId('rule-row-301');
+    expect(searchRules).toHaveBeenCalledWith({ serviceType: 'RIDE', page: 3, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ serviceType: 'RIDE', page: 1, limit: 50 });
+    expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 1 / 1');
+    expect(getRules).toHaveBeenCalledTimes(1); // không rơi về danh sách KHÔNG lọc
+  });
+
+  it('Dịch vụ / Loại xe / Trạng thái: gọi tìm kiếm NGAY (không đợi) với đúng tham số', async () => {
+    const u = await renderManager();
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    expect(searchRules).toHaveBeenLastCalledWith({ serviceType: 'RIDE', page: 1, limit: 50 });
+    await choose(u, 'Loại xe', 'Xe 7 chỗ');
+    expect(searchRules).toHaveBeenLastCalledWith({ serviceType: 'RIDE', vehicleType: 'CAR_7', page: 1, limit: 50 });
+    await choose(u, 'Trạng thái', 'Đang tắt');
+    expect(searchRules).toHaveBeenLastCalledWith({
+      serviceType: 'RIDE',
+      vehicleType: 'CAR_7',
+      isActive: false,
+      page: 1,
+      limit: 50,
+    });
+    expect(searchRules).toHaveBeenCalledTimes(3);
+    expect(matchRules).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('macro-match-panel')).not.toBeInTheDocument();
+  });
+
+  it('chọn điểm đón cụ thể bằng ô chọn điểm THẬT ⇒ gửi mã tỉnh + mã xã (+ cover); khung nhắc chọn đủ hai đầu, chưa tra', async () => {
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, cover: true, page: 1, limit: 50 });
+    expect(panel()).toHaveTextContent('Chọn cả điểm đón và điểm đến để xem quy tắc đang áp dụng.');
+    expect(matchRules).not.toHaveBeenCalled();
+    expect(getWards).toHaveBeenCalledTimes(1);
+    expect(getWards).toHaveBeenCalledWith(); // một lần, MỌI xã
+  });
+
+  it('đủ hai đầu cụ thể ⇒ gọi CẢ tìm kiếm lẫn tra «đang áp»; dòng thắng tô xanh + «ĐANG ÁP · <tổ hợp>» cạnh mã; dòng thua có nhãn lý do', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12, R5, R77], 4));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(matchRules).toHaveBeenCalledTimes(1);
+    expect(matchRules).toHaveBeenCalledWith({ ...DAI_TU, ...CAU_GIAY });
+
+    // không lọc dịch vụ/xe: tổ hợp chọn sẵn = tổ hợp ĐẦU TIÊN có luật thắng (ghép/7), không phải tổ hợp 0
+    await waitFor(() => expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'true'));
+    expect(comboButton('Ghép xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'false');
+    await waitForResult({ shown: [13, 12, 5, 77] });
+    const winner = screen.getByTestId('rule-row-13');
+    expect(winner).toHaveClass('bg-emerald-50/70');
+    const badge = within(winner).getByText(/^ĐANG ÁP/);
+    expect(badge).toHaveTextContent('ĐANG ÁP · Ghép 7 chỗ'); // ghi rõ tổ hợp, không chỉ ở title
+    expect(within(winner).getByText('#13').parentElement).toContainElement(badge); // nằm cạnh mã quy tắc
+    expect(within(winner).queryByText('Đang áp dụng')).not.toBeInTheDocument(); // không thêm nhãn xám «thắng»
+    expect(allWinnerBadges()).toHaveLength(1);
+
+    const r12 = screen.getByTestId('rule-row-12');
+    expect(r12).not.toHaveClass('bg-emerald-50/70');
+    expect(within(r12).getByText('Thua: mã nhỏ hơn')).toBeInTheDocument();
+    expect(within(screen.getByTestId('rule-row-5')).getByText('Thua: kém cụ thể hơn')).toBeInTheDocument();
+    const outside = screen.getByTestId('rule-row-77'); // đang tắt: không có trong bảng xếp hạng
+    expect(outside).not.toHaveClass('bg-emerald-50/70');
+    expect(within(outside).queryByText(/^Thua|ĐANG ÁP|Đang áp dụng|Không áp dụng/)).not.toBeInTheDocument();
+  });
+
+  it('bấm tổ hợp khác ⇒ dòng tô xanh và nhãn lý do chuyển theo ĐÚNG tổ hợp đó (không gọi lại máy chủ)', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12, R5, R14, R15, R77], 6));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(13)).toBeInTheDocument());
+
+    await u.click(comboButton('Bao xe · Xe 4 chỗ'));
+    expect(comboButton('Bao xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByTestId('rule-row-14')).toHaveClass('bg-emerald-50/70');
+    expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ');
+    expect(screen.getByTestId('rule-row-13')).not.toHaveClass('bg-emerald-50/70');
+    expect(winnerBadgeOf(13)).not.toBeInTheDocument();
+    expect(within(screen.getByTestId('rule-row-15')).getByText('Thua: ưu tiên thấp hơn')).toBeInTheDocument();
+    expect(within(screen.getByTestId('rule-row-13')).queryByText(/^Thua/)).not.toBeInTheDocument(); // không có trong tổ hợp này
+    expect(within(screen.getByTestId('rule-row-5')).queryByText(/^Thua/)).not.toBeInTheDocument();
+
+    // tổ hợp không có quy tắc nào: không dòng nào được tô
+    await u.click(comboButton('Ghép xe · Xe 4 chỗ'));
+    expect(allWinnerBadges()).toHaveLength(0);
+    expect(screen.queryByText(/^Thua/)).not.toBeInTheDocument();
+    expect(matchRules).toHaveBeenCalledTimes(1);
+  });
+
+  // Lỗi C1 của lượt review: tổ hợp mặc định bỏ qua bộ lọc ⇒ bảng (đã lọc bao xe 7 chỗ) tô «ĐANG ÁP» cho luật thắng của
+  // ghép/4, còn luật thắng THẬT của bao xe/7 không có nhãn gì.
+  describe('tổ hợp đang xem theo bộ lọc Dịch vụ / Loại xe', () => {
+    // #10 «Tất cả» ưu tiên 5; #11 «Bao xe · Xe 7 chỗ» ưu tiên 0. Máy giá: bao xe/7 ⇒ #11 (cụ thể hơn thắng ưu tiên); còn lại #10.
+    const R10 = rule({ ...TN_HN, id: 10, priority: 5 });
+    const R11 = rule({ ...TN_HN, id: 11, priority: 0, serviceType: 'RIDE', vehicleType: 'CAR_7' });
+    const ALL: Spec = { wardEnds: 2, provinceEnds: 0, serviceExact: 0, vehicleExact: 0 };
+    const EXACT: Spec = { wardEnds: 2, provinceEnds: 0, serviceExact: 1, vehicleExact: 1 };
+    const C1_MATCH = matchOf(
+      [
+        combo('CARPOOL', 'CAR_4', 10, [rank(10, 'WINNER', ALL)]),
+        combo('CARPOOL', null, 10, [rank(10, 'WINNER', ALL)]),
+        combo('CARPOOL', 'CAR_7', 10, [rank(10, 'WINNER', ALL)]),
+        combo('RIDE', 'CAR_4', 10, [rank(10, 'WINNER', ALL)]),
+        combo('RIDE', 'CAR_7', 11, [rank(11, 'WINNER', EXACT), rank(10, 'LOSES_SPECIFICITY', ALL)]),
+      ],
+      [R10, R11],
+    );
+    beforeEach(() => {
+      matchRules.mockResolvedValue(C1_MATCH);
+      searchRules.mockResolvedValue(pageOf([R10, R11], 2));
+    });
+
+    it('lọc «Bao xe» + «Xe 7 chỗ» rồi chọn hai điểm ⇒ #11 «ĐANG ÁP · Bao xe 7 chỗ», #10 KHÔNG (thua kém cụ thể)', async () => {
+      const u = await renderManager();
+      await choose(u, 'Dịch vụ', 'Bao xe');
+      await choose(u, 'Loại xe', 'Xe 7 chỗ');
+      await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+      await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+      await waitFor(() => expect(winnerBadgeOf(11)).toHaveTextContent('ĐANG ÁP · Bao xe 7 chỗ'));
+      expect(screen.getByTestId('rule-row-11')).toHaveClass('bg-emerald-50/70');
+      expect(winnerBadgeOf(10)).not.toBeInTheDocument();
+      expect(screen.getByTestId('rule-row-10')).not.toHaveClass('bg-emerald-50/70');
+      expect(within(screen.getByTestId('rule-row-10')).getByText('Thua: kém cụ thể hơn')).toBeInTheDocument();
+      expect(comboButton('Bao xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'true');
+      expect(comboButton('Ghép xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('đổi bộ lọc SAU khi đã có kết quả ⇒ đồng bộ lại ngay (không tra lại máy chủ)', async () => {
+      const u = await renderManager();
+      await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+      await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+      await waitFor(() => expect(winnerBadgeOf(10)).toHaveTextContent('ĐANG ÁP · Ghép 4 chỗ'));
+
+      await choose(u, 'Dịch vụ', 'Bao xe'); // tổ hợp bao xe ĐẦU TIÊN có luật thắng: bao xe/4
+      await waitFor(() => expect(winnerBadgeOf(10)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+      await choose(u, 'Loại xe', 'Xe 7 chỗ');
+      await waitFor(() => expect(winnerBadgeOf(11)).toHaveTextContent('ĐANG ÁP · Bao xe 7 chỗ'));
+      expect(winnerBadgeOf(10)).not.toBeInTheDocument();
+      expect(matchRules).toHaveBeenCalledTimes(1);
+    });
+
+    it('tổ hợp người dùng bấm được GIỮ khi đổi bộ lọc mà nó vẫn khớp; bị BỎ khi không còn khớp', async () => {
+      const u = await renderManager();
+      await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+      await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+      await waitFor(() => expect(winnerBadgeOf(10)).toBeInTheDocument());
+      await u.click(comboButton('Bao xe · Xe 7 chỗ'));
+      expect(winnerBadgeOf(11)).toHaveTextContent('ĐANG ÁP · Bao xe 7 chỗ');
+
+      await choose(u, 'Dịch vụ', 'Bao xe'); // bao xe/7 vẫn khớp «Bao xe» ⇒ giữ (mặc định sẽ là bao xe/4)
+      await waitForResult({ shown: [10, 11] });
+      expect(comboButton('Bao xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'true');
+      expect(winnerBadgeOf(11)).toHaveTextContent('ĐANG ÁP · Bao xe 7 chỗ');
+
+      await choose(u, 'Loại xe', 'Xe 4 chỗ'); // không còn khớp ⇒ về mặc định của bộ lọc mới: bao xe/4
+      await waitFor(() => expect(winnerBadgeOf(10)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+      expect(winnerBadgeOf(11)).not.toBeInTheDocument();
+      expect(comboButton('Bao xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true');
+
+      await choose(u, 'Loại xe', 'Tất cả loại xe'); // lựa chọn cũ đã bị bỏ: KHÔNG quay lại bao xe/7
+      await waitForResult({ shown: [10, 11] });
+      expect(winnerBadgeOf(10)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ');
+    });
+
+    it('«Ghép xe · không chọn loại xe»: nhãn riêng; bấm ⇒ bảng tô luật thắng của tổ hợp đó; lọc «Xe 4 chỗ» ⇒ bỏ (không khớp)', async () => {
+      // #20 «Ghép · Xe 4 chỗ» thắng ghép/4; #21 «Ghép · Mọi loại xe» thua ở ghép/4 (kém cụ thể) nhưng là luật DUY NHẤT áp
+      // khi chuyến không chọn loại xe (máy giá bỏ luật chỉ định xe).
+      const R20 = rule({ ...TN_HN, id: 20, serviceType: 'CARPOOL', vehicleType: 'CAR_4' });
+      const R21 = rule({ ...TN_HN, id: 21, serviceType: 'CARPOOL' });
+      const SVC: Spec = { wardEnds: 2, provinceEnds: 0, serviceExact: 1, vehicleExact: 0 };
+      matchRules.mockResolvedValue(
+        matchOf(
+          [
+            combo('CARPOOL', 'CAR_4', 20, [rank(20, 'WINNER', EXACT), rank(21, 'LOSES_SPECIFICITY', SVC)]),
+            combo('CARPOOL', null, 21, [rank(21, 'WINNER', SVC)]),
+            combo('CARPOOL', 'CAR_7', 21, [rank(21, 'WINNER', SVC)]),
+            combo('RIDE', 'CAR_4', null),
+            combo('RIDE', 'CAR_7', null),
+          ],
+          [R20, R21],
+        ),
+      );
+      searchRules.mockResolvedValue(pageOf([R20, R21], 2));
+      const u = await renderManager();
+      await choose(u, 'Dịch vụ', 'Ghép xe');
+      await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+      await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+      await waitFor(() => expect(winnerBadgeOf(20)).toHaveTextContent('ĐANG ÁP · Ghép 4 chỗ'));
+      const nullCombo = comboButton('Ghép xe · không chọn loại xe');
+      expect(nullCombo).toHaveTextContent('#21');
+
+      await u.click(nullCombo);
+      expect(comboButton('Ghép xe · không chọn loại xe')).toHaveAttribute('aria-pressed', 'true');
+      expect(winnerBadgeOf(21)).toHaveTextContent('ĐANG ÁP · Ghép, không chọn xe');
+      expect(winnerBadgeOf(20)).not.toBeInTheDocument();
+
+      await choose(u, 'Loại xe', 'Xe 4 chỗ');
+      await waitFor(() => expect(winnerBadgeOf(20)).toHaveTextContent('ĐANG ÁP · Ghép 4 chỗ'));
+      expect(winnerBadgeOf(21)).not.toBeInTheDocument();
+      expect(comboButton('Ghép xe · không chọn loại xe')).toHaveAttribute('aria-pressed', 'false');
+    });
+  });
+
+  it('lưu sửa / «Làm mới» (cùng cặp điểm) ⇒ tra lại nhưng GIỮ tổ hợp người dùng đang xem', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12, R14, R15], 4));
+    updateRule.mockResolvedValue({ ...R14 });
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(13)).toBeInTheDocument()); // mặc định ghép/7
+    await u.click(comboButton('Bao xe · Xe 4 chỗ'));
+    expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ');
+
+    await u.click(screen.getByRole('button', { name: /^Sửa quy tắc #14\b/ }));
+    const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
+    await u.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+    await waitFor(() => expect(matchRules).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+    expect(comboButton('Bao xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true');
+    expect(winnerBadgeOf(13)).not.toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: 'Làm mới' }));
+    await waitFor(() => expect(matchRules).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+    expect(comboButton('Bao xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('nạp lại cùng cặp khi CHƯA bấm tổ hợp nào: tổ hợp đang xem KHÔNG nhảy, kể cả khi luật thắng của nó vừa bị xoá', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R14], 2));
+    deleteRule.mockResolvedValue(undefined);
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(13)).toHaveTextContent('ĐANG ÁP · Ghép 7 chỗ')); // mặc định ghép/7
+
+    // xoá #13 (và #12, #5 không còn): ghép/7 hết luật; tổ hợp có luật thắng ĐẦU TIÊN giờ là bao xe/4 (#14)
+    matchRules.mockResolvedValue(
+      matchOf([
+        combo('CARPOOL', 'CAR_4', null),
+        combo('CARPOOL', null, null),
+        combo('CARPOOL', 'CAR_7', null),
+        combo('RIDE', 'CAR_4', 14, [rank(14, 'WINNER'), rank(15, 'LOSES_PRIORITY')]),
+        combo('RIDE', 'CAR_7', null),
+      ]),
+    );
+    await u.click(screen.getByRole('button', { name: /^Xoá quy tắc #13\b/ }));
+    await u.click(await screen.findByRole('button', { name: 'Xoá quy tắc' }));
+    await waitFor(() => expect(matchRules).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveTextContent('Không có quy tắc nào áp (giữ giá gốc)'),
+    );
+    expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'true');
+    await waitForResult({ shown: [14] });
+    expect(winnerBadgeOf(14)).not.toBeInTheDocument(); // không tự nhảy sang tổ hợp bao xe/4
+
+    // tổ hợp được giữ KHÔNG phải do người dùng bấm ⇒ đổi bộ lọc là chọn lại theo bộ lọc mới (ghép: không ai thắng ⇒
+    // tổ hợp ghép đầu tiên)
+    await choose(u, 'Dịch vụ', 'Ghép xe');
+    await waitFor(() => expect(comboButton('Ghép xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true'));
+    expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('nạp lại khi tổ hợp người dùng bấm NẰM NGOÀI bộ lọc Dịch vụ ⇒ chọn lại tổ hợp mặc định của bộ lọc', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R14], 2));
+    const u = await renderManager();
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+    await u.click(comboButton('Ghép xe · Xe 7 chỗ')); // xem thử tổ hợp ngoài bộ lọc: được
+    expect(winnerBadgeOf(13)).toHaveTextContent('ĐANG ÁP · Ghép 7 chỗ');
+
+    await u.click(screen.getByRole('button', { name: 'Làm mới' }));
+    await waitFor(() => expect(matchRules).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+    expect(winnerBadgeOf(13)).not.toBeInTheDocument();
+  });
+
+  it('đổi cặp điểm rồi quay lại ⇒ câu trả lời mới chọn lại tổ hợp mặc định (không giữ lựa chọn của lần trước)', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R14], 2));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(13)).toBeInTheDocument());
+    await u.click(comboButton('Bao xe · Xe 4 chỗ'));
+    expect(winnerBadgeOf(14)).toBeInTheDocument();
+
+    await u.click(screen.getByRole('button', { name: 'Bỏ Điểm đến' }));
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(matchRules).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(winnerBadgeOf(13)).toHaveTextContent('ĐANG ÁP · Ghép 7 chỗ'));
+    expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('một đầu theo chữ ⇒ khung báo chưa biết chính xác xã nào, KHÔNG gọi tra «đang áp»; tìm kiếm gửi chữ cho đầu đó', async () => {
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'Dong Anh', 'Tìm theo chữ «Dong Anh» (gồm tên huyện/tỉnh cũ)');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    expect(searchRules).toHaveBeenLastCalledWith({ originSearch: 'Dong Anh', ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(panel()).toHaveTextContent('Đã chọn theo chữ nên chưa biết chính xác xã nào');
+    await sleep(50);
+    expect(matchRules).not.toHaveBeenCalled();
+    expect(screen.queryByText('ĐANG ÁP')).not.toBeInTheDocument();
+  });
+
+  it('một đầu «Cả tỉnh» ⇒ VẪN tra, nhưng luật thắng cấp tỉnh tô VÀNG «CẤP TỈNH — xã có luật riêng thì thắng», KHÔNG xanh «ĐANG ÁP»', async () => {
+    // #6 cấp tỉnh Thái Nguyên → Cầu Giấy thắng mọi tổ hợp KHI CHỈ XÉT cấp tỉnh; #16 cấp xã Đại Từ → Cầu Giấy (cùng tỉnh, có
+    // trong danh sách) không được /match xét ở đầu «Cả tỉnh» — chuyến thật ở Đại Từ sẽ áp #16.
+    const R6 = rule({ id: 6, originProvinceCode: '19', destProvinceCode: '01', destWardCode: '01002', destWardName: 'Cầu Giấy' });
+    const R16 = rule({ ...TN_HN, id: 16 });
+    const P1W1: Spec = { wardEnds: 1, provinceEnds: 1, serviceExact: 0, vehicleExact: 0 };
+    matchRules.mockResolvedValue(
+      matchOf(
+        [
+          combo('CARPOOL', 'CAR_4', 6, [rank(6, 'WINNER', P1W1)]),
+          combo('CARPOOL', null, 6, [rank(6, 'WINNER', P1W1)]),
+          combo('CARPOOL', 'CAR_7', 6, [rank(6, 'WINNER', P1W1)]),
+          combo('RIDE', 'CAR_4', 6, [rank(6, 'WINNER', P1W1)]),
+          combo('RIDE', 'CAR_7', 6, [rank(6, 'WINNER', P1W1)]),
+        ],
+        [R6],
+      ),
+    );
+    searchRules.mockResolvedValue(pageOf([R6, R16], 2));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'thai nguyen', 'Cả tỉnh Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    expect(searchRules).toHaveBeenLastCalledWith({ originProvinceCode: '19', ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(matchRules).toHaveBeenCalledWith({ originProvinceCode: '19', ...CAU_GIAY });
+    expect(panel()).toHaveTextContent('Bạn chọn cả tỉnh nên quy tắc cấp xã không được xét');
+    await waitFor(() => expect(comboButton('Ghép xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true'));
+    await waitForResult({ shown: [6, 16] });
+    const r6 = screen.getByTestId('rule-row-6');
+    expect(r6).not.toHaveClass('bg-emerald-50/70');
+    expect(r6).toHaveClass('bg-amber-50/70');
+    expect(allWinnerBadges()).toHaveLength(0);
+    const badge = within(r6).getByText('CẤP TỈNH — xã có luật riêng thì thắng');
+    expect(badge).toHaveAttribute('title', expect.stringContaining('quy tắc cấp xã chưa được xét'));
+    expect(within(r6).getByText('#6').parentElement).toContainElement(badge);
+    expect(within(screen.getByTestId('rule-row-16')).queryByText(/CẤP TỈNH|ĐANG ÁP|^Thua/)).not.toBeInTheDocument();
+  });
+
+  it('cặp điểm trúng ĐỒNG GIÁ ⇒ băng vàng trong khung; luật macro «thắng» của tổ hợp đồng giá có nhãn xám «Bị đồng giá bỏ qua», KHÔNG xanh', async () => {
+    const FLAT = { source: 'FLAT_DEFAULT' as const, rowId: 31, price: 250000, unit: 'SEAT' as const };
+    matchRules.mockResolvedValue(
+      matchOf([
+        combo('CARPOOL', 'CAR_4', null, [], FLAT),
+        combo('CARPOOL', null, null, [], FLAT),
+        combo('CARPOOL', 'CAR_7', 13, R7_RANKING(), FLAT),
+        combo('RIDE', 'CAR_4', 14, [rank(14, 'WINNER'), rank(15, 'LOSES_PRIORITY')]), // bao xe: bảng đồng giá không có hàng
+        combo('RIDE', 'CAR_7', 13, R7_RANKING()),
+      ]),
+    );
+    searchRules.mockResolvedValue(pageOf([R13, R12, R14], 3));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    expect(await within(panel()).findByTestId('macro-match-flat-banner')).toHaveTextContent('Xem tab «Sân bay & đồng giá».');
+    expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveAttribute('aria-pressed', 'true');
+    expect(comboButton('Ghép xe · Xe 7 chỗ')).toHaveTextContent('Đồng giá 250.000đ/ghế (hàng #31) — mọi quy tắc bị bỏ qua');
+    await waitForResult({ shown: [13, 12, 14] });
+    const r13 = screen.getByTestId('rule-row-13');
+    expect(r13).not.toHaveClass('bg-emerald-50/70');
+    expect(winnerBadgeOf(13)).not.toBeInTheDocument();
+    expect(within(r13).getByText('Bị đồng giá bỏ qua')).toBeInTheDocument();
+
+    // tổ hợp KHÔNG đồng giá: như thường
+    await u.click(comboButton('Bao xe · Xe 4 chỗ'));
+    expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ');
+    expect(screen.getByTestId('rule-row-14')).toHaveClass('bg-emerald-50/70');
+    expect(screen.queryByText('Bị đồng giá bỏ qua')).not.toBeInTheDocument();
+  });
+
+  it('máy chủ CŨ (400 «numeric string»): báo đỏ phía trên bảng, bảng KHÔNG còn dòng nào (không bao giờ hiện danh sách không lọc)', async () => {
+    searchRules.mockRejectedValue(UNSUPPORTED());
+    const u = await renderManager();
+    expect(ruleRows()).toHaveLength(3);
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    expect(await screen.findByTestId('macro-search-unsupported')).toHaveTextContent(UNSUPPORTED_TEXT);
+    expect(ruleRows()).toHaveLength(0);
+    expect(screen.queryByText('Không có quy tắc nào khớp bộ lọc.')).not.toBeInTheDocument();
+    expect(toastMock).not.toHaveBeenCalled();
+
+    // «Xoá lọc» ⇒ về danh sách thường (máy chủ cũ vẫn có), hết báo
+    await u.click(screen.getByRole('button', { name: 'Xoá lọc' }));
     await screen.findByTestId('rule-row-1');
-    await user.type(screen.getByLabelText('Tìm kiếm thông minh bằng AI'), 'zzz');
-    await user.click(screen.getByRole('button', { name: 'Tìm với AI' }));
-    expect(await screen.findByText('Không có quy tắc nào khớp từ khoá tìm kiếm.')).toBeInTheDocument();
+    expect(screen.queryByTestId('macro-search-unsupported')).not.toBeInTheDocument();
+  });
+
+  it('máy chủ CŨ với tra «đang áp»: khung báo cùng câu đỏ, không dòng nào được tô', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12], 2));
+    matchRules.mockRejectedValue(UNSUPPORTED('GET /pricing/macro-rules/match'));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    expect(await screen.findByTestId('macro-match-error')).toHaveTextContent(MATCH_UNSUPPORTED_TEXT);
+    await screen.findByTestId('rule-row-13');
+    expect(allWinnerBadges()).toHaveLength(0);
+  });
+
+  it('lỗi tìm kiếm khác: toast «Lỗi tìm kiếm» kèm câu lỗi; không để lại dòng của danh sách trước', async () => {
+    searchRules.mockRejectedValue(new Error('Máy chủ đang gặp sự cố'));
+    const u = await renderManager();
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith({
+        title: 'Lỗi tìm kiếm',
+        description: 'Máy chủ đang gặp sự cố',
+        variant: 'destructive',
+      }),
+    );
+    expect(await screen.findByText('Không tải được kết quả tìm kiếm — bấm «Làm mới» để thử lại.')).toBeInTheDocument();
+    expect(screen.queryByTestId('macro-search-unsupported')).not.toBeInTheDocument();
+    expect(ruleRows()).toHaveLength(0);
+  });
+
+  it('lỗi khác khi tra «đang áp»: khung ghi rõ lỗi, không dòng nào được tô, không toast', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12], 2));
+    matchRules.mockRejectedValue(new Error('Hết thời gian chờ'));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    expect(await screen.findByTestId('macro-match-error')).toHaveTextContent(
+      'Không tra được quy tắc đang áp dụng: Hết thời gian chờ',
+    );
+    await waitForResult({ shown: [13, 12] });
+    expect(allWinnerBadges()).toHaveLength(0);
+    expect(toastMock).not.toHaveBeenCalled();
+  });
+
+  it('liên kết sâu ?ruleId=12: lần nạp ĐẦU là route danh sách CŨ với noteSearch «#12» (chạy cả trên backend cũ), KHÔNG BAO GIỜ gọi tìm kiếm mới; «Xoá lọc» về danh sách thường', async () => {
+    window.history.pushState({}, '', '/master-data?ruleId=12');
+    noteListReturns(() => pageOf([R12], 1));
+    render(<PricingMacroManager />);
+    await screen.findByTestId('rule-row-12');
+    expect(getRules).toHaveBeenCalledTimes(1);
+    expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 50, noteSearch: '#12' });
+    expect(qBox()).toHaveValue('#12');
+    expect(screen.queryByRole('button', { name: 'Bỏ lọc quy tắc' })).not.toBeInTheDocument(); // chip cũ đã bỏ
+
+    const u = ue();
+    await u.click(screen.getByRole('button', { name: 'Xoá lọc' }));
+    await screen.findByTestId('rule-row-1');
+    expect(getRules).toHaveBeenCalledTimes(2);
+    expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50 });
+    expect(qBox()).toHaveValue('');
+    await sleep(400);
+    expect(getRules).toHaveBeenCalledTimes(2); // «Xoá lọc» áp ngay, không có lượt «#12» thừa
+    expect(searchRules).not.toHaveBeenCalled();
+  });
+
+  it('liên kết sâu trên backend CŨ (…/search không có): vẫn hiện đúng quy tắc, không báo «máy chủ chưa hỗ trợ»', async () => {
+    window.history.pushState({}, '', '/master-data?ruleId=12');
+    searchRules.mockRejectedValue(UNSUPPORTED());
+    noteListReturns(() => pageOf([R12], 1));
+    render(<PricingMacroManager />);
+    await screen.findByTestId('rule-row-12');
+    await sleep(30);
+    expect(searchRules).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('macro-search-unsupported')).not.toBeInTheDocument();
+  });
+
+  it('danh sách THƯỜNG nạp lỗi ngay sau một lượt có lọc ⇒ không giữ dòng đã lọc dưới thanh lọc trống (vẫn toast)', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12], 2));
+    const u = await renderManager();
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    await waitForResult({ shown: [13, 12], gone: [1] });
+
+    getRules.mockRejectedValue(new Error('Mất kết nối'));
+    await u.click(screen.getByRole('button', { name: 'Xoá lọc' }));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith({
+        title: 'Lỗi tải dữ liệu Macro',
+        description: 'Mất kết nối',
+        variant: 'destructive',
+      }),
+    );
+    await waitFor(() => expect(ruleRows()).toHaveLength(0));
+    expect(screen.getByText('Không tải được danh sách quy tắc — bấm «Làm mới» để thử lại.')).toBeInTheDocument();
+    expect(screen.queryByText(/Chưa có quy tắc macro nào/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Danh sách Quy tắc Điều chỉnh Khu vực \(0\)/)).toBeInTheDocument();
+  });
+
+  it('danh sách THƯỜNG nạp lỗi khi bảng đang là danh sách thường ⇒ giữ nguyên dòng như cũ (chỉ toast)', async () => {
+    const u = await renderManager();
+    getRules.mockRejectedValue(new Error('Mất kết nối'));
+    await u.click(screen.getByRole('button', { name: 'Làm mới' }));
+    await waitFor(() => expect(toastMock).toHaveBeenCalledTimes(1));
+    await waitForResult({ shown: [1, 2, 3] });
+  });
+
+  it('?ruleId= không phải số ⇒ bỏ qua, danh sách thường', async () => {
+    window.history.pushState({}, '', '/master-data?ruleId=12abc');
+    await renderManager();
+    expect(getRules).toHaveBeenCalledWith({ page: 1, limit: 50 });
+    expect(searchRules).not.toHaveBeenCalled();
+    expect(qBox()).toHaveValue('');
+  });
+
+  it('kết quả tra «đang áp» CŨ về muộn không đè kết quả của cặp điểm mới', async () => {
+    // Cặp mới Đại Từ → Nội Bài: #40 (xã→xã, mọi dịch vụ/xe) thắng cả 5 tổ hợp.
+    const R40 = rule({ ...TN_HN, id: 40, destWardCode: '01003', destWardName: 'Nội Bài' });
+    const ALL: Spec = { wardEnds: 2, provinceEnds: 0, serviceExact: 0, vehicleExact: 0 };
+    let releaseOld: (v: unknown) => void = () => {};
+    matchRules.mockImplementation((p: { destWardCode?: string }) =>
+      p.destWardCode === '01002'
+        ? new Promise((r) => (releaseOld = r))
+        : Promise.resolve(
+            matchOf(
+              [
+                combo('CARPOOL', 'CAR_4', 40, [rank(40, 'WINNER', ALL)]),
+                combo('CARPOOL', null, 40, [rank(40, 'WINNER', ALL)]),
+                combo('CARPOOL', 'CAR_7', 40, [rank(40, 'WINNER', ALL)]),
+                combo('RIDE', 'CAR_4', 40, [rank(40, 'WINNER', ALL)]),
+                combo('RIDE', 'CAR_7', 40, [rank(40, 'WINNER', ALL)]),
+              ],
+              [R40],
+            ),
+          ),
+    );
+    searchRules.mockResolvedValue(pageOf([R13, R40], 2));
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội'); // tra lần 1: treo
+    await u.click(screen.getByRole('button', { name: 'Bỏ Điểm đến' }));
+    await pickPlace(u, 'Điểm đến', 'noi bai', 'Nội Bài, Hà Nội'); // tra lần 2: về ngay
+    await waitFor(() => expect(winnerBadgeOf(40)).toBeInTheDocument());
+    expect(matchRules).toHaveBeenLastCalledWith({ ...DAI_TU, destProvinceCode: '01', destWardCode: '01003' });
+
+    releaseOld(MATCH); // lần 1 (13 thắng ở ghép/7) về muộn
+    await sleep(30);
+    expect(winnerBadgeOf(40)).toBeInTheDocument();
+    expect(winnerBadgeOf(13)).not.toBeInTheDocument();
+    expect(comboButton('Ghép xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('xoá một quy tắc khi đang lọc ⇒ nạp lại ĐÚNG bộ lọc đang có và tra lại «đang áp» (quy tắc có thể đã đổi)', async () => {
+    searchRules.mockResolvedValue(pageOf([R13, R12, R14, R15], 4));
+    deleteRule.mockResolvedValue(undefined);
+    const u = await renderManager();
+    await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(13)).toHaveTextContent('ĐANG ÁP · Ghép 7 chỗ'));
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    await screen.findByTestId('rule-row-12');
+    // lọc «Bao xe» ⇒ tổ hợp bao xe ĐẦU TIÊN có luật thắng (bao xe/4: #14), không còn tô luật của ghép/7
+    await waitFor(() => expect(winnerBadgeOf(14)).toHaveTextContent('ĐANG ÁP · Bao xe 4 chỗ'));
+    expect(winnerBadgeOf(13)).not.toBeInTheDocument();
+    expect(matchRules).toHaveBeenCalledTimes(1); // đổi dịch vụ không tra lại (5 tổ hợp đã đủ)
+    const before = searchRules.mock.calls.length;
+
+    await u.click(screen.getByRole('button', { name: /^Xoá quy tắc #12\b/ }));
+    await u.click(await screen.findByRole('button', { name: 'Xoá quy tắc' }));
+    await waitFor(() => expect(deleteRule).toHaveBeenCalledWith(12));
+    await waitFor(() => expect(searchRules.mock.calls.length).toBe(before + 1));
+    expect(searchRules).toHaveBeenLastCalledWith({
+      ...DAI_TU,
+      ...CAU_GIAY,
+      serviceType: 'RIDE',
+      cover: true,
+      page: 1,
+      limit: 50,
+    });
+    await waitFor(() => expect(matchRules).toHaveBeenCalledTimes(2));
+    expect(getRules).toHaveBeenCalledTimes(1);
+  });
+
+  it('lưu sửa một quy tắc khi đang lọc ⇒ nạp lại ĐÚNG bộ lọc đang có', async () => {
+    noteListReturns(() => pageOf([TWO_WAY], 1));
+    updateRule.mockResolvedValue({ ...TWO_WAY });
+    const u = await renderManager();
+    await u.type(qBox(), '#2');
+    await waitForResult({ shown: [2], gone: [1, 3] });
+    expect(getRules).toHaveBeenCalledTimes(2);
+
+    await u.click(screen.getByRole('button', { name: /^Sửa quy tắc #2\b/ }));
+    const dlg = await screen.findByRole('dialog', { name: /Chỉnh sửa quy tắc macro/ });
+    await u.click(within(dlg).getByRole('button', { name: 'Lưu quy tắc' }));
+    await waitFor(() => expect(updateRule).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(getRules).toHaveBeenCalledTimes(3));
+    expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, noteSearch: '#2' });
+    expect(searchRules).not.toHaveBeenCalled();
+  });
+
+  it('vùng chọn được GIỮ khi đổi bộ lọc (xoá hàng loạt gồm cả dòng của danh sách trước)', async () => {
+    searchRules.mockResolvedValue(pageOf([rule({ id: 9 })], 1));
+    bulkDelete.mockResolvedValue({ deleted: [1, 9], missing: [] });
+    const u = await renderManager();
+    await u.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await choose(u, 'Dịch vụ', 'Bao xe');
+    await screen.findByTestId('rule-row-9');
+    expect(screen.queryByTestId('rule-row-1')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Xoá đã chọn (1)' })).toBeInTheDocument();
+
+    await u.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #9\b/ }));
+    await u.click(screen.getByRole('button', { name: 'Xoá đã chọn (2)' }));
+    await u.click(await screen.findByRole('button', { name: 'Xoá 2 quy tắc' }));
+    await waitFor(() => expect(bulkDelete).toHaveBeenCalledTimes(1));
+    expect(bulkDelete.mock.calls[0][0].slice().sort((a: number, b: number) => a - b)).toEqual([1, 9]);
+  });
+
+  describe('trạng thái điểm đặc biệt tới ô chọn điểm (zonesStatus)', () => {
+    it('ĐANG tải ⇒ ô chọn điểm báo đang tải và KHÔNG tô sẵn dòng nào (Enter không tự chọn)', async () => {
+      getZones.mockReturnValue(new Promise(() => {}));
+      const u = await renderManager();
+      await u.type(placeBox('Điểm đón'), 'dai tu');
+      const option = await screen.findByRole('option', { name: 'Đại Từ, Thái Nguyên' });
+      expect(placeHint('Điểm đón')).toHaveTextContent('Đang tải điểm đặc biệt (sân bay…)…');
+      await sleep(30);
+      expect(option).toHaveAttribute('aria-selected', 'false');
+      await u.keyboard('{Enter}');
+      expect(screen.queryByTestId('place-picker-chip-Điểm đón')).not.toBeInTheDocument();
+    });
+
+    it('LỖI ⇒ trang vẫn chạy; ô chọn điểm báo lỗi và KHÔNG tô sẵn dòng nào', async () => {
+      getZones.mockRejectedValue(new Error('500'));
+      const u = await renderManager();
+      expect(ruleRows()).toHaveLength(3);
+      await u.type(placeBox('Điểm đón'), 'dai tu');
+      const option = await screen.findByRole('option', { name: 'Đại Từ, Thái Nguyên' });
+      await waitFor(() => expect(placeHint('Điểm đón')).toHaveTextContent('Không tải được điểm đặc biệt (sân bay…)'));
+      expect(option).toHaveAttribute('aria-selected', 'false');
+      expect(toastMock).not.toHaveBeenCalled();
+    });
+
+    it('ĐÃ tải ⇒ tô sẵn dòng chắc chắn (Enter chọn được) và tìm được sân bay (ZONE:<mã>)', async () => {
+      const u = await renderManager();
+      await u.type(placeBox('Điểm đón'), 'dai tu');
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'Đại Từ, Thái Nguyên' })).toHaveAttribute('aria-selected', 'true'),
+      );
+      expect(placeHint('Điểm đón')).not.toHaveTextContent(/điểm đặc biệt \(sân bay/);
+      await u.keyboard('{Enter}');
+      expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, cover: true, page: 1, limit: 50 });
+
+      await u.type(placeBox('Điểm đến'), 'san bay noi bai');
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'Sân bay Nội Bài, Hà Nội · điểm đặc biệt' })).toHaveAttribute(
+          'aria-selected',
+          'true',
+        ),
+      );
+      await u.keyboard('{Enter}');
+      expect(searchRules).toHaveBeenLastCalledWith({
+        ...DAI_TU,
+        destProvinceCode: '01',
+        destWardCode: 'ZONE:NOIBAI',
+        cover: true,
+        page: 1,
+        limit: 50,
+      });
+      expect(matchRules).toHaveBeenLastCalledWith({ ...DAI_TU, destProvinceCode: '01', destWardCode: 'ZONE:NOIBAI' });
+    });
+  });
+
+  it('StrictMode (effect chạy hai lần): liên kết sâu, điểm đặc biệt «đã tải» (Enter tự chọn) và tô dòng thắng vẫn đúng', async () => {
+    window.history.pushState({}, '', '/master-data?ruleId=12');
+    noteListReturns(() => pageOf([R12], 1));
+    searchRules.mockResolvedValue(pageOf([R13, R12, R5], 3));
+    render(<PricingMacroManager />, { reactStrictMode: true });
+    await screen.findByTestId('rule-row-12');
+    expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50, noteSearch: '#12' });
+    expect(getRules.mock.calls.every(([p]) => p.noteSearch === '#12')).toBe(true); // không lượt nào KHÔNG lọc
+    expect(searchRules).not.toHaveBeenCalled();
+    expect(qBox()).toHaveValue('#12');
+
+    const u = ue();
+    await u.type(placeBox('Điểm đón'), 'dai tu');
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: 'Đại Từ, Thái Nguyên' })).toHaveAttribute('aria-selected', 'true'),
+    );
+    await u.keyboard('{Enter}');
+    await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
+    await waitFor(() => expect(winnerBadgeOf(13)).toBeInTheDocument());
+    expect(searchRules).toHaveBeenLastCalledWith({ q: '#12', ...DAI_TU, ...CAU_GIAY, cover: true, page: 1, limit: 50 });
   });
 });
