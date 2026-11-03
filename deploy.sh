@@ -85,6 +85,37 @@ deploy_backend() {
     docker save "$img" | gzip | ssh -o StrictHostKeyChecking=no "vigoops@${node}" "gunzip | sudo k3s ctr images import -"
   done
 
+  echo ">>> [BACKEND] Chạy migration (nếu có) trên cụm k3s PROD..."
+  ssh -o StrictHostKeyChecking=no "vigoops@${K3S_NODES[0]}" "
+    sudo k3s kubectl -n vigo delete job vigo-migrate-${sha8} --ignore-not-found=true &&
+    cat <<'EOF' | sed 's|__SHA8__|${sha8}|g; s|__IMG__|${img}|g' | sudo k3s kubectl apply -f -
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vigo-migrate-__SHA8__
+  namespace: vigo
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: __IMG__
+          imagePullPolicy: IfNotPresent
+          command: [\"node\", \"dist/database/run-migration.js\"]
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: vigo-backend-env
+                  key: DATABASE_URL
+EOF
+    sudo k3s kubectl -n vigo wait --for=condition=complete --timeout=120s job/vigo-migrate-${sha8} &&
+    sudo k3s kubectl -n vigo logs job/vigo-migrate-${sha8}
+  "
+
   echo ">>> [BACKEND] Rollout trên cụm k3s PROD..."
   ssh -o StrictHostKeyChecking=no "vigoops@${K3S_NODES[0]}" "
     sudo k3s kubectl -n vigo set image deployment/vigo-api vigo-backend=${img} &&
