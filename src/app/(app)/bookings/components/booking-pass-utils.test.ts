@@ -41,7 +41,8 @@ describe('buildTripPassText', () => {
     expect(text).toContain('🚗 Loại xe: Xe 4 chỗ (Bao xe)');
     expect(text).toContain('👥 Số khách: 2 người');
     expect(text).toContain('💰 Cước phí: 200.000');
-    expect(text).toContain('📝 Ghi chú: Có 1 vali to');
+    expect(text).not.toContain('📝 Ghi chú');
+    expect(text).not.toContain('Có 1 vali to');
 
     // Không để lộ SĐT và tên khách hàng hoặc SĐT người đi cùng
     expect(text).not.toContain('0344509422');
