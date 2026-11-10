@@ -5376,6 +5376,11 @@ export async function getPricingMacroWards(provinceCode?: string): Promise<WardO
   return sortByNameVi(await unwrap<WardOption[]>(response));
 }
 
+export async function getPricingMacroRule(id: number): Promise<PricingMacroRule> {
+  const response = await fetchWithAuth(`/pricing/macro-rules/${id}`);
+  return unwrap<PricingMacroRule>(response);
+}
+
 /** Backend mới trả kèm `warnings` (cảnh báo không chặn); backend cũ không có field này. */
 export async function createPricingMacroRule(data: Partial<PricingMacroRule>): Promise<SavedPricingMacroRule> {
   const response = await fetchWithAuth('/pricing/macro-rules', {

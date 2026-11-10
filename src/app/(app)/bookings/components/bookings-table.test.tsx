@@ -11,8 +11,10 @@ import type { Booking, PriceBreakdown } from '@/lib/types';
 vi.mock('@/lib/api', () => ({
   getBookingDetails: vi.fn(),
   getCustomerCallReasons: vi.fn(async () => []),
+  getPricingMacroRule: vi.fn(async () => null),
   getPricingMacroRulesPage: vi.fn(async () => ({ items: [], total: 0, page: 1, limit: 10 })),
   getPricingMacroProvinces: vi.fn(async () => []),
+  getPricingMacroWards: vi.fn(async () => []),
   updatePricingMacroRule: vi.fn(),
 }));
 

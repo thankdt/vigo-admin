@@ -10,7 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, Zap, ExternalLink, ArrowLeftRight, MapPin } from 'lucide-react';
-import { getPricingMacroRulesPage, getPricingMacroProvinces, updatePricingMacroRule } from '@/lib/api';
+import {
+  getPricingMacroRule,
+  getPricingMacroProvinces,
+  getPricingMacroWards,
+  updatePricingMacroRule,
+} from '@/lib/api';
 import {
   FORM_SERVICE_VALUES,
   FORM_VEHICLE_VALUES,
@@ -24,8 +29,67 @@ import {
   priorityError,
   summarizeWarnings,
 } from '@/lib/macro-bulk';
-import type { PricingMacroRule, ProvinceOption, MacroAdjustmentType } from '@/lib/types';
+import type { PricingMacroRule, ProvinceOption, WardOption, MacroAdjustmentType } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
+
+let cachedProvincesPromise: Promise<ProvinceOption[]> | null = null;
+const cachedWardsByProvince = new Map<string, Promise<WardOption[]>>();
+
+function loadProvincesCached(): Promise<ProvinceOption[]> {
+  if (!cachedProvincesPromise) {
+    cachedProvincesPromise = getPricingMacroProvinces().catch((err) => {
+      cachedProvincesPromise = null;
+      throw err;
+    });
+  }
+  return cachedProvincesPromise.catch(() => [] as ProvinceOption[]);
+}
+
+function loadWardsCached(provinceCode: string): Promise<WardOption[]> {
+  let p = cachedWardsByProvince.get(provinceCode);
+  if (!p) {
+    p = getPricingMacroWards(provinceCode).catch((err) => {
+      cachedWardsByProvince.delete(provinceCode);
+      throw err;
+    });
+    cachedWardsByProvince.set(provinceCode, p);
+  }
+  return p.catch(() => [] as WardOption[]);
+}
+
+async function enrichRuleWardNamesIfNeeded(rule: PricingMacroRule): Promise<PricingMacroRule> {
+  const needOrigin = Boolean(
+    rule.originWardCode &&
+      !rule.originWardName &&
+      rule.originProvinceCode &&
+      !rule.originWardCode.startsWith('ZONE:'),
+  );
+  const needDest = Boolean(
+    rule.destWardCode &&
+      !rule.destWardName &&
+      rule.destProvinceCode &&
+      !rule.destWardCode.startsWith('ZONE:'),
+  );
+  if (!needOrigin && !needDest) return rule;
+
+  const [originWards, destWards] = await Promise.all([
+    needOrigin && rule.originProvinceCode ? loadWardsCached(rule.originProvinceCode) : Promise.resolve([] as WardOption[]),
+    needDest && rule.destProvinceCode ? loadWardsCached(rule.destProvinceCode) : Promise.resolve([] as WardOption[]),
+  ]);
+
+  const originWardName =
+    rule.originWardName ||
+    (needOrigin ? originWards.find((w) => w.code === rule.originWardCode)?.name : undefined);
+  const destWardName =
+    rule.destWardName ||
+    (needDest ? destWards.find((w) => w.code === rule.destWardCode)?.name : undefined);
+
+  return {
+    ...rule,
+    ...(originWardName ? { originWardName } : {}),
+    ...(destWardName ? { destWardName } : {}),
+  };
+}
 
 export function MacroRuleBadge({
   ruleId,
@@ -113,18 +177,19 @@ export function MacroRuleQuickEditDialog({
     setNotFound(false);
 
     Promise.all([
-      getPricingMacroRulesPage({ page: 1, limit: 10, noteSearch: `#${ruleId}` }),
-      getPricingMacroProvinces().catch(() => [] as ProvinceOption[]),
+      getPricingMacroRule(Number(ruleId)),
+      loadProvincesCached(),
     ])
-      .then(([res, provs]) => {
+      .then(async ([foundRaw, provs]) => {
         if (cancelled) return;
         setProvinces(provs || []);
-        const found = (res?.items ?? []).find((r) => Number(r.id) === Number(ruleId)) ?? null;
-        if (!found) {
+        if (!foundRaw || Number(foundRaw.id) !== Number(ruleId)) {
           setRule(null);
           setNotFound(true);
           return;
         }
+        const found = await enrichRuleWardNamesIfNeeded(foundRaw);
+        if (cancelled) return;
         setRule(found);
         setFormData({
           isActive: found.isActive,
@@ -139,11 +204,16 @@ export function MacroRuleQuickEditDialog({
       })
       .catch((err: any) => {
         if (cancelled) return;
-        toast({
-          title: 'Lỗi tải quy tắc giá',
-          description: err?.message || 'Không thể tải thông tin quy tắc giá.',
-          variant: 'destructive',
-        });
+        const is404 =
+          err?.httpStatus === 404 || /không tồn tại|not found/i.test(String(err?.message || ''));
+        if (!is404) {
+          toast({
+            title: 'Lỗi tải quy tắc giá',
+            description: err?.message || 'Không thể tải thông tin quy tắc giá.',
+            variant: 'destructive',
+          });
+        }
+        setRule(null);
         setNotFound(true);
       })
       .finally(() => {
@@ -155,7 +225,7 @@ export function MacroRuleQuickEditDialog({
     };
   }, [ruleId, toast]);
 
-  const getProvinceName = (code: string | null) => {
+  const getProvinceName = (code?: string | null) => {
     if (!code) return 'Toàn quốc (Mọi tỉnh)';
     return provinces.find((p) => p.code === code)?.name || `Mã tỉnh: ${code}`;
   };
@@ -193,8 +263,8 @@ export function MacroRuleQuickEditDialog({
       toast({
         title: `Đã cập nhật quy tắc #${rule.id}`,
         description:
-          warnMsg ||
-          `Giá trị mới: ${formatMacroAdjustment(formData.adjustmentType, Number(formData.adjustmentValue))} (áp dụng cho các chuyến báo giá tiếp theo).`,
+          warnMsg?.lines.join(' ') ||
+          `Giá trị mới: ${formatMacroAdjustment(formData.adjustmentType, Number(formData.adjustmentValue), true)} (áp dụng cho các chuyến báo giá tiếp theo).`,
       });
       setRule(updated);
       onSaved?.(updated);
@@ -369,7 +439,6 @@ export function MacroRuleQuickEditDialog({
                 </Label>
                 <Input
                   type="number"
-                  step={formData.adjustmentType === 'PERCENTAGE' ? '0.1' : '1000'}
                   {...adjustmentValueRange(formData.adjustmentType)}
                   value={formData.adjustmentValue}
                   onChange={(e) =>
@@ -380,7 +449,7 @@ export function MacroRuleQuickEditDialog({
                 <p className="text-[11px] text-muted-foreground">
                   Hiện tại:{' '}
                   <span className="font-semibold text-foreground">
-                    {formatMacroAdjustment(formData.adjustmentType, Number(formData.adjustmentValue))}
+                    {formatMacroAdjustment(formData.adjustmentType, Number(formData.adjustmentValue), true)}
                   </span>{' '}
                   · {adjustmentValueHint(formData.adjustmentType)}
                 </p>
