@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   validateConfigValue,
   normalizeConfigValue,
+  formatCompleteRadiusHint,
+  DRIVER_COMPLETE_RADIUS_KEY,
+  DRIVER_COMPLETE_RADIUS_MAX_M,
   MAP_STYLE_KEY_RE,
   MAP_STYLE_ALLOWED_HOSTS,
 } from './config-value-validate';
@@ -153,5 +156,32 @@ describe('MAP_STYLE_KEY_RE — gate phải hẹp', () => {
     expect(MAP_STYLE_KEY_RE.test('DRIVER_APP_UPDATE_URL')).toBe(false);
     expect(MAP_STYLE_KEY_RE.test('KOL_SHARE_BASE_URL')).toBe(false);
     expect(MAP_STYLE_KEY_RE.test('MAP_STYLE_URL_BACKUP')).toBe(false);
+  });
+});
+
+describe('DRIVER_COMPLETE_RADIUS_M — đồng bộ validate + chuẩn hoá với backend', () => {
+  it('nhận 0 (không giới hạn), số nguyên dương tới trần, và chuẩn hoá khoảng trắng / số 0 đầu', () => {
+    expect(validateConfigValue(DRIVER_COMPLETE_RADIUS_KEY, '0')).toBeNull();
+    expect(validateConfigValue(DRIVER_COMPLETE_RADIUS_KEY, '  10000  ')).toBeNull();
+    expect(validateConfigValue(DRIVER_COMPLETE_RADIUS_KEY, String(DRIVER_COMPLETE_RADIUS_MAX_M))).toBeNull();
+
+    expect(normalizeConfigValue(DRIVER_COMPLETE_RADIUS_KEY, '  10000  ')).toBe('10000');
+    expect(normalizeConfigValue(DRIVER_COMPLETE_RADIUS_KEY, '005000')).toBe('5000');
+    expect(normalizeConfigValue(DRIVER_COMPLETE_RADIUS_KEY, ' 0 ')).toBe('0');
+  });
+
+  it.each(['', '   ', '-1', '-500', '10.5', '10km', 'abc', '500001'])(
+    'từ chối giá trị không hợp lệ "%s"',
+    (bad) => {
+      expect(validateConfigValue(DRIVER_COMPLETE_RADIUS_KEY, bad)).toBeTruthy();
+    },
+  );
+
+  it('formatCompleteRadiusHint hiển thị quy đổi m / km rõ ràng cho admin', () => {
+    expect(formatCompleteRadiusHint('0')).toContain('Không giới hạn');
+    expect(formatCompleteRadiusHint('800')).toContain('800 m');
+    expect(formatCompleteRadiusHint('10000')).toContain('10 km');
+    expect(formatCompleteRadiusHint('15500')).toContain('15.5 km');
+    expect(formatCompleteRadiusHint('abc')).toBeNull();
   });
 });

@@ -7,7 +7,13 @@ import { Switch } from '@/components/ui/switch';
 import { ExternalLink, Loader2, Save, Undo2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { SystemConfig } from '@/lib/types';
-import { MAP_STYLE_KEY_RE, normalizeConfigValue, validateConfigValue } from './config-value-validate';
+import {
+  DRIVER_COMPLETE_RADIUS_KEY,
+  MAP_STYLE_KEY_RE,
+  formatCompleteRadiusHint,
+  normalizeConfigValue,
+  validateConfigValue,
+} from './config-value-validate';
 import { boolToConfigValue, isBooleanConfigValue, parseBooleanConfigValue } from './config-boolean';
 
 // URL bản đồ được trả qua endpoint PUBLIC `GET /master-data/app/config`, nên khoá
@@ -51,7 +57,11 @@ export function ConfigFieldRow({
   // URL bản đồ giữ nguyên ô text kể cả khi ai đó lỡ ghi "false" vào.
   const isBoolean = !isMapStyle && isBooleanConfigValue(config.value);
   const checked = parseBooleanConfigValue(value);
-  const error = isMapStyle ? validateConfigValue(config.key, value) : null;
+  const error = isBoolean ? null : validateConfigValue(config.key, value);
+  const completeRadiusHint =
+    config.key === DRIVER_COMPLETE_RADIUS_KEY && !error
+      ? formatCompleteRadiusHint(value)
+      : null;
   const isEmpty = isMapStyle && value.trim() === '';
   const canOpen = isMapStyle && !error && !isEmpty;
   const hasApiKey = isMapStyle && API_KEY_IN_URL_RE.test(value);
@@ -126,6 +136,11 @@ export function ConfigFieldRow({
           // sẽ đọc liên tục. aria-describedby ở trên đã đủ để đọc khi focus vào ô.
           <p id={errorId} className="mt-1 break-words text-xs text-destructive">
             {error}
+          </p>
+        )}
+        {completeRadiusHint && (
+          <p className="mt-1 break-words text-xs text-muted-foreground">
+            {completeRadiusHint}
           </p>
         )}
         {isEmpty && (

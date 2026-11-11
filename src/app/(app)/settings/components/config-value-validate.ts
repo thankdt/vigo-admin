@@ -23,6 +23,26 @@ export const MAP_STYLE_ALLOWED_HOSTS = ['maps.vietmap.vn', 'api.mapbox.com', 'vi
 const MAX_LEN = 2048;
 const WHITESPACE_RE = /\s/;
 
+export const DRIVER_COMPLETE_RADIUS_KEY = 'DRIVER_COMPLETE_RADIUS_M';
+export const DRIVER_COMPLETE_RADIUS_MAX_M = 500_000;
+export const DRIVER_COMPLETE_RADIUS_INVALID_MSG =
+  'Bán kính hoàn thành chuyến phải là số nguyên từ 0 đến 500000 (đơn vị mét; đặt 0 để không giới hạn khoảng cách).';
+
+const canonicalDigits = (v: string): string | null =>
+  /^\d{1,15}$/.test(v) ? String(Number(v)) : null;
+
+export function formatCompleteRadiusHint(value: string): string | null {
+  const c = canonicalDigits((value ?? '').trim());
+  if (c === null) return null;
+  const n = Number(c);
+  if (!Number.isFinite(n) || n < 0 || n > DRIVER_COMPLETE_RADIUS_MAX_M) return null;
+  if (n === 0) return 'Không giới hạn khoảng cách hoàn thành chuyến.';
+  if (n < 1000) return `Tối đa ${n} m tính từ điểm trả.`;
+  const km = n / 1000;
+  const kmLabel = Number.isInteger(km) ? String(km) : km.toFixed(1).replace(/\.0$/, '');
+  return `Tối đa ${kmLabel} km tính từ điểm trả (đặt 0 để không giới hạn).`;
+}
+
 /**
  * Chuẩn hoá giá trị TRƯỚC khi gửi lên backend — mirror của giá trị mà
  * `assertValidConfigValue` bên backend TRẢ VỀ và ghi xuống DB
@@ -33,6 +53,10 @@ const WHITESPACE_RE = /\s/;
  * Key ngoài diện kiểm trả nguyên giá trị (giữ nguyên hành vi ~150 config khác).
  */
 export function normalizeConfigValue(key: string, value: string): string {
+  if (key === DRIVER_COMPLETE_RADIUS_KEY) {
+    const trimmed = (value ?? '').trim();
+    return canonicalDigits(trimmed) ?? trimmed;
+  }
   if (!MAP_STYLE_KEY_RE.test(key)) return value;
   return value.trim();
 }
@@ -45,6 +69,13 @@ export function normalizeConfigValue(key: string, value: string): string {
  * bản đồ mặc định cài sẵn.
  */
 export function validateConfigValue(key: string, value: string): string | null {
+  if (key === DRIVER_COMPLETE_RADIUS_KEY) {
+    const c = canonicalDigits((value ?? '').trim());
+    if (c === null || Number(c) > DRIVER_COMPLETE_RADIUS_MAX_M) {
+      return DRIVER_COMPLETE_RADIUS_INVALID_MSG;
+    }
+    return null;
+  }
   if (!MAP_STYLE_KEY_RE.test(key)) return null;
 
   // TRIM TRƯỚC rồi mới áp luật — y hệt backend (`const v = (value ?? '').trim()`).

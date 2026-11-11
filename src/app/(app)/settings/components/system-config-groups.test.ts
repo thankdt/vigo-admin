@@ -174,3 +174,15 @@ describe('HIDDEN_CONFIG_KEYS', () => {
     expect(groups[0].items.map((c) => c.key)).toEqual(['PRICING_BASE_PRICE', 'PRICING_RIDE_5SEAT_PER_KM']);
   });
 });
+
+describe('DRIVER_COMPLETE_RADIUS_M — nhóm Tài xế (settings.driver)', () => {
+  it('rơi đúng nhóm driver và người có settings.driver thấy được', () => {
+    expect(groupIdFor('DRIVER_COMPLETE_RADIUS_M')).toBe('driver');
+    const configs = [
+      { key: 'DRIVER_COMPLETE_RADIUS_M', value: '10000', description: 'Bán kính hoàn thành chuyến' },
+    ];
+    const groups = buildConfigGroups(configs, 'hoàn thành', canFor(mkMe({ functions: ['settings.driver'] })));
+    expect(groups.map((g) => g.group.id)).toEqual(['driver']);
+    expect(groups[0].items.map((c) => c.key)).toEqual(['DRIVER_COMPLETE_RADIUS_M']);
+  });
+});
