@@ -6,9 +6,9 @@ import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { listAgentBookings, cancelAgentBooking, AgentBooking } from '@/lib/api';
+import { listAgentBookings, cancelAgentBooking, downloadBookingContractPdf, AgentBooking } from '@/lib/api';
 import { agentCommissionDisplay } from '@/lib/agent-commission-display';
-import { RefreshCw, Loader2, MapPin, XCircle } from 'lucide-react';
+import { RefreshCw, Loader2, MapPin, XCircle, FileText } from 'lucide-react';
 
 // Đủ 14 trạng thái BookingStatus backend có thể trả (raw), nhìn từ góc ĐẠI LÝ — nhãn rõ ràng, không
 // để lộ enum thô. `className` tô màu theo pha: chờ (xám), tài xế đang lo (xanh dương), xong (xanh lá),
@@ -44,6 +44,11 @@ const CANCELLABLE = new Set([
   'AWAITING_CLAIM', 'PROCESSING', 'SCHEDULED', 'DELAYED_WAITING', 'ACCEPTED', 'ARRIVED',
 ]);
 
+// Khi chuyến đã có tài xế nhận hoặc đã hoàn thành thì đã có hợp đồng vận chuyển PDF.
+const HAS_CONTRACT = new Set([
+  'ACCEPTED', 'ARRIVED', 'PICKED_UP', 'COMPLETED',
+]);
+
 const fmtVnd = (n: number | null | undefined) => (n == null ? '—' : `${n.toLocaleString('vi-VN')}₫`);
 const addr = (a: { address?: string } | null | undefined) => a?.address ?? '—';
 
@@ -52,6 +57,7 @@ export default function AgentOrdersPage() {
   const [bookings, setBookings] = React.useState<AgentBooking[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  const [downloadingContractId, setDownloadingContractId] = React.useState<string | null>(null);
   // Two-step inline confirm — window.confirm() is a no-op inside the in-app webview.
   const [confirmId, setConfirmId] = React.useState<string | null>(null);
 
@@ -76,6 +82,18 @@ export default function AgentOrdersPage() {
       toast({ variant: 'destructive', title: 'Không huỷ được', description: e?.message });
     } finally {
       setBusyId(null);
+    }
+  };
+
+  const doDownloadContract = async (id: string) => {
+    setDownloadingContractId(id);
+    try {
+      await downloadBookingContractPdf(id);
+      toast({ title: 'Đã tải hợp đồng vận chuyển (PDF)' });
+    } catch (e: any) {
+      toast({ variant: 'destructive', title: 'Không tải được hợp đồng', description: e?.message });
+    } finally {
+      setDownloadingContractId(null);
     }
   };
 
@@ -115,9 +133,10 @@ export default function AgentOrdersPage() {
                       <MapPin className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
                       <span className="break-words">{addr(b.pickupAddress)} → {addr(b.dropoffAddress)}</span>
                     </div>
-                    {(b.customerName || b.customerPhone) && (
+                    {(b.passengerNames?.[0]?.trim() || b.customerName || b.customerPhone) && (
                       <div className="text-xs text-muted-foreground">
-                        Khách: {b.customerName ?? '—'}{b.customerPhone ? ` · ${b.customerPhone}` : ''}
+                        Khách đi: <span className="font-medium text-foreground">{b.passengerNames?.[0]?.trim() || b.customerName || '—'}</span>
+                        {b.customerPhone ? ` · ${b.customerPhone}` : ''}
                       </div>
                     )}
                   </div>
@@ -139,40 +158,58 @@ export default function AgentOrdersPage() {
                         {c.reason && <span className="block text-[10px] text-muted-foreground/80">{c.reason}</span>}
                       </div>
                     )}
-                    {CANCELLABLE.has(b.status) && (
-                      confirmId === b.id ? (
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            className="h-7 px-2"
-                            onClick={() => doCancel(b.id)}
-                            disabled={busyId === b.id}
-                          >
-                            {busyId === b.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
-                            Xác nhận huỷ
-                          </Button>
+                    <div className="flex items-center justify-end gap-1 pt-0.5">
+                      {HAS_CONTRACT.has(b.status) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => doDownloadContract(b.id)}
+                          disabled={downloadingContractId === b.id}
+                        >
+                          {downloadingContractId === b.id ? (
+                            <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <FileText className="mr-1 h-3.5 w-3.5 text-primary" />
+                          )}
+                          Hợp đồng
+                        </Button>
+                      )}
+                      {CANCELLABLE.has(b.status) && (
+                        confirmId === b.id ? (
+                          <div className="flex justify-end gap-1">
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => doCancel(b.id)}
+                              disabled={busyId === b.id}
+                            >
+                              {busyId === b.id && <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />}
+                              Xác nhận huỷ
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => setConfirmId(null)}
+                              disabled={busyId === b.id}
+                            >
+                              Không
+                            </Button>
+                          </div>
+                        ) : (
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 px-2"
-                            onClick={() => setConfirmId(null)}
-                            disabled={busyId === b.id}
+                            className="text-destructive h-7 px-2"
+                            onClick={() => setConfirmId(b.id)}
                           >
-                            Không
+                            <XCircle className="mr-1 h-3.5 w-3.5" /> Huỷ
                           </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive h-7 px-2"
-                          onClick={() => setConfirmId(b.id)}
-                        >
-                          <XCircle className="mr-1 h-3.5 w-3.5" /> Huỷ
-                        </Button>
-                      )
-                    )}
+                        )
+                      )}
+                    </div>
                   </div>
                 </div>
               </Card>

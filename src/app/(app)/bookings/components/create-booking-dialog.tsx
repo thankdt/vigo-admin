@@ -478,8 +478,15 @@ export function CreateBookingDialog({
       toast({ variant: 'destructive', title: 'Lỗi', description: 'Bấm "Kiểm tra" SĐT trước khi tạo chuyến.' });
       return;
     }
-    if (customerStatus === 'new' && !customerName.trim()) {
-      toast({ variant: 'destructive', title: 'Lỗi', description: 'Khách mới — vui lòng nhập tên khách.' });
+    if ((mode === 'agent' || customerStatus === 'new') && !customerName.trim()) {
+      toast({
+        variant: 'destructive',
+        title: 'Lỗi',
+        description:
+          mode === 'agent'
+            ? 'Vui lòng nhập tên khách hàng (người đi) để hiển thị trên hợp đồng.'
+            : 'Khách mới — vui lòng nhập tên khách.',
+      });
       return;
     }
     if (!pickup) {
@@ -563,12 +570,15 @@ export function CreateBookingDialog({
         serviceType,
         requestedVehicleType: resolveRequestedVehicleType(serviceType, vehicleType),
         requestedSeats: showPassengerFields ? totalPassengers : undefined,
-        // [primary, ...co-passengers] — primary is the booking customer. Only
-        // sent when there's at least one co-passenger; a solo ride needs no list.
+        // [primary, ...co-passengers] — primary is the actual traveller on this booking
+        // so ContractService / TransportContractScreen always show the entered passenger name
+        // even if the phone number already belongs to an existing account.
         passengerNames: (() => {
           if (!showPassengerFields) return undefined;
+          const primary = customerName.trim();
           const extras = coPassengers.map((n) => n.trim()).filter(Boolean);
-          return extras.length > 0 ? [customerName.trim(), ...extras] : undefined;
+          if (extras.length > 0) return [primary, ...extras];
+          return primary ? [primary] : undefined;
         })(),
         // SĐT người đi cùng — gửi số ĐÃ chuẩn hoá, bỏ trống thì không gửi field.
         // Số sai định dạng vẫn gửi: backend là chốt chặn duy nhất (âm thầm bỏ,
@@ -742,29 +752,44 @@ export function CreateBookingDialog({
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="cb-name">
-                  Tên khách {customerStatus === 'new' && <span className="text-destructive">*</span>}
+                  {mode === 'agent' ? 'Tên khách hàng (người đi)' : 'Tên khách'}{' '}
+                  {(mode === 'agent' || customerStatus === 'new') && <span className="text-destructive">*</span>}
                 </Label>
                 <Input
                   id="cb-name"
-                  placeholder={customerStatus === 'new' ? 'Nhập tên khách mới' : 'Kiểm tra SĐT trước'}
+                  placeholder={
+                    mode === 'agent'
+                      ? 'VD: Nguyễn Văn A (hiện trên hợp đồng)'
+                      : customerStatus === 'idle' || customerStatus === 'checking'
+                        ? 'Kiểm tra SĐT trước'
+                        : 'Nhập tên người đi (hiện trên hợp đồng)'
+                  }
                   value={customerName}
                   onChange={(e) => setCustomerName(e.target.value)}
-                  disabled={customerStatus !== 'new'}
+                  disabled={mode !== 'agent' && (customerStatus === 'idle' || customerStatus === 'checking')}
                 />
               </div>
             </div>
-            {customerStatus === 'existing' && (
-              <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
-                <CheckCircle2 className="h-3.5 w-3.5" /> Khách đã có tài khoản — dùng thông tin cũ ({customerName || 'không tên'}).
+            {mode === 'agent' ? (
+              <p className="flex items-center gap-1.5 text-xs text-emerald-700 dark:text-emerald-400">
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Nhập đúng họ tên người đi thực tế để hiển thị trên Hợp đồng vận chuyển.
               </p>
-            )}
-            {customerStatus === 'new' && (
-              <p className="flex items-center gap-1.5 text-xs text-amber-600">
-                <UserPlus className="h-3.5 w-3.5" /> Khách mới — nhập tên để tạo tài khoản + lưu lại.
-              </p>
-            )}
-            {customerStatus === 'idle' && (
-              <p className="text-xs text-muted-foreground">Nhập SĐT rồi bấm "Kiểm tra" để xác định khách cũ / mới.</p>
+            ) : (
+              <>
+                {customerStatus === 'existing' && (
+                  <p className="flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0" /> Khách đã có tài khoản — có thể sửa tên người đi cho hợp đồng chuyến này nếu đặt hộ người khác.
+                  </p>
+                )}
+                {customerStatus === 'new' && (
+                  <p className="flex items-center gap-1.5 text-xs text-amber-600">
+                    <UserPlus className="h-3.5 w-3.5 shrink-0" /> Khách mới — nhập tên để tạo tài khoản và hiển thị trên hợp đồng.
+                  </p>
+                )}
+                {customerStatus === 'idle' && (
+                  <p className="text-xs text-muted-foreground">Nhập SĐT rồi bấm "Kiểm tra" để xác định khách cũ / mới.</p>
+                )}
+              </>
             )}
           </div>
 
@@ -883,11 +908,14 @@ export function CreateBookingDialog({
                 <Badge variant="secondary">{totalPassengers} người</Badge>
               </div>
 
-              {/* Passenger #1 — the booking customer (from the phone lookup above). */}
+              {/* Passenger #1 — the primary traveller on the contract. */}
               <div className="flex items-center gap-2 rounded-md bg-muted/40 px-3 py-2">
-                <Badge variant="outline" className="shrink-0 text-xs">Khách 1</Badge>
-                <span className={cn('text-sm', !customerName && 'text-muted-foreground italic')}>
-                  {customerName || 'Nhập & kiểm tra SĐT ở trên'}
+                <Badge variant="outline" className="shrink-0 text-xs">Khách 1 (trên HĐ)</Badge>
+                <span className={cn('text-sm font-medium', !customerName.trim() && 'text-muted-foreground italic font-normal')}>
+                  {customerName.trim() ||
+                    (mode === 'agent'
+                      ? 'Nhập tên khách hàng (người đi) ở trên'
+                      : 'Nhập & kiểm tra SĐT ở trên')}
                 </span>
               </div>
 

@@ -149,3 +149,20 @@ describe('CreateBookingDialog — Tự cấu hình giá cước (tối thiểu 1
   });
 });
 
+describe('CreateBookingDialog — Cổng đặt hộ đặt tên khách hàng (người đi) cho hợp đồng', () => {
+  it('cho phép nhập thẳng tên người đi trên cổng đặt hộ và đồng bộ ngay vào Khách 1 (trên HĐ)', async () => {
+    const user = userEvent.setup();
+    render(<CreateBookingDialog onSuccess={() => {}} mode="agent" open={true} />);
+
+    const nameInput = screen.getByLabelText(/Tên khách hàng \(người đi\)/i);
+    expect(nameInput).toBeInTheDocument();
+    expect(nameInput).not.toBeDisabled();
+
+    await user.type(nameInput, 'Nguyễn Văn Nam');
+
+    expect(nameInput).toHaveValue('Nguyễn Văn Nam');
+    expect(screen.getByText('Khách 1 (trên HĐ)')).toBeInTheDocument();
+    expect(screen.getByText('Nguyễn Văn Nam')).toBeInTheDocument();
+  });
+});
+

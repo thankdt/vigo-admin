@@ -26,6 +26,54 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, RefreshCw, RotateCcw, Save, Search, Settings2 } from 'lucide-react';
 
+const BLOCKED_SUPPORT_GROUP_IDS = new Set<string>([
+  'g7215496937750716408',
+  'g2305670636817283365',
+  'g5907365059692704545',
+  'g9114444210383657639',
+  'g3054943267528890047',
+  'g3521617230310077957',
+  'g221238451620776907',
+  'g4793728521925156188',
+  'g1323475752600983175',
+  'g8808906916888304869',
+  'g3857694975568684371',
+  'g368301856120078534',
+  'g1507693150575059254',
+  'g427553495236997684',
+  'g6569245599888107760',
+  'g2369418530038274107',
+  'g5118687279976011731',
+  'g911697344143602556',
+]);
+
+function isBlockedSupportZaloGroup(groupId?: string | null, groupName?: string | null): boolean {
+  const id = (groupId ?? '').trim();
+  if (id && BLOCKED_SUPPORT_GROUP_IDS.has(id)) return true;
+  const rawName = (groupName ?? '').trim();
+  if (!rawName) return false;
+  const ascii = rawName
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[đĐ]/g, 'd')
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (
+    ascii.includes('ho tro ky thuat') ||
+    ascii.includes('ho tro htx') ||
+    ascii.includes('thong bao chung') ||
+    (ascii.includes('limo green') && ascii.includes('ho tro tai xe'))
+  ) {
+    return true;
+  }
+  const hasRouteParentheses = /\([^)]*(?:hn|ha noi)[^)]*\)/i.test(ascii);
+  if (ascii.includes('ho tro tai xe') && !hasRouteParentheses) {
+    return true;
+  }
+  return false;
+}
+
 export function ZaloPassConfigDialog() {
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -56,8 +104,9 @@ export function ZaloPassConfigDialog() {
       setVizioUrl(cfg.vizioUrl || 'https://chat.vizio.vn');
       setMcpKey(cfg.mcpKey || '');
       setChannelId(cfg.channelId || '');
-      setDefaultGroupId(cfg.defaultGroupId || '');
-      setDefaultGroupName(cfg.defaultGroupName || '');
+      const cleanDefaultBlocked = isBlockedSupportZaloGroup(cfg.defaultGroupId, cfg.defaultGroupName);
+      setDefaultGroupId(cleanDefaultBlocked ? '' : cfg.defaultGroupId || '');
+      setDefaultGroupName(cleanDefaultBlocked ? '' : cfg.defaultGroupName || '');
       setMentionAll(cfg.mentionAll ?? false);
       setAutoPassOnCreate(cfg.autoPassOnCreate ?? true);
       setProvinceGroupMap(cfg.provinceGroupMap || {});
@@ -71,7 +120,7 @@ export function ZaloPassConfigDialog() {
           channelId: cfg.channelId || undefined,
         });
         setChannels(live.channels || []);
-        setGroups(live.groups || []);
+        setGroups((live.groups || []).filter((g) => !isBlockedSupportZaloGroup(g.id, g.name)));
       } catch (err: any) {
         toast({
           variant: 'destructive',
@@ -108,10 +157,11 @@ export function ZaloPassConfigDialog() {
         refresh: true,
       });
       setChannels(live.channels || []);
-      setGroups(live.groups || []);
+      const validGroups = (live.groups || []).filter((g) => !isBlockedSupportZaloGroup(g.id, g.name));
+      setGroups(validGroups);
       toast({
         title: 'Đã đồng bộ danh sách nhóm Zalo',
-        description: `Tìm thấy ${live.groups?.length ?? 0} nhóm Zalo trên Vizio.`,
+        description: `Tìm thấy ${validGroups.length} nhóm Zalo hợp lệ trên Vizio (đã ẩn kênh Hỗ trợ chung).`,
       });
     } catch (err: any) {
       toast({
@@ -159,6 +209,10 @@ export function ZaloPassConfigDialog() {
 
   const handleDefaultGroupChange = (selectedGroupId: string) => {
     setDefaultGroupId(selectedGroupId);
+    if (!selectedGroupId) {
+      setDefaultGroupName('');
+      return;
+    }
     const found = groups.find((g) => g.id === selectedGroupId);
     if (found) {
       setDefaultGroupName(found.name);
@@ -314,6 +368,7 @@ export function ZaloPassConfigDialog() {
                     onChange={(e) => handleDefaultGroupChange(e.target.value)}
                     className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
                   >
+                    <option value="">— Không gửi khi không khớp nhóm tỉnh —</option>
                     {defaultGroupId && !groups.some((g) => g.id === defaultGroupId) && (
                       <option value={defaultGroupId}>
                         {defaultGroupName || defaultGroupId} ({defaultGroupId})
@@ -412,7 +467,7 @@ export function ZaloPassConfigDialog() {
                           </Badge>
                         ) : (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
-                            Dùng mặc định
+                            {defaultGroupId ? 'Dùng mặc định' : 'Chưa gán (Bỏ qua)'}
                           </Badge>
                         )}
                       </div>
@@ -421,7 +476,9 @@ export function ZaloPassConfigDialog() {
                         onChange={(e) => handleProvinceGroupChange(item.provinceKey, e.target.value)}
                         className="flex h-8 w-full sm:max-w-[380px] rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-sm"
                       >
-                        <option value="">— Dùng nhóm Zalo mặc định —</option>
+                        <option value="">
+                          {defaultGroupId ? '— Dùng nhóm Zalo mặc định —' : '— Chưa gán nhóm (không gửi) —'}
+                        </option>
                         {selectedId && !groups.some((g) => g.id === selectedId) && (
                           <option value={selectedId}>
                             {selectedLabel} ({selectedId})

@@ -329,10 +329,12 @@ export default function ReturnTripPage() {
         }
       }
 
-      const allPassengerNames = [
-        customerName.trim(),
-        ...companionNames.map((n) => n.trim()),
-      ].filter((n) => n.length > 0);
+      const cleanedCompanions = companionNames.map((n) => n.trim()).filter((n) => n.length > 0);
+      const primaryTrimmed = customerName.trim();
+      const allPassengerNames =
+        primaryTrimmed || cleanedCompanions.length > 0
+          ? [primaryTrimmed, ...cleanedCompanions]
+          : [];
 
       setSubmitting(true);
       try {
@@ -1004,11 +1006,11 @@ export default function ReturnTripPage() {
 
                   <div className="space-y-1.5">
                     <Label htmlFor="customerName" className="text-xs font-medium">
-                      Tên khách hàng (tuỳ chọn)
+                      Tên khách hàng / người đi (hiện trên hợp đồng)
                     </Label>
                     <Input
                       id="customerName"
-                      placeholder="Anh Tuấn, Chị Hoa..."
+                      placeholder="VD: Nguyễn Văn A, Chị Hoa..."
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                     />
@@ -1683,10 +1685,10 @@ function RetailPassengerCard({
 
           <div className="space-y-1.5">
             <Label className="text-xs font-medium">
-              Tên khách hàng (tuỳ chọn)
+              Tên khách hàng / người đi (hiện trên hợp đồng)
             </Label>
             <Input
-              placeholder="Anh Tuấn, Chị Hoa..."
+              placeholder="VD: Nguyễn Văn A, Chị Hoa..."
               value={passenger.name}
               onChange={(e) => onUpdate({ name: e.target.value })}
               className="h-9"
