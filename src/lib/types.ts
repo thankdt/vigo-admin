@@ -1209,6 +1209,12 @@ export type BulkDeletePricingMacroRulesResult = {
   missing: number[];
 };
 
+export type BulkDisablePricingMacroRulesResult = {
+  disabled: number[];
+  alreadyInactive: number[];
+  missing: number[];
+};
+
 export type ProvinceOption = {
   code: string;
   name: string;

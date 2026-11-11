@@ -25,6 +25,7 @@ import { useToast } from '@/hooks/use-toast';
 import {
   Loader2,
   PlusCircle,
+  PowerOff,
   Trash2,
   Edit,
   MapPin,
@@ -43,6 +44,7 @@ import {
   updatePricingMacroRule,
   deletePricingMacroRule,
   bulkDeletePricingMacroRules,
+  bulkDisablePricingMacroRules,
   getPricingMacroBandWarnings,
   type MacroMatchParams,
   type MacroMatchResponse,
@@ -69,6 +71,8 @@ import {
   FORM_SERVICE_VALUES,
   FORM_VEHICLE_VALUES,
   MACRO_BULK_DELETE_MAX,
+  MACRO_BULK_DISABLE_MAX,
+  MACRO_SELECT_ALL_MATCHING_MAX,
   MACRO_VALUE_LIMITS,
   adjustmentValueError,
   adjustmentValueHint,
@@ -241,6 +245,9 @@ export function PricingMacroManager() {
   const [bulkDialogOpen, setBulkDialogOpen] = React.useState(false);
   const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
   const [bulkDeleting, setBulkDeleting] = React.useState(false);
+  const [bulkDisableOpen, setBulkDisableOpen] = React.useState(false);
+  const [bulkDisabling, setBulkDisabling] = React.useState(false);
+  const [selectingAllMatching, setSelectingAllMatching] = React.useState(false);
   // Sửa giá hàng loạt: đặt CÙNG kiểu + giá trị cho mọi luật đã chọn (gọi PUT từng luật, backend chưa có API bulk-update).
   const [bulkEditOpen, setBulkEditOpen] = React.useState(false);
   const [bulkEditing, setBulkEditing] = React.useState(false);
@@ -700,6 +707,87 @@ export function PricingMacroManager() {
     }
   };
 
+  const handleBulkDisable = async () => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkDisabling(true);
+    let disabled = 0;
+    let alreadyInactive = 0;
+    let missing = 0;
+    try {
+      for (const part of chunk(ids, MACRO_BULK_DISABLE_MAX)) {
+        const res = await bulkDisablePricingMacroRules(part);
+        disabled += res.disabled.length;
+        alreadyInactive += res.alreadyInactive.length;
+        missing += res.missing.length;
+      }
+      const details = [
+        alreadyInactive ? `${alreadyInactive} quy tắc đã tắt sẵn.` : '',
+        missing ? `${missing} quy tắc không còn tồn tại.` : '',
+      ].filter(Boolean);
+      toast({
+        title: `Đã tắt ${disabled} quy tắc`,
+        description: details.length ? details.join(' ') : undefined,
+      });
+      setSelected(new Map());
+    } catch (err: any) {
+      toast({
+        title: 'Lỗi tắt hàng loạt',
+        description: `${err?.message || 'Không thể tắt quy tắc'}${disabled ? ` (đã tắt được ${disabled} trước khi lỗi)` : ''}`,
+        variant: 'destructive',
+      });
+    } finally {
+      setBulkDisabling(false);
+      setBulkDisableOpen(false);
+      loadData();
+    }
+  };
+
+  const handleSelectAllMatching = async () => {
+    if (!searching || selectingAllMatching) return;
+    setSelectingAllMatching(true);
+    try {
+      const batchLimit = 500;
+      const fetchBatch = (p: number) =>
+        searchKey
+          ? searchPricingMacroRules(toSearchParams(effectiveFilters, { page: p, limit: batchLimit }))
+          : getPricingMacroRulesPage(
+              noteQ ? { page: p, limit: batchLimit, noteSearch: noteQ } : { page: p, limit: batchLimit },
+            );
+      const first = await fetchBatch(1);
+      const matchTotal = first?.total ?? 0;
+      if (matchTotal > MACRO_SELECT_ALL_MATCHING_MAX) {
+        toast({
+          title: 'Quá nhiều quy tắc',
+          description: `Bộ lọc đang khớp ${matchTotal} quy tắc (tối đa ${MACRO_SELECT_ALL_MATCHING_MAX} mỗi lần chọn tất cả). Hãy lọc hẹp hơn theo tỉnh/xã.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+      const collected: PricingMacroRule[] = [...(first?.items ?? [])];
+      const pageCount = Math.ceil(matchTotal / batchLimit);
+      for (let p = 2; p <= pageCount; p++) {
+        const next = await fetchBatch(p);
+        if (next?.items?.length) collected.push(...next.items);
+      }
+      collected.forEach((r) => ruleCache.current.set(r.id, r));
+      setSelected((prev) => {
+        const next = new Map(prev);
+        for (const r of collected) next.set(r.id, ruleTitle(r));
+        return next;
+      });
+      toast({ title: `Đã chọn ${collected.length} quy tắc khớp bộ lọc` });
+    } catch (err: any) {
+      toast({
+        title: 'Lỗi chọn tất cả',
+        description: err?.message || 'Không tải được toàn bộ quy tắc khớp bộ lọc',
+        variant: 'destructive',
+      });
+    } finally {
+      setSelectingAllMatching(false);
+    }
+  };
+
   const openBulkEdit = () => {
     setBulkEditType('DELTA_AMOUNT');
     setBulkEditValue('');
@@ -795,6 +883,7 @@ export function PricingMacroManager() {
     const onPage = new Set(rules.map((r) => r.id));
     return Array.from(selected.keys()).filter((id) => !onPage.has(id)).length;
   }, [selected, rules]);
+  const allPageSelected = rules.length > 0 && rules.every((r) => selectedIds.has(r.id));
   const BULK_DELETE_LIST_MAX = 8;
 
   // Bản xem trước sửa hàng loạt: luật đã chọn (kể cả luật đang ẩn do trang/bộ lọc) với giá trị CŨ → MỚI.
@@ -904,11 +993,32 @@ export function PricingMacroManager() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="h-9 text-xs text-amber-700 border-amber-200 hover:bg-amber-50"
+                  onClick={() => setBulkDisableOpen(true)}
+                >
+                  <PowerOff className="w-3.5 h-3.5 mr-1" />
+                  Tắt đã chọn ({selectedIds.size})
+                </Button>
+              )}
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
                   className="h-9 text-xs text-red-600 border-red-200 hover:bg-red-50"
                   onClick={() => setBulkDeleteOpen(true)}
                 >
                   <Trash2 className="w-3.5 h-3.5 mr-1" />
                   Xoá đã chọn ({selectedIds.size})
+                </Button>
+              )}
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-9 text-xs text-slate-500 hover:text-slate-800"
+                  onClick={() => setSelected(new Map())}
+                >
+                  Bỏ chọn
                 </Button>
               )}
             </div>
@@ -948,13 +1058,40 @@ export function PricingMacroManager() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
+          {searching &&
+            !loading &&
+            !searchFailure &&
+            allPageSelected &&
+            total > rules.length &&
+            selectedIds.size < total &&
+            total <= MACRO_SELECT_ALL_MATCHING_MAX && (
+              <div
+                className="flex flex-wrap items-center justify-between gap-2 border-b border-indigo-100 bg-indigo-50/60 px-4 py-2 text-xs text-slate-700"
+                data-testid="select-all-matching-banner"
+              >
+                <span>
+                  Đã chọn <b>{rules.length}</b> quy tắc ở trang này. Bộ lọc hiện khớp tổng cộng <b>{total}</b> quy tắc.
+                </span>
+                <Button
+                  type="button"
+                  variant="link"
+                  size="sm"
+                  className="h-auto p-0 text-xs font-semibold text-indigo-700"
+                  disabled={selectingAllMatching}
+                  onClick={handleSelectAllMatching}
+                >
+                  {selectingAllMatching && <Loader2 className="mr-1 h-3 w-3 animate-spin" />}
+                  Chọn tất cả {total} quy tắc khớp bộ lọc
+                </Button>
+              </div>
+            )}
           <Table>
             <TableHeader>
               <TableRow className="bg-slate-50/80 text-xs">
                 <TableHead className="w-8">
                   <Checkbox
                     aria-label="Chọn tất cả quy tắc ở trang này"
-                    checked={rules.length > 0 && rules.every((r) => selectedIds.has(r.id))}
+                    checked={allPageSelected}
                     onCheckedChange={(c) =>
                       setSelected((prev) => {
                         const next = new Map(prev);
@@ -1523,6 +1660,53 @@ export function PricingMacroManager() {
         provinces={provinces}
         onDone={loadData}
       />
+
+      {/* ───────── BULK DISABLE CONFIRM ───────── */}
+      <AlertDialog open={bulkDisableOpen} onOpenChange={(open) => !open && !bulkDisabling && setBulkDisableOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-sm font-bold text-slate-900">
+              Tắt {selectedIds.size} quy tắc đã chọn?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-slate-500">
+              Các chuyến đặt sau khi tắt sẽ không còn áp dụng những quy tắc này. Bạn vẫn có thể bật lại từng quy tắc bất
+              cứ lúc nào.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="text-xs space-y-1.5" data-testid="bulk-disable-list">
+            <ul className="list-disc pl-5 text-slate-700 max-h-40 overflow-y-auto">
+              {Array.from(selected.entries())
+                .slice(0, BULK_DELETE_LIST_MAX)
+                .map(([id, title]) => (
+                  <li key={id}>{title}</li>
+                ))}
+            </ul>
+            {selectedTitles.length > BULK_DELETE_LIST_MAX && (
+              <div className="text-slate-500">… và {selectedTitles.length - BULK_DELETE_LIST_MAX} quy tắc khác.</div>
+            )}
+            {offPageSelectedCount > 0 && (
+              <div className="rounded border border-amber-300 bg-amber-50 p-1.5 text-amber-800" role="alert">
+                Trong đó {offPageSelectedCount} quy tắc không nằm ở trang đang xem (trang khác hoặc bị bộ lọc ẩn) — chúng
+                VẪN sẽ bị tắt.
+              </div>
+            )}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="text-xs" disabled={bulkDisabling}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              className="text-xs bg-amber-600 hover:bg-amber-700 text-white"
+              onClick={(e) => {
+                e.preventDefault();
+                handleBulkDisable();
+              }}
+              disabled={bulkDisabling}
+            >
+              {bulkDisabling && <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" />}
+              Tắt {selectedIds.size} quy tắc
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ───────── BULK DELETE CONFIRM ───────── */}
       <AlertDialog open={bulkDeleteOpen} onOpenChange={(open) => !open && !bulkDeleting && setBulkDeleteOpen(false)}>

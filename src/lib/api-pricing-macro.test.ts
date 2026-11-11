@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   bulkCreatePricingMacroRules,
   bulkDeletePricingMacroRules,
+  bulkDisablePricingMacroRules,
   createPricingMacroRule,
   getPricingMacroProvinces,
   getPricingMacroWards,
@@ -53,6 +54,15 @@ describe('pricing macro bulk API clients', () => {
     expect(init().method).toBe('POST');
     expect(JSON.parse(init().body)).toEqual({ ids: [1, 2, 3] });
     expect(res).toEqual({ deleted: [1, 2], missing: [3] });
+  });
+
+  it('bulkDisablePricingMacroRules: POST /pricing/macro-rules/bulk-disable body {ids}', async () => {
+    ok({ disabled: [1], alreadyInactive: [2], missing: [3] });
+    const res = await bulkDisablePricingMacroRules([1, 2, 3]);
+    expect(url()).toBe(`${API_BASE_URL}/pricing/macro-rules/bulk-disable`);
+    expect(init().method).toBe('POST');
+    expect(JSON.parse(init().body)).toEqual({ ids: [1, 2, 3] });
+    expect(res).toEqual({ disabled: [1], alreadyInactive: [2], missing: [3] });
   });
 
   it('createPricingMacroRule gửi isBidirectional khi được truyền (field mới, additive)', async () => {

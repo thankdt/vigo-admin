@@ -20,6 +20,7 @@ const createRule = vi.fn();
 const updateRule = vi.fn();
 const deleteRule = vi.fn();
 const bulkDelete = vi.fn();
+const bulkDisable = vi.fn();
 const bandWarnings = vi.fn();
 
 vi.mock('@/hooks/use-toast', () => ({ useToast: () => ({ toast: toastMock }) }));
@@ -40,6 +41,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     updatePricingMacroRule: (...a: unknown[]) => updateRule(...a),
     deletePricingMacroRule: (...a: unknown[]) => deleteRule(...a),
     bulkDeletePricingMacroRules: (...a: unknown[]) => bulkDelete(...a),
+    bulkDisablePricingMacroRules: (...a: unknown[]) => bulkDisable(...a),
     getPricingMacroBandWarnings: (...a: unknown[]) => bandWarnings(...a),
   };
 });
@@ -193,6 +195,7 @@ describe('PricingMacroManager — danh sách', () => {
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    bulkDisable.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
 
@@ -426,6 +429,106 @@ describe('PricingMacroManager — danh sách', () => {
       expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Đã xoá 501 quy tắc' })),
     );
   }, 60_000);
+
+  it('tắt hàng loạt: hiện "Tắt đã chọn (N)", xác nhận liệt kê quy tắc + báo ẩn, gọi API theo lô ≤ 500, báo kết quả và bỏ chọn', async () => {
+    const { user } = await setup();
+    expect(screen.queryByRole('button', { name: /Tắt đã chọn/ })).not.toBeInTheDocument();
+
+    bulkDisable.mockResolvedValue({ disabled: [1], alreadyInactive: [2], missing: [3] });
+
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #2\b/ }));
+
+    // lọc sang dòng #3 để #1, #2 thành ngoài trang đang xem
+    noteListReturns(() => pageOf([CANONICAL], 1));
+    await user.type(qBox(), 'api');
+    await waitForResult({ shown: [3], gone: [1, 2] });
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #3\b/ }));
+
+    expect(screen.getByRole('button', { name: 'Tắt đã chọn (3)' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Tắt đã chọn (3)' }));
+
+    const list = await screen.findByTestId('bulk-disable-list');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+    expect(within(list).getByRole('alert')).toHaveTextContent('2 quy tắc không nằm ở trang đang xem');
+    expect(bulkDisable).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('button', { name: 'Tắt 3 quy tắc' }));
+
+    await waitFor(() => expect(bulkDisable).toHaveBeenCalledTimes(1));
+    expect(bulkDisable.mock.calls[0][0].slice().sort((a: number, b: number) => a - b)).toEqual([1, 2, 3]);
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          title: 'Đã tắt 1 quy tắc',
+          description: '1 quy tắc đã tắt sẵn. 1 quy tắc không còn tồn tại.',
+        }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Tắt đã chọn/ })).not.toBeInTheDocument());
+  });
+
+  it('tắt hàng loạt lỗi: báo lỗi đỏ và GIỮ vùng chọn để thử lại; nút "Bỏ chọn" xoá sạch vùng chọn', async () => {
+    const { user } = await setup();
+    bulkDisable.mockRejectedValue(new Error('Mất kết nối'));
+
+    await user.click(screen.getByRole('checkbox', { name: /^Chọn quy tắc #1\b/ }));
+    await user.click(screen.getByRole('button', { name: 'Tắt đã chọn (1)' }));
+    await user.click(await screen.findByRole('button', { name: 'Tắt 1 quy tắc' }));
+
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(
+        expect.objectContaining({ title: 'Lỗi tắt hàng loạt', variant: 'destructive' }),
+      ),
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tắt đã chọn (1)' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Bỏ chọn' }));
+    expect(screen.queryByRole('button', { name: /Tắt đã chọn/ })).not.toBeInTheDocument();
+  });
+
+  it('tắt hàng loạt hơn 500 quy tắc: tự chia lô ≤ 500 và hỗ trợ chọn tất cả khớp bộ lọc nhiều trang', async () => {
+    const allFiltered = Array.from({ length: 502 }, (_, i) =>
+      rule({ id: i + 1, name: `F${i + 1}`, note: 'khuyến mãi tết' }),
+    );
+    const { user } = await setup();
+    bulkDisable.mockImplementation(async (ids: number[]) => ({
+      disabled: ids,
+      alreadyInactive: [],
+      missing: [],
+    }));
+
+    noteListReturns((_q, p) => {
+      const page = p?.page ?? 1;
+      const limit = p?.limit ?? 50;
+      return {
+        items: allFiltered.slice((page - 1) * limit, page * limit),
+        total: allFiltered.length,
+        page,
+        limit,
+      };
+    });
+
+    await user.type(qBox(), 'khuyến mãi');
+    await waitFor(() => expect(screen.getByText(/Hiển thị 1–50 \/ 502 quy tắc/)).toBeInTheDocument());
+
+    await user.click(screen.getByRole('checkbox', { name: 'Chọn tất cả quy tắc ở trang này' }));
+    const banner = await screen.findByTestId('select-all-matching-banner');
+    expect(banner).toHaveTextContent('Đã chọn 50 quy tắc ở trang này');
+
+    await user.click(within(banner).getByRole('button', { name: 'Chọn tất cả 502 quy tắc khớp bộ lọc' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Tắt đã chọn (502)' })).toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: 'Tắt đã chọn (502)' }));
+    await user.click(await screen.findByRole('button', { name: 'Tắt 502 quy tắc' }));
+
+    await waitFor(() => expect(bulkDisable).toHaveBeenCalledTimes(2), { timeout: 10_000 });
+    const sizes = bulkDisable.mock.calls.map((c) => c[0].length).sort((a, b) => b - a);
+    expect(sizes).toEqual([500, 2]);
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(expect.objectContaining({ title: 'Đã tắt 502 quy tắc' })),
+    );
+  }, 30_000);
 
   it('bật/tắt nhanh chỉ gửi {isActive} (cập nhật nhẹ, không kích hoạt kiểm tra lại giá trị cũ)', async () => {
     const { user } = await setup();
@@ -1130,6 +1233,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     updateRule.mockReset();
     deleteRule.mockReset();
     bulkDelete.mockReset();
+    bulkDisable.mockReset();
     bandWarnings.mockReset().mockResolvedValue({ band: {}, warnings: [] });
   });
   afterEach(() => {

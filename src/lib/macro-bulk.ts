@@ -10,6 +10,8 @@ import type { BulkMacroSkippedItem, MacroAdjustmentType, MacroEndSelector, Macro
 export const MACRO_BULK_MAX_COMBOS = 500;
 export const MACRO_BULK_MAX_SIDE = 200;
 export const MACRO_BULK_DELETE_MAX = 500;
+export const MACRO_BULK_DISABLE_MAX = 500;
+export const MACRO_SELECT_ALL_MATCHING_MAX = 5000;
 
 export const MACRO_VALUE_LIMITS = {
   PRIORITY_MIN: -1000,
