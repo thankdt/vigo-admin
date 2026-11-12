@@ -29,6 +29,13 @@ export type BookingDraft = {
   scheduledFrom: string;
   scheduledTo: string;
   promotionId: number | null;
+  // Thông tin xuất HĐ VAT của chuyến gốc (null khi chuyến gốc xuất dạng Khách lẻ).
+  vatInfo: {
+    companyName: string;
+    taxCode: string;
+    companyAddress: string;
+    invoiceEmail: string;
+  } | null;
 };
 
 const SERVICE_TYPES = ['RIDE', 'DELIVERY', 'CARPOOL'] as const;
@@ -122,6 +129,21 @@ export function bookingToDraft(b: Booking): BookingDraft {
   const isScheduled = fromMs != null;
   const toMs = fromMs == null ? null : (toMsRaw != null && toMsRaw > fromMs ? toMsRaw : fromMs + DEFAULT_WINDOW_MS);
 
+  const rawVat = b.vatInfo && typeof b.vatInfo === 'object' ? b.vatInfo : null;
+  const vatCompanyName = typeof rawVat?.companyName === 'string' ? rawVat.companyName.trim() : '';
+  const vatTaxCode = typeof rawVat?.taxCode === 'string' ? rawVat.taxCode.trim() : '';
+  const vatCompanyAddress = typeof rawVat?.companyAddress === 'string' ? rawVat.companyAddress.trim() : '';
+  const vatInvoiceEmail = typeof rawVat?.invoiceEmail === 'string' ? rawVat.invoiceEmail.trim() : '';
+  const vatInfo =
+    vatCompanyName || vatTaxCode || vatCompanyAddress || vatInvoiceEmail
+      ? {
+          companyName: vatCompanyName,
+          taxCode: vatTaxCode,
+          companyAddress: vatCompanyAddress,
+          invoiceEmail: vatInvoiceEmail,
+        }
+      : null;
+
   return {
     sourceBookingId: b.id,
     customerPhone,
@@ -140,5 +162,6 @@ export function bookingToDraft(b: Booking): BookingDraft {
     scheduledFrom: fromMs != null ? formatLocal(new Date(fromMs)) : '',
     scheduledTo: toMs != null ? formatLocal(new Date(toMs)) : '',
     promotionId: typeof b.promotionId === 'number' ? b.promotionId : null,
+    vatInfo,
   };
 }

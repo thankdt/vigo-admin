@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { listAgentBookings, cancelAgentBooking, downloadBookingContractPdf, AgentBooking } from '@/lib/api';
 import { agentCommissionDisplay } from '@/lib/agent-commission-display';
-import { RefreshCw, Loader2, MapPin, XCircle, FileText } from 'lucide-react';
+import { RefreshCw, Loader2, MapPin, XCircle, FileText, Receipt } from 'lucide-react';
 
 // Đủ 14 trạng thái BookingStatus backend có thể trả (raw), nhìn từ góc ĐẠI LÝ — nhãn rõ ràng, không
 // để lộ enum thô. `className` tô màu theo pha: chờ (xám), tài xế đang lo (xanh dương), xong (xanh lá),
@@ -137,6 +137,14 @@ export default function AgentOrdersPage() {
                       <div className="text-xs text-muted-foreground">
                         Khách đi: <span className="font-medium text-foreground">{b.passengerNames?.[0]?.trim() || b.customerName || '—'}</span>
                         {b.customerPhone ? ` · ${b.customerPhone}` : ''}
+                      </div>
+                    )}
+                    {(b.vatInfo?.companyName || b.vatInfo?.taxCode) && (
+                      <div className="text-xs text-muted-foreground flex items-center gap-1 flex-wrap">
+                        <Receipt className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span>Hoá đơn VAT:</span>
+                        <span className="font-medium text-foreground">{b.vatInfo.companyName || '—'}</span>
+                        {b.vatInfo.taxCode && <span>· MST: {b.vatInfo.taxCode}</span>}
                       </div>
                     )}
                   </div>

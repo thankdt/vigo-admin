@@ -257,4 +257,26 @@ describe('bookingToDraft — ghi chú, voucher, nguồn', () => {
     const d = bookingToDraft(base({ driverId: 'd1' })) as any;
     expect(d.driverId).toBeUndefined();
   });
+
+  it('chép vatInfo đã trim khi chuyến gốc có xuất hoá đơn công ty, null khi Khách lẻ', () => {
+    expect(bookingToDraft(base()).vatInfo).toBeNull();
+    expect(bookingToDraft(base({ vatInfo: { companyName: '   ' } })).vatInfo).toBeNull();
+    expect(
+      bookingToDraft(
+        base({
+          vatInfo: {
+            companyName: '  Công ty TNHH ABC ',
+            taxCode: ' 0101234567 ',
+            companyAddress: ' 123 Trần Phú, Hà Nội ',
+            invoiceEmail: ' ketoan@abc.vn ',
+          },
+        }),
+      ).vatInfo,
+    ).toEqual({
+      companyName: 'Công ty TNHH ABC',
+      taxCode: '0101234567',
+      companyAddress: '123 Trần Phú, Hà Nội',
+      invoiceEmail: 'ketoan@abc.vn',
+    });
+  });
 });

@@ -1368,6 +1368,13 @@ export async function createAdminBooking(data: {
   promotionId?: number;
   /** Giá cước tự cấu hình (đã bao gồm thuế VAT, tối thiểu 150.000₫) */
   customPrice?: number;
+  /** Thông tin xuất hoá đơn VAT riêng cho chuyến (tuỳ chọn; bỏ trống = xuất dạng Khách lẻ) */
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
 }): Promise<Booking> {
   const response = await fetchWithAuth('/bookings/admin/create', {
     method: 'POST',
@@ -1400,6 +1407,13 @@ export async function createAgentBooking(data: {
   promotionId?: number;
   /** Giá cước tự cấu hình (đã bao gồm thuế VAT, tối thiểu 150.000₫) */
   customPrice?: number;
+  /** Thông tin xuất hoá đơn VAT riêng cho chuyến đặt hộ (tuỳ chọn; bỏ trống = xuất dạng Khách lẻ) */
+  vatInfo?: {
+    companyName?: string;
+    taxCode?: string;
+    companyAddress?: string;
+    invoiceEmail?: string;
+  };
 }): Promise<Booking> {
   const response = await fetchWithAuth('/agent/bookings', {
     method: 'POST',
@@ -3100,6 +3114,12 @@ export type AgentBooking = {
   routeName: string | null;
   customerPhone: string | null;
   passengerNames: string[] | null;
+  vatInfo?: {
+    companyName?: string | null;
+    taxCode?: string | null;
+    companyAddress?: string | null;
+    invoiceEmail?: string | null;
+  } | null;
   createdAt: string;
 };
 export async function listAgentBookings(page = 1, limit = 50): Promise<{ data: AgentBooking[]; meta: any }> {

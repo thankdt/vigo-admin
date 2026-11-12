@@ -508,7 +508,17 @@ export type Booking = {
     fullName?: string | null;
     phone?: string | null;
   } | null;
+  // Thông tin xuất hoá đơn VAT riêng của chuyến (nhập lúc đặt hộ / admin tạo / tự đặt chuyến,
+  // hoặc snapshot từ hồ sơ khách khi hoàn thành). Null = xuất dạng Khách lẻ / người tiêu dùng.
+  vatInfo?: BookingVatInfo | null;
 }
+
+export type BookingVatInfo = {
+  companyName?: string | null;
+  taxCode?: string | null;
+  companyAddress?: string | null;
+  invoiceEmail?: string | null;
+};
 
 /** Trạng thái CSKH gọi check khách. Luồng: (chưa gọi) → CLAIMED (đã nhận gọi) →
  *  CALLED (gọi được) / UNREACHED (không liên lạc được). */

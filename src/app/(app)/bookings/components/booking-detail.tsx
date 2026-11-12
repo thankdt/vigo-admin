@@ -16,7 +16,7 @@ import * as React from 'react';
 // 7 tiếng giữa dòng và dialog mở từ chính dòng đó. CLAUDE.md: mọi mốc là giờ VN.
 import { formatVnDateTime, formatVnDateTimeFull } from '../../leakage-review/leakage-labels';
 import { Button } from '@/components/ui/button';
-import { Loader2, Car, User, Clock, Zap, CopyPlus, Store, Copy, Check, Send } from 'lucide-react';
+import { Loader2, Car, User, Clock, Zap, CopyPlus, Store, Copy, Check, Send, Receipt } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
@@ -961,6 +961,30 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                     <div className="flex-1 text-sm">
                       <div className="font-semibold">{booking.agentName || '—'}</div>
                       <div className="text-muted-foreground">{booking.agentPhone || '—'}</div>
+                    </div>
+                  </div>
+                </Card>
+              )}
+
+              {/* Thông tin xuất hoá đơn VAT — chỉ hiện khi chuyến có cấu hình xuất HĐ công ty/MST */}
+              {(booking.vatInfo?.companyName || booking.vatInfo?.taxCode) && (
+                <Card className="p-3 space-y-1 border-blue-200 bg-blue-50/40 dark:border-blue-900/50 dark:bg-blue-950/20">
+                  <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thông tin xuất hoá đơn VAT</div>
+                  <div className="flex items-start gap-3">
+                    <div className="h-9 w-9 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <Receipt className="h-4 w-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 text-sm space-y-0.5">
+                      <div className="font-semibold">{booking.vatInfo.companyName || '—'}</div>
+                      {booking.vatInfo.taxCode && (
+                        <div className="text-muted-foreground">MST: <span className="font-mono text-foreground">{booking.vatInfo.taxCode}</span></div>
+                      )}
+                      {booking.vatInfo.companyAddress && (
+                        <div className="text-xs text-muted-foreground">{booking.vatInfo.companyAddress}</div>
+                      )}
+                      {booking.vatInfo.invoiceEmail && (
+                        <div className="text-xs text-muted-foreground">Email HĐ: {booking.vatInfo.invoiceEmail}</div>
+                      )}
                     </div>
                   </div>
                 </Card>

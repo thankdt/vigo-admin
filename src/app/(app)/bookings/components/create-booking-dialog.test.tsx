@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeAll } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CreateBookingDialog } from './create-booking-dialog';
+import { CreateBookingDialog, isValidVatTaxCode, isValidVatEmailOrEmpty } from './create-booking-dialog';
+import { createAgentBooking } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   createAdminBooking: vi.fn(),
@@ -163,6 +164,89 @@ describe('CreateBookingDialog — Cổng đặt hộ đặt tên khách hàng (n
     expect(nameInput).toHaveValue('Nguyễn Văn Nam');
     expect(screen.getByText('Khách 1 (trên HĐ)')).toBeInTheDocument();
     expect(screen.getByText('Nguyễn Văn Nam')).toBeInTheDocument();
+  });
+});
+
+describe('CreateBookingDialog — Xuất hoá đơn VAT cho khách trên cổng đặt hộ', () => {
+  it('kiểm định dạng MST & email khớp chuẩn MISA backend', () => {
+    expect(isValidVatTaxCode('0101234567')).toBe(true);
+    expect(isValidVatTaxCode('0101234567-001')).toBe(true);
+    expect(isValidVatTaxCode('001200012345')).toBe(true);
+    expect(isValidVatTaxCode('12345')).toBe(false);
+    expect(isValidVatTaxCode('0101234567-01')).toBe(false);
+    expect(isValidVatEmailOrEmpty('')).toBe(true);
+    expect(isValidVatEmailOrEmpty('ketoan@vigo.vn')).toBe(true);
+    expect(isValidVatEmailOrEmpty('a@b.vn; c@d.vn')).toBe(false);
+  });
+
+  it('bật công tắc Xuất hoá đơn VAT và gửi vatInfo lên createAgentBooking khi tạo chuyến đặt hộ', async () => {
+    const user = userEvent.setup();
+    vi.mocked(createAgentBooking).mockResolvedValueOnce({ id: 'b-vat-1' } as any);
+
+    const futureFrom = new Date(Date.now() + 60 * 60_000);
+    const futureTo = new Date(Date.now() + 90 * 60_000);
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+    render(
+      <CreateBookingDialog
+        onSuccess={() => {}}
+        mode="agent"
+        open={true}
+        initial={{
+          sourceBookingId: 'src-1',
+          customerPhone: '0909123456',
+          customerName: 'Nguyễn Văn A',
+          pickup: { address: 'Sân bay Nội Bài', lat: 21.2187, long: 105.8047 },
+          dropoff: { address: '1 Trần Phú, Hà Nội', lat: 21.0278, long: 105.8342 },
+          missingCoords: [],
+          serviceType: 'RIDE',
+          vehicleType: 'CAR_4',
+          coPassengers: [],
+          companionPhone: '',
+          note: '',
+          isScheduled: true,
+          scheduledFrom: fmt(futureFrom),
+          scheduledTo: fmt(futureTo),
+          promotionId: null,
+          vatInfo: null,
+        }}
+      />,
+    );
+
+    const vatToggle = screen.getByLabelText(/Xuất hoá đơn VAT cho khách/i);
+    expect(vatToggle).not.toBeChecked();
+
+    await user.click(vatToggle);
+    expect(vatToggle).toBeChecked();
+
+    await user.type(screen.getByLabelText(/Tên công ty \/ Đơn vị/i), 'Công ty TNHH MTV ViGo');
+    const taxInput = screen.getByLabelText(/Mã số thuế \(MST\)/i);
+    await user.type(taxInput, '123');
+    expect(screen.getByText(/MST không hợp lệ/i)).toBeInTheDocument();
+
+    await user.clear(taxInput);
+    await user.type(taxInput, '0101234567');
+    expect(screen.queryByText(/MST không hợp lệ/i)).not.toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/Email nhận hoá đơn/i), 'ketoan@vigo.vn');
+    await user.type(screen.getByLabelText(/Địa chỉ công ty/i), 'Số 1 Trần Phú, Ba Đình, Hà Nội');
+
+    await user.click(screen.getByRole('button', { name: /^Tạo chuyến$/i }));
+
+    expect(createAgentBooking).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customerPhone: '0909123456',
+        customerName: 'Nguyễn Văn A',
+        vatInfo: {
+          companyName: 'Công ty TNHH MTV ViGo',
+          taxCode: '0101234567',
+          companyAddress: 'Số 1 Trần Phú, Ba Đình, Hà Nội',
+          invoiceEmail: 'ketoan@vigo.vn',
+        },
+      }),
+    );
   });
 });
 

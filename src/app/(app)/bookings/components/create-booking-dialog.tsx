@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, Users, MapPin, Car, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket, ArrowUpDown } from 'lucide-react';
+import { Loader2, Plus, Phone, User, Users, MapPin, Car, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket, ArrowUpDown, Receipt } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,33 @@ interface AddressData {
   address: string;
   lat: number;
   long: number;
+}
+
+const TAX_CODE_SEPARATORS = /[ .\-\u2010-\u2015\u2212]+/;
+const SINGLE_INVOICE_EMAIL_RE = /^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/;
+
+/**
+ * Kiểm định dạng MST người mua khớp chuẩn MISA backend (`tax-code.util.ts`):
+ *  - 10 chữ số (doanh nghiệp/tổ chức)
+ *  - 10-3 chữ số (đơn vị phụ thuộc / chi nhánh, vd 0101234567-001)
+ *  - 12 chữ số (số định danh cá nhân thay MST)
+ */
+export function isValidVatTaxCode(raw: string): boolean {
+  const cleaned = raw.trim();
+  if (!cleaned) return false;
+  const groups = cleaned.split(TAX_CODE_SEPARATORS).filter(Boolean);
+  if (groups.length === 0 || !groups.every((g) => /^\d+$/.test(g))) return false;
+  const digits = groups.join('');
+  if (groups.length > 1 && groups[0].length === 10) {
+    return digits.length === 13;
+  }
+  return digits.length === 10 || digits.length === 12 || digits.length === 13;
+}
+
+export function isValidVatEmailOrEmpty(raw: string): boolean {
+  const cleaned = raw.trim();
+  if (!cleaned) return true;
+  return SINGLE_INVOICE_EMAIL_RE.test(cleaned);
 }
 
 export function CreateBookingDialog({
@@ -127,6 +154,16 @@ export function CreateBookingDialog({
   // Tự cấu hình giá cước (cho đại lý đặt hộ / admin)
   const [isCustomPrice, setIsCustomPrice] = React.useState(false);
   const [customPriceStr, setCustomPriceStr] = React.useState('');
+
+  // Thông tin xuất hoá đơn VAT riêng cho chuyến (cổng đặt hộ & admin tạo chuyến).
+  // Mặc định tắt → xuất dạng Khách lẻ / Bán cho người tiêu dùng.
+  const [needVat, setNeedVat] = React.useState(false);
+  const [vatCompanyName, setVatCompanyName] = React.useState('');
+  const [vatTaxCode, setVatTaxCode] = React.useState('');
+  const [vatCompanyAddress, setVatCompanyAddress] = React.useState('');
+  const [vatInvoiceEmail, setVatInvoiceEmail] = React.useState('');
+  const vatTaxCodeValid = !vatTaxCode.trim() || isValidVatTaxCode(vatTaxCode);
+  const vatEmailValid = isValidVatEmailOrEmpty(vatInvoiceEmail);
 
   const handleCustomPriceChange = (raw: string) => {
     const cleanDigits = raw.replace(/\D/g, '');
@@ -377,6 +414,11 @@ export function CreateBookingDialog({
     setVoucherDropped(false);
     setIsCustomPrice(false);
     setCustomPriceStr('');
+    setNeedVat(false);
+    setVatCompanyName('');
+    setVatTaxCode('');
+    setVatCompanyAddress('');
+    setVatInvoiceEmail('');
   };
 
   // Cờ "đã áp bản nháp" chỉ được xoá khi dialog ĐÓNG, không xoá trong resetForm:
@@ -411,6 +453,19 @@ export function CreateBookingDialog({
     setPendingPromotionId(initial.promotionId);
     setVoucherDropped(false);
     setDuplicateInfo({ sourceId: initial.sourceBookingId, missingCoords: initial.missingCoords });
+    if (initial.vatInfo) {
+      setNeedVat(true);
+      setVatCompanyName(initial.vatInfo.companyName);
+      setVatTaxCode(initial.vatInfo.taxCode);
+      setVatCompanyAddress(initial.vatInfo.companyAddress);
+      setVatInvoiceEmail(initial.vatInfo.invoiceEmail);
+    } else {
+      setNeedVat(false);
+      setVatCompanyName('');
+      setVatTaxCode('');
+      setVatCompanyAddress('');
+      setVatInvoiceEmail('');
+    }
 
     setCustomerPhone(initial.customerPhone);
     setCustomerName(initial.customerName);
@@ -552,6 +607,34 @@ export function CreateBookingDialog({
       customPriceToSend = num;
     }
 
+    // Thông tin xuất hoá đơn VAT (nếu bật) — bắt buộc đủ Tên đơn vị + MST + Địa chỉ (chuẩn MISA D5)
+    if (needVat) {
+      if (!vatCompanyName.trim() || !vatTaxCode.trim() || !vatCompanyAddress.trim()) {
+        toast({
+          variant: 'destructive',
+          title: 'Thiếu thông tin xuất hoá đơn VAT',
+          description: 'Vui lòng điền đầy đủ Tên công ty / Đơn vị, Mã số thuế (MST) và Địa chỉ công ty.',
+        });
+        return;
+      }
+      if (!isValidVatTaxCode(vatTaxCode)) {
+        toast({
+          variant: 'destructive',
+          title: 'Mã số thuế không hợp lệ',
+          description: 'MST phải gồm 10 số (doanh nghiệp), 10-3 số (chi nhánh) hoặc 12 số định danh.',
+        });
+        return;
+      }
+      if (!isValidVatEmailOrEmpty(vatInvoiceEmail)) {
+        toast({
+          variant: 'destructive',
+          title: 'Email nhận hoá đơn không hợp lệ',
+          description: 'Vui lòng nhập đúng 1 địa chỉ email hợp lệ (ví dụ: ketoan@congty.vn) hoặc để trống.',
+        });
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
       const payload = {
@@ -598,6 +681,14 @@ export function CreateBookingDialog({
         scheduledToTime: scheduledToIso,
         promotionId: selectedPromotionId ?? undefined,
         customPrice: customPriceToSend,
+        vatInfo: needVat
+          ? {
+              companyName: vatCompanyName.trim(),
+              taxCode: vatTaxCode.trim(),
+              companyAddress: vatCompanyAddress.trim(),
+              invoiceEmail: vatInvoiceEmail.trim() || undefined,
+            }
+          : undefined,
       };
       // đặt hộ: agent posts to /agent/bookings (agentUserId from JWT, no driver-assign);
       // admin keeps the driver pre-assign path.
@@ -1136,6 +1227,99 @@ export function CreateBookingDialog({
                       {amt.toLocaleString('vi-VN')}₫
                     </button>
                   ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Xuất hoá đơn VAT cho khách (cổng đặt hộ & admin tạo chuyến) */}
+          <div className="space-y-3 rounded-lg border p-3 bg-muted/20">
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <Label htmlFor="cb-need-vat-toggle" className="flex items-center gap-2 text-sm font-semibold text-muted-foreground cursor-pointer">
+                  <Receipt className="h-4 w-4 text-blue-600" />
+                  Xuất hoá đơn VAT cho khách
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Nếu không bật, hoá đơn mặc định xuất dưới dạng <strong>Khách lẻ</strong>. Bật để nhập tên công ty &amp; MST của khách.
+                </p>
+              </div>
+              <Switch
+                id="cb-need-vat-toggle"
+                checked={needVat}
+                onCheckedChange={setNeedVat}
+              />
+            </div>
+
+            {needVat && (
+              <div className="space-y-2.5 pt-2 border-t">
+                <div className="space-y-1">
+                  <Label htmlFor="cb-vat-company" className="text-xs font-medium">
+                    Tên công ty / Đơn vị <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="cb-vat-company"
+                    maxLength={255}
+                    placeholder="VD: Công ty TNHH..."
+                    value={vatCompanyName}
+                    onChange={(e) => setVatCompanyName(e.target.value)}
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="space-y-1">
+                    <Label htmlFor="cb-vat-taxcode" className="text-xs font-medium">
+                      Mã số thuế (MST) <span className="text-destructive">*</span>
+                    </Label>
+                    <Input
+                      id="cb-vat-taxcode"
+                      maxLength={20}
+                      placeholder="0101234567 hoặc 0101234567-001"
+                      value={vatTaxCode}
+                      onChange={(e) => setVatTaxCode(e.target.value)}
+                      aria-invalid={!vatTaxCodeValid}
+                      className={cn(!vatTaxCodeValid && 'border-destructive focus-visible:ring-destructive')}
+                    />
+                    {!vatTaxCodeValid && (
+                      <p className="text-xs text-destructive">
+                        MST không hợp lệ (10 số, 10-3 số chi nhánh hoặc 12 số định danh).
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label htmlFor="cb-vat-email" className="text-xs font-medium">
+                      Email nhận hoá đơn (không bắt buộc)
+                    </Label>
+                    <Input
+                      id="cb-vat-email"
+                      type="email"
+                      maxLength={254}
+                      placeholder="ketoan@congty.vn"
+                      value={vatInvoiceEmail}
+                      onChange={(e) => setVatInvoiceEmail(e.target.value)}
+                      aria-invalid={!vatEmailValid}
+                      className={cn(!vatEmailValid && 'border-destructive focus-visible:ring-destructive')}
+                    />
+                    {!vatEmailValid && (
+                      <p className="text-xs text-destructive">
+                        Chỉ nhập 1 địa chỉ email hợp lệ (không cách / dấu phẩy).
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="cb-vat-address" className="text-xs font-medium">
+                    Địa chỉ công ty <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    id="cb-vat-address"
+                    maxLength={255}
+                    placeholder="Số nhà, đường, phường/xã, tỉnh/thành..."
+                    value={vatCompanyAddress}
+                    onChange={(e) => setVatCompanyAddress(e.target.value)}
+                  />
                 </div>
               </div>
             )}
