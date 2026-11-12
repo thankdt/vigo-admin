@@ -28,7 +28,7 @@ describe('buildFunctionCatalog', () => {
     expect(pricing?.label).toBe('Giá & Hoa hồng');
   });
 
-  it('allFunctionKeys = 36 menu + 11 settings + 4 đặc biệt = 51 unique keys', () => {
+  it('allFunctionKeys = 36 menu + 11 settings + 6 đặc biệt = 53 unique keys', () => {
     const keys = allFunctionKeys();
     // 2026-08-18 (CRM GĐ3-7): +crm-tickets, +crm-segments, +crm-campaigns, +crm-accounts,
     // +crm-insights (menu) và +crm-compensate (đặc biệt).
@@ -37,8 +37,9 @@ describe('buildFunctionCatalog', () => {
     // 2026-09-21: +loyalty-adjust (đặc biệt — cộng/trừ Vcoin tay, tách khỏi `users`).
     // 2026-10-12: +driver-note-presets (đặc biệt — thêm/đổi tên/xoá mục ghi chú tài xế).
     // 2026-10-27: +invoice-reopen (đặc biệt — mở lại hoá đơn MISA lỗi/bỏ qua, tách khỏi `invoices`).
-    expect(keys).toHaveLength(51);
-    expect(new Set(keys).size).toBe(51);
+    // 2026-11-12: +ai-cskh, +ai-cskh-dispatch (đặc biệt — Service Account cho Vigo MCP Server).
+    expect(keys).toHaveLength(53);
+    expect(new Set(keys).size).toBe(53);
   });
 
   /**
@@ -86,6 +87,16 @@ describe('buildFunctionCatalog', () => {
     expect(item!.label).toMatch(/CHỨNG TỪ THUẾ/i);
     const menu = buildFunctionCatalog().find((g) => g.group.includes('menu'));
     expect(menu!.items.map((i) => i.key)).not.toContain('invoice-reopen');
+  });
+
+  // 2026-11-12: ai-cskh và ai-cskh-dispatch nằm trong nhóm đặc biệt; ai-cskh-dispatch cảnh báo trừ ví tài xế.
+  it('nhóm "Chức năng đặc biệt" chứa ai-cskh và ai-cskh-dispatch (cảnh báo trừ hoa hồng ví tài xế)', () => {
+    const special = buildFunctionCatalog().find((g) => g.group.includes('đặc biệt'));
+    const baseItem = special!.items.find((i) => i.key === 'ai-cskh');
+    const dispatchItem = special!.items.find((i) => i.key === 'ai-cskh-dispatch');
+    expect(baseItem).toBeDefined();
+    expect(dispatchItem).toBeDefined();
+    expect(dispatchItem!.label).toMatch(/TRỪ HOA HỒNG VÍ TÀI XẾ/i);
   });
 });
 
