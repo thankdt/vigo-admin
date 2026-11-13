@@ -2001,4 +2001,81 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     await waitFor(() => expect(winnerBadgeOf(13)).toBeInTheDocument());
     expect(searchRules).toHaveBeenLastCalledWith({ q: '#12', ...DAI_TU, ...CAU_GIAY, cover: true, page: 1, limit: 50 });
   });
+
+  describe('sắp xếp quy tắc (ô chọn + tiêu đề cột)', () => {
+    it('chọn từ ô «Sắp xếp quy tắc» đưa về trang 1 và gửi sortBy/sortOrder xuống danh sách thường', async () => {
+      getRules.mockImplementation(async (p: { page: number }) =>
+        pageOf([p.page === 1 ? ONE_WAY : rule({ id: 400 + p.page })], 120, p.page),
+      );
+      const u = await renderManager();
+      await u.click(screen.getByRole('button', { name: 'Trang sau' }));
+      await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 2, limit: 50 }));
+      await waitFor(() => expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 2 / 3'));
+
+      await u.click(screen.getByRole('combobox', { name: 'Sắp xếp quy tắc' }));
+      await u.click(await screen.findByRole('option', { name: 'Giá / Điều chỉnh: Thấp → Cao' }));
+
+      await waitFor(() =>
+        expect(getRules).toHaveBeenLastCalledWith({
+          page: 1,
+          limit: 50,
+          sortBy: 'adjustmentValue',
+          sortOrder: 'ASC',
+        }),
+      );
+      expect(screen.getByTestId('rules-pager')).toHaveTextContent('Trang 1 / 3');
+    });
+
+    it('bấm tiêu đề cột «Mức điều chỉnh» đảo ASC → DESC → Mặc định, đồng bộ với ô chọn và tìm kiếm có lọc', async () => {
+      searchRules.mockResolvedValue(pageOf([CANONICAL], 1));
+      const u = await renderManager();
+
+      const sortTrigger = screen.getByRole('combobox', { name: 'Sắp xếp quy tắc' });
+      const adjHeader = screen.getByRole('button', { name: /^Mức điều chỉnh/ });
+
+      // Lần 1: Thấp → Cao (ASC)
+      await u.click(adjHeader);
+      await waitFor(() =>
+        expect(getRules).toHaveBeenLastCalledWith({
+          page: 1,
+          limit: 50,
+          sortBy: 'adjustmentValue',
+          sortOrder: 'ASC',
+        }),
+      );
+      expect(sortTrigger).toHaveTextContent('Giá / Điều chỉnh: Thấp → Cao');
+
+      // Lần 2: Cao → Thấp (DESC)
+      await u.click(adjHeader);
+      await waitFor(() =>
+        expect(getRules).toHaveBeenLastCalledWith({
+          page: 1,
+          limit: 50,
+          sortBy: 'adjustmentValue',
+          sortOrder: 'DESC',
+        }),
+      );
+      expect(sortTrigger).toHaveTextContent('Giá / Điều chỉnh: Cao → Thấp');
+
+      // Lần 3: về Mặc định (bỏ sortBy/sortOrder)
+      await u.click(adjHeader);
+      await waitFor(() => expect(getRules).toHaveBeenLastCalledWith({ page: 1, limit: 50 }));
+      expect(sortTrigger).toHaveTextContent('Mặc định (Ưu tiên & Mới nhất)');
+
+      // Khi đang lọc nâng cao, bấm cột «Điểm đón (Tỉnh / Xã)» gửi sortBy=origin, sortOrder=ASC qua searchPricingMacroRules
+      await choose(u, 'Dịch vụ', 'Bao xe');
+      await waitFor(() => expect(searchRules).toHaveBeenLastCalledWith({ serviceType: 'RIDE', page: 1, limit: 50 }));
+
+      await u.click(screen.getByRole('button', { name: /^Điểm đón \(Tỉnh \/ Xã\)/ }));
+      await waitFor(() =>
+        expect(searchRules).toHaveBeenLastCalledWith({
+          serviceType: 'RIDE',
+          page: 1,
+          limit: 50,
+          sortBy: 'origin',
+          sortOrder: 'ASC',
+        }),
+      );
+    });
+  });
 });

@@ -119,4 +119,38 @@ describe('WardGroupsManager', () => {
     await user.click(screen.getByRole('button', { name: 'Xoá nhóm' }));
     await waitFor(() => expect(deleteGroup).toHaveBeenCalledWith(7));
   });
+
+  it('tìm kiếm không dấu và sắp xếp A → Z / Số xã trên bảng nhóm xã', async () => {
+    const user = userEvent.setup();
+    listGroups.mockResolvedValue([
+      { ...GROUP, id: 1, name: 'Yên Bái cũ', note: 'miền núi', wardCount: 5, staleCodes: [] },
+      { ...GROUP, id: 2, name: 'Đông Anh cũ', note: 'cửa ngõ', wardCount: 12, staleCodes: [] },
+      { ...GROUP, id: 3, name: 'Duy Tiên cũ', note: 'khu công nghiệp', wardCount: 3, staleCodes: [] },
+      { ...GROUP, id: 4, name: 'Hà Nam cũ', note: 'phía nam', wardCount: 8, staleCodes: [] },
+    ]);
+    render(<WardGroupsManager />);
+    await screen.findByText('Yên Bái cũ');
+
+    const groupNamesInDom = () =>
+      screen
+        .getAllByRole('row')
+        .slice(1)
+        .map((r) => r.querySelector('td')?.textContent?.trim());
+
+    // Chọn sắp xếp Tên nhóm: A → Z (Đông Anh đứng sau Duy Tiên, trước Hà Nam và Yên Bái)
+    await user.selectOptions(screen.getByLabelText('Sắp xếp nhóm xã'), 'name:ASC');
+    expect(groupNamesInDom()).toEqual(['Duy Tiên cũ', 'Đông Anh cũ', 'Hà Nam cũ', 'Yên Bái cũ']);
+
+    // Bấm tiêu đề cột "Số xã": lần 1 Nhiều → Ít (12, 8, 5, 3), lần 2 Ít → Nhiều (3, 5, 8, 12)
+    const countHeader = screen.getByRole('button', { name: /^Số xã/ });
+    await user.click(countHeader);
+    expect(groupNamesInDom()).toEqual(['Đông Anh cũ', 'Hà Nam cũ', 'Yên Bái cũ', 'Duy Tiên cũ']);
+
+    await user.click(countHeader);
+    expect(groupNamesInDom()).toEqual(['Duy Tiên cũ', 'Yên Bái cũ', 'Hà Nam cũ', 'Đông Anh cũ']);
+
+    // Lọc không dấu theo tên/ghi chú
+    await user.type(screen.getByLabelText('Tìm nhóm xã'), 'dong anh');
+    expect(groupNamesInDom()).toEqual(['Đông Anh cũ']);
+  });
 });

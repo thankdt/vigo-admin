@@ -748,4 +748,83 @@ describe('SpecialZonesManager', () => {
       expect(screen.getByText('Không có hàng nào khớp từ khoá tìm kiếm.')).toBeInTheDocument();
     });
   });
+
+  describe('sắp xếp trong bảng đồng giá sân bay', () => {
+    it('sắp xếp Nơi áp dụng A → Z / Z → A theo bảng chữ cái tiếng Việt (Đ sau D) và luôn ghim hàng mặc định cả tỉnh lên đầu', async () => {
+      const user = await setup([
+        row({ id: 10, wardCode: '00090', wardName: 'Xã Yên Thường', priceCar4: 260000 }),
+        row({ id: 11, wardCode: '00050', wardName: 'Phường Đống Đa', priceCar4: 240000 }),
+        row({ id: 1, wardCode: null, wardName: null, priceCar4: 250000 }),
+        row({ id: 12, wardCode: '00040', wardName: 'Phường Dịch Vọng', priceCar4: 230000 }),
+      ]);
+
+      const sortSelect = screen.getByLabelText('Sắp xếp đồng giá Sân bay Nội Bài');
+      await user.selectOptions(sortSelect, 'target:ASC');
+
+      const card = screen.getByTestId('zone-NOIBAI');
+      const rowIdsAsc = within(card)
+        .getAllByTestId(/^flat-row-/)
+        .map((el) => el.getAttribute('data-testid'));
+      expect(rowIdsAsc).toEqual([
+        'flat-row-default',
+        'flat-row-00040', // Phường Dịch Vọng
+        'flat-row-00050', // Phường Đống Đa (Đ ngay sau D)
+        'flat-row-00090', // Xã Yên Thường
+      ]);
+
+      await user.selectOptions(sortSelect, 'target:DESC');
+      const rowIdsDesc = within(card)
+        .getAllByTestId(/^flat-row-/)
+        .map((el) => el.getAttribute('data-testid'));
+      expect(rowIdsDesc).toEqual([
+        'flat-row-default',
+        'flat-row-00090',
+        'flat-row-00050',
+        'flat-row-00040',
+      ]);
+    });
+
+    it('bấm tiêu đề cột giá đảo Thấp → Cao → Cao → Thấp → Mặc định; hàng chưa cấu hình giá («—») luôn xếp cuối', async () => {
+      const user = await setup([
+        row({ id: 1, wardCode: null, wardName: null, priceCar4: 250000 }),
+        row({ id: 2, wardCode: '00002', wardName: 'Xã Sóc Sơn', priceCar4: 300000 }),
+        row({ id: 3, wardCode: '00003', wardName: 'Phường Ba Đình', priceCar4: null, priceCar7: 380000 }),
+        row({ id: 4, wardCode: '00004', wardName: 'Xã Đông Anh', priceCar4: 180000 }),
+      ]);
+
+      const card = screen.getByTestId('zone-NOIBAI');
+      const car4Header = within(card).getByRole('button', { name: /^Bao xe 4 chỗ/ });
+      const currentOrder = () =>
+        within(card)
+          .getAllByTestId(/^flat-row-/)
+          .map((el) => el.getAttribute('data-testid'));
+
+      // Bấm lần 1: Thấp → Cao (180k -> 300k -> null cuối; hàng mặc định ghim đầu)
+      await user.click(car4Header);
+      expect(currentOrder()).toEqual([
+        'flat-row-default',
+        'flat-row-00004',
+        'flat-row-00002',
+        'flat-row-00003',
+      ]);
+
+      // Bấm lần 2: Cao → Thấp (300k -> 180k -> null vẫn cuối; hàng mặc định ghim đầu)
+      await user.click(car4Header);
+      expect(currentOrder()).toEqual([
+        'flat-row-default',
+        'flat-row-00002',
+        'flat-row-00004',
+        'flat-row-00003',
+      ]);
+
+      // Bấm lần 3: về mặc định ban đầu
+      await user.click(car4Header);
+      expect(currentOrder()).toEqual([
+        'flat-row-default',
+        'flat-row-00002',
+        'flat-row-00003',
+        'flat-row-00004',
+      ]);
+    });
+  });
 });

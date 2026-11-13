@@ -32,6 +32,9 @@ import {
   RefreshCw,
   Compass,
   ArrowLeftRight,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import {
   getPricingMacroRulesPage,
@@ -50,6 +53,8 @@ import {
   type MacroMatchResponse,
   type MacroMatchVerdict,
   type MacroSearchParams,
+  type MacroSortField,
+  type MacroSortOrder,
 } from '@/lib/api';
 import {
   EMPTY_FILTERS,
@@ -137,6 +142,36 @@ const ALL_CODE = '__ALL__';
 const isPerSeatRule = (r: PricingMacroRule) =>
   r.applyPerSeat && r.serviceType !== 'RIDE' && r.serviceType !== 'CONVENIENT';
 
+type MacroSortChoice =
+  | 'default'
+  | `${MacroSortField}:${MacroSortOrder}`;
+
+const MACRO_SORT_OPTIONS: readonly { value: MacroSortChoice; label: string }[] = [
+  { value: 'default', label: 'Mặc định (Ưu tiên & Mới nhất)' },
+  { value: 'adjustmentValue:ASC', label: 'Giá / Điều chỉnh: Thấp → Cao' },
+  { value: 'adjustmentValue:DESC', label: 'Giá / Điều chỉnh: Cao → Thấp' },
+  { value: 'origin:ASC', label: 'Điểm đón: A → Z' },
+  { value: 'origin:DESC', label: 'Điểm đón: Z → A' },
+  { value: 'dest:ASC', label: 'Điểm đến: A → Z' },
+  { value: 'dest:DESC', label: 'Điểm đến: Z → A' },
+  { value: 'priority:DESC', label: 'Độ ưu tiên: Cao → Thấp' },
+  { value: 'priority:ASC', label: 'Độ ưu tiên: Thấp → Cao' },
+  { value: 'id:DESC', label: 'Mới tạo nhất' },
+  { value: 'id:ASC', label: 'Cũ nhất' },
+  { value: 'isActive:DESC', label: 'Trạng thái: Đang bật trước' },
+  { value: 'isActive:ASC', label: 'Trạng thái: Đang tắt trước' },
+  { value: 'serviceType:ASC', label: 'Dịch vụ / Xe: A → Z' },
+  { value: 'serviceType:DESC', label: 'Dịch vụ / Xe: Z → A' },
+];
+
+function parseMacroSortChoice(
+  choice: MacroSortChoice,
+): { sortBy: MacroSortField; sortOrder: MacroSortOrder } | null {
+  if (choice === 'default') return null;
+  const [sortBy, sortOrder] = choice.split(':') as [MacroSortField, MacroSortOrder];
+  return { sortBy, sortOrder };
+}
+
 /**
  * Lựa chọn cho ô chọn tỉnh / xã có thể tìm: mục "tất cả" đứng đầu rồi tới danh sách.
  * Mã đang chọn mà chưa có trong danh sách (đang nạp xã, hoặc nạp lỗi) vẫn được hiện — bằng mã — thay vì ô trống.
@@ -187,9 +222,10 @@ export function PricingMacroManager() {
   // cùng cặp (lưu/xoá/«Làm mới») GIỮ; đổi cặp điểm bỏ; đổi bộ lọc thì chỉ giữ lựa chọn của người dùng còn khớp bộ lọc mới.
   const [comboChoice, setComboChoice] = React.useState<{ key: string; index: number; byUser: boolean } | null>(null);
   const matchSeq = React.useRef(0);
-  // Phân trang + tìm kiếm chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
+  // Phân trang + tìm kiếm + sắp xếp chạy ở SERVER (luật nhiều thì tải hết sẽ lag).
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(DEFAULT_PAGE_SIZE);
+  const [sortChoice, setSortChoice] = React.useState<MacroSortChoice>('default');
   const [total, setTotal] = React.useState(0);
   const [reloadKey, setReloadKey] = React.useState(0);
   const loadSeq = React.useRef(0);
@@ -306,13 +342,45 @@ export function PricingMacroManager() {
 
   const effectiveFilters = React.useMemo(() => ({ ...filters, q: appliedQ }), [filters, appliedQ]);
   const searching = hasActiveFilters(effectiveFilters);
+  const parsedSort = React.useMemo(() => parseMacroSortChoice(sortChoice), [sortChoice]);
   // Chỉ lọc ghi chú/mã ⇒ route danh sách CŨ `noteSearch` (cùng nghĩa `#mã`): liên kết sâu `?ruleId=` chạy cả trên backend
   // chưa có `GET …/search`.
   const noteQ = searching ? noteOnlyQuery(effectiveFilters) : null;
   // Đúng tham số gửi `GET …/search` (null = danh sách thường, có hoặc không `noteSearch`). Dạng chuỗi để effect nạp chỉ
   // chạy lại khi điều GỬI ĐI thật sự đổi.
-  const searchKey =
-    searching && noteQ === null ? JSON.stringify(toSearchParams(effectiveFilters, { page, limit: pageSize })) : null;
+  const searchKey = React.useMemo(() => {
+    if (!searching || noteQ !== null) return null;
+    const base = toSearchParams(effectiveFilters, { page, limit: pageSize });
+    return JSON.stringify(parsedSort ? { ...base, ...parsedSort } : base);
+  }, [searching, noteQ, effectiveFilters, page, pageSize, parsedSort]);
+
+  const changeSortChoice = (next: MacroSortChoice) => {
+    setSortChoice(next);
+    setPage(1);
+  };
+
+  /** Bấm tiêu đề cột: lần 1 → hướng tự nhiên, lần 2 → hướng ngược, lần 3 → về mặc định. */
+  const toggleColumnSort = (field: MacroSortField, firstDir: MacroSortOrder = 'ASC') => {
+    const secondDir: MacroSortOrder = firstDir === 'ASC' ? 'DESC' : 'ASC';
+    if (!parsedSort || parsedSort.sortBy !== field) {
+      changeSortChoice(`${field}:${firstDir}`);
+    } else if (parsedSort.sortOrder === firstDir) {
+      changeSortChoice(`${field}:${secondDir}`);
+    } else {
+      changeSortChoice('default');
+    }
+  };
+
+  const renderSortIcon = (field: MacroSortField) => {
+    if (!parsedSort || parsedSort.sortBy !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 shrink-0 text-slate-400 opacity-70" aria-hidden />;
+    }
+    return parsedSort.sortOrder === 'ASC' ? (
+      <ArrowUp className="ml-1 h-3 w-3 shrink-0 text-indigo-600" aria-hidden />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3 shrink-0 text-indigo-600" aria-hidden />
+    );
+  };
 
   // Nạp MỘT trang luật: không lọc gì ⇒ danh sách thường (y như trước); chỉ ghi chú/mã ⇒ danh sách thường + `noteSearch`;
   // còn lại ⇒ tìm kiếm mới. Có số thứ tự yêu cầu: kết quả của yêu cầu cũ không được đè lên yêu cầu mới.
@@ -320,9 +388,15 @@ export function PricingMacroManager() {
     const seq = ++loadSeq.current;
     const filtered = Boolean(searchKey || noteQ);
     setLoading(true);
+    const listParams = {
+      page,
+      limit: pageSize,
+      ...(noteQ ? { noteSearch: noteQ } : {}),
+      ...(parsedSort ?? {}),
+    };
     const request = searchKey
       ? searchPricingMacroRules(JSON.parse(searchKey) as MacroSearchParams)
-      : getPricingMacroRulesPage(noteQ ? { page, limit: pageSize, noteSearch: noteQ } : { page, limit: pageSize });
+      : getPricingMacroRulesPage(listParams);
     request
       .then((res) => {
         if (seq !== loadSeq.current) return;
@@ -374,7 +448,7 @@ export function PricingMacroManager() {
         }
         setLoading(false);
       });
-  }, [searchKey, noteQ, page, pageSize, reloadKey, toast]);
+  }, [searchKey, noteQ, parsedSort, page, pageSize, reloadKey, toast]);
 
   // «Quy tắc đang áp»: chỉ khi hai đầu là điểm cụ thể (xã/điểm đặc biệt, hoặc «Cả tỉnh»). Đầu theo chữ / thiếu đầu thì
   // không gọi máy chủ (khung tự giải thích). Tra lại sau mỗi lần nạp lại (quy tắc có thể vừa đổi).
@@ -750,10 +824,16 @@ export function PricingMacroManager() {
       const batchLimit = 500;
       const fetchBatch = (p: number) =>
         searchKey
-          ? searchPricingMacroRules(toSearchParams(effectiveFilters, { page: p, limit: batchLimit }))
-          : getPricingMacroRulesPage(
-              noteQ ? { page: p, limit: batchLimit, noteSearch: noteQ } : { page: p, limit: batchLimit },
-            );
+          ? searchPricingMacroRules({
+              ...toSearchParams(effectiveFilters, { page: p, limit: batchLimit }),
+              ...(parsedSort ?? {}),
+            })
+          : getPricingMacroRulesPage({
+              page: p,
+              limit: batchLimit,
+              ...(noteQ ? { noteSearch: noteQ } : {}),
+              ...(parsedSort ?? {}),
+            });
       const first = await fetchBatch(1);
       const matchTotal = first?.total ?? 0;
       if (matchTotal > MACRO_SELECT_ALL_MATCHING_MAX) {
@@ -983,6 +1063,27 @@ export function PricingMacroManager() {
               </CardDescription>
             </div>
             <div className="flex w-full sm:w-auto flex-wrap items-center gap-2">
+              <Select
+                value={sortChoice}
+                onValueChange={(v) => changeSortChoice(v as MacroSortChoice)}
+              >
+                <SelectTrigger
+                  aria-label="Sắp xếp quy tắc"
+                  className="h-9 w-full sm:w-60 text-xs bg-white"
+                >
+                  <div className="flex items-center gap-1.5 truncate">
+                    <ArrowUpDown className="h-3.5 w-3.5 shrink-0 text-slate-500" aria-hidden />
+                    <SelectValue placeholder="Sắp xếp" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  {MACRO_SORT_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               {selectedIds.size > 0 && (
                 <Button variant="outline" size="sm" className="h-9 text-xs" onClick={openBulkEdit}>
                   <Edit className="w-3.5 h-3.5 mr-1" />
@@ -1104,12 +1205,90 @@ export function PricingMacroManager() {
                     }
                   />
                 </TableHead>
-                <TableHead className="w-12 text-center">Ưu tiên</TableHead>
-                <TableHead>Điểm đón (Tỉnh / Xã)</TableHead>
-                <TableHead>Điểm đến (Tỉnh / Xã)</TableHead>
-                <TableHead>Dịch vụ / Loại xe</TableHead>
-                <TableHead>Mức điều chỉnh</TableHead>
-                <TableHead className="w-24 text-center">Trạng thái</TableHead>
+                <TableHead className="w-16 text-center">
+                  <button
+                    type="button"
+                    onClick={() => toggleColumnSort('priority', 'DESC')}
+                    className={cn(
+                      'inline-flex items-center justify-center font-medium hover:text-indigo-600 transition-colors',
+                      parsedSort?.sortBy === 'priority' && 'text-indigo-700 font-semibold',
+                    )}
+                    title="Bấm để sắp xếp theo độ ưu tiên"
+                  >
+                    Ưu tiên
+                    {renderSortIcon('priority')}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => toggleColumnSort('origin', 'ASC')}
+                    className={cn(
+                      'inline-flex items-center font-medium hover:text-indigo-600 transition-colors',
+                      parsedSort?.sortBy === 'origin' && 'text-indigo-700 font-semibold',
+                    )}
+                    title="Bấm để sắp xếp điểm đón A → Z / Z → A"
+                  >
+                    Điểm đón (Tỉnh / Xã)
+                    {renderSortIcon('origin')}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => toggleColumnSort('dest', 'ASC')}
+                    className={cn(
+                      'inline-flex items-center font-medium hover:text-indigo-600 transition-colors',
+                      parsedSort?.sortBy === 'dest' && 'text-indigo-700 font-semibold',
+                    )}
+                    title="Bấm để sắp xếp điểm đến A → Z / Z → A"
+                  >
+                    Điểm đến (Tỉnh / Xã)
+                    {renderSortIcon('dest')}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => toggleColumnSort('serviceType', 'ASC')}
+                    className={cn(
+                      'inline-flex items-center font-medium hover:text-indigo-600 transition-colors',
+                      parsedSort?.sortBy === 'serviceType' && 'text-indigo-700 font-semibold',
+                    )}
+                    title="Bấm để sắp xếp theo dịch vụ / loại xe"
+                  >
+                    Dịch vụ / Loại xe
+                    {renderSortIcon('serviceType')}
+                  </button>
+                </TableHead>
+                <TableHead>
+                  <button
+                    type="button"
+                    onClick={() => toggleColumnSort('adjustmentValue', 'ASC')}
+                    className={cn(
+                      'inline-flex items-center font-medium hover:text-indigo-600 transition-colors',
+                      parsedSort?.sortBy === 'adjustmentValue' && 'text-indigo-700 font-semibold',
+                    )}
+                    title="Bấm để sắp xếp giá / mức điều chỉnh thấp → cao / cao → thấp"
+                  >
+                    Mức điều chỉnh
+                    {renderSortIcon('adjustmentValue')}
+                  </button>
+                </TableHead>
+                <TableHead className="w-28 text-center">
+                  <button
+                    type="button"
+                    onClick={() => toggleColumnSort('isActive', 'DESC')}
+                    className={cn(
+                      'inline-flex items-center justify-center font-medium hover:text-indigo-600 transition-colors',
+                      parsedSort?.sortBy === 'isActive' && 'text-indigo-700 font-semibold',
+                    )}
+                    title="Bấm để sắp xếp theo trạng thái bật / tắt"
+                  >
+                    Trạng thái
+                    {renderSortIcon('isActive')}
+                  </button>
+                </TableHead>
                 <TableHead className="w-24 text-right">Thao tác</TableHead>
               </TableRow>
             </TableHeader>

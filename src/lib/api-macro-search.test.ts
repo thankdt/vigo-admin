@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   ApiError,
   API_BASE_URL,
+  getPricingMacroRulesPage,
   isMacroSearchUnsupported,
   matchPricingMacroRules,
   searchPricingMacroRules,
@@ -96,6 +97,49 @@ describe('searchPricingMacroRules / matchPricingMacroRules', () => {
     ok(PAGE);
     await searchPricingMacroRules({ page: Number.NaN, limit: 0 });
     expect(params()).toEqual([['limit', '0']]);
+  });
+
+  it('searchPricingMacroRules & getPricingMacroRulesPage: truyền sortBy/sortOrder khi có, bỏ qua khi mặc định', async () => {
+    ok(PAGE);
+    await searchPricingMacroRules({
+      serviceType: 'RIDE',
+      page: 1,
+      limit: 50,
+      sortBy: 'adjustmentValue',
+      sortOrder: 'ASC',
+    });
+    expect(params()).toEqual([
+      ['serviceType', 'RIDE'],
+      ['page', '1'],
+      ['limit', '50'],
+      ['sortBy', 'adjustmentValue'],
+      ['sortOrder', 'ASC'],
+    ]);
+
+    fetchMock.mockClear();
+    ok(PAGE);
+    await getPricingMacroRulesPage({ page: 1, limit: 50 });
+    expect(params()).toEqual([
+      ['page', '1'],
+      ['limit', '50'],
+    ]);
+
+    fetchMock.mockClear();
+    ok(PAGE);
+    await getPricingMacroRulesPage({
+      page: 2,
+      limit: 50,
+      noteSearch: 'tết',
+      sortBy: 'origin',
+      sortOrder: 'DESC',
+    });
+    expect(params()).toEqual([
+      ['page', '2'],
+      ['limit', '50'],
+      ['noteSearch', 'tết'],
+      ['sortBy', 'origin'],
+      ['sortOrder', 'DESC'],
+    ]);
   });
 
   it('GET /pricing/macro-rules/match: hai tỉnh bắt buộc, xã chỉ gửi khi có; trả nguyên dữ liệu', async () => {

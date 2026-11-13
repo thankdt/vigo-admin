@@ -5186,6 +5186,18 @@ export async function getPricingMacroRules(): Promise<PricingMacroRule[]> {
   return unwrap<PricingMacroRule[]>(response);
 }
 
+export type MacroSortField =
+  | 'priority'
+  | 'adjustmentValue'
+  | 'origin'
+  | 'dest'
+  | 'id'
+  | 'createdAt'
+  | 'isActive'
+  | 'serviceType';
+
+export type MacroSortOrder = 'ASC' | 'DESC';
+
 export async function getPricingMacroRulesPage(params: {
   page: number;
   limit: number;
@@ -5193,12 +5205,16 @@ export async function getPricingMacroRulesPage(params: {
   originSearch?: string;
   destSearch?: string;
   noteSearch?: string;
+  sortBy?: MacroSortField;
+  sortOrder?: MacroSortOrder;
 }): Promise<PricingMacroRulePage> {
   const qs = new URLSearchParams({ page: String(params.page), limit: String(params.limit) });
   if (params.search?.trim()) qs.set('search', params.search.trim());
   if (params.originSearch?.trim()) qs.set('originSearch', params.originSearch.trim());
   if (params.destSearch?.trim()) qs.set('destSearch', params.destSearch.trim());
   if (params.noteSearch?.trim()) qs.set('noteSearch', params.noteSearch.trim());
+  if (params.sortBy?.trim()) qs.set('sortBy', params.sortBy.trim());
+  if (params.sortOrder?.trim()) qs.set('sortOrder', params.sortOrder.trim());
   const response = await fetchWithAuth(`/pricing/macro-rules?${qs.toString()}`);
   const data = await unwrap<PricingMacroRulePage | PricingMacroRulePage['items']>(response);
   // Backend cũ (chưa có phân trang) trả mảng đầy đủ ⇒ tự cắt trang phía client để không hiện danh sách rỗng.
@@ -5233,6 +5249,8 @@ export type MacroSearchParams = {
   cover?: boolean;
   page?: number;
   limit?: number;
+  sortBy?: MacroSortField;
+  sortOrder?: MacroSortOrder;
 };
 
 /** Tham số `GET /pricing/macro-rules/match`: tỉnh hai đầu BẮT BUỘC; xã (hoặc `ZONE:<mã>`) tuỳ chọn. */
@@ -5353,6 +5371,8 @@ export async function searchPricingMacroRules(params: MacroSearchParams): Promis
     ['cover', params.cover === true ? true : undefined],
     ['page', params.page],
     ['limit', params.limit],
+    ['sortBy', params.sortBy],
+    ['sortOrder', params.sortOrder],
   ]);
   const response = await fetchWithAuth(`/pricing/macro-rules/search${qs}`);
   return unwrap<PricingMacroRulePage>(response);

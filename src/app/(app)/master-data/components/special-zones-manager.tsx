@@ -21,7 +21,18 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/lib/auth-context';
-import { Loader2, PlaneTakeoff, PlusCircle, RefreshCw, Search, Trash2, Edit } from 'lucide-react';
+import {
+  Loader2,
+  PlaneTakeoff,
+  PlusCircle,
+  RefreshCw,
+  Search,
+  Trash2,
+  Edit,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+} from 'lucide-react';
 import {
   deleteSpecialZoneFlatPrice,
   getPricingMacroWards,
@@ -59,6 +70,24 @@ const REQUIRED_FUNCTION = 'master-data';
 
 /** Giá trị ô chọn cho hàng mặc định cả tỉnh (mã phường gis là số nên không đụng). */
 const DEFAULT_TARGET = '__DEFAULT__';
+
+const VI_COLLATOR = new Intl.Collator('vi', { sensitivity: 'variant', numeric: true });
+
+type FlatSortField = 'target' | FlatPriceKey;
+type FlatSortOrder = 'ASC' | 'DESC';
+type FlatSortChoice = 'default' | `${FlatSortField}:${FlatSortOrder}`;
+
+const FLAT_SORT_OPTIONS: readonly { value: FlatSortChoice; label: string }[] = [
+  { value: 'default', label: 'Sắp xếp: Mặc định' },
+  { value: 'target:ASC', label: 'Nơi áp dụng: A → Z' },
+  { value: 'target:DESC', label: 'Nơi áp dụng: Z → A' },
+  { value: 'pricePerSeatGhep:ASC', label: 'Giá ghép: Thấp → Cao' },
+  { value: 'pricePerSeatGhep:DESC', label: 'Giá ghép: Cao → Thấp' },
+  { value: 'priceCar4:ASC', label: 'Bao xe 4 chỗ: Thấp → Cao' },
+  { value: 'priceCar4:DESC', label: 'Bao xe 4 chỗ: Cao → Thấp' },
+  { value: 'priceCar7:ASC', label: 'Bao xe 7 chỗ: Thấp → Cao' },
+  { value: 'priceCar7:DESC', label: 'Bao xe 7 chỗ: Cao → Thấp' },
+];
 
 function errMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
@@ -224,6 +253,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [search, setSearch] = React.useState('');
+  const [sortChoice, setSortChoice] = React.useState<FlatSortChoice>('default');
 
   // Dialog sửa/thêm: `editing` = hàng đang sửa, 'new' = thêm hàng mới, null = đóng.
   const [editing, setEditing] = React.useState<SpecialZoneFlatPrice | 'new' | null>(null);
@@ -419,15 +449,65 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
   };
 
   const deleteText = deleteRow ? describeFlatPriceDelete({ zone, row: deleteRow }) : null;
+  const parsedSort = React.useMemo(() => {
+    if (sortChoice === 'default') return null;
+    const [field, order] = sortChoice.split(':') as [FlatSortField, FlatSortOrder];
+    return { field, order };
+  }, [sortChoice]);
+
+  const toggleColumnSort = (field: FlatSortField, firstDir: FlatSortOrder = 'ASC') => {
+    const secondDir: FlatSortOrder = firstDir === 'ASC' ? 'DESC' : 'ASC';
+    if (!parsedSort || parsedSort.field !== field) {
+      setSortChoice(`${field}:${firstDir}`);
+    } else if (parsedSort.order === firstDir) {
+      setSortChoice(`${field}:${secondDir}`);
+    } else {
+      setSortChoice('default');
+    }
+  };
+
+  const renderSortIcon = (field: FlatSortField) => {
+    if (!parsedSort || parsedSort.field !== field) {
+      return <ArrowUpDown className="ml-1 h-3 w-3 shrink-0 text-slate-400 opacity-70" aria-hidden />;
+    }
+    return parsedSort.order === 'ASC' ? (
+      <ArrowUp className="ml-1 h-3 w-3 shrink-0 text-indigo-600" aria-hidden />
+    ) : (
+      <ArrowDown className="ml-1 h-3 w-3 shrink-0 text-indigo-600" aria-hidden />
+    );
+  };
+
   const filteredRows = React.useMemo(() => {
     const q = foldVietnamese(search.trim());
-    if (!q) return rows;
-    return rows.filter((r) => {
-      const target = foldVietnamese(flatPriceTargetLabel(zone, r.wardCode, r.wardName));
-      const note = foldVietnamese(r.note ?? '');
-      return target.includes(q) || note.includes(q);
+    const base = !q
+      ? rows
+      : rows.filter((r) => {
+          const target = foldVietnamese(flatPriceTargetLabel(zone, r.wardCode, r.wardName));
+          const note = foldVietnamese(r.note ?? '');
+          return target.includes(q) || note.includes(q);
+        });
+    if (!parsedSort) return base;
+    const sign = parsedSort.order === 'ASC' ? 1 : -1;
+    return [...base].sort((a, b) => {
+      // Hàng mặc định cả tỉnh luôn ghim trên đầu để dễ đối chiếu mức nền.
+      const aDefault = a.wardCode === null ? 0 : 1;
+      const bDefault = b.wardCode === null ? 0 : 1;
+      if (aDefault !== bDefault) return aDefault - bDefault;
+
+      const aLabel = flatPriceTargetLabel(zone, a.wardCode, a.wardName);
+      const bLabel = flatPriceTargetLabel(zone, b.wardCode, b.wardName);
+      if (parsedSort.field === 'target') {
+        return sign * VI_COLLATOR.compare(aLabel, bLabel) || a.id - b.id;
+      }
+      const av = a[parsedSort.field];
+      const bv = b[parsedSort.field];
+      const aNull = av === null || av === undefined;
+      const bNull = bv === null || bv === undefined;
+      if (aNull !== bNull) return aNull ? 1 : -1; // Ô trống («—») luôn xếp cuối
+      if (!aNull && !bNull && av !== bv) return sign * (Number(av) - Number(bv));
+      return VI_COLLATOR.compare(aLabel, bLabel) || a.id - b.id;
     });
-  }, [rows, search, zone]);
+  }, [rows, search, zone, parsedSort]);
   const provinceLabel = zone.provinceName ?? `tỉnh ${zone.provinceCode}`;
   // Hàng mặc định cả tỉnh đứng đầu rồi tới phường/xã; ô tìm của Combobox khớp cả tên (không dấu cũng được) lẫn mã.
   const targetOptions = React.useMemo(
@@ -493,7 +573,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
           </div>
         ) : (
           <>
-          <div className="mb-3">
+          <div className="mb-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
             <div className="relative w-full sm:w-64">
               <Search className="w-4 h-4 absolute left-2.5 top-2.5 text-slate-400" />
               <Input
@@ -504,14 +584,55 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
+            <div className="relative w-full sm:w-56">
+              <ArrowUpDown className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" aria-hidden />
+              <select
+                aria-label={`Sắp xếp đồng giá ${zone.name}`}
+                className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
+                value={sortChoice}
+                onChange={(e) => setSortChoice(e.target.value as FlatSortChoice)}
+              >
+                {FLAT_SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Áp cho</TableHead>
+                  <TableHead>
+                    <button
+                      type="button"
+                      onClick={() => toggleColumnSort('target', 'ASC')}
+                      className={cn(
+                        'inline-flex items-center font-medium hover:text-indigo-600 transition-colors',
+                        parsedSort?.field === 'target' && 'text-indigo-700 font-semibold',
+                      )}
+                      title="Bấm để sắp xếp nơi áp dụng A → Z / Z → A"
+                    >
+                      Áp cho
+                      {renderSortIcon('target')}
+                    </button>
+                  </TableHead>
                   {FLAT_PRICE_FIELDS.map((f) => (
-                    <TableHead key={f.key} className="text-right">{f.label}</TableHead>
+                    <TableHead key={f.key} className="text-right">
+                      <button
+                        type="button"
+                        onClick={() => toggleColumnSort(f.key, 'ASC')}
+                        className={cn(
+                          'inline-flex items-center justify-end font-medium hover:text-indigo-600 transition-colors ml-auto',
+                          parsedSort?.field === f.key && 'text-indigo-700 font-semibold',
+                        )}
+                        title={`Bấm để sắp xếp ${f.label.toLowerCase()} thấp → cao / cao → thấp`}
+                      >
+                        {f.label}
+                        {renderSortIcon(f.key)}
+                      </button>
+                    </TableHead>
                   ))}
                   <TableHead>Ghi chú</TableHead>
                   <TableHead className="w-24" />
