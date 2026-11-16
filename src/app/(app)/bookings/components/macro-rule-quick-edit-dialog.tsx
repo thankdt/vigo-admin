@@ -336,7 +336,7 @@ export function MacroRuleQuickEditDialog({
                 </Button>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-1 border-t border-slate-200/80">
+              <div className="grid grid-cols-1 gap-3 border-t border-slate-200/80 pt-1 sm:grid-cols-2">
                 <div>
                   <div className="text-[11px] font-medium uppercase text-muted-foreground flex items-center gap-1">
                     <MapPin className="h-3 w-3 text-blue-600" /> Điểm đi
@@ -367,7 +367,7 @@ export function MacroRuleQuickEditDialog({
             </div>
 
             {/* Dịch vụ & Loại xe */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-1.5">
                 <Label>Loại dịch vụ</Label>
                 <Select
@@ -409,7 +409,7 @@ export function MacroRuleQuickEditDialog({
             </div>
 
             {/* Loại điều chỉnh & Giá trị */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-1.5">
                 <Label>Kiểu điều chỉnh</Label>
                 <Select
@@ -457,7 +457,7 @@ export function MacroRuleQuickEditDialog({
             </div>
 
             {/* Độ ưu tiên & Ghi chú */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4">
               <div className="space-y-1.5">
                 <Label>Độ ưu tiên</Label>
                 <Input
@@ -469,7 +469,7 @@ export function MacroRuleQuickEditDialog({
                 />
                 <p className="text-[11px] text-muted-foreground">Số lớn hơn ưu tiên trước</p>
               </div>
-              <div className="col-span-2 space-y-1.5">
+              <div className="space-y-1.5 sm:col-span-2">
                 <Label>Ghi chú</Label>
                 <Input
                   placeholder="Ghi chú nội bộ..."

@@ -63,7 +63,7 @@ export default function LoginPage() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
+    <main className="flex min-h-dvh flex-col items-center justify-center bg-background p-4">
       <div className="w-full max-w-md">
         <Card className="shadow-2xl">
           <CardHeader className="items-center text-center">
@@ -76,13 +76,13 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="phone">Số điện thoại</Label>
-                <Input id="phone" type="tel" placeholder="0999999999" required value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <Input id="phone" type="tel" inputMode="tel" autoComplete="tel" placeholder="0999999999" required value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label htmlFor="password">Mật khẩu</Label>
                 </div>
-                <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
               </div>
               <Button type="submit" className="w-full" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}

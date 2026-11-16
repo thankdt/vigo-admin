@@ -15,7 +15,17 @@ import {
 import type { Promotion, PromotionVisibility } from '@/lib/types';
 import { AssigneePicker, type PickedCustomer } from './assignee-picker';
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -230,7 +240,7 @@ function PromotionForm({
             : 'Điền thông tin chi tiết để tạo voucher khuyến mãi mới.'}
         </DialogDescription>
       </DialogHeader>
-      <div className="grid max-h-[70vh] grid-cols-1 gap-4 overflow-y-auto p-1 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 py-2 sm:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="code">Mã{isEdit ? ' (không sửa được)' : ''}</Label>
           <Input id="code" {...register('code')} disabled={isEdit} />
@@ -403,7 +413,7 @@ function PromotionForm({
                       <button
                         type="button"
                         aria-label={`Gỡ ${a.phone ?? a.userId}`}
-                        className="ml-1 rounded-sm hover:text-destructive"
+                        className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-sm hover:text-destructive [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:h-7 [@media(pointer:coarse)]:w-7"
                         onClick={async () => {
                           if (!initial) return;
                           try {
@@ -544,7 +554,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                 <TableHead>Hiển thị</TableHead>
                 <TableHead>Hiệu lực</TableHead>
                 <TableHead>Đã dùng</TableHead>
-                <TableHead>Trạng thái</TableHead>
+                <TableHead className={STICKY_ACTION_HEAD_CLASS}>Trạng thái</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -595,6 +605,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                       {promo.usageCount} / {promo.usageLimit}
                     </TableCell>
                     <TableCell
+                      className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap')}
                       // Stop row-click from opening the edit dialog when the
                       // admin is targeting the inline switch — they want to
                       // flip status, not pull up the form.

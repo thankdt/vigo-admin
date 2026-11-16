@@ -201,13 +201,13 @@ export default function DriverCashflowPage() {
           </TableBody>
         </Table>
 
-        <div className="flex flex-col gap-2 border-t px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-col gap-2 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4">
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
             <span>Trang {page} / {meta.totalPages} · {meta.total} giao dịch</span>
-            <span className="mx-1">·</span>
+            <span className="hidden sm:inline mx-1">·</span>
             <label className="flex items-center gap-1">
               Hiện
-              <select className="h-8 rounded-md border bg-background px-2 text-sm" value={pageSize} disabled={loading} onChange={(e) => setPageSize(Number(e.target.value))}>
+              <select className="h-8 min-w-[64px] rounded-md border bg-background px-2 text-sm [@media(pointer:coarse)]:text-base" value={pageSize} disabled={loading} onChange={(e) => setPageSize(Number(e.target.value))}>
                 {PAGE_SIZES.map((n) => <option key={n} value={n}>{n}</option>)}
               </select>
               / trang

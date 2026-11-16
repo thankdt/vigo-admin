@@ -54,7 +54,7 @@ import type {
 } from '@/lib/types';
 
 const NATIVE_SELECT =
-  'h-8 w-full rounded-md border border-input bg-white px-2 text-xs focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60';
+  'h-9 sm:h-8 w-full rounded-md border border-input bg-white px-2 text-xs [@media(pointer:coarse)]:text-base focus:outline-none focus:ring-2 focus:ring-ring disabled:opacity-60';
 
 type FormState = {
   serviceType: string;
@@ -321,7 +321,7 @@ function EndpointBuilder({
               <button
                 type="button"
                 aria-label={`${title}: bỏ ${e.label}`}
-                className="rounded hover:bg-slate-300/60"
+                className="inline-flex h-4 w-4 items-center justify-center rounded hover:bg-slate-300/60 [@media(pointer:coarse)]:-my-0.5 [@media(pointer:coarse)]:h-6 [@media(pointer:coarse)]:w-6"
                 onClick={() => onChange(removeEndpoint(items, endpointKey(e)))}
               >
                 <X className="w-3 h-3" />
@@ -528,7 +528,7 @@ export function MacroBulkDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent
         ref={contentRef}
-        className="max-w-3xl max-h-[90vh] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="max-w-3xl max-h-[90dvh] overflow-y-auto focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         // Ô «Tìm nhanh» là ô nhập đầu tiên: máy có CHUỘT thì focus thẳng vào đó (mở ra là gõ được, Shift+Tab vẫn vòng
         // về nút Đóng); máy CẢM ỨNG thì chỉ focus khung hộp thoại, vì tự focus ô nhập sẽ bật bàn phím ảo che nửa hộp thoại.
         onOpenAutoFocus={(e) => {

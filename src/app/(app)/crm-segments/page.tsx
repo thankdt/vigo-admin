@@ -219,12 +219,12 @@ function SegmentBuilder({ onSaved }: { onSaved: () => void }) {
         <CardTitle className="text-base">Dựng phân khúc mới</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4 text-sm">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid grid-cols-1 items-end gap-3 sm:flex sm:flex-wrap">
           <div className="space-y-1">
             <Label htmlFor="seg-name">Tên phân khúc</Label>
             <Input
               id="seg-name"
-              className="w-[260px]"
+              className="w-full sm:w-[260px]"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
@@ -232,7 +232,7 @@ function SegmentBuilder({ onSaved }: { onSaved: () => void }) {
           <div className="space-y-1">
             <Label>Ghép điều kiện</Label>
             <Select value={joiner} onValueChange={(v) => setJoiner(v as 'all' | 'any')}>
-              <SelectTrigger className="h-9 w-[160px]" aria-label="Cách ghép điều kiện">
+              <SelectTrigger className="h-9 w-full sm:w-[180px]" aria-label="Cách ghép điều kiện">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -245,9 +245,9 @@ function SegmentBuilder({ onSaved }: { onSaved: () => void }) {
 
         <div className="space-y-2">
           {conds.map((c, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2" data-testid="seg-cond">
+            <div key={i} className="flex flex-wrap items-center gap-2 rounded-md border p-2 sm:border-0 sm:p-0" data-testid="seg-cond">
               <Select value={c.field} onValueChange={(v) => patch(i, { field: v })}>
-                <SelectTrigger className="h-9 w-[220px]" aria-label={`Trường ${i + 1}`}>
+                <SelectTrigger className="h-9 w-full sm:w-[220px]" aria-label={`Trường ${i + 1}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -260,7 +260,7 @@ function SegmentBuilder({ onSaved }: { onSaved: () => void }) {
               </Select>
 
               <Select value={c.op} onValueChange={(v) => patch(i, { op: v as any })}>
-                <SelectTrigger className="h-9 w-[130px]" aria-label={`Toán tử ${i + 1}`}>
+                <SelectTrigger className="h-9 w-full sm:w-[130px]" aria-label={`Toán tử ${i + 1}`}>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -274,7 +274,7 @@ function SegmentBuilder({ onSaved }: { onSaved: () => void }) {
 
               {c.field === 'segment' ? (
                 <Select value={String(c.value)} onValueChange={(v) => patch(i, { value: v })}>
-                  <SelectTrigger className="h-9 w-[220px]" aria-label={`Giá trị ${i + 1}`}>
+                  <SelectTrigger className="h-9 w-full sm:w-[220px]" aria-label={`Giá trị ${i + 1}`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -287,7 +287,7 @@ function SegmentBuilder({ onSaved }: { onSaved: () => void }) {
                 </Select>
               ) : (
                 <Input
-                  className="w-[220px]"
+                  className="w-full sm:w-[220px]"
                   aria-label={`Giá trị ${i + 1}`}
                   value={String(c.value)}
                   onChange={(e) => patch(i, { value: e.target.value })}

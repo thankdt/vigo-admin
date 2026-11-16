@@ -1,12 +1,14 @@
 'use client';
 
 import * as React from 'react';
-import { User, Phone, Car, X, Building2 } from 'lucide-react';
+import { User, Phone, Car, X, Building2, SlidersHorizontal } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
 import { getSurvivingProvinces } from '@/lib/api';
 import type { AdminUnit } from '@/lib/types';
 import { provinceOptionLabel, selectableProvinces } from './driver-provinces';
@@ -101,6 +103,19 @@ export function DriversFilterBar({
   showOnlineState?: boolean;
 }) {
   const [provinces, setProvinces] = React.useState<AdminUnit[]>([]);
+  const [mobileExpanded, setMobileExpanded] = React.useState(false);
+  const isMobile = useIsMobile();
+
+  const advancedFilterCount =
+    (value.plate ? 1 : 0) +
+    (value.onlineState ? 1 : 0) +
+    (value.provinceCode ? 1 : 0) +
+    (value.transportCompanyName ? 1 : 0) +
+    (value.unconfirmedTransportCompany ? 1 : 0) +
+    (value.csCalled ? 1 : 0) +
+    (value.csLastCallType ? 1 : 0) +
+    (value.csNeverWorked ? 1 : 0) +
+    (value.csWorkedFrom || value.csWorkedTo ? 1 : 0);
 
   React.useEffect(() => {
     getSurvivingProvinces()
@@ -122,7 +137,7 @@ export function DriversFilterBar({
 
   return (
     <div className="space-y-3 pb-4">
-      <div className={`grid grid-cols-1 gap-3 ${showOnlineState ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      <div className={`grid grid-cols-1 gap-2.5 sm:gap-3 ${showOnlineState ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
         <IconInput
           icon={User}
           placeholder="Tên tài xế..."
@@ -135,133 +150,165 @@ export function DriversFilterBar({
           value={value.phone}
           onChange={(e) => setField('phone', e.target.value)}
         />
-        <IconInput
-          icon={Car}
-          placeholder="Biển số xe..."
-          value={value.plate}
-          onChange={(e) => setField('plate', e.target.value)}
-        />
-        {showOnlineState && (
-          <Combobox
-            options={ONLINE_OPTIONS}
-            selectedValue={value.onlineState || ALL_ONLINE_VALUE}
-            onSelect={(v) =>
-              setField('onlineState', !v || v === ALL_ONLINE_VALUE ? '' : (v as DriverOnlineState))
-            }
-            placeholder="Online: tất cả"
-            searchPlaceholder="Lọc trạng thái..."
-            noResultsText="Không có."
-          />
-        )}
-      </div>
-      <div className="grid grid-cols-1 items-center gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Combobox
-          options={provinceOptions}
-          selectedValue={value.provinceCode || ALL_PROVINCES_VALUE}
-          onSelect={(v) => setField('provinceCode', !v || v === ALL_PROVINCES_VALUE ? '' : v)}
-          placeholder="Tất cả tỉnh"
-          searchPlaceholder="Tìm tỉnh..."
-          noResultsText="Không có tỉnh phù hợp."
-        />
-        <IconInput
-          icon={Building2}
-          placeholder="Tên đơn vị vận tải..."
-          value={value.transportCompanyName}
-          disabled={value.unconfirmedTransportCompany}
-          onChange={(e) => setField('transportCompanyName', e.target.value)}
-        />
-        <Combobox
-          options={[
-            { value: ALL_CS_VALUE, label: 'Gọi điện: tất cả' },
-            { value: 'false', label: 'Chưa gọi' },
-            { value: 'true', label: 'Đã gọi' },
-          ]}
-          selectedValue={value.csCalled || ALL_CS_VALUE}
-          onSelect={(v) =>
-            setField('csCalled', !v || v === ALL_CS_VALUE ? '' : (v as 'true' | 'false'))
-          }
-          placeholder="Gọi điện: tất cả"
-          searchPlaceholder="Lọc..."
-          noResultsText="Không có."
-        />
-        <div className="flex items-center gap-3 sm:justify-end">
-          <div className="flex items-center gap-2">
-            <Checkbox
-              id="unconfirmed-tc"
-              checked={value.unconfirmedTransportCompany}
-              onCheckedChange={(checked) =>
-                onChange({
-                  ...value,
-                  unconfirmedTransportCompany: checked === true,
-                  // When toggled on, clear the name search (the toggle filters the
-                  // full unconfirmed-HTX group regardless of typed text).
-                  transportCompanyName: checked === true ? '' : value.transportCompanyName,
-                })
-              }
-            />
-            <Label htmlFor="unconfirmed-tc" className="text-sm font-normal cursor-pointer">
-              HTX chưa xác nhận
-            </Label>
-          </div>
-          {hasAnyFilter(value) && (
-            <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)}>
+        <div className="flex items-center gap-2 md:hidden">
+          <Button
+            type="button"
+            variant={mobileExpanded || advancedFilterCount > 0 ? 'secondary' : 'outline'}
+            size="sm"
+            className="h-10 flex-1 gap-1.5"
+            aria-expanded={mobileExpanded}
+            onClick={() => setMobileExpanded((v) => !v)}
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+            Bộ lọc nâng cao
+            {advancedFilterCount > 0 && (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                {advancedFilterCount}
+              </span>
+            )}
+          </Button>
+          {isMobile && hasAnyFilter(value) && (
+            <Button variant="ghost" size="sm" className="h-10 px-3" onClick={() => onChange(EMPTY_FILTERS)}>
               <X className="mr-1 h-4 w-4" />
               Xóa lọc
             </Button>
           )}
         </div>
+        <div className={cn(!mobileExpanded && 'hidden md:block')}>
+          <IconInput
+            icon={Car}
+            placeholder="Biển số xe..."
+            value={value.plate}
+            onChange={(e) => setField('plate', e.target.value)}
+          />
+        </div>
+        {showOnlineState && (
+          <div className={cn(!mobileExpanded && 'hidden md:block')}>
+            <Combobox
+              options={ONLINE_OPTIONS}
+              selectedValue={value.onlineState || ALL_ONLINE_VALUE}
+              onSelect={(v) =>
+                setField('onlineState', !v || v === ALL_ONLINE_VALUE ? '' : (v as DriverOnlineState))
+              }
+              placeholder="Online: tất cả"
+              searchPlaceholder="Lọc trạng thái..."
+              noResultsText="Không có."
+            />
+          </div>
+        )}
       </div>
-      {/* CSKH "lịch sử làm việc": lọc theo loại mốc gần nhất, khoảng ngày làm việc, hoặc chưa làm việc bao giờ. */}
-      <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Combobox
-          options={CS_TYPE_OPTIONS}
-          selectedValue={value.csLastCallType || ALL_CS_TYPE_VALUE}
-          onSelect={(v) =>
-            setField('csLastCallType', !v || v === ALL_CS_TYPE_VALUE ? '' : (v as DriverFilters['csLastCallType']))
-          }
-          placeholder="Mốc CSKH: tất cả"
-          searchPlaceholder="Lọc mốc..."
-          noResultsText="Không có."
-          disabled={value.csNeverWorked}
-        />
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Ngày làm việc từ</Label>
-          <Input
-            type="date"
-            value={value.csWorkedFrom}
-            max={value.csWorkedTo || undefined}
-            disabled={value.csNeverWorked}
-            onChange={(e) => setField('csWorkedFrom', e.target.value)}
+      <div className={cn('space-y-3', !mobileExpanded && 'hidden md:block')}>
+        <div className="grid grid-cols-1 items-center gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
+          <Combobox
+            options={provinceOptions}
+            selectedValue={value.provinceCode || ALL_PROVINCES_VALUE}
+            onSelect={(v) => setField('provinceCode', !v || v === ALL_PROVINCES_VALUE ? '' : v)}
+            placeholder="Tất cả tỉnh"
+            searchPlaceholder="Tìm tỉnh..."
+            noResultsText="Không có tỉnh phù hợp."
           />
-        </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">đến ngày</Label>
-          <Input
-            type="date"
-            value={value.csWorkedTo}
-            min={value.csWorkedFrom || undefined}
-            disabled={value.csNeverWorked}
-            onChange={(e) => setField('csWorkedTo', e.target.value)}
+          <IconInput
+            icon={Building2}
+            placeholder="Tên đơn vị vận tải..."
+            value={value.transportCompanyName}
+            disabled={value.unconfirmedTransportCompany}
+            onChange={(e) => setField('transportCompanyName', e.target.value)}
           />
-        </div>
-        <div className="flex items-center gap-2 sm:justify-end">
-          <Checkbox
-            id="cs-never-worked"
-            checked={value.csNeverWorked}
-            onCheckedChange={(checked) =>
-              onChange({
-                ...value,
-                csNeverWorked: checked === true,
-                // "Chưa làm việc bao giờ" mâu thuẫn với lọc loại mốc / khoảng ngày → xoá chúng khi bật.
-                csLastCallType: checked === true ? '' : value.csLastCallType,
-                csWorkedFrom: checked === true ? '' : value.csWorkedFrom,
-                csWorkedTo: checked === true ? '' : value.csWorkedTo,
-              })
+          <Combobox
+            options={[
+              { value: ALL_CS_VALUE, label: 'Gọi điện: tất cả' },
+              { value: 'false', label: 'Chưa gọi' },
+              { value: 'true', label: 'Đã gọi' },
+            ]}
+            selectedValue={value.csCalled || ALL_CS_VALUE}
+            onSelect={(v) =>
+              setField('csCalled', !v || v === ALL_CS_VALUE ? '' : (v as 'true' | 'false'))
             }
+            placeholder="Gọi điện: tất cả"
+            searchPlaceholder="Lọc..."
+            noResultsText="Không có."
           />
-          <Label htmlFor="cs-never-worked" className="text-sm font-normal cursor-pointer">
-            Chưa làm việc bao giờ
-          </Label>
+          <div className="flex flex-wrap items-center gap-3 sm:justify-end">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="unconfirmed-tc"
+                checked={value.unconfirmedTransportCompany}
+                onCheckedChange={(checked) =>
+                  onChange({
+                    ...value,
+                    unconfirmedTransportCompany: checked === true,
+                    // When toggled on, clear the name search (the toggle filters the
+                    // full unconfirmed-HTX group regardless of typed text).
+                    transportCompanyName: checked === true ? '' : value.transportCompanyName,
+                  })
+                }
+              />
+              <Label htmlFor="unconfirmed-tc" className="text-sm font-normal cursor-pointer">
+                HTX chưa xác nhận
+              </Label>
+            </div>
+            {!isMobile && hasAnyFilter(value) && (
+              <Button variant="ghost" size="sm" onClick={() => onChange(EMPTY_FILTERS)}>
+                <X className="mr-1 h-4 w-4" />
+                Xóa lọc
+              </Button>
+            )}
+          </div>
+        </div>
+        {/* CSKH "lịch sử làm việc": lọc theo loại mốc gần nhất, khoảng ngày làm việc, hoặc chưa làm việc bao giờ. */}
+        <div className="grid grid-cols-2 items-end gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
+          <div className="col-span-2 sm:col-span-1">
+            <Combobox
+              options={CS_TYPE_OPTIONS}
+              selectedValue={value.csLastCallType || ALL_CS_TYPE_VALUE}
+              onSelect={(v) =>
+                setField('csLastCallType', !v || v === ALL_CS_TYPE_VALUE ? '' : (v as DriverFilters['csLastCallType']))
+              }
+              placeholder="Mốc CSKH: tất cả"
+              searchPlaceholder="Lọc mốc..."
+              noResultsText="Không có."
+              disabled={value.csNeverWorked}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">Ngày làm việc từ</Label>
+            <Input
+              type="date"
+              value={value.csWorkedFrom}
+              max={value.csWorkedTo || undefined}
+              disabled={value.csNeverWorked}
+              onChange={(e) => setField('csWorkedFrom', e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">đến ngày</Label>
+            <Input
+              type="date"
+              value={value.csWorkedTo}
+              min={value.csWorkedFrom || undefined}
+              disabled={value.csNeverWorked}
+              onChange={(e) => setField('csWorkedTo', e.target.value)}
+            />
+          </div>
+          <div className="col-span-2 flex items-center gap-2 sm:col-span-1 sm:justify-end">
+            <Checkbox
+              id="cs-never-worked"
+              checked={value.csNeverWorked}
+              onCheckedChange={(checked) =>
+                onChange({
+                  ...value,
+                  csNeverWorked: checked === true,
+                  // "Chưa làm việc bao giờ" mâu thuẫn với lọc loại mốc / khoảng ngày → xoá chúng khi bật.
+                  csLastCallType: checked === true ? '' : value.csLastCallType,
+                  csWorkedFrom: checked === true ? '' : value.csWorkedFrom,
+                  csWorkedTo: checked === true ? '' : value.csWorkedTo,
+                })
+              }
+            />
+            <Label htmlFor="cs-never-worked" className="text-sm font-normal cursor-pointer">
+              Chưa làm việc bao giờ
+            </Label>
+          </div>
         </div>
       </div>
     </div>

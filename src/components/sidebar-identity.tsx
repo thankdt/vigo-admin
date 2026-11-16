@@ -25,21 +25,28 @@ export function SidebarIdentity({
 }) {
   const [pwOpen, setPwOpen] = React.useState(false);
   return (
-    <div className="flex flex-col gap-2 duration-200 group-data-[collapsible=icon]:hidden">
+    <div className="flex flex-col gap-2 duration-200 group-data-[collapsible=icon]:items-center">
       <button
         type="button"
         onClick={() => setPwOpen(true)}
         title="Đổi mật khẩu"
-        className="flex items-center gap-2 rounded-md px-1 py-0.5 text-left hover:bg-muted"
+        className="flex min-h-9 items-center gap-2 rounded-md px-1.5 py-1 text-left hover:bg-muted group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:min-h-0 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
       >
-        <div className="flex min-w-0 flex-col">
+        <div className="flex min-w-0 flex-col group-data-[collapsible=icon]:hidden">
           <span className="truncate text-sm font-medium">{fullName || 'Quản trị viên'}</span>
           <span className="truncate text-xs text-muted-foreground">{phone || ''}</span>
         </div>
-        <KeyRound className="ml-auto h-4 w-4 shrink-0 text-muted-foreground" />
+        <KeyRound className="ml-auto h-4 w-4 shrink-0 text-muted-foreground group-data-[collapsible=icon]:ml-0" />
       </button>
-      <Button variant="ghost" size="sm" className="justify-start" onClick={onLogout}>
-        <LogOut className="mr-2 h-4 w-4" /> Đăng xuất
+      <Button
+        variant="ghost"
+        size="sm"
+        title="Đăng xuất"
+        className="justify-start group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:p-0"
+        onClick={onLogout}
+      >
+        <LogOut className="mr-2 h-4 w-4 shrink-0 group-data-[collapsible=icon]:mr-0" />
+        <span className="group-data-[collapsible=icon]:sr-only">Đăng xuất</span>
       </Button>
       <ChangePasswordDialog open={pwOpen} onClose={() => setPwOpen(false)} />
     </div>

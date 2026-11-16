@@ -10,6 +10,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
 import {
   DropdownMenu,
@@ -33,7 +35,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy, Send } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy, Send, SlidersHorizontal } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
 // Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
@@ -71,6 +73,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
 
 type SortKey = keyof Booking;
@@ -318,7 +321,7 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
           autoFocus
         />
       </div>
-      <div className="max-h-[60vh] overflow-y-auto p-1">
+      <div className="max-h-[50dvh] overflow-y-auto overscroll-contain p-1">
         {isLoading ? (
           <div className="flex justify-center py-8"><Loader2 className="h-8 w-8 animate-spin" /></div>
         ) : drivers.length === 0 ? (
@@ -352,16 +355,16 @@ function ReassignDialog({ booking, open, onOpenChange, onReassignSuccess }: { bo
                     <AvatarImage src={avatar} alt={name} data-ai-hint="person portrait" />
                     <AvatarFallback>{name.charAt(0).toUpperCase()}</AvatarFallback>
                   </Avatar>
-                  <div className='flex-1 grid grid-cols-2 gap-x-4 gap-y-1 text-sm'>
-                    <div className="flex items-center gap-2 font-semibold"><User className="h-4 w-4 text-muted-foreground" /> {name}</div>
-                    <div className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /> {driver.phone}</div>
+                  <div className='flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-sm'>
+                    <div className="flex items-center gap-2 font-semibold truncate"><User className="h-4 w-4 shrink-0 text-muted-foreground" /> <span className="truncate">{name}</span></div>
+                    <div className="flex items-center gap-2"><Phone className="h-4 w-4 shrink-0 text-muted-foreground" /> {driver.phone}</div>
                     <div className="flex items-center gap-2 text-muted-foreground">
-                      <Car className="h-4 w-4" />
+                      <Car className="h-4 w-4 shrink-0" />
                       {route ? route : ''}
                       {plate ? ` • ${plate}` : ''}
                       {!route && !plate ? 'Chưa có thông tin xe' : ''}
                     </div>
-                    <div className="flex items-center gap-2 justify-end">
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
                       {/* Tài đang giữ cam kết ở khung giờ khác giờ VẪN hiện trong danh
                           sách (fix 14/08/2026) — phải nói rõ họ đang giữ chuyến gì. */}
                       <DriverCommitmentBadge commitments={driver.activeCommitments} />
@@ -464,6 +467,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [duplicateFilter, setDuplicateFilter] = React.useState<DuplicateTripFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
   const { options: provinceOptions, names: provinceNames } = useProvinceOptions();
+  const isCompactMenu = useIsMobile(640);
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -778,6 +782,17 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   };
 
   const statusChangeOptions: BookingStatus[] = ['ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
+  const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
+  const activeAdvancedFilterCount =
+    (tripKind !== 'all' ? 1 : 0) +
+    (testFilter !== 'ALL' ? 1 : 0) +
+    (duplicateFilter !== 'ALL' ? 1 : 0) +
+    (callBeforeFilter !== 'ALL' ? 1 : 0) +
+    (selectedProvinceCode !== GEO_FILTER_ALL ? 1 : 0) +
+    (selectedRouteId !== GEO_FILTER_ALL ? 1 : 0) +
+    (bookingIdTerm.trim() ? 1 : 0) +
+    (addressTerm.trim() ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0);
 
   // Hide the SCHEDULED status sub-tab under "Chuyến thường" — a ride-now trip is never in the
   // pre-dispatch SCHEDULED state, so that sub-tab would always be empty there.
@@ -814,151 +829,179 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
             <TabsTrigger key={key} value={key}>{statusLabelMap[key] ?? key}</TabsTrigger>
           ))}
         </TabsList>
-        {/* Hàng 2 (dưới tab trạng thái): mọi bộ lọc + search + tạo chuyến gộp 1 hàng. */}
-        <div className="flex flex-wrap items-center gap-2 py-4">
-          <Select
-            value={tripKind}
-            onValueChange={(val) => handleTripKindChange(val)}
-          >
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Loại chuyến" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Tất cả loại</SelectItem>
-              <SelectItem value="regular">Chuyến thường</SelectItem>
-              <SelectItem value="scheduled">Đặt lịch</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={testFilter}
-            // setCurrentPage(1) như MỌI filter khác: đang ở trang 5 mà chọn "Chỉ chuyến
-            // test" thì trang 5 của tập nhỏ hơn là rỗng, và nút phân trang khoá luôn.
-            onValueChange={(val) => { setTestFilter(val as TestTripFilter | 'ALL'); setCurrentPage(1); }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Chuyến test" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Chuyến test: tất cả</SelectItem>
-              <SelectItem value="exclude">Chỉ chuyến thật</SelectItem>
-              <SelectItem value="only">Chỉ chuyến test</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* Lọc cờ "chuyến trùng". Đứng cạnh bộ lọc chuyến test vì cùng dạng cờ admin
-              gạt tay — nhưng hệ quả khác hẳn: chuyến trùng VẪN tính doanh thu. */}
-          <Select
-            value={duplicateFilter}
-            onValueChange={(val) => { setDuplicateFilter(val as DuplicateTripFilter | 'ALL'); setCurrentPage(1); }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Chuyến trùng" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Chuyến trùng: tất cả</SelectItem>
-              <SelectItem value="exclude">Ẩn chuyến trùng</SelectItem>
-              <SelectItem value="only">Chỉ chuyến trùng</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* Lọc pha gọi TRƯỚC hoàn thành. Chỉ pha "trước" — dropdown "Gọi sau HT" cố ý
-              ở lại /crm-queue, bảng này lo chuyến đang chạy chứ không lo hậu mãi. */}
-          <Select
-            value={callBeforeFilter}
-            // setCurrentPage(1) như MỌI filter khác: trang 5 của tập nhỏ hơn là bảng trắng.
-            onValueChange={(val) => { setCallBeforeFilter(val as CustomerCallFilter | 'ALL'); setCurrentPage(1); }}
-          >
-            <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="Gọi trước HT" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Gọi trước HT: tất cả</SelectItem>
-              <SelectItem value="uncalled">Chưa gọi</SelectItem>
-              <SelectItem value="claimed">Đã nhận gọi</SelectItem>
-              <SelectItem value="called">Đã gọi được</SelectItem>
-              <SelectItem value="unreached">Không liên lạc được</SelectItem>
-            </SelectContent>
-          </Select>
-          {/* Combobox có ô tìm để lọc nhanh trong 34 tỉnh. Chọn lại mục đang chọn trả undefined
-              (toggle bỏ chọn) → quy về 'ALL'. Lọc theo điểm ĐÓN HOẶC điểm TRẢ của chuyến. */}
-          <Combobox
-            options={provinceFilterChoices}
-            selectedValue={selectedProvinceCode}
-            onSelect={(val) => { setSelectedProvinceCode(val ?? GEO_FILTER_ALL); setCurrentPage(1); }}
-            placeholder="Lọc theo tỉnh (đón/trả)"
-            searchPlaceholder="Tìm tỉnh..."
-            noResultsText="Không có tỉnh phù hợp."
-            className="w-[220px]"
-          />
-          {/* LEGACY: chỉ hiện khi còn dữ liệu tuyến cũ. Chuyến tạo sau khi bỏ tuyến không có
-              routeId nên bộ lọc này không bao giờ ra chúng — dùng bộ lọc tỉnh ở trên. */}
-          {routes.length > 0 && (
-            <Combobox
-              options={routeOptions}
-              selectedValue={selectedRouteId}
-              onSelect={(val) => { setSelectedRouteId(val ?? GEO_FILTER_ALL); setCurrentPage(1); }}
-              placeholder="Tuyến cũ (chỉ lịch sử)"
-              searchPlaceholder="Tìm tuyến cũ..."
-              noResultsText="Không có tuyến phù hợp."
-              className="w-[220px]"
-            />
-          )}
-          <div className='relative'>
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm tên/SĐT khách hoặc tài xế"
-              value={searchTerm}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              className="w-[240px] pl-8"
-            />
+        {/* Khu vực bộ lọc + tìm kiếm + thao tác tạo chuyến: trên mobile thu gọn bộ lọc phụ
+            sau nút "Bộ lọc" để bảng chuyến đi hiện ngay trong màn hình đầu; từ tablet (md) trở lên
+            xếp lưới đều cột, lên desktop lớn (xl) trải phẳng 1 hàng gọn. */}
+        <div className="space-y-2.5 py-3 sm:py-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm tên/SĐT khách hoặc tài xế"
+                value={searchTerm}
+                onChange={(e) => handleSearchChange(e.target.value)}
+                className="w-full pl-8"
+              />
+            </div>
+            <Button
+              type="button"
+              variant={mobileFiltersOpen || activeAdvancedFilterCount > 0 ? 'secondary' : 'outline'}
+              size="sm"
+              className="h-10 gap-1.5 md:hidden"
+              aria-expanded={mobileFiltersOpen}
+              onClick={() => setMobileFiltersOpen((v) => !v)}
+            >
+              <SlidersHorizontal className="h-4 w-4" />
+              Bộ lọc
+              {activeAdvancedFilterCount > 0 && (
+                <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-semibold text-primary-foreground">
+                  {activeAdvancedFilterCount}
+                </span>
+              )}
+            </Button>
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              <ZaloPassConfigDialog />
+              <CreateBookingDialog onSuccess={() => reload()} />
+            </div>
           </div>
-          <div className='relative'>
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm ID chuyến (8 ký tự đầu OK)"
-              value={bookingIdTerm}
-              onChange={(e) => handleBookingIdChange(e.target.value)}
-              className="w-[240px] pl-8"
-            />
-          </div>
-          {/* Tìm theo địa chỉ ĐÓN hoặc TRẢ. BE bỏ dấu nên gõ không dấu vẫn ra; tách token
-              theo khoảng trắng và mọi token phải khớp CÙNG một điểm (đón hoặc trả). */}
-          <div className='relative'>
-            <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Tìm địa chỉ đón/trả (không dấu OK)"
-              value={addressTerm}
-              onChange={(e) => handleAddressChange(e.target.value)}
-              className="w-[240px] pl-8"
-            />
-          </div>
-          {/* Lọc khoảng ngày ĐẶT chuyến (createdAt, giờ VN). Đổi ngày → về trang 1. */}
-          <div className="flex items-center gap-1.5">
-            <Label className="whitespace-nowrap text-xs text-muted-foreground">Ngày đặt:</Label>
-            <Input
-              type="date"
-              value={dateFrom}
-              max={dateTo || undefined}
-              onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-              className="w-[150px]"
-              aria-label="Từ ngày"
-            />
-            <span className="text-sm text-muted-foreground">→</span>
-            <Input
-              type="date"
-              value={dateTo}
-              min={dateFrom || undefined}
-              onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-              className="w-[150px]"
-              aria-label="Đến ngày"
-            />
-            {(dateFrom || dateTo) && (
-              <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}>
-                Xóa
-              </Button>
+
+          <div
+            className={cn(
+              'grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:flex xl:flex-wrap xl:items-center',
+              !mobileFiltersOpen && 'hidden md:grid',
             )}
-          </div>
-          <div className='ml-auto flex items-center gap-2'>
-            <ZaloPassConfigDialog />
-            <CreateBookingDialog onSuccess={() => reload()} />
+          >
+            <Select
+              value={tripKind}
+              onValueChange={(val) => handleTripKindChange(val)}
+            >
+              <SelectTrigger className="w-full xl:w-[150px]">
+                <SelectValue placeholder="Loại chuyến" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Tất cả loại</SelectItem>
+                <SelectItem value="regular">Chuyến thường</SelectItem>
+                <SelectItem value="scheduled">Đặt lịch</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select
+              value={testFilter}
+              // setCurrentPage(1) như MỌI filter khác: đang ở trang 5 mà chọn "Chỉ chuyến
+              // test" thì trang 5 của tập nhỏ hơn là rỗng, và nút phân trang khoá luôn.
+              onValueChange={(val) => { setTestFilter(val as TestTripFilter | 'ALL'); setCurrentPage(1); }}
+            >
+              <SelectTrigger className="w-full xl:w-[175px]">
+                <SelectValue placeholder="Chuyến test" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Chuyến test: tất cả</SelectItem>
+                <SelectItem value="exclude">Chỉ chuyến thật</SelectItem>
+                <SelectItem value="only">Chỉ chuyến test</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Lọc cờ "chuyến trùng". Đứng cạnh bộ lọc chuyến test vì cùng dạng cờ admin
+                gạt tay — nhưng hệ quả khác hẳn: chuyến trùng VẪN tính doanh thu. */}
+            <Select
+              value={duplicateFilter}
+              onValueChange={(val) => { setDuplicateFilter(val as DuplicateTripFilter | 'ALL'); setCurrentPage(1); }}
+            >
+              <SelectTrigger className="w-full xl:w-[175px]">
+                <SelectValue placeholder="Chuyến trùng" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Chuyến trùng: tất cả</SelectItem>
+                <SelectItem value="exclude">Ẩn chuyến trùng</SelectItem>
+                <SelectItem value="only">Chỉ chuyến trùng</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Lọc pha gọi TRƯỚC hoàn thành. Chỉ pha "trước" — dropdown "Gọi sau HT" cố ý
+                ở lại /crm-queue, bảng này lo chuyến đang chạy chứ không lo hậu mãi. */}
+            <Select
+              value={callBeforeFilter}
+              // setCurrentPage(1) như MỌI filter khác: trang 5 của tập nhỏ hơn là bảng trắng.
+              onValueChange={(val) => { setCallBeforeFilter(val as CustomerCallFilter | 'ALL'); setCurrentPage(1); }}
+            >
+              <SelectTrigger className="w-full xl:w-[175px]">
+                <SelectValue placeholder="Gọi trước HT" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Gọi trước HT: tất cả</SelectItem>
+                <SelectItem value="uncalled">Chưa gọi</SelectItem>
+                <SelectItem value="claimed">Đã nhận gọi</SelectItem>
+                <SelectItem value="called">Đã gọi được</SelectItem>
+                <SelectItem value="unreached">Không liên lạc được</SelectItem>
+              </SelectContent>
+            </Select>
+            {/* Combobox có ô tìm để lọc nhanh trong 34 tỉnh. Chọn lại mục đang chọn trả undefined
+                (toggle bỏ chọn) → quy về 'ALL'. Lọc theo điểm ĐÓN HOẶC điểm TRẢ của chuyến. */}
+            <Combobox
+              options={provinceFilterChoices}
+              selectedValue={selectedProvinceCode}
+              onSelect={(val) => { setSelectedProvinceCode(val ?? GEO_FILTER_ALL); setCurrentPage(1); }}
+              placeholder="Lọc theo tỉnh (đón/trả)"
+              searchPlaceholder="Tìm tỉnh..."
+              noResultsText="Không có tỉnh phù hợp."
+              className="w-full xl:w-[210px]"
+            />
+            {/* LEGACY: chỉ hiện khi còn dữ liệu tuyến cũ. Chuyến tạo sau khi bỏ tuyến không có
+                routeId nên bộ lọc này không bao giờ ra chúng — dùng bộ lọc tỉnh ở trên. */}
+            {routes.length > 0 && (
+              <Combobox
+                options={routeOptions}
+                selectedValue={selectedRouteId}
+                onSelect={(val) => { setSelectedRouteId(val ?? GEO_FILTER_ALL); setCurrentPage(1); }}
+                placeholder="Tuyến cũ (chỉ lịch sử)"
+                searchPlaceholder="Tìm tuyến cũ..."
+                noResultsText="Không có tuyến phù hợp."
+                className="w-full xl:w-[210px]"
+              />
+            )}
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm ID chuyến (8 ký tự đầu OK)"
+                value={bookingIdTerm}
+                onChange={(e) => handleBookingIdChange(e.target.value)}
+                className="w-full pl-8 xl:w-[220px]"
+              />
+            </div>
+            {/* Tìm theo địa chỉ ĐÓN hoặc TRẢ. BE bỏ dấu nên gõ không dấu vẫn ra; tách token
+                theo khoảng trắng và mọi token phải khớp CÙNG một điểm (đón hoặc trả). */}
+            <div className="relative">
+              <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm địa chỉ đón/trả (không dấu OK)"
+                value={addressTerm}
+                onChange={(e) => handleAddressChange(e.target.value)}
+                className="w-full pl-8 xl:w-[230px]"
+              />
+            </div>
+            {/* Lọc khoảng ngày ĐẶT chuyến (createdAt, giờ VN). Đổi ngày → về trang 1. */}
+            <div className="flex flex-wrap items-center gap-1.5 sm:col-span-2 lg:col-span-2 xl:w-auto">
+              <Label className="whitespace-nowrap text-xs text-muted-foreground">Ngày đặt:</Label>
+              <Input
+                type="date"
+                value={dateFrom}
+                max={dateTo || undefined}
+                onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                className="min-w-0 flex-1 xl:w-[150px] xl:flex-none"
+                aria-label="Từ ngày"
+              />
+              <span className="text-sm text-muted-foreground">→</span>
+              <Input
+                type="date"
+                value={dateTo}
+                min={dateFrom || undefined}
+                onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                className="min-w-0 flex-1 xl:w-[150px] xl:flex-none"
+                aria-label="Đến ngày"
+              />
+              {(dateFrom || dateTo) && (
+                <Button variant="ghost" size="sm" className="h-8 px-2" onClick={() => { setDateFrom(''); setDateTo(''); setCurrentPage(1); }}>
+                  Xóa
+                </Button>
+              )}
+            </div>
           </div>
         </div>
         <Card>
@@ -1021,7 +1064,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     <TableHead>Lý do huỷ</TableHead>
                   </>
                 )}
-                <TableHead>
+                <TableHead className={STICKY_ACTION_HEAD_CLASS}>
                   <span className="sr-only">Thao tác</span>
                 </TableHead>
               </TableRow>
@@ -1049,7 +1092,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                 sortedBookings.map((booking) => (
                   <TableRow
                     key={booking.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="group/row cursor-pointer hover:bg-muted/50"
                     onClick={() => openDetails(booking.id)}
                   >
                     <TableCell className="font-medium">
@@ -1203,10 +1246,13 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         </TableCell>
                       </>
                     )}
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell
+                      className={STICKY_ACTION_CELL_CLASS}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
                             <span className="sr-only">Mở menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
@@ -1247,20 +1293,38 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                             Chuyển quốc
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuSub>
-                            <DropdownMenuSubTrigger>Cập nhật trạng thái</DropdownMenuSubTrigger>
-                            <DropdownMenuSubContent>
+                          {isCompactMenu ? (
+                            <>
+                              <DropdownMenuLabel className="px-2 py-1 text-xs font-medium text-muted-foreground">
+                                Cập nhật trạng thái
+                              </DropdownMenuLabel>
                               {statusChangeOptions.map(status => (
                                 <DropdownMenuItem
                                   key={status}
+                                  className="pl-4"
                                   disabled={booking.status === status || booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
                                   onSelect={() => openConfirmationDialog(booking, status)}
                                 >
                                   {statusLabelMap[status] ?? status}
                                 </DropdownMenuItem>
                               ))}
-                            </DropdownMenuSubContent>
-                          </DropdownMenuSub>
+                            </>
+                          ) : (
+                            <DropdownMenuSub>
+                              <DropdownMenuSubTrigger>Cập nhật trạng thái</DropdownMenuSubTrigger>
+                              <DropdownMenuSubContent>
+                                {statusChangeOptions.map(status => (
+                                  <DropdownMenuItem
+                                    key={status}
+                                    disabled={booking.status === status || booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
+                                    onSelect={() => openConfirmationDialog(booking, status)}
+                                  >
+                                    {statusLabelMap[status] ?? status}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                          )}
                           {booking.status === 'COMPLETED' && (
                             <>
                               <DropdownMenuSeparator />
@@ -1280,23 +1344,25 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
             </TableBody>
           </Table>
           {/* Pagination Controls */}
-          <div className="flex items-center justify-between px-4 py-4 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Hiển thị</span>
-              <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
-                <SelectTrigger className="h-8 w-[70px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span>/ {totalItems} kết quả</span>
+          <div className="flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
+            <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground sm:justify-start">
+              <div className="flex items-center gap-2">
+                <span>Hiển thị</span>
+                <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span>/ {totalItems} kết quả</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
               <span className="text-sm text-muted-foreground">
                 Trang {currentPage} / {totalPages}
               </span>

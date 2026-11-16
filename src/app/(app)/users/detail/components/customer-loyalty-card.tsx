@@ -72,7 +72,7 @@ export function CustomerLoyaltyCard({ userId, userName }: { userId: string; user
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-start justify-between gap-4">
+      <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 space-y-0">
         <CardTitle className="text-base">Vcoin &amp; hạng</CardTitle>
         {canAdjust && (
           <Button size="sm" onClick={() => setDialogOpenFor(userId)} disabled={loading || !data}>

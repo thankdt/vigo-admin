@@ -138,7 +138,7 @@ export default function PoolingPage() {
       />
 
       <Card className="p-4">
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid grid-cols-1 items-end gap-3 sm:flex sm:flex-wrap">
           <div className="space-y-1">
             <Label htmlFor="pool-date">Ngày (giờ VN)</Label>
             <Input
@@ -146,57 +146,62 @@ export default function PoolingPage() {
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="w-[170px]"
+              className="w-full sm:w-[170px]"
             />
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="pool-corridor">Lệch tuyến tối đa (km)</Label>
-            <Input
-              id="pool-corridor"
-              type="number"
-              min={1}
-              max={20}
-              value={corridorKm}
-              onChange={(e) => setCorridorKm(e.target.value)}
-              className="w-[170px]"
-            />
+          <div className="grid grid-cols-2 gap-2 sm:contents">
+            <div className="space-y-1">
+              <Label htmlFor="pool-corridor">Lệch tuyến tối đa (km)</Label>
+              <Input
+                id="pool-corridor"
+                type="number"
+                min={1}
+                max={20}
+                value={corridorKm}
+                onChange={(e) => setCorridorKm(e.target.value)}
+                className="w-full sm:w-[170px]"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="pool-window">Lệch giờ tối đa (giờ)</Label>
+              <Input
+                id="pool-window"
+                type="number"
+                min={1}
+                max={12}
+                value={windowHours}
+                onChange={(e) => setWindowHours(e.target.value)}
+                className="w-full sm:w-[170px]"
+              />
+            </div>
           </div>
-          <div className="space-y-1">
-            <Label htmlFor="pool-window">Lệch giờ tối đa (giờ)</Label>
-            <Input
-              id="pool-window"
-              type="number"
-              min={1}
-              max={12}
-              value={windowHours}
-              onChange={(e) => setWindowHours(e.target.value)}
-              className="w-[170px]"
-            />
+          <div className="flex flex-wrap items-center gap-2 sm:contents">
+            <Button onClick={run} disabled={loading} className="flex-1 sm:flex-none">
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Search className="mr-2 h-4 w-4" />
+              )}
+              Quét
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setHienSdt((v) => !v)}
+              className="flex-1 sm:flex-none"
+              title={
+                hienSdt
+                  ? 'Ẩn lại trước khi chụp màn hình'
+                  : 'Hiện số điện thoại khách (đừng chụp màn hình khi đang hiện)'
+              }
+            >
+              {hienSdt ? (
+                <EyeOff className="mr-2 h-4 w-4" />
+              ) : (
+                <Eye className="mr-2 h-4 w-4" />
+              )}
+              {hienSdt ? 'Ẩn SĐT' : 'Hiện SĐT'}
+            </Button>
           </div>
-          <Button onClick={run} disabled={loading}>
-            {loading ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Search className="mr-2 h-4 w-4" />
-            )}
-            Quét
-          </Button>
-          <Button
-            variant="outline"
-            onClick={() => setHienSdt((v) => !v)}
-            title={
-              hienSdt
-                ? 'Ẩn lại trước khi chụp màn hình'
-                : 'Hiện số điện thoại khách (đừng chụp màn hình khi đang hiện)'
-            }
-          >
-            {hienSdt ? (
-              <EyeOff className="mr-2 h-4 w-4" />
-            ) : (
-              <Eye className="mr-2 h-4 w-4" />
-            )}
-            {hienSdt ? 'Ẩn SĐT' : 'Hiện SĐT'}
-          </Button>
         </div>
         {lanQuetCuoi && (
           <p className="mt-3 text-xs text-muted-foreground">
@@ -263,7 +268,7 @@ function Summary({ data }: { data: PoolSuggestions }) {
   const thieuGia = data.groups.reduce((s, g) => s + g.missingPriceCount, 0);
   return (
     <Card className="p-4">
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5 sm:gap-4">
         <Stat label="Chuyến đã quét" value={String(data.scanned)} />
         <Stat label="Nhóm gom được" value={String(data.groups.length)} />
         <Stat label="Chuyến nằm trong nhóm" value={String(pooled)} />

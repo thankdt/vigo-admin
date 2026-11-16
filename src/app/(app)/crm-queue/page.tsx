@@ -17,9 +17,12 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toastApiError } from '@/hooks/use-api-error-toast';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from '@/hooks/use-toast';
 import { useProvinceOptions } from '@/hooks/use-province-options';
 import { useAuth } from '@/lib/auth-context';
@@ -58,6 +61,7 @@ const BASE_COLS = 5;
 export default function CrmQueuePage() {
   const { me, loading: authLoading } = useAuth();
   const { toast } = useToast();
+  const isCompactPhone = useIsMobile(640);
   // Tên tỉnh cho cột "Hành trình". Soft-fail: tải lỗi thì "01" vẫn có nhãn, mã khác hiện "Mã tỉnh <mã>".
   const { names: provinceNames } = useProvinceOptions();
 
@@ -281,126 +285,242 @@ export default function CrmQueuePage() {
           {QUEUE_TAB_HINT[tab]}
         </p>
 
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Khách</TableHead>
-              <TableHead>Hành trình</TableHead>
-              <TableHead>Giờ đón / hoàn thành</TableHead>
-              <TableHead>Đã chờ</TableHead>
-              {showOwnerCol && <TableHead>Người giữ việc</TableHead>}
-              <TableHead className="text-right">Thao tác</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {authLoading || loading ? (
-              <TableRow>
-                <TableCell colSpan={BASE_COLS + (showOwnerCol ? 1 : 0)} className="h-24 text-center">
-                  <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-                </TableCell>
-              </TableRow>
-            ) : rows.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={BASE_COLS + (showOwnerCol ? 1 : 0)} className="h-24 text-center text-muted-foreground">
-                    {loadFailed
-                    ? 'Không tải được danh sách — xem thông báo lỗi rồi thử lại.'
-                    : 'Không còn việc nào trong tab này.'}
-                </TableCell>
-              </TableRow>
-            ) : (
-              rows.map((b) => {
-                // Pha theo DÒNG, không theo tab — tab "Việc của tôi" chứa lẫn cả hai pha.
+        {isCompactPhone ? (
+          authLoading || loading ? (
+            <div className="flex h-24 items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-8 text-center text-sm text-muted-foreground">
+              {loadFailed
+                ? 'Không tải được danh sách — xem thông báo lỗi rồi thử lại.'
+                : 'Không còn việc nào trong tab này.'}
+            </div>
+          ) : (
+            <div className="space-y-2.5" data-testid="crm-queue-mobile-list">
+              {rows.map((b) => {
                 const isBefore = rowIsBeforePhase(b);
                 const owner = isBefore ? b.callBeforeBy : b.callAfterBy;
                 const claimed = (isBefore ? b.callBeforeStatus : b.callAfterStatus) === 'CLAIMED';
                 const busy = busyId === b.id;
+                const since = waitedSince(b);
+                const tone = waitTone(since, nowMs);
+                const journey =
+                  provincePairLabel(b.pickupProvinceCode, b.dropoffProvinceCode, provinceNames) ||
+                  b.route?.name ||
+                  '—';
                 return (
-                  <TableRow key={b.id}>
-                    <TableCell>
-                      <p className="font-medium">{b.customer?.fullName || '—'}</p>
-                      <p className="text-xs text-muted-foreground">{b.customer?.phone || '—'}</p>
-                    </TableCell>
-                    {/* Cặp tỉnh đón → trả (chuyến mới không còn tuyến); chuyến LỊCH SỬ chưa có
-                        mã tỉnh mới rơi về tên tuyến cũ. */}
-                    <TableCell className="text-sm">
-                      {provincePairLabel(b.pickupProvinceCode, b.dropoffProvinceCode, provinceNames) || b.route?.name || '—'}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}
-                    </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">
-                      {(() => {
-                        const since = waitedSince(b);
-                        const tone = waitTone(since, nowMs);
-                        return (
-                          <span
-                            className={cn(
-                              'tabular-nums',
-                              tone === 'danger' && 'font-semibold text-destructive',
-                              tone === 'warn' && 'font-medium text-amber-600 dark:text-amber-500',
-                            )}
+                  <div key={b.id} className="space-y-2.5 rounded-lg border bg-card p-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium">{b.customer?.fullName || '—'}</p>
+                        {b.customer?.phone ? (
+                          <a
+                            href={`tel:${b.customer.phone}`}
+                            className="inline-flex min-h-8 items-center py-1 text-sm font-medium text-primary hover:underline"
                           >
-                            {formatWaited(since, nowMs)}
-                          </span>
-                        );
-                      })()}
-                    </TableCell>
-                    {showOwnerCol && (
-                      <TableCell className="whitespace-nowrap text-sm">
-                        {owner?.fullName ? (
-                          <Badge variant="secondary">{owner.fullName}</Badge>
+                            {b.customer.phone}
+                          </a>
                         ) : (
-                          <span className="text-muted-foreground">—</span>
+                          <p className="text-xs text-muted-foreground">—</p>
                         )}
-                      </TableCell>
-                    )}
-                    <TableCell className="text-right">
-                      <div className="flex items-center justify-end gap-1.5">
-                        {!claimed && (
-                          <Button size="sm" disabled={busy} onClick={() => record(b, 'CLAIMED')}>
-                            {busy ? (
-                              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <PhoneIncoming className="mr-1.5 h-3.5 w-3.5" />
-                            )}
-                            Nhận gọi
-                          </Button>
-                        )}
-                        {claimed && (
-                          <>
-                            <ResultButton
-                              label="Đã gọi được"
-                              icon={<PhoneCall className="mr-1.5 h-3.5 w-3.5" />}
-                              reasons={reasons}
-                              disabled={busy}
-                              onSubmit={(reason, note) => record(b, 'CALLED', { reason, note })}
-                            />
-                            <ResultButton
-                              label="Không liên lạc được"
-                              variant="outline"
-                              icon={<PhoneOff className="mr-1.5 h-3.5 w-3.5" />}
-                              reasons={reasons}
-                              disabled={busy}
-                              onSubmit={(reason, note) => record(b, 'UNREACHED', { reason, note })}
-                            />
-                          </>
-                        )}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        <span
+                          className={cn(
+                            'rounded-md bg-muted px-2 py-0.5 text-xs tabular-nums',
+                            tone === 'danger' && 'bg-destructive/15 font-semibold text-destructive',
+                            tone === 'warn' &&
+                              'bg-amber-100 font-medium text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
+                          )}
+                        >
+                          {formatWaited(since, nowMs)}
+                        </span>
                         <Button
-                          size="sm"
+                          size="icon"
                           variant="ghost"
+                          className="h-8 w-8"
                           onClick={() => setDetailId(b.id)}
                           aria-label="Xem chi tiết chuyến"
                         >
-                          <Eye className="h-3.5 w-3.5" />
+                          <Eye className="h-4 w-4" />
                         </Button>
                       </div>
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                    <div className="space-y-1 text-xs text-muted-foreground">
+                      <p className="text-sm text-foreground">{journey}</p>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span>{formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}</span>
+                        {showOwnerCol && owner?.fullName && (
+                          <Badge variant="secondary" className="text-[11px]">
+                            {owner.fullName}
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    {!claimed ? (
+                      <Button
+                        size="sm"
+                        className="w-full"
+                        disabled={busy}
+                        onClick={() => record(b, 'CLAIMED')}
+                      >
+                        {busy ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <PhoneIncoming className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Nhận gọi
+                      </Button>
+                    ) : (
+                      <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2">
+                        <ResultButton
+                          label="Đã gọi được"
+                          className="w-full"
+                          icon={<PhoneCall className="mr-1.5 h-3.5 w-3.5" />}
+                          reasons={reasons}
+                          disabled={busy}
+                          onSubmit={(reason, note) => record(b, 'CALLED', { reason, note })}
+                        />
+                        <ResultButton
+                          label="Không liên lạc được"
+                          variant="outline"
+                          className="w-full"
+                          icon={<PhoneOff className="mr-1.5 h-3.5 w-3.5" />}
+                          reasons={reasons}
+                          disabled={busy}
+                          onSubmit={(reason, note) => record(b, 'UNREACHED', { reason, note })}
+                        />
+                      </div>
+                    )}
+                  </div>
                 );
-              })
-            )}
-          </TableBody>
-        </Table>
+              })}
+            </div>
+          )
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Khách</TableHead>
+                <TableHead>Hành trình</TableHead>
+                <TableHead>Giờ đón / hoàn thành</TableHead>
+                <TableHead>Đã chờ</TableHead>
+                {showOwnerCol && <TableHead>Người giữ việc</TableHead>}
+                <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {authLoading || loading ? (
+                <TableRow>
+                  <TableCell colSpan={BASE_COLS + (showOwnerCol ? 1 : 0)} className="h-24 text-center">
+                    <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+                  </TableCell>
+                </TableRow>
+              ) : rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={BASE_COLS + (showOwnerCol ? 1 : 0)} className="h-24 text-center text-muted-foreground">
+                    {loadFailed
+                      ? 'Không tải được danh sách — xem thông báo lỗi rồi thử lại.'
+                      : 'Không còn việc nào trong tab này.'}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((b) => {
+                  // Pha theo DÒNG, không theo tab — tab "Việc của tôi" chứa lẫn cả hai pha.
+                  const isBefore = rowIsBeforePhase(b);
+                  const owner = isBefore ? b.callBeforeBy : b.callAfterBy;
+                  const claimed = (isBefore ? b.callBeforeStatus : b.callAfterStatus) === 'CLAIMED';
+                  const busy = busyId === b.id;
+                  return (
+                    <TableRow key={b.id}>
+                      <TableCell>
+                        <p className="font-medium">{b.customer?.fullName || '—'}</p>
+                        <p className="text-xs text-muted-foreground">{b.customer?.phone || '—'}</p>
+                      </TableCell>
+                      {/* Cặp tỉnh đón → trả (chuyến mới không còn tuyến); chuyến LỊCH SỬ chưa có
+                          mã tỉnh mới rơi về tên tuyến cũ. */}
+                      <TableCell className="text-sm">
+                        {provincePairLabel(b.pickupProvinceCode, b.dropoffProvinceCode, provinceNames) || b.route?.name || '—'}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}
+                      </TableCell>
+                      <TableCell className="whitespace-nowrap text-sm">
+                        {(() => {
+                          const since = waitedSince(b);
+                          const tone = waitTone(since, nowMs);
+                          return (
+                            <span
+                              className={cn(
+                                'tabular-nums',
+                                tone === 'danger' && 'font-semibold text-destructive',
+                                tone === 'warn' && 'font-medium text-amber-600 dark:text-amber-500',
+                              )}
+                            >
+                              {formatWaited(since, nowMs)}
+                            </span>
+                          );
+                        })()}
+                      </TableCell>
+                      {showOwnerCol && (
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {owner?.fullName ? (
+                            <Badge variant="secondary">{owner.fullName}</Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      )}
+                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                        <div className="flex flex-col items-end gap-1.5 md:flex-row md:items-center md:justify-end">
+                          {!claimed && (
+                            <Button size="sm" disabled={busy} onClick={() => record(b, 'CLAIMED')}>
+                              {busy ? (
+                                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                              ) : (
+                                <PhoneIncoming className="mr-1.5 h-3.5 w-3.5" />
+                              )}
+                              Nhận gọi
+                            </Button>
+                          )}
+                          {claimed && (
+                            <>
+                              <ResultButton
+                                label="Đã gọi được"
+                                icon={<PhoneCall className="mr-1.5 h-3.5 w-3.5" />}
+                                reasons={reasons}
+                                disabled={busy}
+                                onSubmit={(reason, note) => record(b, 'CALLED', { reason, note })}
+                              />
+                              <ResultButton
+                                label="Không liên lạc được"
+                                variant="outline"
+                                icon={<PhoneOff className="mr-1.5 h-3.5 w-3.5" />}
+                                reasons={reasons}
+                                disabled={busy}
+                                onSubmit={(reason, note) => record(b, 'UNREACHED', { reason, note })}
+                              />
+                            </>
+                          )}
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            onClick={() => setDetailId(b.id)}
+                            aria-label="Xem chi tiết chuyến"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })
+              )}
+            </TableBody>
+          </Table>
+        )}
 
         {(totalPages > 1 || page > 1) && (
           <div className="flex items-center justify-end gap-2">
@@ -453,6 +573,7 @@ function ResultButton({
   reasons,
   disabled,
   variant = 'default',
+  className,
   onSubmit,
 }: {
   label: string;
@@ -460,6 +581,7 @@ function ResultButton({
   reasons: string[];
   disabled?: boolean;
   variant?: 'default' | 'outline';
+  className?: string;
   onSubmit: (reason?: string, note?: string) => void;
 }) {
   const [open, setOpen] = React.useState(false);
@@ -476,7 +598,7 @@ function ResultButton({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button size="sm" variant={variant} disabled={disabled}>
+        <Button size="sm" variant={variant} className={className} disabled={disabled}>
           {icon}
           {label}
         </Button>

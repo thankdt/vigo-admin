@@ -33,7 +33,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
   Select,
   SelectContent,
@@ -176,16 +179,16 @@ export function ProvinceAccordion({
       type="multiple"
       value={open}
       onValueChange={onToggle}
-      className="rounded-md border"
+      className="rounded-md border bg-card"
     >
       {rows.map((r) => {
         const key = provinceKeyOf(r);
         const rowsOfGroup = groups[key];
         return (
           <AccordionItem key={key} value={key}>
-            <AccordionTrigger className="px-4 hover:no-underline">
-              <div className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 pr-4 text-sm">
-                <span className="min-w-48 flex-1 text-left font-medium">{r.provinceName}</span>
+            <AccordionTrigger className="px-3 sm:px-4 hover:no-underline">
+              <div className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 pr-2 text-xs sm:gap-x-4 sm:pr-4 sm:text-sm">
+                <span className="min-w-0 basis-full text-left text-sm font-medium sm:min-w-48 sm:basis-auto sm:flex-1">{r.provinceName}</span>
                 {provinceNeedsDrivers(r) ? (
                   <Badge className="bg-red-100 text-red-800 hover:bg-red-100">
                     Có khách, thiếu tài
@@ -196,21 +199,21 @@ export function ProvinceAccordion({
                     {r.matchedDriverCount} tài khớp
                   </Badge>
                 ) : null}
-                <span className="w-24 text-right">{r.driverCount} tài</span>
-                <span className="w-32 text-right">{r.completedTrips} hoàn thành</span>
-                <span className="w-32 text-right text-muted-foreground">
+                <span className="sm:w-24 sm:text-right">{r.driverCount} tài</span>
+                <span className="sm:w-32 sm:text-right">{r.completedTrips} hoàn thành</span>
+                <span className="text-muted-foreground sm:w-32 sm:text-right">
                   {r.totalBookings} khách đặt
                 </span>
-                <span className="w-44 text-right text-muted-foreground">
+                <span className="text-muted-foreground sm:w-44 sm:text-right">
                   {r.contactedCount} liên hệ · {r.joinedCount} trong team
                 </span>
-                <span className="w-28 text-right text-muted-foreground">
+                <span className="text-muted-foreground sm:w-28 sm:text-right">
                   {vnDay(r.lastCompletedAt)}
                 </span>
               </div>
             </AccordionTrigger>
 
-            <AccordionContent className="px-4 pb-4">
+            <AccordionContent className="px-3 pb-4 sm:px-4">
               {loadingKeys.has(key) ? (
                 <div className="flex justify-center py-6">
                   <Loader2 className="h-5 w-5 animate-spin" />
@@ -231,7 +234,7 @@ export function ProvinceAccordion({
                       <TableHead>Trạng thái</TableHead>
                       <TableHead>Người phụ trách</TableHead>
                       <TableHead>Hẹn gọi lại</TableHead>
-                      <TableHead />
+                      <TableHead className={STICKY_ACTION_HEAD_CLASS} />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -309,7 +312,7 @@ export function ProvinceAccordion({
                               {vnDay(d.team?.nextFollowUpAt)}
                             </span>
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                             <Button
                               variant="ghost"
                               size="sm"

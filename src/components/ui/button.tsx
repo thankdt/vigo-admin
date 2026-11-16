@@ -26,6 +26,17 @@ const buttonVariants = cva(
         icon: "h-10 w-10",
       },
     },
+    compoundVariants: [
+      {
+        variant: ["default", "destructive", "outline", "secondary", "ghost"],
+        className: "[@media(pointer:coarse)]:min-h-9",
+      },
+      {
+        variant: ["default", "destructive", "outline", "secondary", "ghost"],
+        size: "icon",
+        className: "[@media(pointer:coarse)]:min-w-9",
+      },
+    ],
     defaultVariants: {
       variant: "default",
       size: "default",

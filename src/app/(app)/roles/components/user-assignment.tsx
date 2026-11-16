@@ -125,7 +125,7 @@ export function UserAssignment() {
   const superLocked = selected ? isSuperToggleLocked(selected, superCount) : false;
 
   return (
-    <div className="grid gap-6 md:grid-cols-[280px_1fr]">
+    <div className="grid gap-4 lg:gap-6 lg:grid-cols-[280px_1fr]">
       {/* Danh sách user admin */}
       <Card>
         <CardHeader>
@@ -211,9 +211,9 @@ export function UserAssignment() {
                         {grp.items.map((item) => {
                           const state: OverrideState = overrides[item.key] ?? 'default';
                           return (
-                            <div key={item.key} className="flex items-center justify-between gap-2">
+                            <div key={item.key} className="flex flex-col gap-1.5 py-1 sm:flex-row sm:items-center sm:justify-between sm:py-0">
                               <span className="text-sm">{item.label}</span>
-                              <div className="flex gap-1" role="group" aria-label={`Ngoại lệ ${item.label}`}>
+                              <div className="flex flex-wrap gap-1" role="group" aria-label={`Ngoại lệ ${item.label}`}>
                                 {(['default', 'GRANT', 'REVOKE'] as OverrideState[]).map((s) => (
                                   <Button
                                     key={s}

@@ -67,17 +67,17 @@ export default function HtxDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <Button variant="outline" size="icon" className="h-9 w-9" onClick={() => router.push('/htx-reconciliation')}>
+      <div className="flex flex-wrap items-start gap-3">
+        <Button variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => router.push('/htx-reconciliation')}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div>
-          <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <Building2 className="h-6 w-6" /> {name || 'HTX'}
+        <div className="min-w-0 flex-1">
+          <h1 className="flex items-center gap-2 text-xl font-bold tracking-tight sm:text-2xl">
+            <Building2 className="h-5 w-5 shrink-0 sm:h-6 sm:w-6" /> <span className="break-words">{name || 'HTX'}</span>
           </h1>
           <p className="text-sm text-muted-foreground">Chi tiết từng chuyến của HTX trong kỳ.</p>
         </div>
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
           <Badge variant="secondary">{trips.length} chuyến</Badge>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || trips.length === 0}>
             <Download className="mr-1.5 h-4 w-4" /> Xuất Excel

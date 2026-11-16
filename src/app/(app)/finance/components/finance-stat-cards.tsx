@@ -72,14 +72,14 @@ export function FinanceStatCards({
             className={`cursor-pointer transition-shadow hover:shadow-md ${frame} ${sel}`.trim()}
             title="Bấm để xem biểu đồ theo thời gian"
           >
-            <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+            <CardHeader className="p-4 pb-1.5 sm:p-6 sm:pb-2 flex flex-row items-start justify-between gap-2 space-y-0">
               <CardTitle className="text-sm font-medium text-muted-foreground">{c.label}</CardTitle>
-              <div className={c.green ? accentColor : 'text-muted-foreground'}>
+              <div className={`shrink-0 ${c.green ? accentColor : 'text-muted-foreground'}`}>
                 {c.icon}
               </div>
             </CardHeader>
-            <CardContent>
-              <div className={`text-2xl font-bold ${c.green ? accentColor : ''}`}>
+            <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+              <div className={`text-xl sm:text-2xl font-bold break-words tabular-nums ${c.green ? accentColor : ''}`}>
                 {fmtVnd(c.value)}
               </div>
               {c.hint && <p className="text-xs text-muted-foreground mt-1">{c.hint}</p>}

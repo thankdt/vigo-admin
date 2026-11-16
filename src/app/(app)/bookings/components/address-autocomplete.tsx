@@ -32,6 +32,14 @@ export function AddressAutocomplete({
   const [selected, setSelected] = React.useState(!!value);
   const debounceRef = React.useRef<NodeJS.Timeout | null>(null);
   const containerRef = React.useRef<HTMLDivElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+
+  // On touch viewports inside scrollable dialogs, ensure the open suggestion list isn't clipped below the fold.
+  React.useEffect(() => {
+    if (!showDropdown || isSearching || results.length === 0) return;
+    if (!window.matchMedia?.('(pointer: coarse)').matches) return;
+    dropdownRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [showDropdown, isSearching, results.length]);
 
   // Close dropdown on outside click
   React.useEffect(() => {
@@ -142,8 +150,9 @@ export function AddressAutocomplete({
         {selected && !isResolving && !isSearching && (
           <button
             type="button"
+            aria-label="Xoá địa chỉ đã chọn"
             onClick={handleClear}
-            className="absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground hover:text-foreground transition-colors"
+            className="absolute right-1 top-1 flex h-8 w-8 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground"
           >
             <X className="h-4 w-4" />
           </button>
@@ -151,7 +160,7 @@ export function AddressAutocomplete({
       </div>
 
       {showDropdown && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-[220px] overflow-y-auto">
+        <div ref={dropdownRef} className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-lg max-h-[220px] overflow-y-auto overscroll-contain">
           {isSearching && (
             <div className="flex items-center justify-center gap-2 py-3 text-xs text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin text-primary" />

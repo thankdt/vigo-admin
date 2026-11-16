@@ -88,7 +88,7 @@ export function MultiSelectComboBox({
             className={cn("w-full justify-between h-auto min-h-10", className)}
             disabled={disabled}
         >
-            <div className="flex flex-wrap gap-1">
+            <div className="flex min-w-0 flex-1 flex-wrap gap-1 text-left">
                 {selectedLabels.length > 0 ? (
                     selectedLabels.map((label) => (
                     <Badge
@@ -100,13 +100,13 @@ export function MultiSelectComboBox({
                     </Badge>
                     ))
                 ) : (
-                    <span className="text-muted-foreground">{placeholder}</span>
+                    <span className="truncate text-muted-foreground">{placeholder}</span>
                 )}
             </div>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent className="flex w-[--radix-popover-trigger-width] min-w-[min(14rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-0">
         <Command filter={vietnameseInsensitiveFilter}>
           <CommandInput
             placeholder={searchPlaceholder}
@@ -125,7 +125,7 @@ export function MultiSelectComboBox({
                     {option.options.map((subOption) => (
                       <CommandItem
                         key={subOption.value}
-                        value={subOption.label}
+                        value={`${subOption.label}__${subOption.value}`}
                         onSelect={() => handleSelect(subOption.value)}
                       >
                         <Check

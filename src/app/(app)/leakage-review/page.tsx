@@ -116,14 +116,15 @@ export default function LeakageReviewPage() {
             </SelectContent>
           </Select>
           {driverUserId && (
-            <Badge variant="secondary" className="w-fit gap-1">
+            <Badge variant="secondary" className="w-fit gap-1 pr-1">
               Tài xế: {driverLabel}
               <button
                 type="button"
                 aria-label="Bỏ lọc theo tài xế"
+                className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-muted-foreground/20 [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:h-7 [@media(pointer:coarse)]:w-7"
                 onClick={() => { setDriverUserId(null); setDriverLabel(''); }}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           )}

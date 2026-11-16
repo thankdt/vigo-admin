@@ -146,7 +146,7 @@ export function TicketDetailDialog({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+      <DialogContent className="max-h-[85dvh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {loading ? 'Đang tải…' : `Ticket ${ticket?.code ?? ''}`}
@@ -229,7 +229,7 @@ export function TicketDetailDialog({
               <div className="flex flex-wrap items-center gap-2">
                 <Input
                   id="tk-amount"
-                  className="w-[180px]"
+                  className="w-full sm:w-[180px]"
                   inputMode="numeric"
                   placeholder="Số tiền (đ)"
                   value={amount}

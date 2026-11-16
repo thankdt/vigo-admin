@@ -50,7 +50,7 @@ function StatCard({
     <Card>
       <CardHeader className="pb-2">
         <CardDescription>{title}</CardDescription>
-        <CardTitle className="text-3xl">{value}</CardTitle>
+        <CardTitle className="text-xl sm:text-3xl break-words tabular-nums">{value}</CardTitle>
       </CardHeader>
       {hint ? <CardContent className="pt-0 text-xs text-muted-foreground">{hint}</CardContent> : null}
     </Card>
@@ -165,7 +165,7 @@ export default function AcquisitionPage() {
             {/* GA4 acquisition by channel. */}
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-base">Kênh (Google Analytics)</CardTitle>
                   {data.ga4.available ? (
                     <Badge variant="secondary">GA4</Badge>
@@ -225,7 +225,7 @@ export default function AcquisitionPage() {
             {/* Meta paid ads. */}
             <Card>
               <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <CardTitle className="text-base">Quảng cáo Meta</CardTitle>
                   {data.meta.available ? (
                     <Badge variant="secondary">Meta Ads</Badge>
@@ -242,22 +242,22 @@ export default function AcquisitionPage() {
                   </div>
                 ) : (
                   <>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="rounded-lg border p-3">
+                    <div className="grid grid-cols-1 gap-3 min-[380px]:grid-cols-2">
+                      <div className="min-w-0 rounded-lg border p-3">
                         <div className="text-xs text-muted-foreground">Lượt đăng ký</div>
-                        <div className="text-2xl font-bold">{fmt(data.meta.registrations)}</div>
+                        <div className="text-lg sm:text-2xl font-bold break-words tabular-nums">{fmt(data.meta.registrations)}</div>
                       </div>
-                      <div className="rounded-lg border p-3">
+                      <div className="min-w-0 rounded-lg border p-3">
                         <div className="text-xs text-muted-foreground">Chi phí</div>
-                        <div className="text-2xl font-bold">{fmtMoney(data.meta.spend)}</div>
+                        <div className="text-lg sm:text-2xl font-bold break-words tabular-nums">{fmtMoney(data.meta.spend)}</div>
                       </div>
-                      <div className="rounded-lg border p-3">
+                      <div className="min-w-0 rounded-lg border p-3">
                         <div className="text-xs text-muted-foreground">Lượt nhấn</div>
-                        <div className="text-lg font-semibold">{fmt(data.meta.clicks)}</div>
+                        <div className="text-base sm:text-lg font-semibold break-words tabular-nums">{fmt(data.meta.clicks)}</div>
                       </div>
-                      <div className="rounded-lg border p-3">
+                      <div className="min-w-0 rounded-lg border p-3">
                         <div className="text-xs text-muted-foreground">Hiển thị</div>
-                        <div className="text-lg font-semibold">{fmt(data.meta.impressions)}</div>
+                        <div className="text-base sm:text-lg font-semibold break-words tabular-nums">{fmt(data.meta.impressions)}</div>
                       </div>
                     </div>
                     {data.meta.campaigns.length > 0 && (

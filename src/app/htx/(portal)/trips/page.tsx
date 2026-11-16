@@ -229,7 +229,7 @@ export default function HtxTripsPage() {
           </TableBody>
         </Table>
 
-        <div className="flex items-center justify-between border-t px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Hiển thị</span>
             <Select

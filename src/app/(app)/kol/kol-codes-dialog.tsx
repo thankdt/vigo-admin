@@ -18,8 +18,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -211,7 +221,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Mã ưu đãi — {userLabel}</DialogTitle>
           <DialogDescription>
@@ -220,7 +230,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
         </DialogHeader>
 
         {/* Tạo / sửa mã */}
-        <div className="grid grid-cols-2 gap-3 rounded-md border p-3 sm:grid-cols-5">
+        <div className="grid grid-cols-1 gap-3 rounded-md border p-3 min-[420px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
           <div className="space-y-1">
             <Label className="text-xs">Mã {editingId ? '(không đổi được)' : '(trống = tự sinh)'}</Label>
             <Input
@@ -265,7 +275,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
               onChange={(e) => setForm((f) => ({ ...f, campaignName: e.target.value }))}
             />
           </div>
-          <div className="col-span-2 flex items-end gap-2 sm:col-span-5">
+          <div className="flex items-end gap-2 min-[420px]:col-span-2 sm:col-span-3 lg:col-span-5">
             {editingId && (
               <Button variant="outline" onClick={cancelEdit} disabled={saving} className="ml-auto">
                 <X className="mr-2 h-4 w-4" />
@@ -286,7 +296,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
         </div>
 
         {/* Danh sách mã */}
-        <div className="max-h-[45vh] overflow-auto">
+        <div>
           {loading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground">
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Đang tải…
@@ -303,7 +313,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                   <TableHead className="text-right">/ngày</TableHead>
                   <TableHead>Chiến dịch</TableHead>
                   <TableHead>Bật</TableHead>
-                  <TableHead className="text-right">Thao tác</TableHead>
+                  <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'bg-background text-right')}>Thao tác</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -325,35 +335,40 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                           aria-label={r.isActive ? 'Tắt mã' : 'Bật mã'}
                         />
                       </TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8"
-                          title="Báo cáo"
-                          disabled={busyId === r.id}
-                          onClick={() => toggleReport(r)}
-                        >
-                          <BarChart3 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8"
-                          title="Sửa mã"
-                          onClick={() => startEdit(r)}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-8 text-destructive"
-                          title="Xoá mã (chỉ mã chưa dùng)"
-                          onClick={() => setDeleting(r)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'bg-background text-right whitespace-nowrap')}>
+                        <div className="inline-flex items-center justify-end gap-0.5">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            title="Báo cáo"
+                            aria-label={`Báo cáo mã ${r.code}`}
+                            disabled={busyId === r.id}
+                            onClick={() => toggleReport(r)}
+                          >
+                            <BarChart3 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8"
+                            title="Sửa mã"
+                            aria-label={`Sửa mã ${r.code}`}
+                            onClick={() => startEdit(r)}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-8 w-8 text-destructive"
+                            title="Xoá mã (chỉ mã chưa dùng)"
+                            aria-label={`Xoá mã ${r.code}`}
+                            onClick={() => setDeleting(r)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                     {reports[r.id] && (

@@ -727,17 +727,17 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+      <DialogContent className="sm:max-w-lg max-h-[90dvh] overflow-y-auto" onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
         <DialogHeader>
-          <div className="flex items-start justify-between gap-2 pr-6">
-            <div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
               <DialogTitle>Chi tiết chuyến đi</DialogTitle>
-              <DialogDescription>
+              <DialogDescription className="break-all">
                 Mã chuyến: {bookingId}
               </DialogDescription>
             </div>
             {booking && (
-              <div className="flex items-center gap-1.5 shrink-0">
+              <div className="flex flex-wrap items-center gap-1.5 shrink-0">
                 <Button
                   type="button"
                   variant="outline"
@@ -1146,7 +1146,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="shrink-0 text-xs text-muted-foreground">Lý do:</span>
                         <Select value={callReason} onValueChange={setCallReason} disabled={!!callSaving}>
-                          <SelectTrigger className="h-8 w-[240px] text-sm">
+                          <SelectTrigger className="h-8 min-w-0 flex-1 sm:w-[240px] sm:flex-none text-sm">
                             <SelectValue placeholder="Chọn lý do (không bắt buộc)" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1171,7 +1171,6 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                         onChange={(e) => setCallNote(e.target.value)}
                         placeholder="Ghi chú cuộc gọi cho admin khác (vd: khách xác nhận đúng địa chỉ)..."
                         rows={2}
-                        className="text-sm"
                         disabled={!!callSaving}
                       />
                       <div className="flex flex-wrap gap-2">
@@ -1324,12 +1323,17 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                 {copiedPass ? 'Đã copy' : 'Copy pass chuyến'}
               </Button>
             </div>
-            {onDuplicate && (
-              <Button variant="outline" onClick={() => onDuplicate(booking)}>
-                <CopyPlus className="mr-2 h-4 w-4" />
-                Nhân bản chuyến
+            <div className="flex items-center gap-2 flex-wrap">
+              {onDuplicate && (
+                <Button variant="outline" onClick={() => onDuplicate(booking)}>
+                  <CopyPlus className="mr-2 h-4 w-4" />
+                  Nhân bản chuyến
+                </Button>
+              )}
+              <Button type="button" variant="outline" onClick={onClose}>
+                Đóng
               </Button>
-            )}
+            </div>
           </DialogFooter>
         )}
       </DialogContent>

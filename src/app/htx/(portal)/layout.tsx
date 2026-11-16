@@ -12,6 +12,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
+  SidebarTrigger,
 } from '@/components/ui/sidebar';
 import { LayoutDashboard, LogOut, Car, Route } from 'lucide-react';
 import React from 'react';
@@ -93,7 +94,15 @@ export default function HtxPortalLayout({ children }: { children: React.ReactNod
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <div className="p-6 max-w-7xl mx-auto w-full">{children}</div>
+        <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/95 px-3 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+          <SidebarTrigger aria-label="Mở menu điều hướng HTX" />
+          <Link href="/htx/dashboard" className="flex items-center gap-1.5 font-semibold text-foreground">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/vigo-wordmark.png" alt="ViiGO" className="h-5 w-auto" />
+            <span className="text-base">HTX</span>
+          </Link>
+        </header>
+        <div className="mx-auto w-full max-w-7xl min-w-0 p-3 sm:p-6">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

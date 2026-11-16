@@ -36,7 +36,7 @@ export function DriverReputationDialog({
 }) {
   return (
     <Dialog open={!!driverId} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] w-[95vw] max-w-2xl overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="max-h-[90dvh] w-[95vw] max-w-2xl overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>{driverName?.trim() || 'Chi tiết tài xế'}</DialogTitle>
           <DialogDescription>

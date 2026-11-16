@@ -8,6 +8,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
 import {
   DropdownMenu,
@@ -428,14 +430,14 @@ export function TransportCompaniesTable() {
 
   return (
     <>
-      <div className="flex items-center justify-between pb-4">
+      <div className="flex flex-col gap-3 pb-4 sm:flex-row sm:items-center sm:justify-between">
         <Input
           placeholder="Tìm theo tên, chủ HTX, SĐT..."
           value={searchTerm}
           onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-          className="max-w-sm"
+          className="w-full sm:max-w-sm"
         />
-        <Button onClick={openCreateForm}>
+        <Button onClick={openCreateForm} className="w-full sm:w-auto">
           <Plus className="mr-2 h-4 w-4" />
           Thêm đơn vị
         </Button>
@@ -466,7 +468,7 @@ export function TransportCompaniesTable() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead>
+              <TableHead className={STICKY_ACTION_HEAD_CLASS}>
                 <span className="sr-only">Thao tác</span>
               </TableHead>
             </TableRow>
@@ -520,10 +522,10 @@ export function TransportCompaniesTable() {
                         : 'N/A'}
                     </span>
                   </TableCell>
-                  <TableCell onClick={(e) => e.stopPropagation()}>
+                  <TableCell className={STICKY_ACTION_CELL_CLASS} onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" className="h-8 w-8 p-0">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
                           <span className="sr-only">Mở menu</span>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
@@ -567,7 +569,7 @@ export function TransportCompaniesTable() {
         </Table>
 
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between px-4 py-4 border-t">
+        <div className="flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Hiển thị</span>
             <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
@@ -583,7 +585,7 @@ export function TransportCompaniesTable() {
             </Select>
             <span>/ {totalItems} kết quả</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
             <span className="text-sm text-muted-foreground">
               Trang {currentPage} / {totalPages}
             </span>
@@ -780,7 +782,7 @@ export function TransportCompaniesTable() {
 
       {/* Drivers-of-company dialog — click TC row to see who's in it */}
       <Dialog open={!!viewDriversCompany} onOpenChange={(open) => { if (!open) { setViewDriversCompany(null); setCompanyDrivers([]); setDriversPage(1); setCompanyStats(null); } }}>
-        <DialogContent className="sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Chi tiết đơn vị: {viewDriversCompany?.name}</DialogTitle>
           </DialogHeader>
@@ -789,7 +791,7 @@ export function TransportCompaniesTable() {
           <div className="rounded-lg border p-3 space-y-3">
             <div>
               <div className="text-xs font-medium text-muted-foreground mb-1.5">Tài xế</div>
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <StatCell label="Tổng" value={companyStats?.driverCounts.total} />
                 <StatCell label="Đã duyệt" value={companyStats?.driverCounts.approved} />
                 <StatCell label="Chờ duyệt" value={companyStats?.driverCounts.pending} />
@@ -798,10 +800,10 @@ export function TransportCompaniesTable() {
             </div>
 
             <div className="flex flex-wrap items-end gap-2 border-t pt-3">
-              <div className="grid gap-1">
+              <div className="grid gap-1 w-full sm:w-auto">
                 <Label className="text-xs">Khoảng thời gian</Label>
                 <Select value={statsPreset} onValueChange={(v) => handleStatsPreset(v as 'day' | 'month' | 'year' | 'custom')}>
-                  <SelectTrigger className="h-8 w-[140px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-9 w-full sm:h-8 sm:w-[140px]"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="day">Hôm nay</SelectItem>
                     <SelectItem value="month">Tháng này</SelectItem>
@@ -812,10 +814,10 @@ export function TransportCompaniesTable() {
               </div>
               {statsPreset === 'custom' && (
                 <>
-                  <Input type="date" className="h-8 w-[150px]" value={statsFrom} onChange={(e) => setStatsFrom(e.target.value)} />
+                  <Input type="date" className="h-9 min-w-0 flex-1 sm:h-8 sm:w-[150px] sm:flex-none" value={statsFrom} onChange={(e) => setStatsFrom(e.target.value)} />
                   <span className="pb-2 text-muted-foreground">→</span>
-                  <Input type="date" className="h-8 w-[150px]" value={statsTo} onChange={(e) => setStatsTo(e.target.value)} />
-                  <Button size="sm" className="h-8" onClick={applyCustomRange} disabled={!statsFrom || !statsTo || statsLoading}>Áp dụng</Button>
+                  <Input type="date" className="h-9 min-w-0 flex-1 sm:h-8 sm:w-[150px] sm:flex-none" value={statsTo} onChange={(e) => setStatsTo(e.target.value)} />
+                  <Button size="sm" className="h-9 sm:h-8" onClick={applyCustomRange} disabled={!statsFrom || !statsTo || statsLoading}>Áp dụng</Button>
                 </>
               )}
               {statsLoading && <Loader2 className="mb-1.5 h-4 w-4 animate-spin text-muted-foreground" />}
@@ -823,7 +825,7 @@ export function TransportCompaniesTable() {
 
             <div>
               <div className="text-xs font-medium text-muted-foreground mb-1.5">Chuyến xe</div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 gap-2 min-[400px]:grid-cols-3">
                 <StatCell label="Tổng cuốc" value={companyStats?.totalTripCount} />
                 <StatCell label="Thành công" value={companyStats?.ticketCount} />
                 <StatCell label="Hủy" value={companyStats?.cancelledTripCount} />
@@ -859,7 +861,7 @@ export function TransportCompaniesTable() {
               Tải Excel
             </Button>
           </div>
-          <div className="max-h-[40vh] overflow-y-auto">
+          <div>
             {companyDriversLoading && companyDrivers.length === 0 ? (
               <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
             ) : companyDrivers.length === 0 ? (
@@ -902,7 +904,7 @@ export function TransportCompaniesTable() {
             )}
           </div>
           {driversTotalPages > 1 && (
-            <div className="flex items-center justify-between border-t pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t pt-3">
               <span className="text-sm text-muted-foreground">
                 Trang {driversPage} / {driversTotalPages} · {driversTotal} tài xế
               </span>

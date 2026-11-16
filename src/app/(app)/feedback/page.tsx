@@ -85,7 +85,7 @@ export default function FeedbackPage() {
         <p className="text-muted-foreground">Danh sách góp ý từ tài xế.</p>
       </div>
 
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap sm:items-center">
         <Select
           value={category}
           onValueChange={(v) => {
@@ -93,7 +93,7 @@ export default function FeedbackPage() {
             setPage(1);
           }}
         >
-          <SelectTrigger className="w-[200px]">
+          <SelectTrigger className="w-full sm:w-[200px]">
             <SelectValue placeholder="Loại góp ý" />
           </SelectTrigger>
           <SelectContent>
@@ -103,7 +103,7 @@ export default function FeedbackPage() {
             ))}
           </SelectContent>
         </Select>
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Tìm SĐT tài xế"
@@ -112,29 +112,31 @@ export default function FeedbackPage() {
               setPhone(e.target.value);
               setPage(1);
             }}
-            className="max-w-xs pl-8"
+            className="w-full pl-8 sm:max-w-xs"
           />
         </div>
-        <Input
-          type="date"
-          value={from}
-          onChange={(e) => {
-            setFrom(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Từ ngày"
-          className="w-[180px]"
-        />
-        <Input
-          type="date"
-          value={to}
-          onChange={(e) => {
-            setTo(e.target.value);
-            setPage(1);
-          }}
-          placeholder="Đến ngày"
-          className="w-[180px]"
-        />
+        <div className="grid grid-cols-2 gap-2 sm:contents">
+          <Input
+            type="date"
+            value={from}
+            onChange={(e) => {
+              setFrom(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Từ ngày"
+            className="w-full sm:w-[170px]"
+          />
+          <Input
+            type="date"
+            value={to}
+            onChange={(e) => {
+              setTo(e.target.value);
+              setPage(1);
+            }}
+            placeholder="Đến ngày"
+            className="w-full sm:w-[170px]"
+          />
+        </div>
       </div>
 
       <Card>
@@ -196,11 +198,11 @@ export default function FeedbackPage() {
         </Table>
       </Card>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
           Hiển thị {feedbacks.length} / {totalItems} kết quả
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 sm:justify-end">
           <Select
             value={pageSize.toString()}
             onValueChange={(v) => {

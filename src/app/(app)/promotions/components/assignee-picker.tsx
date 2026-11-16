@@ -98,10 +98,10 @@ export function AssigneePicker({
               <button
                 type="button"
                 aria-label={`Bỏ ${c.phone}`}
-                className="ml-1 rounded-sm hover:text-destructive"
+                className="ml-0.5 inline-flex h-5 w-5 items-center justify-center rounded-sm hover:text-destructive [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:h-7 [@media(pointer:coarse)]:w-7"
                 onClick={() => onChange(value.filter((v) => v.id !== c.id))}
               >
-                <X className="h-3 w-3" />
+                <X className="h-3.5 w-3.5" />
               </button>
             </Badge>
           ))}

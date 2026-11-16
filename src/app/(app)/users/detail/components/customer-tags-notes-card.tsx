@@ -165,18 +165,18 @@ export function CustomerTagsNotesCard({ userId }: { userId: string }) {
                         aria-label={`Gỡ nhãn ${t.tag}`}
                         disabled={busy}
                         onClick={() => handleRemoveTag(t.id)}
-                        className="rounded-full p-0.5 hover:bg-muted-foreground/20"
+                        className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-muted-foreground/20 [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:h-7 [@media(pointer:coarse)]:w-7"
                       >
-                        <X className="h-3 w-3" />
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </Badge>
                   ))
                 )}
               </div>
 
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <Select value={pickedTag} onValueChange={setPickedTag}>
-                  <SelectTrigger className="h-9 w-[220px]" aria-label="Chọn nhãn">
+                  <SelectTrigger className="h-9 min-w-0 flex-1 sm:w-[220px] sm:flex-none" aria-label="Chọn nhãn">
                     <SelectValue placeholder="Chọn nhãn…" />
                   </SelectTrigger>
                   <SelectContent>

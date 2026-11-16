@@ -267,11 +267,11 @@ export function DriverTeamDrawer({
 
   return (
     <Sheet open={!!driverId} onOpenChange={(o) => !o && onClose()}>
-      <SheetContent className="w-full overflow-y-auto sm:max-w-xl">
-        <SheetHeader>
+      <SheetContent className="flex w-full flex-col gap-0 overflow-hidden p-0 sm:max-w-xl">
+        <SheetHeader className="shrink-0 border-b py-3.5 pl-4 pr-14 sm:py-4 sm:pl-6 sm:pr-14">
           <SheetTitle>{driver?.fullName ?? 'Chi tiết tài xế'}</SheetTitle>
           <p className="text-sm text-muted-foreground">
-            <a href={`tel:${driver?.phone ?? ''}`} className="hover:underline">
+            <a href={`tel:${driver?.phone ?? ''}`} className="inline-flex items-center py-0.5 hover:underline">
               {driver?.phone ?? '—'}
             </a>
             {driver?.transportCompanyName ? ` · ${driver.transportCompanyName}` : ''}
@@ -279,12 +279,13 @@ export function DriverTeamDrawer({
           {warn ? <Badge className="w-fit bg-red-100 text-red-800">{warn}</Badge> : null}
         </SheetHeader>
 
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4 sm:px-6">
         {loading || !detail ? (
           <div className="flex justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin" />
           </div>
         ) : (
-          <div className="space-y-6 py-4">
+          <div className="space-y-6">
             {/* 1. Pipeline */}
             <section className="space-y-3">
               <h3 className="text-sm font-medium">Pipeline tuyển team</h3>
@@ -316,7 +317,7 @@ export function DriverTeamDrawer({
                   <Label className="text-xs text-muted-foreground">% hoa hồng riêng</Label>
                   {me?.isSuperAdmin ? (
                     <div className="space-y-2">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Input
                           type="number"
                           min={0}
@@ -430,9 +431,9 @@ export function DriverTeamDrawer({
                             aria-label={`Gỡ ${unknownProvinceCodeLabel(code)} (ngoài danh mục)`}
                             disabled={provincesSaving}
                             onClick={() => void saveProvinces(assignedInCatalog)}
-                            className="rounded-full p-0.5 hover:bg-amber-200 disabled:opacity-50"
+                            className="inline-flex h-5 w-5 items-center justify-center rounded-full hover:bg-amber-200 disabled:opacity-50 [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:h-7 [@media(pointer:coarse)]:w-7"
                           >
-                            <X className="h-3 w-3" />
+                            <X className="h-3.5 w-3.5" />
                           </button>
                         </Badge>
                       ))}
@@ -528,13 +529,14 @@ export function DriverTeamDrawer({
             {/* 4. Nhật ký riêng */}
             <section className="space-y-2">
               <h3 className="text-sm font-medium">Nhật ký chăm sóc (riêng tư)</h3>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Input
+                  className="min-w-0 flex-1"
                   value={callNote}
                   onChange={(e) => setCallNote(e.target.value)}
                   placeholder="Nội dung cuộc gọi"
                 />
-                <Button onClick={() => void logCall()}>Ghi nhận gọi</Button>
+                <Button className="shrink-0" onClick={() => void logCall()}>Ghi nhận gọi</Button>
               </div>
               {detail.events.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Chưa có hoạt động nào.</p>
@@ -569,6 +571,7 @@ export function DriverTeamDrawer({
             </section>
           </div>
         )}
+        </div>
       </SheetContent>
     </Sheet>
   );

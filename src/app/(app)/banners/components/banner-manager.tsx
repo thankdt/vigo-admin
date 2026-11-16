@@ -2,7 +2,17 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+    STICKY_ACTION_HEAD_CLASS,
+    STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { getBanners, createBanner, updateBanner, deleteBanner, getPresignedUrl, uploadToS3, API_BASE_URL } from '@/lib/api';
 import type { Banner } from '@/lib/types';
@@ -89,7 +99,7 @@ export function BannerManager() {
                     <CardDescription>Quản lý các banner quảng cáo hiển thị trong ứng dụng.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                         <Button variant="outline" size="sm" onClick={() => fetchBanners()}>Làm mới</Button>
                         {banners.length > itemsPerPage && (
                             <div className="space-x-2">
@@ -119,7 +129,7 @@ export function BannerManager() {
                                 <TableHead>Hình ảnh</TableHead>
                                 <TableHead>Ưu tiên</TableHead>
                                 <TableHead>Trạng thái</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -157,11 +167,11 @@ export function BannerManager() {
                                                 {banner.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                            <Button variant="ghost" size="icon" onClick={() => handleOpenForm(banner)}>
+                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(banner)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeletingBanner(banner)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeletingBanner(banner)}>
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TableCell>

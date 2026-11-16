@@ -7,7 +7,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -184,7 +193,7 @@ export function WardGroupsManager() {
             <ArrowUpDown className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" aria-hidden />
             <select
               aria-label="Sắp xếp nhóm xã"
-              className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
+              className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-xs [@media(pointer:coarse)]:text-base text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
               value={sortChoice}
               onChange={(e) => setSortChoice(e.target.value as GroupSortChoice)}
             >
@@ -229,7 +238,7 @@ export function WardGroupsManager() {
                 </button>
               </TableHead>
               <TableHead>Ghi chú</TableHead>
-              <TableHead className="w-24 text-right">Thao tác</TableHead>
+              <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'w-24 text-right')}>Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -264,10 +273,11 @@ export function WardGroupsManager() {
                   </TableCell>
                   <TableCell>{g.wardCount}</TableCell>
                   <TableCell className="text-xs text-slate-600">{g.note ?? ''}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       aria-label={`Sửa nhóm ${g.name}`}
                       onClick={() => {
                         setEditing(g);
@@ -279,6 +289,7 @@ export function WardGroupsManager() {
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       aria-label={`Xoá nhóm ${g.name}`}
                       onClick={() => setDeleting(g)}
                     >
@@ -445,7 +456,7 @@ function WardGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={(o) => !saving && onOpenChange(o)}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{group ? 'Sửa nhóm xã' : 'Thêm nhóm xã'}</DialogTitle>
           <DialogDescription className="text-xs">
@@ -546,7 +557,7 @@ function WardGroupDialog({
                 <button
                   type="button"
                   aria-label={`Nhóm xã: bỏ ${e.label}`}
-                  className="rounded hover:bg-slate-300/60"
+                  className="inline-flex h-4 w-4 items-center justify-center rounded hover:bg-slate-300/60 [@media(pointer:coarse)]:-my-0.5 [@media(pointer:coarse)]:h-6 [@media(pointer:coarse)]:w-6"
                   onClick={() => setItems((cur) => removeEndpoint(cur, endpointKey(e)))}
                 >
                   <X className="h-3 w-3" />

@@ -818,7 +818,7 @@ export function CreateBookingDialog({
               <User className="h-4 w-4" />
               Thông tin khách hàng
             </h4>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <Label htmlFor="cb-phone">SĐT khách <span className="text-destructive">*</span></Label>
                 <div className="flex gap-2">
@@ -938,7 +938,7 @@ export function CreateBookingDialog({
           </div>
 
           {/* Service & Vehicle */}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Loại dịch vụ</Label>
               <Select value={serviceType} onValueChange={(v) => { setServiceType(v as any); clearEstimate(); }}>

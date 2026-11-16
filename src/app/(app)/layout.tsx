@@ -15,6 +15,8 @@ import {
   SidebarGroupLabel,
   SidebarGroupContent,
   SidebarInset,
+  SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { RadixPointerEventsWatchdog } from '@/components/radix-pointer-events-watchdog';
 import { ShieldCheck } from 'lucide-react';
@@ -139,11 +141,12 @@ function AppShell({ children }: { children: React.ReactNode }) {
   const routeAllowed = isRouteAllowed(pathname, me);
 
   return (
-    <SidebarProvider>
+    <SidebarProvider mobileBreakpoint={1024}>
+      <MobileDrawerAutoClose pathname={pathname} />
       <RadixPointerEventsWatchdog />
-      <Sidebar>
-        <SidebarHeader className="p-4">
-          <Link href="/dashboard" className="flex items-center gap-2">
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
+          <Link href="/dashboard" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             {/* Wordmark ViiGO (đỏ) + "Admin" khi sidebar mở; icon vuông đỏ khi thu gọn (rail). */}
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/vigo-wordmark.png" alt="ViiGO" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
@@ -179,7 +182,7 @@ function AppShell({ children }: { children: React.ReactNode }) {
             </SidebarGroup>
           ))}
         </SidebarContent>
-        <SidebarFooter className="p-4">
+        <SidebarFooter className="p-4 group-data-[collapsible=icon]:p-2">
           <SidebarIdentity
             fullName={me?.fullName ?? null}
             phone={me?.phone ?? null}
@@ -189,13 +192,22 @@ function AppShell({ children }: { children: React.ReactNode }) {
             }}
           />
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
       <SidebarInset>
         <Header />
-        <main className="flex-1 p-4 sm:px-6 sm:py-0">
+        <div className="flex-1 min-w-0 p-3 sm:p-4 lg:p-6">
           <ErrorBoundary>{routeAllowed ? children : null}</ErrorBoundary>
-        </main>
+        </div>
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+function MobileDrawerAutoClose({ pathname }: { pathname: string }) {
+  const { setOpenMobile } = useSidebar();
+  React.useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+  return null;
 }

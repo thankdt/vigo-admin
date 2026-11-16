@@ -15,7 +15,17 @@ import {
   Search,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -360,7 +370,7 @@ export default function InvoicesPage() {
               <TableHead>Tên DVVT</TableHead>
               <TableHead>Xuất hoá đơn</TableHead>
               <TableHead className="min-w-[220px]">HĐĐT MISA</TableHead>
-              <TableHead className="text-center whitespace-nowrap">Hợp đồng</TableHead>
+              <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-center whitespace-nowrap')}>Hợp đồng</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -513,10 +523,11 @@ export default function InvoicesPage() {
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center align-top">
+                    <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-center align-top')}>
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         title="Tải hợp đồng"
                         aria-label="Tải hợp đồng"
                         onClick={() => downloadContract(trip.id)}
@@ -536,7 +547,7 @@ export default function InvoicesPage() {
           </TableBody>
         </Table>
 
-        <div className="flex flex-col gap-3 border-t px-4 py-4 md:flex-row md:items-center md:justify-between">
+        <div className="flex flex-col gap-3 border-t px-3 py-3 sm:px-4 sm:py-4 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Hiển thị</span>
             <Select value={String(pageSize)} onValueChange={(value) => setPageSize(Number(value))}>
@@ -550,7 +561,7 @@ export default function InvoicesPage() {
             </Select>
             <span>/ {total} kết quả</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 md:justify-end">
             <span className="text-sm text-muted-foreground">Trang {page} / {totalPages}</span>
             <div className="flex items-center gap-1">
               <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setPage(1)} disabled={page <= 1 || isLoading}>

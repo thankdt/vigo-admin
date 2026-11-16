@@ -42,13 +42,13 @@ type StatProps = {
 function Stat({ icon, label, value, hint, accent, onSelect, selected }: StatProps) {
   const card = (
     <Card className={`h-full ${onSelect ? 'transition-shadow group-hover:shadow-md' : ''} ${selected ? 'border-primary ring-1 ring-primary' : ''}`}>
-      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-        <CardTitle className="text-sm font-medium text-muted-foreground">{label}</CardTitle>
-        <div className={selected ? 'text-primary' : 'text-muted-foreground'}>{icon}</div>
+      <CardHeader className="p-3.5 pb-1.5 sm:p-6 sm:pb-2 flex flex-row items-start justify-between gap-2 space-y-0">
+        <CardTitle className="text-xs sm:text-sm font-medium leading-snug text-muted-foreground">{label}</CardTitle>
+        <div className={`shrink-0 ${selected ? 'text-primary' : 'text-muted-foreground'}`}>{icon}</div>
       </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold ${accent ?? ''}`}>{value}</div>
-        {hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
+      <CardContent className="p-3.5 pt-0 sm:p-6 sm:pt-0">
+        <div className={`text-lg sm:text-2xl font-bold break-words tabular-nums ${accent ?? ''}`}>{value}</div>
+        {hint && <p className="text-[11px] sm:text-xs text-muted-foreground mt-1">{hint}</p>}
       </CardContent>
     </Card>
   );
@@ -161,19 +161,19 @@ export default function DashboardPage() {
         <>
           {/* A — Vận hành hiện tại: số tức thời, KHÔNG đổi theo bộ lọc ngày, tự làm mới mỗi phút. */}
           <SectionTitle>Vận hành (hiện tại)</SectionTitle>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <Stat icon={<Activity className="h-5 w-5" />} label="Chuyến đang chạy" value={fmtNum(ov.realtime.activeTrips)} hint="ACCEPTED / ARRIVED / PICKED_UP" />
             <Stat icon={<Wifi className="h-5 w-5" />} label="Tài xế online" value={fmtNum(ov.realtime.onlineDrivers)} hint={`${ov.realtime.busyDrivers} đang bận`} accent="text-green-600 dark:text-green-400" />
             <Stat icon={<Car className="h-5 w-5" />} label="Tài xế đang bận" value={fmtNum(ov.realtime.busyDrivers)} hint="Đang trên chuyến" />
             <Link href="/drivers" className="block rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
               <Card className={`h-full transition-shadow hover:shadow-md ${pendingDrivers > 0 ? 'border-amber-400 dark:border-amber-600' : ''}`}>
-                <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                  <CardTitle className="text-sm font-medium text-muted-foreground">Tài xế chờ duyệt</CardTitle>
-                  <div className={pendingDrivers > 0 ? 'text-amber-500' : 'text-muted-foreground'}><UserPlus className="h-5 w-5" /></div>
+                <CardHeader className="p-3.5 pb-1.5 sm:p-6 sm:pb-2 flex flex-row items-start justify-between gap-2 space-y-0">
+                  <CardTitle className="text-xs sm:text-sm font-medium leading-snug text-muted-foreground">Tài xế chờ duyệt</CardTitle>
+                  <div className={`shrink-0 ${pendingDrivers > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}><UserPlus className="h-5 w-5" /></div>
                 </CardHeader>
-                <CardContent>
-                  <div className={`text-2xl font-bold ${pendingDrivers > 0 ? 'text-amber-600 dark:text-amber-500' : ''}`}>{fmtNum(pendingDrivers)}</div>
-                  <p className="text-xs text-muted-foreground mt-1 flex items-center gap-0.5">Xem danh sách <ChevronRight className="h-3 w-3" /></p>
+                <CardContent className="p-3.5 pt-0 sm:p-6 sm:pt-0">
+                  <div className={`text-lg sm:text-2xl font-bold tabular-nums ${pendingDrivers > 0 ? 'text-amber-600 dark:text-amber-500' : ''}`}>{fmtNum(pendingDrivers)}</div>
+                  <p className="text-[11px] sm:text-xs text-muted-foreground mt-1 flex items-center gap-0.5">Xem danh sách <ChevronRight className="h-3 w-3" /></p>
                 </CardContent>
               </Card>
             </Link>

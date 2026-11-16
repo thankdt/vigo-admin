@@ -13,7 +13,17 @@ import {
 } from '@/lib/api';
 import type { ScheduledNotification, NotificationAudience } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+    STICKY_ACTION_HEAD_CLASS,
+    STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -200,7 +210,7 @@ function NotificationForm({ onSaveSuccess, onCancel }: { onSaveSuccess: () => vo
                 <DialogTitle>Tạo thông báo</DialogTitle>
                 <DialogDescription>Bắn ngay hoặc hẹn lịch thông báo đẩy.</DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4 max-h-[70vh] overflow-y-auto p-1">
+            <div className="space-y-4 py-4">
                 <div className="space-y-2">
                     <Label htmlFor="title">Tiêu đề</Label>
                     <Input id="title" {...register('title')} placeholder="Tiêu đề thông báo" />
@@ -651,7 +661,7 @@ export function NotificationsManager() {
                                 <TableHead>Lịch / Cron</TableHead>
                                 <TableHead>Trạng thái</TableHead>
                                 <TableHead>Ngày tạo</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -691,7 +701,7 @@ export function NotificationsManager() {
                                         <TableCell className="text-xs text-muted-foreground">
                                             {formatVn(notif.createdAt)}
                                         </TableCell>
-                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

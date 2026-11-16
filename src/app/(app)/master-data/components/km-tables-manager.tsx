@@ -2,8 +2,18 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -149,20 +159,21 @@ export function KmTablesManager() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-12">#</TableHead>
+                    <TableHead className="w-10">#</TableHead>
                     <TableHead>Đến (km)</TableHead>
                     <TableHead>Giá tại mốc (đ)</TableHead>
-                    <TableHead className="w-12" />
+                    <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'w-12 text-right')} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {t.points.map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell>{i + 1}</TableCell>
+                      <TableCell className="tabular-nums">{i + 1}</TableCell>
                       <TableCell>
                         <Input
                           type="number"
                           inputMode="decimal"
+                          className="min-w-[5.5rem]"
                           aria-label={`${type} mốc ${i + 1} km`}
                           value={show(p.km)}
                           // Nhập xong km thì dòng tự vào đúng chỗ (thêm mốc ở giữa không phải dịch lại các dòng sau).
@@ -179,6 +190,7 @@ export function KmTablesManager() {
                         <Input
                           type="number"
                           inputMode="numeric"
+                          className="min-w-[7.5rem]"
                           aria-label={`${type} mốc ${i + 1} giá`}
                           value={show(p.price)}
                           onChange={(e) =>
@@ -189,10 +201,11 @@ export function KmTablesManager() {
                           }
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-8 w-8"
                           aria-label={`Xoá mốc ${i + 1} của ${type}`}
                           disabled={t.points.length <= 2}
                           onClick={() => update(type, (tb) => ({ ...tb, points: tb.points.filter((_, j) => j !== i) }))}

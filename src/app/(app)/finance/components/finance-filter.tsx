@@ -112,14 +112,14 @@ export function FinanceFilter({
         )}
       </div>
       {showCustom && (
-        <div className="flex flex-wrap items-end gap-3">
+        <div className="grid grid-cols-2 items-end gap-2 sm:flex sm:flex-wrap sm:gap-3">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">Từ</Label>
             <Input
               type="date"
               value={value.from}
               onChange={(e) => handleCustom('from', e.target.value)}
-              className="w-44"
+              className="w-full sm:w-44"
               disabled={isLoading}
             />
           </div>
@@ -129,7 +129,7 @@ export function FinanceFilter({
               type="date"
               value={value.to}
               onChange={(e) => handleCustom('to', e.target.value)}
-              className="w-44"
+              className="w-full sm:w-44"
               disabled={isLoading}
             />
           </div>

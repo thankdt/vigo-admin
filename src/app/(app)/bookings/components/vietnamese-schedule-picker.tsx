@@ -178,7 +178,7 @@ export function VietnameseSchedulePicker({
         </label>
 
         {/* Quick Day Chips */}
-        <div className="grid grid-cols-4 gap-1.5">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
           <button
             type="button"
             onClick={() => handleDateSelect(today)}
@@ -311,7 +311,7 @@ export function VietnameseSchedulePicker({
 
       {/* 2. Khung giờ đón: Đón từ ... Đến ... */}
       <div className="space-y-1.5 pt-1">
-        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
+        <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex flex-wrap items-center justify-between gap-1">
           <span className="flex items-center gap-1.5">
             <Clock className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
             Khung giờ đón (24h) <span className="text-destructive">*</span>
@@ -321,7 +321,7 @@ export function VietnameseSchedulePicker({
           </span>
         </label>
 
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2">
           {/* Giờ đón bắt đầu */}
           <div className="rounded-lg border p-2 bg-background space-y-1">
             <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
@@ -404,7 +404,7 @@ export function VietnameseSchedulePicker({
         </div>
 
         {/* Nút nhanh chỉnh khung giờ (+30p, +45p, +1h) */}
-        <div className="flex items-center gap-1.5 pt-0.5">
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           <span className="text-[11px] text-muted-foreground">Khung đón:</span>
           {[
             { label: '+30 phút', mins: 30 },

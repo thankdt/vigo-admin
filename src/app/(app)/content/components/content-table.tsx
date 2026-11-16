@@ -1,7 +1,16 @@
 'use client';
 
 import * as React from 'react';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, ArrowUpDown } from 'lucide-react';
@@ -99,7 +108,7 @@ export function ContentTable() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead>
+              <TableHead className={STICKY_ACTION_HEAD_CLASS}>
                 <span className="sr-only">Thao tác</span>
               </TableHead>
             </TableRow>
@@ -123,10 +132,10 @@ export function ContentTable() {
                 <TableCell>{article.author}</TableCell>
                 <TableCell>{getStatusBadge(article.status)}</TableCell>
                 <TableCell>{article.createdAt}</TableCell>
-                <TableCell>
+                <TableCell className={STICKY_ACTION_CELL_CLASS}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
                         <span className="sr-only">Mở menu</span>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>

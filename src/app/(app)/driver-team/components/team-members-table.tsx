@@ -34,7 +34,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import type { DateRange } from '../../finance/components/finance-filter';
 
 const ALL = '__all__';
@@ -158,11 +161,11 @@ export function TeamMembersTable({
         ở cột &quot;Chuyến trong kỳ&quot;, KHÔNG lọc bớt người.
       </p>
 
-      <div className="flex flex-wrap items-end gap-3">
+      <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
         <div>
           <Label className="text-xs text-muted-foreground">Tài xế</Label>
           <Input
-            className="w-56"
+            className="w-full lg:w-56"
             placeholder="Tên hoặc SĐT"
             value={filters.q}
             onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
@@ -174,7 +177,7 @@ export function TeamMembersTable({
             value={filters.stage}
             onValueChange={(v) => setFilters((f) => ({ ...f, stage: v }))}
           >
-            <SelectTrigger className="w-44">
+            <SelectTrigger className="w-full lg:w-44">
               <SelectValue placeholder="Trạng thái" />
             </SelectTrigger>
             <SelectContent>
@@ -193,7 +196,7 @@ export function TeamMembersTable({
             value={filters.ownerAdminUserId}
             onValueChange={(v) => setFilters((f) => ({ ...f, ownerAdminUserId: v }))}
           >
-            <SelectTrigger className="w-52">
+            <SelectTrigger className="w-full lg:w-52">
               <SelectValue placeholder="Người phụ trách" />
             </SelectTrigger>
             <SelectContent>
@@ -206,7 +209,7 @@ export function TeamMembersTable({
             </SelectContent>
           </Select>
         </div>
-        <Button variant="outline" onClick={() => void handleExport()} disabled={exporting}>
+        <Button variant="outline" className="w-full sm:w-auto" onClick={() => void handleExport()} disabled={exporting}>
           {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
           Xuất Excel
         </Button>
@@ -221,7 +224,7 @@ export function TeamMembersTable({
           Không có tài xế nào khớp bộ lọc.
         </p>
       ) : (
-        <div className="rounded-md border">
+        <div className="rounded-md border bg-card">
           <Table>
             <TableHeader>
               <TableRow>
@@ -234,7 +237,7 @@ export function TeamMembersTable({
                 <TableHead>Ngày vào team</TableHead>
                 <TableHead className="text-right">Chuyến trong kỳ</TableHead>
                 <TableHead className="text-right">Chuyến gần nhất</TableHead>
-                <TableHead />
+                <TableHead className={STICKY_ACTION_HEAD_CLASS} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -283,7 +286,7 @@ export function TeamMembersTable({
                     </TableCell>
                     <TableCell className="text-right">{m.completedTripsInRange}</TableCell>
                     <TableCell className="text-right">{vnDay(m.lastCompletedAt)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                       <Button variant="ghost" size="sm" onClick={() => onOpenDriver(m.driverId, m)}>
                         Chi tiết
                       </Button>

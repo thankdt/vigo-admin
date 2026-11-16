@@ -8,6 +8,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
 import {
   DropdownMenu,
@@ -917,7 +919,7 @@ export function DriversTable() {
                 </TableHead>
                 <TableHead className="text-center">Đã gọi điện</TableHead>
                 <TableHead>Ghi chú</TableHead>
-                <TableHead>
+                <TableHead className={STICKY_ACTION_HEAD_CLASS}>
                   <span className="sr-only">Thao tác</span>
                 </TableHead>
               </TableRow>
@@ -950,7 +952,7 @@ export function DriversTable() {
                   return (
                   <TableRow
                     key={driver.id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="group/row cursor-pointer hover:bg-muted/50"
                     onClick={() => setViewDriver(driver)}
                   >
                     <TableCell className="font-medium">
@@ -1105,10 +1107,13 @@ export function DriversTable() {
                         }}
                       />
                     </TableCell>
-                    <TableCell onClick={(e) => e.stopPropagation()}>
+                    <TableCell
+                      className={STICKY_ACTION_CELL_CLASS}
+                      onClick={(e) => e.stopPropagation()}
+                    >
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" className="h-8 w-8 p-0">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
                             <span className="sr-only">Mở menu</span>
                             <MoreHorizontal className="h-4 w-4" />
                           </Button>
@@ -1183,23 +1188,25 @@ export function DriversTable() {
             </TableBody>
           </Table>
           {/* Pagination Controls */}
-          <div className="flex items-center justify-between px-4 py-4 border-t">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <span>Hiển thị</span>
-              <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
-                <SelectTrigger className="h-8 w-[70px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                  <SelectItem value="50">50</SelectItem>
-                  <SelectItem value="100">100</SelectItem>
-                </SelectContent>
-              </Select>
-              <span>/ {totalItems} kết quả</span>
+          <div className="flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
+            <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground sm:justify-start">
+              <div className="flex items-center gap-2">
+                <span>Hiển thị</span>
+                <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
+                  <SelectTrigger className="h-8 w-[70px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="10">10</SelectItem>
+                    <SelectItem value="20">20</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                    <SelectItem value="100">100</SelectItem>
+                  </SelectContent>
+                </Select>
+                <span>/ {totalItems} kết quả</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center justify-between gap-2 sm:justify-end">
               <span className="text-sm text-muted-foreground">
                 Trang {currentPage} / {totalPages}
               </span>
@@ -1312,7 +1319,7 @@ export function DriversTable() {
           (bản B, read-only) dùng ở trang "Đơn vị vận tải". Sửa field HIỂN THỊ ở bản này
           nhớ sửa cả bản B — đã quên 2 lần (5ffe97d: timeline CSKH; ô "Số ghế"). */}
       <Dialog open={!!viewDriver} onOpenChange={(open) => { if (!open) { setViewDriver(null); setEditingServices(null); resetDetailAction(); setEditingName(false); setEditingVehicle(false); setEditingProvinces(null); } }}>
-        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
             <DialogTitle>Chi tiết tài xế</DialogTitle>
           </DialogHeader>
@@ -1429,7 +1436,7 @@ export function DriversTable() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">ID</Label>
                   <p className="font-medium text-sm break-all">{viewDriver.id}</p>
@@ -1441,13 +1448,13 @@ export function DriversTable() {
               </div>
 
               <div className="border-t pt-4 space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <h4 className="font-semibold">Số dư ví</h4>
                   <Button size="sm" variant="outline" onClick={() => { const d = viewDriver; setViewDriver(null); setWalletDriver(d); }}>
                     <WalletIcon className="mr-2 h-4 w-4" /> Nạp / trừ tiền
                   </Button>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3">
                   <div className="rounded-md border bg-muted/40 p-3">
                     <div className="text-xs text-muted-foreground">Ví chính (cọc)</div>
                     <div className="font-semibold tabular-nums">{new Intl.NumberFormat('vi-VN').format(viewDriver.wallets?.deposit ?? 0)} đ</div>
@@ -1507,7 +1514,7 @@ export function DriversTable() {
                       </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Biển số</Label>
                       {editingVehicle ? (
@@ -1629,7 +1636,7 @@ export function DriversTable() {
               {viewDriver.vehicle && !viewDriver.vehicleRegistration && (
                 <div className="space-y-2 border-t pt-4">
                   <h4 className="font-semibold">Xe</h4>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                     <div className="space-y-1">
                       <Label className="text-xs text-muted-foreground">Biển số</Label>
                       <p className="font-medium text-sm">{viewDriver.vehicle.plateNumber}</p>
@@ -1849,7 +1856,7 @@ export function DriversTable() {
             <div className="space-y-2 border-t pt-4">
               <h4 className="font-semibold">Đơn vị vận tải</h4>
               {viewDriver.transportCompany ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Tên đơn vị</Label>
                     <p className="font-medium text-sm">{viewDriver.transportCompany.name}</p>

@@ -2,8 +2,18 @@
 
 import React from 'react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Input } from '@/components/ui/input';
@@ -216,7 +226,7 @@ export default function HtxDriversPage() {
               <TableHead>Trạng thái</TableHead>
               <TableHead>Ngày tạo</TableHead>
               <TableHead className="text-center">Hợp đồng HTX</TableHead>
-              <TableHead className="text-right">Hoạt động</TableHead>
+              <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Hoạt động</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -297,15 +307,16 @@ export default function HtxDriversPage() {
                       <span className="text-xs text-muted-foreground">Chưa nộp</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                     <div className="flex items-center justify-end gap-2">
-                      <span className={`text-xs ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
+                      <span className={`hidden text-xs sm:inline ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
                         {d.isActive ? 'Đang hoạt động' : 'Tạm dừng'}
                       </span>
                       <Switch
                         checked={d.isActive}
                         disabled={pendingId === d.id}
                         onCheckedChange={() => handleToggle(d)}
+                        aria-label={d.isActive ? `Tạm dừng ${d.fullName ?? 'tài xế'}` : `Kích hoạt ${d.fullName ?? 'tài xế'}`}
                       />
                     </div>
                   </TableCell>
@@ -315,7 +326,7 @@ export default function HtxDriversPage() {
           </TableBody>
         </Table>
 
-        <div className="flex items-center justify-between border-t px-4 py-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t px-3 py-3 sm:px-4 sm:py-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Hiển thị</span>
             <Select value={String(pageSize)} onValueChange={(v) => { setPageSize(Number(v)); setPage(1); }}>

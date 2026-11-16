@@ -2,7 +2,17 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+    STICKY_ACTION_HEAD_CLASS,
+    STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { getNews, createNews, updateNews, deleteNews, getPresignedUrl, uploadToS3, API_BASE_URL } from '@/lib/api';
 import type { News } from '@/lib/types';
@@ -102,7 +112,7 @@ export function NewsManager() {
                     <CardDescription>Quản lý tin tức và cập nhật hiển thị cho người dùng.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
                         <Button variant="outline" size="sm" onClick={() => fetchNews()}>Làm mới</Button>
                         <div className="space-x-2">
                             <Button
@@ -132,7 +142,7 @@ export function NewsManager() {
                                 <TableHead>Tiêu đề</TableHead>
                                 <TableHead>Mô tả</TableHead>
                                 <TableHead>Trạng thái</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -180,11 +190,11 @@ export function NewsManager() {
                                                 {item.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
-                                            <Button variant="ghost" size="icon" onClick={() => handleOpenForm(item)}>
+                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(item)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>
-                                            <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => setDeletingNews(item)}>
+                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeletingNews(item)}>
                                                 <Trash2 className="h-4 w-4" />
                                             </Button>
                                         </TableCell>
@@ -315,7 +325,7 @@ function NewsForm({ news, onSave, onCancel }: { news: News | null, onSave: () =>
     };
 
     return (
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[600px] max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle>{isEditing ? 'Sửa Tin tức' : 'Tạo Tin tức'}</DialogTitle>
                 <DialogDescription>{isEditing ? 'Cập nhật chi tiết tin tức.' : 'Đăng bài viết tin tức mới.'}</DialogDescription>

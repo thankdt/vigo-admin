@@ -93,7 +93,7 @@ export function CustomerTimelineCard({ userId }: { userId: string }) {
 
   return (
     <Card>
-      <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
+      <CardHeader className="flex-row flex-wrap items-center justify-between gap-2 space-y-0 pb-3">
         {/*
           🚨 NÓI RA cửa sổ 90 ngày. Backend mặc định `DEFAULT_DAYS = 90` và FE không bao
           giờ gửi `days`, nên mọi nhánh đều bị cắt ở mốc đó. Không in ra thì khách im lặng

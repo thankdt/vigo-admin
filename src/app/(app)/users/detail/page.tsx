@@ -257,8 +257,8 @@ export default function UserDetailPage() {
       </div>
 
       <Card>
-        <CardHeader className="flex flex-row items-start justify-between gap-4">
-          <div className="flex items-center gap-4">
+        <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-4 min-w-0">
             <Avatar className="h-16 w-16">
               <AvatarImage src={getImageUrl(user.avatar)} alt={user.fullName ?? user.phone} />
               <AvatarFallback>{String(user.fullName ?? user.phone ?? '?').slice(0, 2).toUpperCase()}</AvatarFallback>
@@ -543,7 +543,7 @@ function UserBookingsCard({ customerId }: { customerId: string }) {
           </Table>
         </div>
         {totalPages > 1 && (
-          <div className="mt-4 flex items-center justify-between">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs text-muted-foreground">Trang {page} / {totalPages}</div>
             <div className="flex gap-1">
               <Button size="icon" variant="outline" onClick={() => setPage(1)} disabled={page === 1}>

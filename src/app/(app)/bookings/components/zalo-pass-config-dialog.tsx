@@ -277,7 +277,7 @@ export function ZaloPassConfigDialog() {
           Cấu hình Zalo Pass
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cấu hình Pass chuyến vào Nhóm Zalo (Vizio MCP)</DialogTitle>
           <DialogDescription>
@@ -293,7 +293,7 @@ export function ZaloPassConfigDialog() {
           <div className="space-y-5 py-2">
             {/* 1. Kết nối Vizio MCP */}
             <div className="rounded-lg border p-4 space-y-3 bg-muted/20">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h4 className="text-sm font-semibold">1. Thông tin kết nối Vizio MCP</h4>
                 <Button
                   type="button"
@@ -333,7 +333,7 @@ export function ZaloPassConfigDialog() {
                     value={mcpKey}
                     onChange={(e) => setMcpKey(e.target.value)}
                     placeholder="vizio_mcp_..."
-                    className="font-mono text-xs"
+                    className="font-mono text-base [@media(hover:hover)_and_(pointer:fine)]:text-xs"
                   />
                 </div>
               </div>
@@ -347,7 +347,7 @@ export function ZaloPassConfigDialog() {
                     id="vizio-channel"
                     value={channelId}
                     onChange={(e) => setChannelId(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-base shadow-sm [@media(hover:hover)_and_(pointer:fine)]:md:text-sm"
                   >
                     <option value="">Tự động chọn kênh Zalo đang kết nối</option>
                     {channels.map((ch) => (
@@ -366,7 +366,7 @@ export function ZaloPassConfigDialog() {
                     id="vizio-default-group"
                     value={defaultGroupId}
                     onChange={(e) => handleDefaultGroupChange(e.target.value)}
-                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm"
+                    className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-base shadow-sm [@media(hover:hover)_and_(pointer:fine)]:md:text-sm"
                   >
                     <option value="">— Không gửi khi không khớp nhóm tỉnh —</option>
                     {defaultGroupId && !groups.some((g) => g.id === defaultGroupId) && (
@@ -383,8 +383,8 @@ export function ZaloPassConfigDialog() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div>
+              <div className="flex items-start justify-between gap-3 pt-2 border-t">
+                <div className="min-w-0">
                   <Label htmlFor="vizio-auto-pass" className="text-sm font-medium">
                     Tự động pass vào nhóm Zalo ngay khi có chuyến mới (chưa có tài xế)
                   </Label>
@@ -394,13 +394,14 @@ export function ZaloPassConfigDialog() {
                 </div>
                 <Switch
                   id="vizio-auto-pass"
+                  className="shrink-0"
                   checked={autoPassOnCreate}
                   onCheckedChange={setAutoPassOnCreate}
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t">
-                <div>
+              <div className="flex items-start justify-between gap-3 pt-2 border-t">
+                <div className="min-w-0">
                   <Label htmlFor="vizio-mention-all" className="text-sm font-medium">
                     Tự động tag <code>@All</code> khi gửi vào nhóm Zalo
                   </Label>
@@ -410,6 +411,7 @@ export function ZaloPassConfigDialog() {
                 </div>
                 <Switch
                   id="vizio-mention-all"
+                  className="shrink-0"
                   checked={mentionAll}
                   onCheckedChange={setMentionAll}
                 />
@@ -445,7 +447,7 @@ export function ZaloPassConfigDialog() {
                   value={provinceQuery}
                   onChange={(e) => setProvinceQuery(e.target.value)}
                   placeholder="Tìm tỉnh/thành phố hoặc tên nhóm Zalo..."
-                  className="pl-8 h-9 text-sm"
+                  className="pl-8 h-9"
                 />
               </div>
 
@@ -474,7 +476,7 @@ export function ZaloPassConfigDialog() {
                       <select
                         value={selectedId}
                         onChange={(e) => handleProvinceGroupChange(item.provinceKey, e.target.value)}
-                        className="flex h-8 w-full sm:max-w-[380px] rounded-md border border-input bg-background px-2.5 py-1 text-xs shadow-sm"
+                        className="flex h-9 w-full sm:h-8 sm:max-w-[380px] rounded-md border border-input bg-background px-2.5 py-1 text-base shadow-sm [@media(hover:hover)_and_(pointer:fine)]:text-xs"
                       >
                         <option value="">
                           {defaultGroupId ? '— Dùng nhóm Zalo mặc định —' : '— Chưa gán nhóm (không gửi) —'}

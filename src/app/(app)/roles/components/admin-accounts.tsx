@@ -6,7 +6,17 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';
@@ -39,12 +49,12 @@ export function AdminAccounts() {
 
   return (
     <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
-        <div>
+      <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-3 space-y-0">
+        <div className="min-w-0 flex-1">
           <CardTitle>Tài khoản admin</CardTitle>
           <CardDescription>Tạo, sửa (tên/mật khẩu), xoá tài khoản quản trị. Đăng nhập bằng số điện thoại.</CardDescription>
         </div>
-        <Button onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" /> Thêm admin</Button>
+        <Button className="shrink-0" onClick={() => setCreateOpen(true)}><Plus className="mr-2 h-4 w-4" /> Thêm admin</Button>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -56,7 +66,7 @@ export function AdminAccounts() {
                 <TableHead>Tên</TableHead>
                 <TableHead>Số điện thoại</TableHead>
                 <TableHead>Loại</TableHead>
-                <TableHead className="text-right">Thao tác</TableHead>
+                <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -69,12 +79,12 @@ export function AdminAccounts() {
                       ? <Badge><ShieldCheck className="mr-1 h-3 w-3" />Super</Badge>
                       : <Badge variant="secondary">Admin</Badge>}
                   </TableCell>
-                  <TableCell className="text-right space-x-1">
-                    <Button size="sm" variant="ghost" onClick={() => setEditUser(u)}><Pencil className="h-4 w-4" /></Button>
+                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap space-x-1')}>
+                    <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Sửa" onClick={() => setEditUser(u)}><Pencil className="h-4 w-4" /></Button>
                     <Button
-                      size="sm"
+                      size="icon"
                       variant="ghost"
-                      className="text-destructive"
+                      className="h-8 w-8 text-destructive"
                       disabled={u.isSuperAdmin}
                       title={u.isSuperAdmin ? 'Không thể xoá super admin' : 'Xoá'}
                       onClick={() => setDelUser(u)}

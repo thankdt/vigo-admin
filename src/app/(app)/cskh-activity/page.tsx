@@ -252,11 +252,11 @@ export default function CskhActivityPage() {
             isLoading={loadingSummary}
             initialPreset={DEFAULT_PRESET.key}
           />
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="grid grid-cols-1 items-end gap-3 sm:flex sm:flex-wrap">
             <div className="space-y-1.5">
               <Label className="text-xs text-muted-foreground">Nhân viên</Label>
               <Select value={adminUserId} onValueChange={setAdminUserId}>
-                <SelectTrigger className="w-56">
+                <SelectTrigger className="w-full sm:w-56">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -269,23 +269,24 @@ export default function CskhActivityPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Gọi cho</Label>
-              <Select value={kind} onValueChange={setKind}>
-                <SelectTrigger className="w-44">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={ALL}>Khách và tài xế</SelectItem>
-                  <SelectItem value="BOOKING">{KIND_LABEL.BOOKING}</SelectItem>
-                  <SelectItem value="DRIVER">{KIND_LABEL.DRIVER}</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label className="text-xs text-muted-foreground">Kết quả</Label>
-              <Select value={effectiveOutcome} onValueChange={setOutcome}>
-                <SelectTrigger className="w-44">
+            <div className="grid grid-cols-2 gap-2 sm:contents">
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Gọi cho</Label>
+                <Select value={kind} onValueChange={setKind}>
+                  <SelectTrigger className="w-full sm:w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Khách và tài xế</SelectItem>
+                    <SelectItem value="BOOKING">{KIND_LABEL.BOOKING}</SelectItem>
+                    <SelectItem value="DRIVER">{KIND_LABEL.DRIVER}</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Kết quả</Label>
+                <Select value={effectiveOutcome} onValueChange={setOutcome}>
+                  <SelectTrigger className="w-full sm:w-44">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -297,8 +298,9 @@ export default function CskhActivityPage() {
                   ))}
                 </SelectContent>
               </Select>
+              </div>
             </div>
-            <div className="flex items-center gap-2 pb-2">
+            <div className="flex items-center gap-2 sm:pb-2">
               <Checkbox
                 id="contact-only"
                 checked={contactOnly}

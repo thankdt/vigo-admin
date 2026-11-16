@@ -91,7 +91,7 @@ export function ImageThumbList({
             <div className="flex flex-col items-center gap-3">
               <div
                 className="flex items-center justify-center overflow-hidden w-full"
-                style={{ height: '70vh' }}
+                style={{ height: 'min(70dvh, calc(100dvh - 8.5rem))' }}
               >
                 <img
                   src={viewer}
@@ -100,8 +100,8 @@ export function ImageThumbList({
                   style={{
                     transform: `rotate(${rotation}deg)`,
                     transformOrigin: 'center',
-                    maxWidth: isSideways ? '70vh' : '100%',
-                    maxHeight: isSideways ? '100%' : '70vh',
+                    maxWidth: isSideways ? 'min(70dvh, calc(100dvh - 8.5rem))' : '100%',
+                    maxHeight: isSideways ? '100%' : 'min(70dvh, calc(100dvh - 8.5rem))',
                     objectFit: 'contain',
                   }}
                 />

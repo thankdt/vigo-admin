@@ -16,7 +16,10 @@ import {
     TableHead,
     TableHeader,
     TableRow,
+    STICKY_ACTION_HEAD_CLASS,
+    STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import {
     getAppPopups,
@@ -178,7 +181,7 @@ export function AppPopupManager() {
                                 <TableHead>Ưu tiên</TableHead>
                                 <TableHead>Lịch chạy</TableHead>
                                 <TableHead>Trạng thái</TableHead>
-                                <TableHead className="text-right">Thao tác</TableHead>
+                                <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -245,10 +248,11 @@ export function AppPopupManager() {
                                                 {p.isActive ? 'Hoạt động' : 'Tắt'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className="text-right" onClick={(e) => e.stopPropagation()}>
+                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
+                                                className="h-8 w-8"
                                                 onClick={() => handleOpenForm(p)}
                                             >
                                                 <Edit className="h-4 w-4" />
@@ -256,7 +260,7 @@ export function AppPopupManager() {
                                             <Button
                                                 variant="ghost"
                                                 size="icon"
-                                                className="text-destructive hover:text-destructive"
+                                                className="h-8 w-8 text-destructive hover:text-destructive"
                                                 onClick={() => setDeleting(p)}
                                             >
                                                 <Trash2 className="h-4 w-4" />
@@ -414,7 +418,7 @@ function AppPopupForm({
     };
 
     return (
-        <DialogContent className="sm:max-w-[560px] max-h-[90vh] overflow-y-auto">
+        <DialogContent className="sm:max-w-[560px] max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
                 <DialogTitle>{isEditing ? 'Sửa popup' : 'Tạo popup'}</DialogTitle>
                 <DialogDescription>
@@ -508,7 +512,7 @@ function AppPopupForm({
                     </p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="grid gap-2">
                         <Label htmlFor="startAt">Bắt đầu (tùy chọn)</Label>
                         <Input

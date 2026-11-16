@@ -14,7 +14,10 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { toastApiError } from '@/hooks/use-api-error-toast';
@@ -295,7 +298,7 @@ export default function DriverPenaltiesPage() {
                 <TableHead>Dấu hiệu</TableHead>
                 <TableHead className="whitespace-nowrap text-right">Thu được</TableHead>
                 <TableHead className="whitespace-nowrap">Trạng thái</TableHead>
-                <TableHead />
+                <TableHead className={STICKY_ACTION_HEAD_CLASS} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -409,7 +412,7 @@ export default function DriverPenaltiesPage() {
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-right">
+                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap text-right')}>
                         {tab === 'dismissed' ? (
                           <Button
                             size="sm"
@@ -425,7 +428,7 @@ export default function DriverPenaltiesPage() {
                             Khôi phục
                           </Button>
                         ) : (
-                          <div className="flex justify-end gap-2">
+                          <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:justify-end sm:gap-2">
                             <Button
                               size="sm"
                               variant="destructive"
@@ -483,7 +486,7 @@ export default function DriverPenaltiesPage() {
                 <TableHead>Lý do</TableHead>
                 <TableHead className="whitespace-nowrap">Người phạt</TableHead>
                 <TableHead className="whitespace-nowrap">Trạng thái</TableHead>
-                <TableHead />
+                <TableHead className={STICKY_ACTION_HEAD_CLASS} />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -545,7 +548,7 @@ export default function DriverPenaltiesPage() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-right">
+                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap text-right')}>
                         {r.status === 'ACTIVE' && (
                           <Button
                             size="sm"

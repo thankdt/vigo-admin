@@ -484,14 +484,14 @@ export function DriverTeamScreen() {
             &quot;Cần gọi lại hôm nay&quot; mở mọi tỉnh và không phụ thuộc khoảng ngày đang chọn.
           </p>
 
-          <div className="flex flex-wrap items-end gap-3">
+          <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap">
             <div>
               <Label className="text-xs text-muted-foreground">Tỉnh</Label>
               <Select
                 value={filters.provinceCode}
                 onValueChange={(v) => setFilters((f) => ({ ...f, provinceCode: v }))}
               >
-                <SelectTrigger className="w-60">
+                <SelectTrigger className="w-full lg:w-60">
                   <SelectValue placeholder="Mọi tỉnh" />
                 </SelectTrigger>
                 <SelectContent>
@@ -510,7 +510,7 @@ export function DriverTeamScreen() {
             <div>
               <Label className="text-xs text-muted-foreground">Tài xế</Label>
               <Input
-                className="w-56"
+                className="w-full lg:w-56"
                 placeholder="Tên hoặc SĐT"
                 value={filters.q}
                 onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
@@ -522,7 +522,7 @@ export function DriverTeamScreen() {
                 value={filters.stage}
                 onValueChange={(v) => setFilters((f) => ({ ...f, stage: v }))}
               >
-                <SelectTrigger className="w-44">
+                <SelectTrigger className="w-full lg:w-44">
                   <SelectValue placeholder="Trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
@@ -542,7 +542,7 @@ export function DriverTeamScreen() {
                 value={filters.ownerAdminUserId}
                 onValueChange={(v) => setFilters((f) => ({ ...f, ownerAdminUserId: v }))}
               >
-                <SelectTrigger className="w-52">
+                <SelectTrigger className="w-full lg:w-52">
                   <SelectValue placeholder="Người phụ trách" />
                 </SelectTrigger>
                 <SelectContent>
@@ -558,7 +558,7 @@ export function DriverTeamScreen() {
             <div>
               <Label className="text-xs text-muted-foreground">Chuyến tối thiểu</Label>
               <Input
-                className="w-36"
+                className="w-full lg:w-36"
                 type="number"
                 min={0}
                 placeholder="vd 5"
@@ -566,7 +566,7 @@ export function DriverTeamScreen() {
                 onChange={(e) => setFilters((f) => ({ ...f, minTrips: e.target.value }))}
               />
             </div>
-            <Button variant="outline" onClick={() => void handleExport()} disabled={exporting}>
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => void handleExport()} disabled={exporting}>
               {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
               {selected.size > 0 ? `Xuất ${selected.size} dòng đã chọn` : 'Xuất Excel'}
             </Button>
@@ -583,7 +583,7 @@ export function DriverTeamScreen() {
             <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/40 p-3">
               <span className="text-sm font-medium">Đã chọn {selected.size} tài xế</span>
               <Select onValueChange={(v) => void runBulk({ stage: v as DriverTeamStage })}>
-                <SelectTrigger className="h-8 w-44">
+                <SelectTrigger className="h-8 w-full sm:w-44">
                   <SelectValue placeholder="Đổi trạng thái" />
                 </SelectTrigger>
                 <SelectContent>
@@ -595,7 +595,7 @@ export function DriverTeamScreen() {
                 </SelectContent>
               </Select>
               <Select onValueChange={(v) => void runBulk({ ownerAdminUserId: v })}>
-                <SelectTrigger className="h-8 w-52">
+                <SelectTrigger className="h-8 w-full sm:w-52">
                   <SelectValue placeholder="Gán người phụ trách" />
                 </SelectTrigger>
                 <SelectContent>

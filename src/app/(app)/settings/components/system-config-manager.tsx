@@ -307,8 +307,8 @@ export function SystemConfigManager() {
         {/* Sticky save bar — only when there are unsaved edits. Full-bleed to cancel
             CardContent's p-6 so the border/background spans the card width. */}
         {dirtyCount > 0 && (
-          <div className="sticky bottom-0 z-20 -mx-6 -mb-6 mt-4 rounded-b-lg border-t bg-background/95 px-6 pt-3 pb-[max(1.5rem,env(safe-area-inset-bottom))] backdrop-blur">
-            <div className="flex items-center justify-between gap-3">
+          <div className="sticky bottom-0 z-20 -mx-6 -mb-6 mt-4 rounded-b-lg border-t bg-background/95 px-4 sm:px-6 pt-3 pb-[max(1.25rem,env(safe-area-inset-bottom))] backdrop-blur">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <span aria-live="polite" className="flex items-center gap-2 text-sm font-medium">
                 <span className="h-2 w-2 rounded-full bg-amber-500" />
                 {dirtyCount} thay đổi chưa lưu

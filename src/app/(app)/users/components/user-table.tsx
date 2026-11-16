@@ -9,6 +9,8 @@ import {
   TableHead,
   TableHeader,
   TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
 } from '@/components/ui/table';
 import {
   DropdownMenu,
@@ -238,19 +240,19 @@ export function UsersTable() {
 
   return (
     <>
-      <div className="flex items-center justify-between gap-3 pb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <Input
-            placeholder="Tìm theo tên hoặc SĐT..."
-            value={searchTerm}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            className="max-w-sm"
-          />
+      <div className="flex flex-col gap-2.5 pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+        <Input
+          placeholder="Tìm theo tên hoặc SĐT..."
+          value={searchTerm}
+          onChange={(e) => handleSearchChange(e.target.value)}
+          className="w-full sm:max-w-xs"
+        />
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:gap-3">
           <Select
             value={roleFilter}
             onValueChange={(val) => { setRoleFilter(val as typeof roleFilter); setCurrentPage(1); }}
           >
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Loại tài khoản" />
             </SelectTrigger>
             <SelectContent>
@@ -263,7 +265,7 @@ export function UsersTable() {
             value={deletedScope}
             onValueChange={(val) => { setDeletedScope(val as typeof deletedScope); setCurrentPage(1); }}
           >
-            <SelectTrigger className="w-[160px]">
+            <SelectTrigger className="w-full sm:w-[160px]">
               <SelectValue placeholder="Trạng thái" />
             </SelectTrigger>
             <SelectContent>
@@ -305,7 +307,7 @@ export function UsersTable() {
                   <ArrowUpDown className="ml-2 h-4 w-4" />
                 </Button>
               </TableHead>
-              <TableHead>
+              <TableHead className={STICKY_ACTION_HEAD_CLASS}>
                 <span className="sr-only">Thao tác</span>
               </TableHead>
             </TableRow>
@@ -413,10 +415,10 @@ export function UsersTable() {
                 </TableCell>
                 {/* Stop propagation so the action menu doesn't trigger the row's
                     detail-page navigation when clicked. */}
-                <TableCell onClick={(e) => e.stopPropagation()}>
+                <TableCell className={STICKY_ACTION_CELL_CLASS} onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" className="h-8 w-8 p-0">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
                         <span className="sr-only">Mở menu</span>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
@@ -468,7 +470,7 @@ export function UsersTable() {
           </TableBody>
         </Table>
         {/* Pagination Controls */}
-        <div className="flex items-center justify-between px-4 py-4 border-t">
+        <div className="flex flex-col gap-3 border-t px-3 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-4 sm:py-4">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <span>Hiển thị</span>
             <Select value={String(pageSize)} onValueChange={(val) => { setPageSize(Number(val)); setCurrentPage(1); }}>
@@ -484,7 +486,7 @@ export function UsersTable() {
             </Select>
             <span>/ {totalItems} kết quả</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between gap-2 sm:justify-end">
             <span className="text-sm text-muted-foreground">
               Trang {currentPage} / {totalPages}
             </span>
@@ -543,7 +545,7 @@ export function UsersTable() {
             <div className="py-12 text-center"><Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" /></div>
           ) : (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
                 <div className="bg-muted/50 rounded p-3">
                   <div className="text-muted-foreground text-xs">Mã giới thiệu</div>
                   <div className="font-mono font-bold tracking-wider mt-1">{stats.code}</div>

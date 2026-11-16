@@ -18,7 +18,7 @@ export default function MasterDataPage() {
         description="Quản lý nhóm xã, bảng giá theo km, điều chỉnh giá theo phường/xã, tỉnh/thành và đồng giá sân bay."
       />
       <Tabs defaultValue="area-adjustments" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid h-auto w-full grid-cols-2 gap-1 sm:grid-cols-4">
           <TabsTrigger value="area-adjustments">Điều chỉnh khu vực</TabsTrigger>
           <TabsTrigger value="km-tables">Bảng giá theo km</TabsTrigger>
           <TabsTrigger value="special-zones">Sân bay & đồng giá</TabsTrigger>

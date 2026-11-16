@@ -211,8 +211,8 @@ export function RetentionCampaign() {
       {/* Công tắc tổng — để trên cùng vì đây là thứ admin cần tìm nhanh nhất khi
           ngân sách khuyến mãi phình ngoài dự kiến. */}
       <Card>
-        <CardContent className="flex items-center justify-between p-4">
-          <div>
+        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4">
+          <div className="min-w-0 flex-1">
             <Label htmlFor="isActive" className="text-base font-medium">
               Trạng thái chiến dịch
             </Label>
@@ -489,7 +489,7 @@ export function RetentionCampaign() {
         </CardHeader>
         <CardContent>
           {stats ? (
-            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:gap-4 lg:grid-cols-4">
               <StatTile label="Đã tặng" value={stats.granted.toLocaleString('vi-VN')} hint="số mã đã sinh" />
               <StatTile
                 label="Đã dùng"

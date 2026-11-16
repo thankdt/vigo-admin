@@ -183,7 +183,7 @@ function SendButton({
   }
 
   return (
-    <span className="flex items-center gap-2" data-testid="crm-send-confirm">
+    <span className="flex flex-wrap items-center gap-2" data-testid="crm-send-confirm">
       <span className="text-xs text-destructive">Gửi thật cho khách — không hoàn tác được.</span>
       <Button
         size="sm"
@@ -297,19 +297,19 @@ function CampaignBuilder({
       </CardHeader>
       <CardContent className="space-y-3 text-sm">
         <div className="flex flex-wrap items-end gap-3">
-          <div className="space-y-1">
+          <div className="w-full space-y-1 sm:w-auto">
             <Label htmlFor="camp-name">Tên chiến dịch</Label>
             <Input
               id="camp-name"
-              className="w-[240px]"
+              className="w-full sm:w-[240px]"
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
           </div>
-          <div className="space-y-1">
+          <div className="w-full space-y-1 sm:w-auto">
             <Label>Phân khúc</Label>
             <Select value={segmentId} onValueChange={setSegmentId}>
-              <SelectTrigger className="h-9 w-[240px]" aria-label="Chọn phân khúc">
+              <SelectTrigger className="h-9 w-full sm:w-[240px]" aria-label="Chọn phân khúc">
                 <SelectValue placeholder="Chọn tệp khách…" />
               </SelectTrigger>
               <SelectContent>
@@ -321,10 +321,10 @@ function CampaignBuilder({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-1">
+          <div className="w-full space-y-1 sm:w-auto">
             <Label>Kênh</Label>
             <Select value={channel} onValueChange={(v) => setChannel(v as 'ZNS' | 'PUSH')}>
-              <SelectTrigger className="h-9 w-[140px]" aria-label="Chọn kênh">
+              <SelectTrigger className="h-9 w-full sm:w-[140px]" aria-label="Chọn kênh">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -350,7 +350,7 @@ function CampaignBuilder({
             <Label htmlFor="camp-tpl">Mã ZNS template (đã duyệt)</Label>
             <Input
               id="camp-tpl"
-              className="w-[280px]"
+              className="w-full sm:w-[280px]"
               value={znsTemplateId}
               onChange={(e) => setZnsTemplateId(e.target.value)}
             />

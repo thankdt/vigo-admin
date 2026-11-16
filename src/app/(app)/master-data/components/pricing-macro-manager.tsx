@@ -1289,7 +1289,9 @@ export function PricingMacroManager() {
                     {renderSortIcon('isActive')}
                   </button>
                 </TableHead>
-                <TableHead className="w-24 text-right">Thao tác</TableHead>
+                <TableHead className="sticky right-0 z-10 w-24 bg-slate-50 text-right shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]">
+                  Thao tác
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -1463,12 +1465,21 @@ export function PricingMacroManager() {
                           )}
                         </Button>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell
+                        className={cn(
+                          'sticky right-0 z-10 text-right whitespace-nowrap shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]',
+                          winnerKind === 'applied'
+                            ? 'bg-emerald-50 group-hover/row:bg-emerald-100'
+                            : winnerKind === 'province'
+                              ? 'bg-amber-50 group-hover/row:bg-amber-100'
+                              : 'bg-card group-hover/row:bg-slate-50',
+                        )}
+                      >
                         <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-slate-500 hover:text-indigo-600"
+                            className="h-8 w-8 sm:h-7 sm:w-7 text-slate-500 hover:text-indigo-600"
                             aria-label={`Sửa quy tắc #${rule.id} ${ruleTitle(rule)}`}
                             onClick={() => openEditDialog(rule)}
                           >
@@ -1477,7 +1488,7 @@ export function PricingMacroManager() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            className="h-7 w-7 text-slate-500 hover:text-red-600"
+                            className="h-8 w-8 sm:h-7 sm:w-7 text-slate-500 hover:text-red-600"
                             aria-label={`Xoá quy tắc #${rule.id} ${ruleTitle(rule)}`}
                             onClick={() => setDeleteRuleId(rule.id)}
                           >
@@ -1492,18 +1503,18 @@ export function PricingMacroManager() {
             </TableBody>
           </Table>
           <div
-            className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t px-4 py-2 text-xs text-slate-600"
+            className="flex flex-col sm:flex-row items-center justify-between gap-2 border-t px-3 sm:px-4 py-2.5 text-xs text-slate-600"
             data-testid="rules-pager"
           >
             <div>
               {total === 0 ? 'Không có quy tắc' : `Hiển thị ${firstRow}–${lastRow} / ${total} quy tắc`}
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-end">
               <label className="flex items-center gap-1">
                 Số dòng/trang
                 <select
                   aria-label="Số dòng mỗi trang"
-                  className="h-7 rounded-md border border-input bg-white px-1 text-xs"
+                  className="h-8 min-w-[64px] rounded-md border border-input bg-white px-2 text-xs [@media(pointer:coarse)]:text-base"
                   value={pageSize}
                   onChange={(e) => {
                     setPageSize(Number(e.target.value));
@@ -1547,7 +1558,7 @@ export function PricingMacroManager() {
 
       {/* ───────── CREATE / EDIT MODAL ───────── */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-slate-900">
               Chỉnh sửa quy tắc macro

@@ -2,7 +2,16 @@
 
 import * as React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -588,7 +597,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
               <ArrowUpDown className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" aria-hidden />
               <select
                 aria-label={`Sắp xếp đồng giá ${zone.name}`}
-                className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-3 text-xs [@media(pointer:coarse)]:text-base text-slate-700 focus:outline-none focus:ring-2 focus:ring-ring"
                 value={sortChoice}
                 onChange={(e) => setSortChoice(e.target.value as FlatSortChoice)}
               >
@@ -600,8 +609,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
               </select>
             </div>
           </div>
-          <div className="overflow-x-auto">
-            <Table>
+          <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>
@@ -635,7 +643,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                     </TableHead>
                   ))}
                   <TableHead>Ghi chú</TableHead>
-                  <TableHead className="w-24" />
+                  <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'w-24')} />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -673,10 +681,11 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                     <TableCell className="text-xs text-slate-500 max-w-[16rem] truncate" title={r.note ?? undefined}>
                       {r.note ?? ''}
                     </TableCell>
-                    <TableCell className="text-right whitespace-nowrap">
+                    <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                       <Button
                         variant="ghost"
                         size="icon"
+                        className="h-8 w-8"
                         aria-label={`Sửa đồng giá ${flatPriceTargetLabel(zone, r.wardCode, r.wardName)}`}
                         disabled={!zone.active}
                         onClick={() => openEdit(r)}
@@ -686,7 +695,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                       <Button
                         variant="ghost"
                         size="icon"
-                        className="text-red-600"
+                        className="h-8 w-8 text-red-600"
                         aria-label={`Xoá đồng giá ${flatPriceTargetLabel(zone, r.wardCode, r.wardName)}`}
                         onClick={() => setDeleteRow(r)}
                       >
@@ -697,7 +706,6 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                 ))}
               </TableBody>
             </Table>
-          </div>
           </>
         )}
       </CardContent>

@@ -78,7 +78,7 @@ export function PhoneCell({
             e.stopPropagation();
             void handleReveal();
           }}
-          className="text-muted-foreground hover:text-foreground disabled:opacity-50"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-50 [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:h-8 [@media(pointer:coarse)]:w-8"
         >
           {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
         </button>

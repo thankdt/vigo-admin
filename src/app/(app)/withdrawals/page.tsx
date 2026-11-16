@@ -2,7 +2,17 @@
 
 import * as React from 'react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -121,10 +131,10 @@ export default function WithdrawalsPage() {
       </div>
 
       <div className="flex items-center gap-3">
-        <div className="space-y-1">
+        <div className="w-full space-y-1 sm:w-auto">
           <Label className="text-xs text-muted-foreground">Trạng thái</Label>
           <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as any)}>
-            <SelectTrigger className="w-44"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="w-full sm:w-44"><SelectValue /></SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Tất cả</SelectItem>
               <SelectItem value="PENDING">Chờ duyệt</SelectItem>
@@ -147,7 +157,9 @@ export default function WithdrawalsPage() {
               <TableHead>Chủ tài khoản</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead>Tạo lúc</TableHead>
-              <TableHead className="text-right" />
+              <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>
+                <span className="sr-only">Thao tác</span>
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -165,18 +177,22 @@ export default function WithdrawalsPage() {
                   <TableCell className="text-right tabular-nums font-bold">{formatVND(r.amount)}</TableCell>
                   <TableCell>{r.bankName}</TableCell>
                   <TableCell>
-                    <button onClick={() => copy(r.accountNumber, 'STK')} className="font-mono text-sm hover:underline inline-flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => copy(r.accountNumber, 'STK')}
+                      className="inline-flex items-center gap-1 rounded-sm font-mono text-sm hover:underline [@media(pointer:coarse)]:-my-1 [@media(pointer:coarse)]:min-h-8 [@media(pointer:coarse)]:px-1"
+                    >
                       {r.accountNumber}
-                      <Copy className="h-3 w-3 text-muted-foreground" />
+                      <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   </TableCell>
                   <TableCell>{r.accountHolder}</TableCell>
                   <TableCell>{statusBadge(r.status)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">
+                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                     {new Date(r.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:justify-end">
                       {r.status === 'PENDING' && (
                         <>
                           <Button variant="ghost" size="sm" className="h-8 text-blue-700" onClick={() => setActionTarget({ row: r, action: 'approve' })}>
@@ -204,7 +220,7 @@ export default function WithdrawalsPage() {
             )}
           </TableBody>
         </Table>
-        <div className="flex items-center justify-between px-4 py-3 border-t">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4 border-t">
           <span className="text-sm text-muted-foreground">{total} lệnh</span>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Trang {page} / {totalPages}</span>

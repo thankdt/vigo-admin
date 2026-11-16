@@ -55,8 +55,8 @@ export function ReportDrilldown({
 
   return (
     <div className="space-y-3 rounded-md border p-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
           <p className="text-sm font-medium">
             Chuyến trong ô: {drilldownTitle(dims)}
             {expectedTotal != null ? (

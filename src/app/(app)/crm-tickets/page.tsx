@@ -132,9 +132,9 @@ export default function CrmTicketsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Bộ lọc</CardTitle>
         </CardHeader>
-        <CardContent className="flex flex-wrap items-center gap-3">
+        <CardContent className="grid grid-cols-1 items-center gap-3 sm:flex sm:flex-wrap">
           <Select value={status || 'ALL'} onValueChange={(v) => setStatus(v === 'ALL' ? '' : v)}>
-            <SelectTrigger className="h-9 w-[180px]" aria-label="Lọc trạng thái">
+            <SelectTrigger className="h-9 w-full sm:w-[180px]" aria-label="Lọc trạng thái">
               <SelectValue placeholder="Trạng thái" />
             </SelectTrigger>
             <SelectContent>
@@ -151,7 +151,7 @@ export default function CrmTicketsPage() {
             value={category || 'ALL'}
             onValueChange={(v) => setCategory(v === 'ALL' ? '' : v)}
           >
-            <SelectTrigger className="h-9 w-[220px]" aria-label="Lọc loại">
+            <SelectTrigger className="h-9 w-full sm:w-[220px]" aria-label="Lọc loại">
               <SelectValue placeholder="Loại khiếu nại" />
             </SelectTrigger>
             <SelectContent>

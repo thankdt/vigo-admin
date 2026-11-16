@@ -431,3 +431,78 @@ describe('CrmQueuePage — thua cuộc giành việc', () => {
     expect(titles.some((t: string) => /người khác nhận/i.test(t))).toBe(false);
   });
 });
+
+describe('CrmQueuePage — hiển thị mobile (<640px) vs iPad/tablet (>=640px)', () => {
+  const origWidth = window.innerWidth;
+  const origMM = window.matchMedia;
+
+  const setViewport = (w: number) => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: w });
+    window.matchMedia = vi.fn().mockImplementation((query: string) => {
+      const m = query.match(/max-width:\s*(\d+)px/);
+      const max = m ? Number(m[1]) : 0;
+      return {
+        matches: w <= max,
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      };
+    });
+  };
+
+  const restoreViewport = () => {
+    Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: origWidth });
+    window.matchMedia = origMM;
+  };
+
+  it('trên điện thoại hẹp (375px) dựng thẻ việc mobile và cho bấm Nhận gọi / ghi kết quả ngay không cần cuộn ngang', async () => {
+    setViewport(375);
+    try {
+      getBookings.mockResolvedValue(
+        page([
+          mkBooking({
+            id: 'bk-mobile',
+            pickupProvinceCode: '01',
+            dropoffProvinceCode: '31',
+          }),
+        ]),
+      );
+      render(<CrmQueuePage />);
+
+      const list = await screen.findByTestId('crm-queue-mobile-list');
+      expect(within(list).getByText('Khách A')).toBeInTheDocument();
+      expect(await within(list).findByText('Nội đô Hà Nội → Hải Phòng')).toBeInTheDocument();
+
+      await userEvent.click(within(list).getByRole('button', { name: /nhận gọi/i }));
+      await waitFor(() =>
+        expect(recordBookingCustomerCall).toHaveBeenCalledWith('bk-mobile', { status: 'CLAIMED' }),
+      );
+    } finally {
+      restoreViewport();
+    }
+  });
+
+  it('trên iPad dọc (820px) ghim cột Thao tác sticky right-0 với whitespace-nowrap', async () => {
+    setViewport(820);
+    try {
+      getBookings.mockResolvedValue(page([mkBooking({ id: 'bk-ipad' })]));
+      render(<CrmQueuePage />);
+
+      const claimBtn = await screen.findByRole('button', { name: /nhận gọi/i });
+      const actionCell = claimBtn.closest('td');
+      expect(actionCell?.className).toContain('sticky');
+      expect(actionCell?.className).toContain('right-0');
+      expect(actionCell?.className).toContain('whitespace-nowrap');
+
+      const actionHead = screen.getByRole('columnheader', { name: 'Thao tác' });
+      expect(actionHead.className).toContain('sticky');
+      expect(actionHead.className).toContain('right-0');
+    } finally {
+      restoreViewport();
+    }
+  });
+});

@@ -2,7 +2,17 @@
 
 import * as React from 'react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -345,7 +355,7 @@ export default function ReferralsPage() {
               <TableHead className="text-right whitespace-nowrap">Đã rút</TableHead>
               <TableHead className="text-right whitespace-nowrap">Tổng tiền</TableHead>
               <TableHead className="text-right whitespace-nowrap">Cập nhật</TableHead>
-              <TableHead className="text-right" />
+              <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')} />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -463,7 +473,7 @@ export default function ReferralsPage() {
                     ) : null}
                   </TableCell>
                   <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{formatVnDateTime(r.analyticsSyncedAt)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                     <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReferrerDrilldown(r); }}>
                       Chi tiết →
                     </Button>
@@ -473,7 +483,7 @@ export default function ReferralsPage() {
             )}
           </TableBody>
         </Table>
-        <div className="flex items-center justify-between px-4 py-3 border-t">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4 border-t">
           <span className="text-sm text-muted-foreground">{total} chủ link</span>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Trang {page} / {totalPages}</span>
@@ -485,7 +495,7 @@ export default function ReferralsPage() {
 
       {/* Drill-down: referees of a specific referrer */}
       <Dialog open={!!selectedReferrer} onOpenChange={(open) => { if (!open) closeReferrerDrilldown(); }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] sm:max-w-4xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Button variant="ghost" size="icon" className="h-7 w-7" onClick={closeReferrerDrilldown}>
@@ -608,7 +618,7 @@ export default function ReferralsPage() {
 
       {/* Event log + clawback dialog (per referee relationship) */}
       <Dialog open={!!detail || detailLoading} onOpenChange={(open) => { if (!open) setDetail(null); }}>
-        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90dvh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Lịch sử giao dịch</DialogTitle>
             {detail && (

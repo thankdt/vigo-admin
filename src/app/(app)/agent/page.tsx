@@ -2,7 +2,17 @@
 
 import * as React from 'react';
 import { Card } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+  STICKY_ACTION_HEAD_CLASS,
+  STICKY_ACTION_CELL_CLASS,
+} from '@/components/ui/table';
+import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -261,7 +271,7 @@ export default function AgentAdminPage() {
               <TableHead>Loại tài khoản</TableHead>
               <TableHead>Trạng thái</TableHead>
               <TableHead className="text-right">Hoa hồng</TableHead>
-              <TableHead className="text-right">Thao tác</TableHead>
+              <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')}>Thao tác</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -294,8 +304,8 @@ export default function AgentAdminPage() {
                       ? `${r.commissionPercent}%`
                       : <span className="text-muted-foreground">nhóm</span>}
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
+                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <div className="flex flex-col items-end gap-1 sm:flex-row sm:justify-end">
                       {r.status === 'PENDING' && (
                         <>
                           <Button size="sm" className="h-8" onClick={() => openPromote(r.userId, r.userFullName || r.userPhone || r.userId.slice(0, 8), r)}>
@@ -326,7 +336,7 @@ export default function AgentAdminPage() {
             )}
           </TableBody>
         </Table>
-        <div className="flex items-center justify-between px-4 py-3 border-t">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-3 sm:px-4 border-t">
           <span className="text-sm text-muted-foreground">{total} đại lý</span>
           <div className="flex items-center gap-2">
             <span className="text-sm text-muted-foreground">Trang {page} / {totalPages}</span>
@@ -414,7 +424,7 @@ export default function AgentAdminPage() {
               {addSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             </Button>
           </div>
-          <div className="max-h-[45vh] overflow-y-auto divide-y">
+          <div className="max-h-[45dvh] overflow-y-auto overscroll-contain divide-y">
             {addResults.length === 0 ? (
               <p className="py-6 text-center text-sm text-muted-foreground">{addSearching ? 'Đang tìm...' : 'Nhập SĐT/tên rồi bấm tìm.'}</p>
             ) : addResults.map((u) => (

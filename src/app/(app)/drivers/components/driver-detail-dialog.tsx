@@ -309,7 +309,7 @@ export function DriverCallTimeline({ driverId }: { driverId: string }) {
 export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null; onClose: () => void }) {
   return (
     <Dialog open={!!driver} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+      <DialogContent className="w-[95vw] max-w-2xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Chi tiết tài xế</DialogTitle>
         </DialogHeader>
@@ -368,7 +368,7 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
               <div className="space-y-1">
                 <Label className="text-xs text-muted-foreground">ID</Label>
                 <p className="font-medium text-sm break-all">{driver.id}</p>
@@ -386,7 +386,7 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
             {driver.vehicleRegistration && (
               <div className="space-y-2 border-t pt-4">
                 <h4 className="font-semibold">Đăng ký xe</h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Biển số</Label>
                     <p className="font-medium text-sm">{driver.vehicleRegistration.plateNumber}</p>
@@ -517,7 +517,7 @@ export function DriverDetailDialog({ driver, onClose }: { driver: Driver | null;
             <div className="space-y-2 border-t pt-4">
               <h4 className="font-semibold">Đơn vị vận tải</h4>
               {driver.transportCompany ? (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="space-y-1">
                     <Label className="text-xs text-muted-foreground">Tên đơn vị</Label>
                     <p className="font-medium text-sm">{driver.transportCompany.name}</p>

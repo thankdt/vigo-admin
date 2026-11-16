@@ -91,7 +91,7 @@ export function Combobox({
           <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0">
+      <PopoverContent className="flex w-[--radix-popover-trigger-width] min-w-[min(14rem,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] flex-col overflow-hidden p-0">
         <Command filter={vietnameseInsensitiveFilter}>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>

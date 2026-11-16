@@ -73,13 +73,13 @@ export default function CrmAccountsPage() {
           <CardTitle className="text-base">Thêm công ty</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap items-end gap-3 text-sm">
-          <div className="space-y-1">
+          <div className="w-full space-y-1 sm:w-auto">
             <Label htmlFor="acc-name">Tên công ty</Label>
-            <Input id="acc-name" className="w-[260px]" value={name} onChange={(e) => setName(e.target.value)} />
+            <Input id="acc-name" className="w-full sm:w-[260px]" value={name} onChange={(e) => setName(e.target.value)} />
           </div>
-          <div className="space-y-1">
+          <div className="w-full space-y-1 sm:w-auto">
             <Label htmlFor="acc-tax">Mã số thuế</Label>
-            <Input id="acc-tax" className="w-[180px]" value={taxCode} onChange={(e) => setTaxCode(e.target.value)} />
+            <Input id="acc-tax" className="w-full sm:w-[180px]" value={taxCode} onChange={(e) => setTaxCode(e.target.value)} />
           </div>
           <Button
             disabled={!name.trim()}
@@ -321,9 +321,9 @@ function AccountDetail({ accountId, onChanged }: { accountId: string; onChanged:
             ))
           )}
         </ul>
-        <div className="flex items-end gap-2">
+        <div className="flex flex-wrap items-end gap-2">
           <Input
-            className="w-[280px]"
+            className="min-w-0 flex-1 sm:w-[280px] sm:flex-none"
             aria-label="ID nhân viên"
             placeholder="user id của nhân viên"
             value={memberId}
