@@ -132,7 +132,7 @@ export default function LeakageReviewPage() {
       </Card>
 
       <Card>
-        <Table>
+        <Table stackBelow="lg">
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Thời điểm huỷ</TableHead>
@@ -165,11 +165,11 @@ export default function LeakageReviewPage() {
               <>
                 {rows.map((r) => (
                   <TableRow key={r.id} className="cursor-pointer" onClick={() => setSelected(r)}>
-                    <TableCell className="whitespace-nowrap">{formatVnDateTime(r.eventAt)}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Thời điểm huỷ" className="whitespace-nowrap">{formatVnDateTime(r.eventAt)}</TableCell>
+                    <TableCell data-label="Kết luận">
                       <Badge className={verdictBadgeClass(r.verdict)}>{VERDICT_LABEL[r.verdict] ?? r.verdict}</Badge>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell data-card="header" className="whitespace-nowrap max-lg:-order-2">
                       {/* Only a real driver gets the filter Button: otherwise the cell
                           becomes a dead zone — stopPropagation would swallow the row
                           click (no sheet) while filterByDriver returns early (no filter). */}
@@ -189,16 +189,16 @@ export default function LeakageReviewPage() {
                         '—'
                       )}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell data-label="Khách hàng" className="whitespace-nowrap">
                       {r.customer?.fullName || '—'}
                       <div className="text-xs text-muted-foreground">{r.customer?.phone}</div>
                     </TableCell>
-                    <TableCell className="max-w-[22rem] text-sm">
+                    <TableCell data-card="full" data-label="Hành trình" className="lg:max-w-[22rem] text-sm max-lg:-order-1">
                       <span className="break-words">
                         {addressText(r.booking?.pickupAddress)} → {addressText(r.booking?.dropoffAddress)}
                       </span>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell data-label="Trạng thái" className="whitespace-nowrap">
                       <Badge variant={statusBadgeVariant(r.status)}>{STATUS_LABEL[r.status] ?? r.status}</Badge>
                     </TableCell>
                   </TableRow>

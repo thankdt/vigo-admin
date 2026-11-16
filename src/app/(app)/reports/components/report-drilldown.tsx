@@ -81,8 +81,8 @@ export function ReportDrilldown({
         <div className="flex justify-center py-8"><Loader2 className="h-5 w-5 animate-spin" /></div>
       ) : (
         <>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto max-md:overflow-x-hidden">
+            <table data-stack="md" className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
                   <th className="px-2 py-1 text-left font-medium">Mã chuyến</th>
@@ -93,26 +93,26 @@ export function ReportDrilldown({
                   <th className="px-2 py-1 text-left font-medium">Lý do huỷ</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="max-md:divide-y">
                 {rows.map((r) => (
                   <tr key={r.id} className="border-t">
-                    <td className="px-2 py-1">
+                    <td data-label="Mã chuyến" className="px-2 py-1">
                       {/* Không phải link: /bookings không đọc bất kỳ query param nào để
                           mở đúng một chuyến — trỏ tới đó sẽ là link chết. Hiện mã đầy đủ
                           qua title để admin tự sao chép/tìm bằng ô "Mã chuyến". */}
                       <span className="font-mono" title={r.id}>{r.id.slice(0, 8)}</span>
                     </td>
-                    <td className="px-2 py-1">
+                    <td data-label="Tạo lúc" className="px-2 py-1">
                       {new Date(r.createdAt).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' })}
                     </td>
-                    <td className="px-2 py-1">{statusLabelMap[r.status] ?? r.status}</td>
-                    <td className="px-2 py-1 text-right tabular-nums">
+                    <td data-label="Trạng thái" className="px-2 py-1">{statusLabelMap[r.status] ?? r.status}</td>
+                    <td data-label="Giá" className="px-2 py-1 text-right tabular-nums">
                       {r.price != null ? r.price.toLocaleString('vi-VN') : '—'}
                     </td>
-                    <td className="px-2 py-1">
+                    <td data-label="Người huỷ" className="px-2 py-1">
                       {r.cancelledByRole ? (CANCELLED_BY_ROLE_LABEL[r.cancelledByRole] ?? r.cancelledByRole) : '—'}
                     </td>
-                    <td className="px-2 py-1">{r.cancelReason ?? '—'}</td>
+                    <td data-label="Lý do huỷ" data-card="wide" className="px-2 py-1">{r.cancelReason ?? '—'}</td>
                   </tr>
                 ))}
                 {rows.length === 0 ? (

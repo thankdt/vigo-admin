@@ -359,7 +359,7 @@ export default function InvoicesPage() {
       </Card>
 
       <Card>
-        <Table>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Ngày hoàn thành</TableHead>
@@ -369,7 +369,7 @@ export default function InvoicesPage() {
               <TableHead>Biển số xe</TableHead>
               <TableHead>Tên DVVT</TableHead>
               <TableHead>Xuất hoá đơn</TableHead>
-              <TableHead className="min-w-[220px]">HĐĐT MISA</TableHead>
+              <TableHead className="2xl:min-w-[200px]">HĐĐT MISA</TableHead>
               <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-center whitespace-nowrap')}>Hợp đồng</TableHead>
             </TableRow>
           </TableHeader>
@@ -395,19 +395,19 @@ export default function InvoicesPage() {
 
                 return (
                   <TableRow key={trip.id}>
-                    <TableCell className="whitespace-nowrap">{formatInvoiceDateOnly(trip.tripDate)}</TableCell>
-                    <TableCell className="max-w-[420px] text-sm">{buildInvoiceServiceText(trip)}</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
+                    <TableCell data-label="Ngày hoàn thành" className="whitespace-nowrap">{formatInvoiceDateOnly(trip.tripDate)}</TableCell>
+                    <TableCell data-card="header" className="xl:max-w-[420px] text-sm max-xl:font-medium">{buildInvoiceServiceText(trip)}</TableCell>
+                    <TableCell data-label="Thành tiền (VAT)" className="text-right font-semibold tabular-nums">
                       {formatInvoiceCurrency(trip.totalWithVat)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">
+                    <TableCell data-label="VAT" className="text-right tabular-nums">
                       {formatInvoiceCurrency(trip.vat)}
                     </TableCell>
-                    <TableCell className="font-mono">{trip.vehiclePlate}</TableCell>
-                    <TableCell>{trip.transportCompanyName}</TableCell>
-                    <TableCell className="text-sm align-top">
+                    <TableCell data-label="Biển số xe" className="font-mono">{trip.vehiclePlate}</TableCell>
+                    <TableCell data-label="Đơn vị vận tải">{trip.transportCompanyName}</TableCell>
+                    <TableCell data-label="Xuất hoá đơn" data-card="wide" className="text-sm align-top">
                       {trip.vatInfo?.companyName ? (
-                        <div className="space-y-0.5 min-w-[200px]">
+                        <div className="space-y-0.5 2xl:min-w-[180px]">
                           <div className="font-medium">{trip.vatInfo.companyName}</div>
                           <div className="text-muted-foreground text-xs">
                             MST: {trip.vatInfo.taxCode ?? '—'}
@@ -427,7 +427,7 @@ export default function InvoicesPage() {
                         <span className="text-muted-foreground">Khách lẻ</span>
                       )}
                     </TableCell>
-                    <TableCell className="align-top text-xs" data-testid={`einvoice-cell-${trip.id}`}>
+                    <TableCell data-label="HĐĐT MISA" data-card="wide" className="align-top text-xs" data-testid={`einvoice-cell-${trip.id}`}>
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge
@@ -523,7 +523,7 @@ export default function InvoicesPage() {
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-center align-top')}>
+                    <TableCell data-card="menu" className={cn(STICKY_ACTION_CELL_CLASS, 'text-center align-top')}>
                       <Button
                         variant="ghost"
                         size="icon"

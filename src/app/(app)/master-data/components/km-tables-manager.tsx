@@ -159,21 +159,21 @@ export function KmTablesManager() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">#</TableHead>
-                    <TableHead>Đến (km)</TableHead>
-                    <TableHead>Giá tại mốc (đ)</TableHead>
-                    <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'w-12 text-right')} />
+                    <TableHead className="w-8 px-1.5 sm:w-10">#</TableHead>
+                    <TableHead className="px-1.5 sm:px-3">Đến (km)</TableHead>
+                    <TableHead className="px-1.5 sm:px-3">Giá tại mốc (đ)</TableHead>
+                    <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'w-10 px-1 text-right sm:w-12')} />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {t.points.map((p, i) => (
                     <TableRow key={i}>
-                      <TableCell className="tabular-nums">{i + 1}</TableCell>
-                      <TableCell>
+                      <TableCell className="px-1.5 tabular-nums">{i + 1}</TableCell>
+                      <TableCell className="px-1.5 sm:px-3">
                         <Input
                           type="number"
                           inputMode="decimal"
-                          className="min-w-[5.5rem]"
+                          className="min-w-[4.25rem] px-2 sm:min-w-[5.5rem]"
                           aria-label={`${type} mốc ${i + 1} km`}
                           value={show(p.km)}
                           // Nhập xong km thì dòng tự vào đúng chỗ (thêm mốc ở giữa không phải dịch lại các dòng sau).
@@ -186,11 +186,11 @@ export function KmTablesManager() {
                           }
                         />
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="px-1.5 sm:px-3">
                         <Input
                           type="number"
                           inputMode="numeric"
-                          className="min-w-[7.5rem]"
+                          className="min-w-[5.75rem] px-2 sm:min-w-[7.5rem]"
                           aria-label={`${type} mốc ${i + 1} giá`}
                           value={show(p.price)}
                           onChange={(e) =>
@@ -201,7 +201,7 @@ export function KmTablesManager() {
                           }
                         />
                       </TableCell>
-                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'px-1 text-right whitespace-nowrap')}>
                         <Button
                           variant="ghost"
                           size="icon"

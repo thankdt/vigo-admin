@@ -105,8 +105,8 @@ export function CustomerLoyaltyCard({ userId, userName }: { userId: string; user
               <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Lịch sử Vcoin &amp; điểm hạng
               </div>
-              <div className="rounded-md border">
-                <Table>
+              <div className="overflow-hidden rounded-md border">
+                <Table stackBelow="lg">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Thời gian</TableHead>
@@ -127,19 +127,19 @@ export function CustomerLoyaltyCard({ userId, userName }: { userId: string; user
                     ) : (
                       data.history.items.map((h) => (
                         <TableRow key={h.id}>
-                          <TableCell className="text-xs">{formatVnDateTime(h.createdAt)}</TableCell>
-                          <TableCell>
+                          <TableCell data-label="Thời gian" className="text-xs">{formatVnDateTime(h.createdAt)}</TableCell>
+                          <TableCell data-label="Loại">
                             <Badge variant="outline">{loyaltyHistoryTypeLabel(h.type)}</Badge>
                           </TableCell>
-                          <TableCell className="text-xs">{pointKindLabel(h.pointKind)}</TableCell>
-                          <TableCell className={`text-right font-medium ${h.points < 0 ? 'text-destructive' : ''}`}>
+                          <TableCell data-label="Vcoin/Điểm" className="text-xs">{pointKindLabel(h.pointKind)}</TableCell>
+                          <TableCell data-label="Số lượng" className={`text-right font-medium ${h.points < 0 ? 'text-destructive' : ''}`}>
                             {h.points > 0 ? '+' : ''}
                             {h.points.toLocaleString('vi-VN')}
                           </TableCell>
-                          <TableCell className="max-w-[240px] text-xs">
+                          <TableCell data-label="Lý do" data-card="wide" className="lg:max-w-[240px] text-xs">
                             <span className="line-clamp-2">{h.reason || '—'}</span>
                           </TableCell>
-                          <TableCell className="text-xs">{h.createdByName ?? '—'}</TableCell>
+                          <TableCell data-label="Người thực hiện" className="text-xs">{h.createdByName ?? '—'}</TableCell>
                         </TableRow>
                       ))
                     )}
@@ -188,8 +188,8 @@ export function CustomerLoyaltyCard({ userId, userName }: { userId: string; user
               <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 Voucher đã đổi ({data.vouchers.length.toLocaleString('vi-VN')})
               </div>
-              <div className="rounded-md border">
-                <Table>
+              <div className="overflow-hidden rounded-md border">
+                <Table stackBelow="lg">
                   <TableHeader>
                     <TableRow>
                       <TableHead>Mã</TableHead>
@@ -211,14 +211,14 @@ export function CustomerLoyaltyCard({ userId, userName }: { userId: string; user
                     ) : (
                       data.vouchers.map((v) => (
                         <TableRow key={v.id}>
-                          <TableCell className="font-mono text-xs">{v.code}</TableCell>
-                          <TableCell className="text-right">{v.pointCost.toLocaleString('vi-VN')}</TableCell>
-                          <TableCell className="text-xs">{formatVnDateTime(v.redeemedAt)}</TableCell>
-                          <TableCell className="text-xs">{formatVnDateTime(v.endDate)}</TableCell>
-                          <TableCell>
+                          <TableCell data-card="header" className="font-mono text-xs">{v.code}</TableCell>
+                          <TableCell data-label="Giá Vcoin" className="text-right">{v.pointCost.toLocaleString('vi-VN')}</TableCell>
+                          <TableCell data-label="Ngày đổi" className="text-xs">{formatVnDateTime(v.redeemedAt)}</TableCell>
+                          <TableCell data-label="Hạn dùng" className="text-xs">{formatVnDateTime(v.endDate)}</TableCell>
+                          <TableCell data-label="Trạng thái">
                             <Badge variant={voucherStateVariant(v.state)}>{voucherStateLabel(v.state)}</Badge>
                           </TableCell>
-                          <TableCell className="text-xs">
+                          <TableCell data-label="Chuyến đang gắn" className="text-xs">
                             {v.bookingId ? (
                               // Repo hiện chưa có trang/route chi tiết chuyến để link tới (bảng
                               // "Chuyến đi đã đặt" ở trên mở chi tiết bằng dialog trong bookings-table,
@@ -232,7 +232,7 @@ export function CustomerLoyaltyCard({ userId, userName }: { userId: string; user
                               '—'
                             )}
                           </TableCell>
-                          <TableCell className="text-xs">
+                          <TableCell data-label="Lịch sử dùng" data-card="wide" className="text-xs">
                             {v.usages.length === 0 ? (
                               '—'
                             ) : (

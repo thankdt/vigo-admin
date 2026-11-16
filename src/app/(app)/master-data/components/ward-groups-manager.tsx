@@ -207,8 +207,8 @@ export function WardGroupsManager() {
         </div>
       )}
 
-      <div className="rounded-md border bg-white">
-        <Table>
+      <div className="overflow-hidden rounded-md border bg-white">
+        <Table stackBelow="md">
           <TableHeader>
             <TableRow>
               <TableHead>
@@ -263,7 +263,7 @@ export function WardGroupsManager() {
             ) : (
               visibleGroups.map((g) => (
                 <TableRow key={g.id}>
-                  <TableCell className="font-medium">
+                  <TableCell data-card="header" className="font-medium">
                     {g.name}
                     {g.staleCodes.length > 0 && (
                       <Badge variant="outline" className="ml-2 text-[10px] text-amber-700">
@@ -271,9 +271,9 @@ export function WardGroupsManager() {
                       </Badge>
                     )}
                   </TableCell>
-                  <TableCell>{g.wardCount}</TableCell>
-                  <TableCell className="text-xs text-slate-600">{g.note ?? ''}</TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                  <TableCell data-label="Số xã">{g.wardCount}</TableCell>
+                  <TableCell data-label="Ghi chú" className="text-xs text-slate-600">{g.note ?? ''}</TableCell>
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                     <Button
                       variant="ghost"
                       size="icon"

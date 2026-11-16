@@ -93,7 +93,7 @@ export function DriverNoteSelect({
           void commit(v === NONE ? null : v);
         }}
       >
-        <SelectTrigger className={className ?? 'h-8 w-full min-w-[200px] text-sm'}>
+        <SelectTrigger className={className ?? 'h-8 w-full min-w-0 2xl:min-w-[180px] text-xs 2xl:text-sm'}>
           <SelectValue placeholder="Chọn ghi chú…" />
         </SelectTrigger>
         <SelectContent>

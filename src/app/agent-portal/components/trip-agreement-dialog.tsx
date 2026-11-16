@@ -21,11 +21,11 @@ export function TripAgreementDialog({ open, onOpenChange }: TripAgreementDialogP
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="max-w-[92vw] sm:max-w-md rounded-2xl p-5 sm:p-6 [&>button:last-child]:hidden"
+        className="max-w-[92vw] sm:max-w-md rounded-2xl p-5 sm:p-6 [&_[data-dialog-close]]:hidden"
         onPointerDownOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <DialogHeader className="space-y-2 text-center sm:text-left">
+        <DialogHeader className="space-y-2 pr-0 text-center sm:text-left [@media(pointer:coarse)]:pr-0">
           <div className="h-11 w-11 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center mx-auto sm:mx-0 shadow-2xs">
             <ShieldCheck className="h-6 w-6" />
           </div>

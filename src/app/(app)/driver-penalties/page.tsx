@@ -288,7 +288,7 @@ export default function DriverPenaltiesPage() {
 
       <Card>
         {tab !== 'history' ? (
-          <Table>
+          <Table stackBelow="xl">
             <TableHeader>
               <TableRow>
                 <TableHead className="whitespace-nowrap">Thời điểm huỷ</TableHead>
@@ -339,26 +339,26 @@ export default function DriverPenaltiesPage() {
                   });
                   return (
                     <TableRow key={r.bookingId}>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell data-label="Thời điểm huỷ" className="whitespace-nowrap text-sm">
                         {formatVnDateTime(r.cancelledAt)}
                       </TableCell>
-                      <TableCell className="max-w-[220px] text-sm">
+                      <TableCell data-card="full" data-label="Chuyến đi" className="xl:max-w-[220px] text-sm max-xl:-order-1">
                         <p className="font-mono text-xs text-muted-foreground">
                           {r.bookingId.slice(0, 8)}
                         </p>
-                        <p className="truncate" title={`${r.pickupAddress || '—'} → ${r.dropoffAddress || '—'}`}>
+                        <p className="line-clamp-2 xl:line-clamp-1 [overflow-wrap:anywhere]" title={`${r.pickupAddress || '—'} → ${r.dropoffAddress || '—'}`}>
                           {r.pickupAddress || '—'} → {r.dropoffAddress || '—'}
                         </p>
                       </TableCell>
-                      <TableCell className="text-sm">
-                        <p>{r.driverName || '—'}</p>
+                      <TableCell data-card="header" className="text-sm max-xl:-order-2">
+                        <p className="font-medium">{r.driverName || '—'}</p>
                         <p className="text-xs text-muted-foreground">{r.driverPhone || ''}</p>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell data-label="Ai huỷ" className="whitespace-nowrap text-sm">
                         <p>{cancelledByLabel(r.cancelledByRole)}</p>
                         {r.cancelReason && (
                           <p
-                            className="max-w-[160px] truncate text-xs text-muted-foreground"
+                            className="xl:max-w-[160px] line-clamp-2 xl:line-clamp-1 [overflow-wrap:anywhere] text-xs text-muted-foreground"
                             title={r.cancelReason}
                           >
                             {r.cancelReason}
@@ -368,7 +368,7 @@ export default function DriverPenaltiesPage() {
                       {/* Nhãn nói THẲNG hệ thống thấy gì; rê chuột ra tooltip giải
                           thích cơ sở. Người soát dựa vào ô này để quyết định trừ tiền
                           nên không được để mã kỹ thuật (LOW / rule A) lọt ra. */}
-                      <TableCell className="max-w-[240px] space-y-1">
+                      <TableCell data-label="Dấu hiệu" data-card="wide" className="xl:max-w-[240px] space-y-1">
                         {leakage && (
                           <Badge className={leakage.className} title={leakage.hint}>
                             {leakage.label}
@@ -391,12 +391,12 @@ export default function DriverPenaltiesPage() {
                       {/* Hàng đã phạt hiện số ĐÃ THU; hàng chưa phạt hiện số CÒN thu được.
                           Hiện collectibleAmount cho hàng đã phạt sẽ bị đọc nhầm thành
                           "còn thu thêm được chừng này". */}
-                      <TableCell className="whitespace-nowrap text-right tabular-nums">
+                      <TableCell data-label="Thu được" className="whitespace-nowrap text-right tabular-nums">
                         {r.penaltyStatus === 'ACTIVE'
                           ? formatVnd(r.penaltyAmount ?? r.collectibleAmount)
                           : formatVnd(r.collectibleAmount)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell data-label="Trạng thái" className="whitespace-nowrap">
                         <Badge className={status.className}>{status.label}</Badge>
                         {/* Ai bỏ qua và vì sao — người soát sau phải trả lời được câu
                             "tại sao chuyến này không bị phạt" mà không cần hỏi ai. */}
@@ -405,14 +405,14 @@ export default function DriverPenaltiesPage() {
                             <p>{formatVnDateTime(r.dismissedAt)}</p>
                             <p>{r.dismissedByName || 'Không rõ người bỏ qua'}</p>
                             {r.dismissNote && (
-                              <p className="max-w-[180px] whitespace-normal" title={r.dismissNote}>
+                              <p className="xl:max-w-[180px] whitespace-normal" title={r.dismissNote}>
                                 Lý do: {r.dismissNote}
                               </p>
                             )}
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap text-right')}>
+                      <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap text-right')}>
                         {tab === 'dismissed' ? (
                           <Button
                             size="sm"
@@ -428,7 +428,7 @@ export default function DriverPenaltiesPage() {
                             Khôi phục
                           </Button>
                         ) : (
-                          <div className="flex flex-col items-end gap-1.5 sm:flex-row sm:justify-end sm:gap-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
                             <Button
                               size="sm"
                               variant="destructive"
@@ -476,7 +476,7 @@ export default function DriverPenaltiesPage() {
             </TableBody>
           </Table>
         ) : (
-          <Table>
+          <Table stackBelow="xl">
             <TableHeader>
               <TableRow>
                 <TableHead className="whitespace-nowrap">Ngày phạt</TableHead>
@@ -512,35 +512,35 @@ export default function DriverPenaltiesPage() {
                   const status = penaltyStatusBadge(r.status);
                   return (
                     <TableRow key={r.id}>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell data-label="Ngày phạt" className="whitespace-nowrap text-sm">
                         {formatVnDateTime(r.createdAt)}
                       </TableCell>
-                      <TableCell className="text-sm">
-                        <p>{r.driverName || '—'}</p>
+                      <TableCell data-card="header" className="text-sm max-xl:-order-1">
+                        <p className="font-medium">{r.driverName || '—'}</p>
                         <p className="text-xs text-muted-foreground">{r.driverPhone || ''}</p>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
+                      <TableCell data-label="Mã chuyến" className="whitespace-nowrap font-mono text-xs text-muted-foreground">
                         {r.bookingId.slice(0, 8)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-right tabular-nums">
+                      <TableCell data-label="Số tiền phạt" className="whitespace-nowrap text-right tabular-nums">
                         <p>{formatVnd(r.amount)}</p>
                         <p className="text-xs text-muted-foreground">
                           thưởng {formatVnd(r.fromMain)} · ký quỹ {formatVnd(r.fromDeposit)}
                         </p>
                       </TableCell>
-                      <TableCell className="max-w-[200px] text-sm">
+                      <TableCell data-label="Lý do" data-card="wide" className="xl:max-w-[200px] text-sm">
                         <p>{REASON_LABEL[r.reasonCode]}</p>
                         {r.note && (
-                          <p className="truncate text-xs text-muted-foreground" title={r.note}>
+                          <p className="line-clamp-2 xl:line-clamp-1 [overflow-wrap:anywhere] text-xs text-muted-foreground" title={r.note}>
                             {r.note}
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell data-label="Người phạt" className="whitespace-nowrap text-sm">
                         <p>{r.createdByName || '—'}</p>
                         <p className="text-xs text-muted-foreground">{SOURCE_LABEL[r.source]}</p>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell data-label="Trạng thái" className="whitespace-nowrap">
                         <Badge className={status.className}>{status.label}</Badge>
                         {r.status === 'REVERSED' && r.reversedByName && (
                           <p className="mt-1 text-xs text-muted-foreground">
@@ -548,7 +548,7 @@ export default function DriverPenaltiesPage() {
                           </p>
                         )}
                       </TableCell>
-                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap text-right')}>
+                      <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap text-right')}>
                         {r.status === 'ACTIVE' && (
                           <Button
                             size="sm"

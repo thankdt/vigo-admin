@@ -135,7 +135,7 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
           </SelectContent>
         </Select>
 
-        <div className="relative w-full min-w-0 sm:w-56" data-search-cell="">
+        <div className="relative w-full min-w-0 sm:w-64" data-search-cell="">
           <Search aria-hidden className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
           <Input
             aria-label="Ghi chú hoặc mã quy tắc"
@@ -145,7 +145,7 @@ export function MacroSearchBar({ value, onChange, index, wardsStatus, wardsError
             maxLength={MACRO_NOTE_SEARCH_MAX}
             autoComplete="off"
             // 16px trên máy cảm ứng (iOS Safari tự phóng to khi chữ nhỏ hơn).
-            className="h-9 pl-8 text-base sm:text-xs md:text-xs [@media(pointer:coarse)]:text-base"
+            className="h-9 pl-8 text-base sm:text-xs md:text-xs [@media(hover:hover)_and_(pointer:fine)]:md:text-xs [@media(pointer:coarse)]:text-base"
           />
         </div>
 

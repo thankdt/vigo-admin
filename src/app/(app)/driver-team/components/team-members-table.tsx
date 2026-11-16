@@ -224,8 +224,8 @@ export function TeamMembersTable({
           Không có tài xế nào khớp bộ lọc.
         </p>
       ) : (
-        <div className="rounded-md border bg-card">
-          <Table>
+        <div className="overflow-hidden rounded-md border bg-card">
+          <Table stackBelow="xl">
             <TableHeader>
               <TableRow>
                 <TableHead>Tài xế</TableHead>
@@ -245,7 +245,7 @@ export function TeamMembersTable({
                 const commission = commissionRateLabel(m.commissionRate);
                 return (
                   <TableRow key={m.driverId}>
-                    <TableCell>
+                    <TableCell data-card="header">
                       <div className="font-medium">{m.fullName ?? '—'}</div>
                       <div className="text-xs text-muted-foreground">
                         <a href={`tel:${m.phone ?? ''}`} className="hover:underline">
@@ -253,12 +253,12 @@ export function TeamMembersTable({
                         </a>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Trạng thái">
                       <span className={`rounded px-2 py-0.5 text-xs ${stageBadgeClass(m.stage)}`}>
                         {stageLabel(m.stage)}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="% hoa hồng">
                       {commission.warn ? (
                         <Badge className="gap-1 bg-red-100 text-red-800 hover:bg-red-100">
                           <AlertTriangle className="h-3 w-3" />
@@ -268,11 +268,11 @@ export function TeamMembersTable({
                         <span className="text-sm">{commission.text}</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-sm">{m.ownerName ?? '—'}</TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell data-label="Người phụ trách" className="text-sm">{m.ownerName ?? '—'}</TableCell>
+                    <TableCell data-label="Tỉnh phụ trách" data-card="wide" className="text-sm">
                       {assignedProvinceLabels(m).join(', ') || '—'}
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell data-label="Hẹn gọi lại" className="text-sm">
                       <span
                         className={
                           isFollowUpOverdue(m.nextFollowUpAt) ? 'font-medium text-red-600' : ''
@@ -281,12 +281,12 @@ export function TeamMembersTable({
                         {vnDay(m.nextFollowUpAt)}
                       </span>
                     </TableCell>
-                    <TableCell className="text-sm">
+                    <TableCell data-label="Ngày vào team" className="text-sm">
                       {vnDay(m.stageChangedAt ?? m.createdAt)}
                     </TableCell>
-                    <TableCell className="text-right">{m.completedTripsInRange}</TableCell>
-                    <TableCell className="text-right">{vnDay(m.lastCompletedAt)}</TableCell>
-                    <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <TableCell data-label="Chuyến trong kỳ" className="text-right">{m.completedTripsInRange}</TableCell>
+                    <TableCell data-label="Chuyến gần nhất" className="text-right">{vnDay(m.lastCompletedAt)}</TableCell>
+                    <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                       <Button variant="ghost" size="sm" onClick={() => onOpenDriver(m.driverId, m)}>
                         Chi tiết
                       </Button>

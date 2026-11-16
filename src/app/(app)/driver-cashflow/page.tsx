@@ -153,7 +153,7 @@ export default function DriverCashflowPage() {
       </Card>
 
       <Card>
-        <Table>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Thời gian (VN)</TableHead>
@@ -176,22 +176,22 @@ export default function DriverCashflowPage() {
                 const isIn = r.direction === 'in';
                 return (
                   <TableRow key={r.id}>
-                    <TableCell className="whitespace-nowrap">{fmtVnTime(r.createdAt)}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Thời gian" className="whitespace-nowrap">{fmtVnTime(r.createdAt)}</TableCell>
+                    <TableCell data-card="header" className="max-xl:-order-1">
                       <div className="font-medium">{r.driverName || '—'}</div>
                       <div className="text-xs text-muted-foreground">{r.driverPhone || '—'}</div>
                     </TableCell>
-                    <TableCell className="text-sm">{r.htxName || '—'}</TableCell>
-                    <TableCell className="font-mono text-xs uppercase">{r.plate || '—'}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="HTX" className="text-sm">{r.htxName || '—'}</TableCell>
+                    <TableCell data-label="Biển số" className="font-mono text-xs uppercase">{r.plate || '—'}</TableCell>
+                    <TableCell data-label="Loại" data-card="wide">
                       <Badge variant="outline" className={isIn ? 'border-green-300 text-green-700 dark:text-green-400' : 'border-red-300 text-red-600'}>
                         {CAT_LABEL[r.category] ?? 'Khác'}
                       </Badge>
-                      {r.description && <div className="mt-0.5 max-w-[220px] truncate text-xs text-muted-foreground" title={r.description}>{r.description}</div>}
+                      {r.description && <div className="mt-0.5 xl:max-w-[220px] xl:truncate text-xs text-muted-foreground" title={r.description}>{r.description}</div>}
                     </TableCell>
-                    <TableCell className="whitespace-nowrap text-sm">{walletLabel(r.walletType)}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.category === 'payos' ? (r.refCode || '—') : '—'}</TableCell>
-                    <TableCell className={`text-right tabular-nums font-semibold ${isIn ? 'text-green-600 dark:text-green-400' : 'text-red-600'}`}>
+                    <TableCell data-label="Ví" className="whitespace-nowrap text-sm">{walletLabel(r.walletType)}</TableCell>
+                    <TableCell data-label="Mã giao dịch" className="font-mono text-xs">{r.category === 'payos' ? (r.refCode || '—') : '—'}</TableCell>
+                    <TableCell data-label="Số tiền" className={`text-right tabular-nums font-semibold ${isIn ? 'text-green-600 dark:text-green-400' : 'text-red-600'}`}>
                       {isIn ? '+' : '−'}{fmtVnd(r.amount)}
                     </TableCell>
                   </TableRow>

@@ -275,8 +275,37 @@ export function UsersTable() {
           </Select>
         </div>
       </div>
-      <Card>
-        <Table>
+      <Card className="[container-type:inline-size]">
+        <div data-stack-sortbar="xl" className="flex items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2 text-xs">
+          <span className="font-medium text-muted-foreground">
+            {totalItems.toLocaleString('vi-VN')} người dùng
+          </span>
+          <label className="flex items-center gap-1.5 text-muted-foreground">
+            <span>Sắp xếp:</span>
+            <select
+              aria-label="Sắp xếp người dùng"
+              className="h-8 rounded-md border bg-background px-2 text-xs text-foreground [@media(pointer:coarse)]:text-base"
+              value={sortConfig ? `${String(sortConfig.key)}:${sortConfig.direction}` : 'default'}
+              onChange={(e) => {
+                if (e.target.value === 'default') {
+                  setSortConfig(null);
+                } else {
+                  const [key, direction] = e.target.value.split(':') as [SortKey, 'ascending' | 'descending'];
+                  setSortConfig({ key, direction });
+                }
+              }}
+            >
+              <option value="default">Mặc định</option>
+              <option value="createdAt:descending">Ngày tạo (mới nhất)</option>
+              <option value="createdAt:ascending">Ngày tạo (cũ nhất)</option>
+              <option value="name:ascending">Tên (A → Z)</option>
+              <option value="name:descending">Tên (Z → A)</option>
+              <option value="phone:ascending">SĐT (A → Z)</option>
+              <option value="status:ascending">Trạng thái</option>
+            </select>
+          </label>
+        </div>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               <TableHead>
@@ -347,15 +376,15 @@ export function UsersTable() {
                 className="cursor-pointer"
                 onClick={() => openUserDetail(user.id)}
               >
-                <TableCell className="font-medium">
+                <TableCell data-card="header" className="font-medium">
                   <div className="flex items-center gap-3">
                     <Avatar>
                       <AvatarImage src={user.avatarUrl} alt={user.name} data-ai-hint="person portrait" />
                       <AvatarFallback>{user.name?.charAt(0) || '?'}</AvatarFallback>
                     </Avatar>
-                    <div className="grid">
+                    <div className="grid min-w-0">
                       <span className="font-semibold">{user.name}</span>
-                      <span className="text-sm text-muted-foreground">{user.email}</span>
+                      <span className="text-sm text-muted-foreground break-all">{user.email}</span>
                     </div>
                   </div>
                 </TableCell>
@@ -368,10 +397,10 @@ export function UsersTable() {
                   lại thao tác vừa làm, không phải để tra cứu — thêm nút mở số vào đó là mở
                   rộng bề mặt mà không ai cần.
                 */}
-                <TableCell>
+                <TableCell data-label="Số điện thoại">
                   <PhoneCell userId={user.id} phone={user.phone} surface="users-list" />
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Loại">
                   {user.role === 'TRANSPORT_COMPANY_OWNER' ? (
                     <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300 hover:bg-purple-100">
                       Chủ HTX
@@ -380,7 +409,7 @@ export function UsersTable() {
                     <Badge variant="secondary">Khách</Badge>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Hạng">
                   {(() => {
                     const tier = user.loyaltyTier ?? 'MEMBER';
                     const tierStyles: Record<string, { label: string; className: string }> = {
@@ -393,13 +422,13 @@ export function UsersTable() {
                     return <Badge className={`${t.className} hover:${t.className}`}>{t.label}</Badge>;
                   })()}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell data-label="Số dư" className="text-right tabular-nums">
                   {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(user.currentBalance ?? 0)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums">
+                <TableCell data-label="Đã rút" className="text-right tabular-nums">
                   {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(user.totalWithdrawn ?? 0)}
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Trạng thái">
                   {user.deletedAt ? (
                     <Badge variant="destructive">Đã xoá</Badge>
                   ) : (
@@ -408,14 +437,14 @@ export function UsersTable() {
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell>
+                <TableCell data-label="Ngày tạo">
                   <span className="text-sm text-muted-foreground">
                     {user.createdAt ? new Date(user.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
                   </span>
                 </TableCell>
                 {/* Stop propagation so the action menu doesn't trigger the row's
                     detail-page navigation when clicked. */}
-                <TableCell className={STICKY_ACTION_CELL_CLASS} onClick={(e) => e.stopPropagation()}>
+                <TableCell data-card="menu" className={STICKY_ACTION_CELL_CLASS} onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
@@ -566,7 +595,7 @@ export function UsersTable() {
                 {stats.referees.length === 0 ? (
                   <div className="text-sm text-muted-foreground py-4 text-center">User này chưa giới thiệu được ai.</div>
                 ) : (
-                  <Table>
+                  <Table stackBelow="sm">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Người được mời</TableHead>
@@ -579,20 +608,20 @@ export function UsersTable() {
                     <TableBody>
                       {stats.referees.map((r) => (
                         <TableRow key={r.refereeId}>
-                          <TableCell>
+                          <TableCell data-card="header">
                             <div className="font-medium">{r.refereeName ?? '—'}</div>
                             <div className="text-xs text-muted-foreground">{r.refereePhone ?? r.refereeId.slice(0, 8)}</div>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">
+                          <TableCell data-label="Chuyến" className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
+                          <TableCell data-label="Tiền nhận" className="text-right tabular-nums font-medium">
                             {new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(r.tripRewardTotal)}
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-label="Thưởng đăng ký">
                             {r.signupRewardCredited
                               ? <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Đã trả</Badge>
                               : <Badge variant="secondary">Chưa</Badge>}
                           </TableCell>
-                          <TableCell className="text-sm text-muted-foreground">
+                          <TableCell data-label="Ngày mời" className="text-sm text-muted-foreground">
                             {new Date(r.createdAt).toLocaleDateString('vi-VN')}
                           </TableCell>
                         </TableRow>

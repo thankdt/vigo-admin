@@ -2,18 +2,38 @@ import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
-const Table = React.forwardRef<
-  HTMLTableElement,
-  React.HTMLAttributes<HTMLTableElement>
->(({ className, ...props }, ref) => (
-  <div className="relative w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
-    <table
-      ref={ref}
-      className={cn("w-full caption-bottom text-sm", className)}
-      {...props}
-    />
-  </div>
-))
+export type TableStackBreakpoint = "sm" | "md" | "lg" | "xl" | "2xl"
+
+export interface TableProps extends React.HTMLAttributes<HTMLTableElement> {
+  /**
+   * Below this breakpoint (`sm`=640px, `md`=768px, `lg`=1024px, `xl`=1280px, `2xl`=1100px container / 1280px viewport),
+   * renders rows as stacked multi-column cards with zero horizontal scrolling.
+   */
+  stackBelow?: TableStackBreakpoint
+}
+
+const Table = React.forwardRef<HTMLTableElement, TableProps>(
+  ({ className, stackBelow, ...props }, ref) => (
+    <div
+      data-stack-wrap={stackBelow}
+      className={cn(
+        "relative w-full overflow-x-auto overscroll-x-contain first:rounded-t-[inherit] last:rounded-b-[inherit] [-webkit-overflow-scrolling:touch]",
+        stackBelow && "[container-type:inline-size]",
+        stackBelow === "sm" && "max-sm:overflow-x-hidden",
+        stackBelow === "md" && "max-md:overflow-x-hidden",
+        stackBelow === "lg" && "max-lg:overflow-x-hidden",
+        (stackBelow === "xl" || stackBelow === "2xl") && "max-xl:overflow-x-hidden"
+      )}
+    >
+      <table
+        ref={ref}
+        data-stack={stackBelow}
+        className={cn("w-full caption-bottom text-sm", className)}
+        {...props}
+      />
+    </div>
+  )
+)
 Table.displayName = "Table"
 
 const TableHeader = React.forwardRef<
@@ -84,7 +104,7 @@ const TableHead = React.forwardRef<
   <th
     ref={ref}
     className={cn(
-      "h-10 px-2.5 text-left align-middle font-medium whitespace-nowrap text-muted-foreground sm:h-11 sm:px-3 lg:px-4 [&:has([role=checkbox])]:pr-0 [&>button:not([role=checkbox]):not([role=switch])]:h-8 [&>button:not([role=checkbox]):not([role=switch])]:px-2 [@media(pointer:coarse)]:[&>button:not([role=checkbox]):not([role=switch])]:min-h-9 [&:not(.text-center):not(.text-right)>button:not([role=checkbox]):not([role=switch]):not([class*='ml-'])]:-ml-2 [&.text-center>button:not([role=checkbox]):not([role=switch])]:-mx-2 [&.text-right>button:not([role=checkbox]):not([role=switch])]:-mr-2",
+      "h-10 px-2.5 text-left align-middle font-medium whitespace-nowrap text-muted-foreground sm:h-11 sm:px-3 2xl:px-4 [&:has([role=checkbox])]:pr-0 [&>button:not([role=checkbox]):not([role=switch])]:h-8 [&>button:not([role=checkbox]):not([role=switch])]:px-2 [@media(pointer:coarse)]:[&>button:not([role=checkbox]):not([role=switch])]:min-h-9 [&:not(.text-center):not(.text-right)>button:not([role=checkbox]):not([role=switch]):not([class*='ml-'])]:-ml-2 [&.text-center>button:not([role=checkbox]):not([role=switch])]:-mx-2 [&.text-right>button:not([role=checkbox]):not([role=switch])]:-mr-2",
       className
     )}
     {...props}
@@ -98,7 +118,7 @@ const TableCell = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <td
     ref={ref}
-    className={cn("px-2.5 py-2.5 align-middle sm:px-3 sm:py-3 lg:p-4 [&:has([role=checkbox])]:pr-0", className)}
+    className={cn("px-2.5 py-2.5 align-middle sm:px-3 sm:py-3 2xl:p-4 [&:has([role=checkbox])]:pr-0", className)}
     {...props}
   />
 ))

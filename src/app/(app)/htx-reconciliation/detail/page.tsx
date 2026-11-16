@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Loader2, ArrowLeft, Building2, Download } from 'lucide-react';
+import { Loader2, ArrowLeft, Building2, Download, Table2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,7 @@ import { getHtxTrips, type HtxTripRow, type HtxReconTotals } from '@/lib/api';
 import { downloadXlsxGrouped } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../../finance/components/finance-filter';
 import { expandHtxRow, HTX_LEAF_COLS, buildHtxExportHeader, HTX_PAYMENT_LABEL } from '../htx-recon-shared';
-import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from '../htx-recon-table';
+import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells, HtxMobileFinancialBlock } from '../htx-recon-table';
 
 const fmtVnTime = (iso: string) =>
   new Intl.DateTimeFormat('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
@@ -31,6 +31,7 @@ export default function HtxDetailPage() {
   const [trips, setTrips] = React.useState<HtxTripRow[]>([]);
   const [totals, setTotals] = React.useState<HtxReconTotals | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [showWideMatrix, setShowWideMatrix] = React.useState(false);
 
   const load = React.useCallback(async () => {
     if (!id) { setLoading(false); return; }
@@ -79,6 +80,16 @@ export default function HtxDetailPage() {
         </div>
         <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
           <Badge variant="secondary">{trips.length} chuyến</Badge>
+          <Button
+            type="button"
+            variant={showWideMatrix ? 'secondary' : 'outline'}
+            size="sm"
+            className="hidden xl:inline-flex"
+            onClick={() => setShowWideMatrix((v) => !v)}
+          >
+            <Table2 className="mr-1.5 h-4 w-4" />
+            {showWideMatrix ? 'Chế độ gọn' : 'Bảng đầy đủ'}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || trips.length === 0}>
             <Download className="mr-1.5 h-4 w-4" /> Xuất Excel
           </Button>
@@ -90,7 +101,53 @@ export default function HtxDetailPage() {
       </Card>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Mặc định hiển thị danh sách chuyến đối soát gọn không cuộn ngang trên mọi màn hình (kể cả MacBook) */}
+        <div data-htx-compact="" className={showWideMatrix ? 'xl:hidden divide-y' : 'divide-y'}>
+          {loading ? (
+            <div className="flex h-24 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : trips.length === 0 ? (
+            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+              Không có chuyến nào trong kỳ.
+            </div>
+          ) : (
+            <>
+              {totals && (
+                <div className="bg-muted/40 p-3.5 sm:p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold">TỔNG KỲ ({trips.length} chuyến)</span>
+                    <span className="text-xs text-muted-foreground">{HTX_PAYMENT_LABEL}</span>
+                  </div>
+                  <HtxMobileFinancialBlock row={expandHtxRow(totals)} />
+                </div>
+              )}
+              {trips.map((t, i) => (
+                <div key={t.bookingId} className="p-3.5 sm:p-4 space-y-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="font-semibold text-sm">
+                        #{i + 1} · {t.driverName || '—'}
+                        {t.plate ? <span className="ml-1.5 font-mono text-xs uppercase text-muted-foreground">({t.plate})</span> : null}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        SĐT: {t.driverPhone || '—'} · Hoàn thành: {fmtVnTime(t.completedAt ?? t.createdAt)}
+                      </div>
+                      <div className="font-mono text-[11px] text-muted-foreground break-all">
+                        Mã chuyến: {t.bookingId}
+                      </div>
+                    </div>
+                  </div>
+                  <HtxMobileFinancialBlock row={expandHtxRow(t)} />
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Tuỳ chọn mở bảng ma trận 26 cột đầy đủ (khớp file Excel) trên màn hình lớn */}
+        {showWideMatrix && (
+        <div className="hidden xl:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -138,6 +195,7 @@ export default function HtxDetailPage() {
             )}
           </Table>
         </div>
+        )}
       </Card>
       <p className="text-xs text-muted-foreground">
         Đơn vị: đồng (đ). VAT = 8%. Tổng khách trả = (Cước vận tải HTX + VAT) + (Phí APP trước VAT + VAT), và luôn bằng (Tài xế thực nhận + HTX, ĐVCCX nhận + VIGO nhận).

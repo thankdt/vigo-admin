@@ -442,7 +442,7 @@ function GroupCard({
         </div>
       </div>
 
-      <Table>
+      <Table stackBelow="xl">
         <TableHeader>
           <TableRow>
             <TableHead>Khách</TableHead>
@@ -459,7 +459,7 @@ function GroupCard({
         <TableBody>
           {g.passengers.map((p) => (
             <TableRow key={p.bookingId}>
-              <TableCell>
+              <TableCell data-card="header">
                 <div className="font-medium">{p.customerName ?? '—'}</div>
                 <div className="font-mono text-[11px] text-muted-foreground">
                   <button
@@ -473,16 +473,16 @@ function GroupCard({
                   {p.isAnchor && <span className="ml-1.5">(chuyến chủ)</span>}
                 </div>
               </TableCell>
-              <TableCell className="text-xs">
+              <TableCell data-label="Cặp tỉnh" className="text-xs">
                 {/* `routeName` nay là CẶP TỈNH đón → trả. Cổng KHAC_CAP_TINH của bộ ghép bảo đảm
                     cả nhóm cùng cặp, nên không còn ca "khác tuyến chuyến chủ" để đánh dấu. */}
                 {p.routeName ?? '—'}
               </TableCell>
-              <TableCell className="whitespace-nowrap font-mono text-xs">
+              <TableCell data-label="Điện thoại" className="whitespace-nowrap font-mono text-xs">
                 {hienSdt ? (p.customerPhone ?? '—') : maskPhone(p.customerPhone)}
               </TableCell>
-              <TableCell className="whitespace-nowrap">{vnTime(p.pickupAt)}</TableCell>
-              <TableCell className="whitespace-nowrap">
+              <TableCell data-label="Khách đặt" className="whitespace-nowrap">{vnTime(p.pickupAt)}</TableCell>
+              <TableCell data-label="Dự trù đón" className="whitespace-nowrap">
                 <span className="font-medium">{vnTime(p.etaPickupAt)}</span>
                 {(() => {
                   const d = delayLabel(p.pickupDelayMin);
@@ -496,7 +496,7 @@ function GroupCard({
                   return <div className={`text-[11px] ${cls}`}>{d.text}</div>;
                 })()}
               </TableCell>
-              <TableCell className="min-w-[200px] whitespace-normal break-words text-xs">
+              <TableCell data-label="Điểm đón" data-card="wide" className="2xl:min-w-[180px] whitespace-normal break-words text-xs">
                 {addressText(p.pickupAddress)}
                 {p.pickupCrossMeters > 0 && (
                   <span className="ml-1 text-muted-foreground">
@@ -504,7 +504,7 @@ function GroupCard({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="min-w-[200px] whitespace-normal break-words text-xs">
+              <TableCell data-label="Điểm trả" data-card="wide" className="2xl:min-w-[180px] whitespace-normal break-words text-xs">
                 {addressText(p.dropoffAddress)}
                 {p.dropoffCrossMeters > 0 && (
                   <span className="ml-1 text-muted-foreground">
@@ -512,13 +512,13 @@ function GroupCard({
                   </span>
                 )}
               </TableCell>
-              <TableCell className="text-right">{p.seats}</TableCell>
-              <TableCell className="text-right font-medium">
+              <TableCell data-label="Số ghế" className="text-right">{p.seats}</TableCell>
+              <TableCell data-label="Giá cước" className="text-right font-medium">
                 {formatVnd(p.price)}
               </TableCell>
             </TableRow>
           ))}
-          <TableRow className="bg-muted/40">
+          <TableRow data-card="summary" className="bg-muted/40">
             <TableCell colSpan={7} className="font-semibold">
               Tổng nhóm
             </TableCell>

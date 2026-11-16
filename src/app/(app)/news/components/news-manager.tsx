@@ -135,7 +135,7 @@ export function NewsManager() {
                         </div>
                     </div>
 
-                    <Table>
+                    <Table stackBelow="md">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Hình ảnh</TableHead>
@@ -176,7 +176,7 @@ export function NewsManager() {
                                                 ) : <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">Không có</div>}
                                             </div>
                                         </TableCell>
-                                        <TableCell className="font-medium">
+                                        <TableCell data-card="header" className="font-medium max-md:-order-1">
                                             <div>{item.title}</div>
                                             {item.link && (
                                                 <a href={item.link} target="_blank" rel="noreferrer" className="text-xs text-blue-500 hover:underline flex items-center gap-1">
@@ -184,13 +184,13 @@ export function NewsManager() {
                                                 </a>
                                             )}
                                         </TableCell>
-                                        <TableCell className="max-w-xs truncate text-muted-foreground">{item.description}</TableCell>
-                                        <TableCell>
+                                        <TableCell data-label="Mô tả" data-card="full" className="md:max-w-xs md:truncate text-muted-foreground">{item.description}</TableCell>
+                                        <TableCell data-label="Trạng thái">
                                             <Badge variant={item.isActive ? "default" : "secondary"}>
                                                 {item.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                                        <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
                                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(item)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>

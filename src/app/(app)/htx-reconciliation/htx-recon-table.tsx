@@ -88,3 +88,69 @@ export function HtxLeafCells({ row }: { row: ExpandedHtx }) {
     </>
   );
 }
+
+/**
+ * Zero-horizontal-scroll financial summary + expandable 19-metric breakdown
+ * used inside mobile / iPad / tablet cards (`< xl`) on both HTX recon pages.
+ */
+export function HtxMobileFinancialBlock({
+  row,
+  defaultExpanded = false,
+}: {
+  row: ExpandedHtx;
+  defaultExpanded?: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 text-xs">
+        <div className="rounded-md bg-muted/50 p-2">
+          <div className="text-muted-foreground">Tổng khách trả</div>
+          <div className="mt-0.5 font-semibold tabular-nums text-sm">{fmt(row.customerTotal)} đ</div>
+        </div>
+        <div className="rounded-md bg-purple-50/70 dark:bg-purple-950/30 p-2">
+          <div className="text-muted-foreground">Tài xế thực nhận</div>
+          <div className="mt-0.5 font-semibold tabular-nums text-sm text-purple-700 dark:text-purple-400">
+            {fmt(row.driverNet)} đ
+          </div>
+        </div>
+        <div className="rounded-md bg-purple-50/70 dark:bg-purple-950/30 p-2">
+          <div className="text-muted-foreground">HTX nhận</div>
+          <div className="mt-0.5 font-semibold tabular-nums text-sm text-purple-700 dark:text-purple-400">
+            {fmt(row.htxTotal)} đ
+          </div>
+        </div>
+        <div className="rounded-md bg-purple-50/70 dark:bg-purple-950/30 p-2">
+          <div className="text-muted-foreground">VIGO nhận</div>
+          <div className="mt-0.5 font-semibold tabular-nums text-sm text-purple-700 dark:text-purple-400">
+            {fmt(row.vigoTotal)} đ
+          </div>
+        </div>
+      </div>
+      <details
+        open={defaultExpanded || undefined}
+        className="rounded-md border bg-background/60 px-2.5 py-1.5 text-xs"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <summary className="cursor-pointer select-none font-medium text-muted-foreground hover:text-foreground">
+          Chi tiết phân bổ thuế &amp; phí
+        </summary>
+        <dl className="mt-2 grid grid-cols-1 gap-x-4 gap-y-1 sm:grid-cols-2 border-t pt-2">
+          {HTX_LEAF_COLS.map((c) => (
+            <div key={c.key} className="flex items-baseline justify-between gap-2 py-0.5">
+              <dt className="text-muted-foreground min-w-0 break-words">
+                {c.group ? `${c.group}: ${c.label}` : c.label}
+              </dt>
+              <dd
+                className={`shrink-0 tabular-nums ${
+                  c.highlight ? 'font-semibold text-purple-700 dark:text-purple-400' : 'font-medium'
+                }`}
+              >
+                {fmt(row[c.key])} đ
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+    </div>
+  );
+}

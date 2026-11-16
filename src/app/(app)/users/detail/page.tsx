@@ -497,15 +497,15 @@ function UserBookingsCard({ customerId }: { customerId: string }) {
         <CardTitle className="text-base">Chuyến đi đã đặt ({total.toLocaleString('vi-VN')})</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="rounded-md border">
-          <Table>
+        <div className="overflow-hidden rounded-md border">
+          <Table stackBelow="md">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[110px]">Mã</TableHead>
+                <TableHead className="md:w-[110px]">Mã</TableHead>
                 <TableHead>Điểm đón → trả</TableHead>
-                <TableHead className="w-[120px]">Trạng thái</TableHead>
-                <TableHead className="w-[140px] text-right">Giá cuối</TableHead>
-                <TableHead className="w-[140px]">Thời gian đặt</TableHead>
+                <TableHead className="md:w-[120px]">Trạng thái</TableHead>
+                <TableHead className="md:w-[140px] text-right">Giá cuối</TableHead>
+                <TableHead className="md:w-[140px]">Thời gian đặt</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -524,18 +524,18 @@ function UserBookingsCard({ customerId }: { customerId: string }) {
               ) : (
                 bookings.map((b) => (
                   <TableRow key={b.id}>
-                    <TableCell className="font-mono text-xs">{String(b.id ?? '').slice(0, 8)}</TableCell>
-                    <TableCell className="text-xs">
-                      <div className="line-clamp-1">{addressString(b.pickupAddress)}</div>
-                      <div className="line-clamp-1 text-muted-foreground">→ {addressString(b.dropoffAddress)}</div>
+                    <TableCell data-label="Mã chuyến" className="font-mono text-xs">{String(b.id ?? '').slice(0, 8)}</TableCell>
+                    <TableCell data-card="header" className="text-xs max-md:-order-1">
+                      <div className="line-clamp-2 md:line-clamp-1">{addressString(b.pickupAddress)}</div>
+                      <div className="line-clamp-2 md:line-clamp-1 text-muted-foreground">→ {addressString(b.dropoffAddress)}</div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Trạng thái">
                       <Badge variant={STATUS_VARIANT[b.status] ?? 'secondary'}>
                         {BOOKING_STATUS_LABEL[b.status] ?? b.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right text-sm">{fmtVnd(b.finalPrice ?? b.price)}</TableCell>
-                    <TableCell className="text-xs">{formatVnDateTime(b.createdAt)}</TableCell>
+                    <TableCell data-label="Giá cuối" className="text-right text-sm tabular-nums">{fmtVnd(b.finalPrice ?? b.price)}</TableCell>
+                    <TableCell data-label="Thời gian đặt" className="text-xs">{formatVnDateTime(b.createdAt)}</TableCell>
                   </TableRow>
                 ))
               )}

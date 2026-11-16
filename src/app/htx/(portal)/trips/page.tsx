@@ -144,11 +144,11 @@ export default function HtxTripsPage() {
       </div>
 
       <Card>
-        <Table>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               {/* Bề rộng cố định để mã luôn xuống dòng cùng một chỗ ở mọi dòng, mọi màn hình. */}
-              <TableHead className="w-[11rem]">Mã chuyến</TableHead>
+              <TableHead className="xl:w-[11rem]">Mã chuyến</TableHead>
               <TableHead>Thời gian</TableHead>
               <TableHead>Hành trình</TableHead>
               <TableHead>Khách</TableHead>
@@ -181,17 +181,17 @@ export default function HtxTripsPage() {
                       (htx-reconciliation/detail) để HTX tra thẳng, khỏi đoán. Ngắt dòng bằng CSS
                       (break-all) chứ KHÔNG cắt chuỗi trong code: cắt thì lúc copy sẽ dính ký tự
                       xuống dòng vào giữa mã, dán sang ô tìm kiếm Excel là không ra kết quả. */}
-                  <TableCell className="align-top font-mono text-xs break-all">{t.id}</TableCell>
-                  <TableCell className="whitespace-nowrap align-top">
+                  <TableCell data-label="Mã chuyến" className="align-top font-mono text-xs break-all">{t.id}</TableCell>
+                  <TableCell data-label="Thời gian" className="whitespace-nowrap align-top">
                     <div className="text-sm">{formatVnDateTime(t.eventAt)}</div>
                   </TableCell>
-                  <TableCell className="align-top">
-                    <div className="max-w-[22rem] text-sm">
-                      <div className="truncate" title={t.pickup ?? undefined}>
+                  <TableCell data-card="route" data-label="Hành trình" className="align-top">
+                    <div className="xl:max-w-[22rem] text-sm">
+                      <div className="line-clamp-2 xl:line-clamp-1 [overflow-wrap:anywhere]" title={t.pickup ?? undefined}>
                         <span className="text-muted-foreground">Đón: </span>
                         {t.pickup ?? '—'}
                       </div>
-                      <div className="truncate" title={t.dropoff ?? undefined}>
+                      <div className="line-clamp-2 xl:line-clamp-1 [overflow-wrap:anywhere]" title={t.dropoff ?? undefined}>
                         <span className="text-muted-foreground">Trả: </span>
                         {t.dropoff ?? '—'}
                       </div>
@@ -200,22 +200,22 @@ export default function HtxTripsPage() {
                       <div className="text-xs text-muted-foreground">{t.distanceKm} km</div>
                     )}
                   </TableCell>
-                  <TableCell className="align-top">{t.customerName ?? '—'}</TableCell>
-                  <TableCell className="align-top">
+                  <TableCell data-label="Khách hàng" className="align-top">{t.customerName ?? '—'}</TableCell>
+                  <TableCell data-card="header" className="align-top max-xl:-order-2">
                     <div className="text-sm font-medium">{t.driver.name ?? '—'}</div>
                     <div className="text-xs text-muted-foreground">{t.driver.plate ?? '—'}</div>
                   </TableCell>
-                  <TableCell className="text-right align-top tabular-nums">
+                  <TableCell data-label="Giá cước" className="text-right align-top tabular-nums">
                     {t.price != null ? formatCurrency(t.price) : '—'}
                   </TableCell>
-                  <TableCell className="text-right align-top tabular-nums font-medium">
+                  <TableCell data-label="Khách trả" className="text-right align-top tabular-nums font-medium">
                     {t.finalPrice != null ? formatCurrency(t.finalPrice) : '—'}
                   </TableCell>
-                  <TableCell className="align-top">
+                  <TableCell data-label="Trạng thái" className="align-top">
                     {t.status === 'CANCELLED' ? (
                       <div className="space-y-1">
                         <Badge variant="destructive">Đã huỷ</Badge>
-                        <div className="max-w-[16rem] text-xs text-muted-foreground">{cancelText(t)}</div>
+                        <div className="xl:max-w-[16rem] text-xs text-muted-foreground">{cancelText(t)}</div>
                       </div>
                     ) : (
                       <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">

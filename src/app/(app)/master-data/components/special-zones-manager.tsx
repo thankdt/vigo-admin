@@ -609,7 +609,7 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
               </select>
             </div>
           </div>
-          <Table>
+          <Table stackBelow="xl">
               <TableHeader>
                 <TableRow>
                   <TableHead>
@@ -655,13 +655,13 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                   </TableRow>
                 ) : filteredRows.map((r) => (
                   <TableRow key={r.id} data-testid={`flat-row-${r.wardCode ?? 'default'}`}>
-                    <TableCell className="text-sm font-medium">
+                    <TableCell data-card="header" className="text-sm font-medium">
                       {flatPriceTargetLabel(zone, r.wardCode, r.wardName)}
                     </TableCell>
                     {FLAT_PRICE_FIELDS.map((f) => {
                       const v = r[f.key];
                       return (
-                        <TableCell key={f.key} className="text-right text-sm tabular-nums">
+                        <TableCell key={f.key} data-label={f.label} className="text-right text-sm tabular-nums">
                           {v === null || v === undefined ? (
                             <span className="text-slate-400">—</span>
                           ) : (
@@ -678,10 +678,10 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
                         </TableCell>
                       );
                     })}
-                    <TableCell className="text-xs text-slate-500 max-w-[16rem] truncate" title={r.note ?? undefined}>
+                    <TableCell data-label="Ghi chú" data-card="wide" className="text-xs text-slate-500 xl:max-w-[16rem] xl:truncate" title={r.note ?? undefined}>
                       {r.note ?? ''}
                     </TableCell>
-                    <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                       <Button
                         variant="ghost"
                         size="icon"

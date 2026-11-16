@@ -264,7 +264,7 @@ export default function AgentAdminPage() {
       )}
 
       <Card>
-        <Table>
+        <Table stackBelow="md">
           <TableHeader>
             <TableRow>
               <TableHead>Người dùng</TableHead>
@@ -282,7 +282,7 @@ export default function AgentAdminPage() {
             ) : (
               rows.map((r) => (
                 <TableRow key={r.userId}>
-                  <TableCell>
+                  <TableCell data-card="header">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
                         <AvatarFallback>{(r.userFullName ?? r.userPhone ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
@@ -293,19 +293,19 @@ export default function AgentAdminPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Loại tài khoản">
                     {r.isDriver
                       ? <Badge variant="default" className="gap-1"><Car className="h-3 w-3" /> Tài xế</Badge>
                       : <Badge variant="secondary">Khách</Badge>}
                   </TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Trạng thái"><StatusBadge status={r.status} /></TableCell>
+                  <TableCell data-label="Hoa hồng" className="text-right tabular-nums">
                     {r.commissionPercent != null
                       ? `${r.commissionPercent}%`
                       : <span className="text-muted-foreground">nhóm</span>}
                   </TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
-                    <div className="flex flex-col items-end gap-1 sm:flex-row sm:justify-end">
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
                       {r.status === 'PENDING' && (
                         <>
                           <Button size="sm" className="h-8" onClick={() => openPromote(r.userId, r.userFullName || r.userPhone || r.userId.slice(0, 8), r)}>

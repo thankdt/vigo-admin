@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   SidebarProvider, Sidebar, SidebarHeader, SidebarContent, SidebarFooter,
-  SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger,
+  SidebarGroup, SidebarGroupContent, SidebarMenu, SidebarMenuItem, SidebarMenuButton,
+  SidebarInset, SidebarRail, SidebarTrigger, useSidebar,
 } from '@/components/ui/sidebar';
 import { LogOut, Wallet } from 'lucide-react';
 import { getAgentMe, type AgentMe } from '@/lib/api';
@@ -13,14 +14,22 @@ import { stripUrlTokens } from '../strip-url-tokens';
 import React from 'react';
 
 /** Số dư tài khoản hoa hồng luôn hiện để đại lý dễ quan sát. Ẩn khi backend chưa trả walletBalance. */
-function WalletChip({ me }: { me: AgentMe | null }) {
+function WalletChip({ me, compactMobile }: { me: AgentMe | null; compactMobile?: boolean }) {
   if (me?.walletBalance == null) return null;
   const label = me.walletType === 'DRIVER_MAIN' ? 'Tài khoản tài xế' : 'Tài khoản hoa hồng';
+  const shortLabel = me.walletType === 'DRIVER_MAIN' ? 'TK tài xế' : 'Hoa hồng';
   return (
-    <div className="flex items-center gap-1.5 rounded-lg bg-indigo-50/90 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50 px-2.5 py-1 text-xs font-medium shadow-2xs">
+    <div className="flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-indigo-50/90 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/50 px-2 sm:px-2.5 py-1 text-xs font-medium shadow-2xs">
       <Wallet className="h-3.5 w-3.5 shrink-0 text-indigo-600 dark:text-indigo-400" />
-      <span className="font-semibold">{label}:</span>
-      <span className="font-bold">{me.walletBalance.toLocaleString('vi-VN')}₫</span>
+      {compactMobile ? (
+        <>
+          <span className="font-semibold sm:hidden">{shortLabel}:</span>
+          <span className="hidden font-semibold sm:inline">{label}:</span>
+        </>
+      ) : (
+        <span className="font-semibold">{label}:</span>
+      )}
+      <span className="font-bold tabular-nums">{me.walletBalance.toLocaleString('vi-VN')}₫</span>
     </div>
   );
 }
@@ -59,72 +68,88 @@ export default function AgentPortalLayout({ children }: { children: React.ReactN
   };
 
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader className="p-4 space-y-3">
-          <Link href="/agent-portal/dashboard" className="flex items-center gap-2">
+    <SidebarProvider mobileBreakpoint={1024}>
+      <PortalDrawerAutoClose pathname={pathname} />
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="p-4 space-y-3 group-data-[collapsible=icon]:p-2 group-data-[collapsible=icon]:space-y-0">
+          <Link href="/agent-portal/dashboard" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/vigo-wordmark.png" alt="ViiGO" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/vigo-icon.png" alt="ViiGO" className="hidden h-8 w-8 shrink-0 rounded group-data-[collapsible=icon]:block" />
             <span className="text-lg font-semibold text-muted-foreground group-data-[collapsible=icon]:hidden">Đại lý</span>
           </Link>
-          <WalletChip me={me} />
+          <div className="group-data-[collapsible=icon]:hidden">
+            <WalletChip me={me} />
+          </div>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active =
-                item.href === '/agent-portal/orders'
-                  ? pathname === item.href
-                  : pathname.startsWith(item.href);
-              return (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link href={item.href}>
-                      <Icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active =
+                    item.href === '/agent-portal/orders'
+                      ? pathname === item.href
+                      : pathname.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                        <Link href={item.href}>
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="p-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleLogout}>
+              <SidebarMenuButton onClick={handleLogout} tooltip="Đăng xuất">
                 <LogOut className="h-4 w-4" />
                 <span>Đăng xuất</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
       <SidebarInset>
         {/* Mobile header: sidebar is hidden on small screens (webview), so give a hamburger to
             open the nav — otherwise there's no way to move between pages / go back. */}
-        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-background px-3 py-2.5 md:hidden">
-          <div className="flex items-center gap-2">
+        <header className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b bg-background px-3 py-2.5 lg:hidden">
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap">
             <SidebarTrigger />
             <Link href="/agent-portal/dashboard" className="flex items-center gap-1.5 font-bold text-foreground">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/vigo-wordmark.png" alt="ViiGO" className="h-5 w-auto" />
+              <img src="/vigo-wordmark.png" alt="ViiGO" className="h-5 w-auto shrink-0" />
               <span className="text-base font-semibold">Đại lý</span>
             </Link>
           </div>
-          <div>
+          <div className="min-w-0">
             <Link href="/agent-portal/wallet">
-              <WalletChip me={me} />
+              <WalletChip me={me} compactMobile />
             </Link>
           </div>
         </header>
 
         {/* Nội dung trang: padding gọn trên mobile (p-3 sm:p-6) */}
-        <main className="p-3 sm:p-6 max-w-5xl mx-auto w-full">{children}</main>
+        <main className="min-w-0 p-3 sm:p-6 max-w-5xl mx-auto w-full">{children}</main>
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+function PortalDrawerAutoClose({ pathname }: { pathname: string }) {
+  const { setOpenMobile } = useSidebar();
+  React.useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+  return null;
 }

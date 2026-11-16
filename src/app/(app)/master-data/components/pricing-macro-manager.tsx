@@ -1158,7 +1158,7 @@ export function PricingMacroManager() {
             )}
           </div>
         </CardHeader>
-        <CardContent className="p-0">
+        <CardContent className="p-0 [container-type:inline-size]">
           {searching &&
             !loading &&
             !searchFailure &&
@@ -1186,9 +1186,30 @@ export function PricingMacroManager() {
                 </Button>
               </div>
             )}
-          <Table>
+          {rules.length > 0 && (
+            <div data-stack-sortbar="xl" className="flex items-center justify-between gap-2 border-b bg-slate-50/70 px-3 py-2 text-xs">
+              <label className="flex cursor-pointer items-center gap-2 font-medium text-slate-700">
+                <Checkbox
+                  aria-label="Chọn nhanh tất cả quy tắc đang hiện"
+                  checked={allPageSelected}
+                  onCheckedChange={(c) =>
+                    setSelected((prev) => {
+                      const next = new Map(prev);
+                      for (const r of rules) {
+                        if (c) next.set(r.id, ruleTitle(r));
+                        else next.delete(r.id);
+                      }
+                      return next;
+                    })
+                  }
+                />
+                <span>Chọn tất cả ở trang này ({rules.length})</span>
+              </label>
+            </div>
+          )}
+          <Table stackBelow="xl">
             <TableHeader>
-              <TableRow className="bg-slate-50/80 text-xs">
+              <TableRow className="bg-slate-50 text-xs">
                 <TableHead className="w-8">
                   <Checkbox
                     aria-label="Chọn tất cả quy tắc ở trang này"
@@ -1341,19 +1362,19 @@ export function PricingMacroManager() {
                         winnerKind === 'province' && 'bg-amber-50/70 hover:bg-amber-50',
                       )}
                     >
-                      <TableCell>
+                      <TableCell data-card="checkbox">
                         <Checkbox
                           aria-label={`Chọn quy tắc #${rule.id} ${ruleTitle(rule)}`}
                           checked={selectedIds.has(rule.id)}
                           onCheckedChange={() => toggleRow(rule)}
                         />
                       </TableCell>
-                      <TableCell className="text-center font-bold text-slate-600">
+                      <TableCell data-label="Ưu tiên" className="text-center font-bold text-slate-600">
                         <div>{rule.priority}</div>
                         <div className="text-[10px] font-normal text-slate-400">#{rule.id}</div>
                         {winnerKind === 'applied' && shownCombo && (
                           <Badge
-                            className="mt-0.5 h-auto max-w-[6rem] whitespace-normal bg-emerald-600 px-1 text-[9px] leading-tight text-white hover:bg-emerald-700"
+                            className="mt-0.5 h-auto xl:max-w-[6rem] whitespace-normal bg-emerald-600 px-1 text-[9px] leading-tight text-white hover:bg-emerald-700"
                             title={`Máy tính giá đang áp quy tắc này cho tổ hợp «${comboLabel(shownCombo)}» (đang chọn ở khung «Quy tắc đang áp dụng»)`}
                           >
                             ĐANG ÁP · {comboShortLabel(shownCombo)}
@@ -1361,7 +1382,7 @@ export function PricingMacroManager() {
                         )}
                         {winnerKind === 'province' && shownCombo && (
                           <Badge
-                            className="mt-0.5 h-auto max-w-[6rem] whitespace-normal bg-amber-500 px-1 text-[9px] leading-tight text-white hover:bg-amber-600"
+                            className="mt-0.5 h-auto xl:max-w-[6rem] whitespace-normal bg-amber-500 px-1 text-[9px] leading-tight text-white hover:bg-amber-600"
                             title={`Thắng ở tổ hợp «${comboLabel(shownCombo)}» khi chỉ xét quy tắc cấp tỉnh / mọi nơi. Bạn đang chọn cả tỉnh nên quy tắc cấp xã chưa được xét: chuyến thật ở một xã có quy tắc riêng sẽ áp quy tắc của xã đó. Chọn xã/phường để biết chính xác.`}
                           >
                             CẤP TỈNH — xã có luật riêng thì thắng
@@ -1370,7 +1391,7 @@ export function PricingMacroManager() {
                         {winnerKind === 'flat' && shownCombo && (
                           <Badge
                             variant="secondary"
-                            className="mt-0.5 h-auto max-w-[6rem] whitespace-normal bg-slate-200 px-1 text-[9px] font-normal leading-tight text-slate-700 hover:bg-slate-200"
+                            className="mt-0.5 h-auto xl:max-w-[6rem] whitespace-normal bg-slate-200 px-1 text-[9px] font-normal leading-tight text-slate-700 hover:bg-slate-200"
                             title={`Tổ hợp «${comboLabel(shownCombo)}» trúng bảng đồng giá điểm đặc biệt: giá thật lấy theo đồng giá, quy tắc này (và mọi quy tắc khác) bị bỏ qua.`}
                           >
                             Bị đồng giá bỏ qua
@@ -1379,13 +1400,13 @@ export function PricingMacroManager() {
                         {verdict && (
                           <Badge
                             variant="secondary"
-                            className="mt-0.5 max-w-[6rem] whitespace-normal bg-slate-100 px-1 text-[9px] font-normal leading-tight text-slate-600 hover:bg-slate-100"
+                            className="mt-0.5 xl:max-w-[6rem] whitespace-normal bg-slate-100 px-1 text-[9px] font-normal leading-tight text-slate-600 hover:bg-slate-100"
                           >
                             {verdictLabel(verdict)}
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Điểm đón">
                         <div className="text-slate-700 font-medium">
                           {getProvinceName(rule.originProvinceCode)}
                         </div>
@@ -1395,7 +1416,7 @@ export function PricingMacroManager() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Điểm đến">
                         <div className="text-slate-700 font-medium">
                           {getProvinceName(rule.destProvinceCode)}
                         </div>
@@ -1415,7 +1436,7 @@ export function PricingMacroManager() {
                         )}
                         {rule.note && <div className="text-[11px] text-slate-400 mt-0.5">{rule.note}</div>}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Dịch vụ / Loại xe">
                         <div className="flex flex-wrap gap-1">
                           <Badge variant="secondary" className="text-[10px] h-4 px-1">
                             {serviceLabel(rule.serviceType)}
@@ -1425,7 +1446,7 @@ export function PricingMacroManager() {
                           </Badge>
                         </div>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Mức điều chỉnh">
                         <span
                           className={cn(
                             'font-bold',
@@ -1451,7 +1472,7 @@ export function PricingMacroManager() {
                           </Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-center">
+                      <TableCell data-label="Trạng thái" className="text-center">
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1466,6 +1487,7 @@ export function PricingMacroManager() {
                         </Button>
                       </TableCell>
                       <TableCell
+                        data-card="actions"
                         className={cn(
                           'sticky right-0 z-10 text-right whitespace-nowrap shadow-[-6px_0_8px_-6px_rgba(0,0,0,0.08)]',
                           winnerKind === 'applied'

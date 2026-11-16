@@ -341,20 +341,20 @@ export default function ReferralsPage() {
       </div>
 
       <Card>
-        <Table>
+        <Table stackBelow="2xl">
           <TableHeader>
             <TableRow>
               <TableHead>Chủ link</TableHead>
               <TableHead>Mã</TableHead>
               <TableHead>Link giới thiệu</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Lượt nhấn</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Lượt tải</TableHead>
+              <TableHead className="text-right">Lượt nhấn</TableHead>
+              <TableHead className="text-right">Lượt tải</TableHead>
               <TableHead className="text-right">Số người mời</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Số dư ví</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Đã rút</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Tổng tiền</TableHead>
-              <TableHead className="text-right whitespace-nowrap">Cập nhật</TableHead>
+              <TableHead className="text-right">Số dư ví</TableHead>
+              <TableHead className="text-right">Đã rút</TableHead>
+              <TableHead className="text-right">Tổng tiền</TableHead>
+              <TableHead className="text-right">Cập nhật</TableHead>
               <TableHead className={cn(STICKY_ACTION_HEAD_CLASS, 'text-right')} />
             </TableRow>
           </TableHeader>
@@ -366,9 +366,9 @@ export default function ReferralsPage() {
             ) : (
               referrers.map((r) => (
                 <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openReferrerDrilldown(r)}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-9 w-9">
+                  <TableCell data-card="header">
+                    <div className="flex items-center gap-3 xl:max-2xl:gap-2">
+                      <Avatar className="h-9 w-9 xl:max-2xl:h-7 xl:max-2xl:w-7 shrink-0">
                         <AvatarFallback>{(r.fullName ?? r.phone ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div>
@@ -377,12 +377,12 @@ export default function ReferralsPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Mã giới thiệu">
                     {r.referralCode
                       ? <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{r.referralCode}</code>
                       : <span className="text-muted-foreground">—</span>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Link giới thiệu" data-card="wide">
                     {r.shortUrl ? (
                       <div className="flex items-center gap-1.5">
                         <a
@@ -390,7 +390,7 @@ export default function ReferralsPage() {
                           target="_blank"
                           rel="noopener noreferrer"
                           onClick={(e) => e.stopPropagation()}
-                          className="text-xs text-primary hover:underline max-w-[180px] truncate"
+                          className="text-xs text-primary hover:underline xl:max-w-[95px] 2xl:max-w-[180px] truncate"
                           title={r.shortUrl}
                         >
                           {r.shortUrl.replace(/^https?:\/\//, '')}
@@ -409,7 +409,7 @@ export default function ReferralsPage() {
                       <span className="text-xs text-muted-foreground">Chưa có link</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Lượt nhấn" className="text-right tabular-nums">
                     {r.clicks ? (
                       <div>
                         <div className="font-medium flex items-center justify-end gap-1">
@@ -422,7 +422,7 @@ export default function ReferralsPage() {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Lượt tải" className="text-right tabular-nums">
                     {r.installs ? (
                       <div>
                         <div className="font-medium flex items-center justify-end gap-1">
@@ -437,14 +437,14 @@ export default function ReferralsPage() {
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">{r.refereeCount}</TableCell>
-                  <TableCell className="text-right tabular-nums">{r.tripCount}</TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Số người mời" className="text-right tabular-nums">{r.refereeCount}</TableCell>
+                  <TableCell data-label="Số chuyến" className="text-right tabular-nums">{r.tripCount}</TableCell>
+                  <TableCell data-label="Số dư ví" className="text-right tabular-nums">
                     <div className="font-semibold text-emerald-600 dark:text-emerald-400">
                       {r.walletBalance != null ? formatVND(r.walletBalance) : '—'}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Đã rút" className="text-right tabular-nums">
                     <div className={khac0(r.withdrawn) ? 'font-medium' : 'text-muted-foreground'}>
                       {r.withdrawn != null ? formatVND(r.withdrawn) : '—'}
                     </div>
@@ -460,7 +460,7 @@ export default function ReferralsPage() {
                   {/* Số lớn = LŨY KẾ THẬT của ví; bên dưới liệt kê TỪNG nguồn (giới thiệu /
                       chuyến / đặt hộ / thủ lĩnh KOL / khác), mỗi nguồn một dòng, chỉ hiện phần
                       khác 0. Cộng các dòng lại đúng bằng số lớn. */}
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Tổng tiền" className="text-right tabular-nums">
                     <div className="font-semibold text-primary">{formatVND(r.lifetimeTotal ?? r.totalReward)}</div>
                     {/* Hiện cả khi chỉ có MỘT nguồn: nếu ẩn đi thì nhìn số 583.000đ không biết
                         là tiền giới thiệu hay tiền đặt hộ — đúng thứ đang cần phân biệt. */}
@@ -472,9 +472,9 @@ export default function ReferralsPage() {
                       </div>
                     ) : null}
                   </TableCell>
-                  <TableCell className="text-right text-xs text-muted-foreground whitespace-nowrap">{formatVnDateTime(r.analyticsSyncedAt)}</TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
-                    <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openReferrerDrilldown(r); }}>
+                  <TableCell data-label="Cập nhật" className="text-right text-xs text-muted-foreground tabular-nums xl:max-w-[78px] 2xl:max-w-none 2xl:whitespace-nowrap">{formatVnDateTime(r.analyticsSyncedAt)}</TableCell>
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <Button variant="ghost" size="sm" className="xl:max-2xl:px-2" onClick={(e) => { e.stopPropagation(); openReferrerDrilldown(r); }}>
                       Chi tiết →
                     </Button>
                   </TableCell>
@@ -554,8 +554,8 @@ export default function ReferralsPage() {
                   <Input type="date" className="sm:w-[150px]" value={drillFrom} onChange={(e) => setDrillFrom(e.target.value)} />
                   <Input type="date" className="sm:w-[150px]" value={drillTo} onChange={(e) => setDrillTo(e.target.value)} />
                 </div>
-                <div className="overflow-x-auto">
-                  <Table>
+                <div>
+                  <Table stackBelow="sm">
                     <TableHeader>
                       <TableRow>
                         <TableHead>Người được mời</TableHead>
@@ -570,14 +570,14 @@ export default function ReferralsPage() {
                         <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Không có giới thiệu khớp bộ lọc.</TableCell></TableRow>
                       ) : pagedReferrals.map((r) => (
                         <TableRow key={r.id} className="cursor-pointer hover:bg-muted/50" onClick={() => openDetail(r)}>
-                          <TableCell>
+                          <TableCell data-card="header">
                             <div className="font-medium">{r.referee.fullName ?? '—'}</div>
                             <div className="text-xs text-muted-foreground">{r.referee.phone}</div>
                           </TableCell>
-                          <TableCell className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
-                          <TableCell className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
-                          <TableCell className="text-sm text-muted-foreground">{formatVnDate(r.createdAt)}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell data-label="Chuyến" className="text-right tabular-nums">{r.tripCountUsed}</TableCell>
+                          <TableCell data-label="Tiền" className="text-right tabular-nums font-medium">{formatVND(r.totalAmount)}</TableCell>
+                          <TableCell data-label="Ngày" className="text-sm text-muted-foreground">{formatVnDate(r.createdAt)}</TableCell>
+                          <TableCell data-card="actions" className="text-right">
                             <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); openDetail(r); }}>Chi tiết</Button>
                           </TableCell>
                         </TableRow>
@@ -637,7 +637,7 @@ export default function ReferralsPage() {
                 <div className="bg-muted/50 rounded p-2"><div className="text-muted-foreground text-xs">Số chuyến</div><div className="font-bold">{detail.tripCountUsed}</div></div>
                 <div className="bg-muted/50 rounded p-2"><div className="text-muted-foreground text-xs">Tiền trip</div><div className="font-bold">{formatVND(detail.tripRewardTotal)}</div></div>
               </div>
-              <Table>
+              <Table stackBelow="sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Loại</TableHead>
@@ -652,11 +652,11 @@ export default function ReferralsPage() {
                     <TableRow><TableCell colSpan={5} className="h-16 text-center text-muted-foreground">Chưa có giao dịch.</TableCell></TableRow>
                   ) : detail.events.slice((eventPage - 1) * EVENT_PAGE_SIZE, eventPage * EVENT_PAGE_SIZE).map((e) => (
                     <TableRow key={e.id}>
-                      <TableCell><Badge variant={e.type === 'CLAWBACK' ? 'destructive' : 'secondary'}>{REFERRAL_EVENT_LABEL(e.type)}</Badge></TableCell>
-                      <TableCell className={`text-right tabular-nums font-medium ${e.amount < 0 ? 'text-red-600' : ''}`}>{formatVND(e.amount)}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground font-mono">{e.bookingId ? e.bookingId.slice(0, 8) + '...' : '—'}</TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{new Date(e.createdAt).toLocaleString('vi-VN')}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-card="header"><Badge variant={e.type === 'CLAWBACK' ? 'destructive' : 'secondary'}>{REFERRAL_EVENT_LABEL(e.type)}</Badge></TableCell>
+                      <TableCell data-label="Số tiền" className={`text-right tabular-nums font-medium ${e.amount < 0 ? 'text-red-600' : ''}`}>{formatVND(e.amount)}</TableCell>
+                      <TableCell data-label="Booking" className="text-xs text-muted-foreground font-mono">{e.bookingId ? e.bookingId.slice(0, 8) + '...' : '—'}</TableCell>
+                      <TableCell data-label="Ngày" className="text-xs text-muted-foreground">{new Date(e.createdAt).toLocaleString('vi-VN')}</TableCell>
+                      <TableCell data-card="actions" className="text-right">
                         {e.type !== 'CLAWBACK' && Number(e.amount) > 0 && (
                           <Button variant="ghost" size="sm" className="h-7 text-destructive" onClick={() => setClawbackTarget({ eventId: e.id, amount: e.amount, type: e.type })}>
                             <Undo2 className="h-3.5 w-3.5 mr-1" /> Clawback

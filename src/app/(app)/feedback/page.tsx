@@ -140,12 +140,12 @@ export default function FeedbackPage() {
       </div>
 
       <Card>
-        <Table>
+        <Table stackBelow="md">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-[180px]">Thời gian</TableHead>
-              <TableHead className="w-[200px]">Tài xế</TableHead>
-              <TableHead className="w-[180px]">Loại</TableHead>
+              <TableHead className="md:w-[160px]">Thời gian</TableHead>
+              <TableHead className="md:w-[190px]">Tài xế</TableHead>
+              <TableHead className="md:w-[160px]">Loại</TableHead>
               <TableHead>Nội dung</TableHead>
             </TableRow>
           </TableHeader>
@@ -170,10 +170,10 @@ export default function FeedbackPage() {
                   className="cursor-pointer"
                   onClick={() => setExpandedRow(expandedRow === f.id ? null : f.id)}
                 >
-                  <TableCell className="font-mono text-xs">
+                  <TableCell data-label="Thời gian" className="font-mono text-xs">
                     {format(new Date(f.createdAt), 'dd/MM/yyyy HH:mm')}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-card="header" className="max-md:-order-1">
                     <div className="font-medium">
                       {f.driver?.user?.fullName || '(Không tên)'}
                     </div>
@@ -181,12 +181,12 @@ export default function FeedbackPage() {
                       {f.driver?.user?.phone || ''}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Phân loại">
                     <Badge className={CATEGORY_COLORS[f.category]}>
                       {CATEGORY_LABELS[f.category]}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-card="full" data-label="Nội dung">
                     <div className={expandedRow === f.id ? 'whitespace-pre-wrap' : 'line-clamp-2'}>
                       {f.content}
                     </div>

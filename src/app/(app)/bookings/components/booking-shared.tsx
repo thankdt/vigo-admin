@@ -55,13 +55,13 @@ export function getStatusBadge(booking: Pick<Booking, 'status' | 'adminClaimedAt
   if (status === 'PROCESSING') {
     if (adminClaimedAt) {
       return (
-        <Badge className="bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
+        <Badge className="whitespace-nowrap bg-purple-100 text-purple-800 dark:bg-purple-900/50 dark:text-purple-300">
           {statusLabelMap.ADMIN_HANDLING}
         </Badge>
       );
     }
     return (
-      <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
+      <Badge className="whitespace-nowrap bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300">
         {statusLabelMap.NEEDS_ADMIN}
       </Badge>
     );
@@ -69,16 +69,16 @@ export function getStatusBadge(booking: Pick<Booking, 'status' | 'adminClaimedAt
   const label = statusLabelMap[status] ?? status;
   switch (status) {
     case 'COMPLETED':
-      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">{label}</Badge>;
+      return <Badge className="whitespace-nowrap bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">{label}</Badge>;
     case 'ACCEPTED':
     case 'PICKED_UP':
-      return <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400">{label}</Badge>;
+      return <Badge className="whitespace-nowrap bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-400">{label}</Badge>;
     case 'SEARCHING':
-      return <Badge variant="secondary">{label}</Badge>;
+      return <Badge variant="secondary" className="whitespace-nowrap">{label}</Badge>;
     case 'CANCELLED':
-      return <Badge variant="destructive">{label}</Badge>;
+      return <Badge variant="destructive" className="whitespace-nowrap">{label}</Badge>;
     default:
-      return <Badge>{label}</Badge>;
+      return <Badge className="whitespace-nowrap">{label}</Badge>;
   }
 };
 

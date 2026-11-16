@@ -93,3 +93,1626 @@
     touch-action: manipulation;
   }
 }
+
+/* ============================================================================
+ * Rounded Scrollbar Corner Protection (macOS / Desktop classic scrollbars)
+ * Classic opaque scrollbar tracks paint 90° square blocks through `rounded-lg`
+ * modal/card/popover corners against dark backdrops. Transparent tracks with
+ * inset margin keep pill thumbs strictly inside rounded borders.
+ * ============================================================================ */
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+[role="dialog"]::-webkit-scrollbar-track,
+[role="alertdialog"]::-webkit-scrollbar-track,
+[data-dialog-scroll]::-webkit-scrollbar-track,
+[data-alert-dialog-scroll]::-webkit-scrollbar-track,
+[data-radix-popper-content-wrapper] *::-webkit-scrollbar-track,
+.rounded-md::-webkit-scrollbar-track,
+.rounded-lg::-webkit-scrollbar-track,
+.rounded-xl::-webkit-scrollbar-track,
+.rounded-2xl::-webkit-scrollbar-track {
+  margin-block: 6px;
+  margin-inline: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.28);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.45);
+}
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ============================================================================
+ * Responsive Table-to-Card System (`<Table stackBelow="sm|md|lg|xl">`)
+ * Below each table's `stackBelow` breakpoint, rows transform into multi-column
+ * CSS Grid cards so phones, iPads, and tablets never require horizontal scroll.
+ * ============================================================================ */
+@media not all and (min-width: 640px) {
+  table[data-stack="sm"] {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="sm"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  table[data-stack="sm"] > tbody,
+  table[data-stack="sm"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="sm"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  table[data-stack="sm"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  table[data-stack="sm"] > tfoot > tr,
+  table[data-stack="sm"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  table[data-stack="sm"] > tbody > tr > td,
+  table[data-stack="sm"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  table[data-stack="sm"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  table[data-stack="sm"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  table[data-stack="sm"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  table[data-stack="sm"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="header"],
+  table[data-stack="sm"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="sm"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="sm"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="full"],
+  table[data-stack="sm"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  table[data-stack="sm"] > tbody > tr > td[data-card="actions"]:empty,
+  table[data-stack="sm"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@media not all and (min-width: 768px) {
+  table[data-stack="md"] {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="md"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  table[data-stack="md"] > tbody,
+  table[data-stack="md"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="md"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  table[data-stack="md"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  table[data-stack="md"] > tfoot > tr,
+  table[data-stack="md"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  table[data-stack="md"] > tbody > tr > td,
+  table[data-stack="md"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  table[data-stack="md"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  table[data-stack="md"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  table[data-stack="md"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  table[data-stack="md"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="header"],
+  table[data-stack="md"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="md"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="md"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="full"],
+  table[data-stack="md"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="actions"]:empty,
+  table[data-stack="md"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@media not all and (min-width: 1024px) {
+  table[data-stack="lg"] {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="lg"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  table[data-stack="lg"] > tbody,
+  table[data-stack="lg"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="lg"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  table[data-stack="lg"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  table[data-stack="lg"] > tfoot > tr,
+  table[data-stack="lg"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  table[data-stack="lg"] > tbody > tr > td,
+  table[data-stack="lg"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  table[data-stack="lg"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  table[data-stack="lg"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  table[data-stack="lg"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="header"],
+  table[data-stack="lg"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="lg"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="lg"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="full"],
+  table[data-stack="lg"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="actions"]:empty,
+  table[data-stack="lg"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@media not all and (min-width: 1280px) {
+  table[data-stack="xl"] {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="xl"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  table[data-stack="xl"] > tbody,
+  table[data-stack="xl"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="xl"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  table[data-stack="xl"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  table[data-stack="xl"] > tfoot > tr,
+  table[data-stack="xl"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  table[data-stack="xl"] > tbody > tr > td,
+  table[data-stack="xl"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  table[data-stack="xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  table[data-stack="xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  table[data-stack="xl"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="header"],
+  table[data-stack="xl"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="xl"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="xl"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="full"],
+  table[data-stack="xl"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="actions"]:empty,
+  table[data-stack="xl"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+/* Tablet / iPad portrait (640px+) upgrades stacked cards to 3 columns */
+@media (min-width: 640px) and (max-width: 767.98px) {
+  table[data-stack="md"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 1rem;
+  }
+  table[data-stack="md"] > tbody > tr:has(> td[data-card="menu"]) {
+    padding-right: 3rem;
+  }
+  table[data-stack="md"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="md"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 0 !important;
+  }
+  table[data-stack="md"] > tbody > tr > td[data-card="header"],
+  table[data-stack="md"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  table[data-stack="md"] > tbody > tr > td[data-card="wide"] {
+    grid-column: span 2 / span 2;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023.98px) {
+  table[data-stack="lg"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 1rem;
+  }
+  table[data-stack="lg"] > tbody > tr:has(> td[data-card="menu"]) {
+    padding-right: 3rem;
+  }
+  table[data-stack="lg"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="lg"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 0 !important;
+  }
+  table[data-stack="lg"] > tbody > tr > td[data-card="header"],
+  table[data-stack="lg"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  table[data-stack="lg"] > tbody > tr > td[data-card="wide"] {
+    grid-column: span 2 / span 2;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1279.98px) {
+  table[data-stack="xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 1rem;
+  }
+  table[data-stack="xl"] > tbody > tr:has(> td[data-card="menu"]) {
+    padding-right: 3rem;
+  }
+  table[data-stack="xl"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="xl"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 0 !important;
+  }
+  table[data-stack="xl"] > tbody > tr > td[data-card="header"],
+  table[data-stack="xl"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  table[data-stack="xl"] > tbody > tr > td[data-card="wide"] {
+    grid-column: span 2 / span 2;
+  }
+}
+
+/* iPad landscape / wide tablet (900px–1279.98px) upgrades `xl` stacked cards to 4 columns */
+@media (min-width: 900px) and (max-width: 1279.98px) {
+  table[data-stack="xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ============================================================================
+ * Container-Query Table-to-Card Rules (Dialogs, Drawers, Split Grids, Sidebar)
+ * When a `<Table stackBelow="...">` lives inside a narrow modal (`max-w-2xl`),
+ * split card (`lg:grid-cols-2`), or narrowed content pane on a wide monitor,
+ * `@container` stacks it based on actual available table width rather than raw
+ * outer window width.
+ * ============================================================================ */
+@container (max-width: 519.98px) {
+  div[data-stack-wrap="sm"] {
+    overflow-x: hidden;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody,
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tfoot > tr,
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td,
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="header"],
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="full"],
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    order: 10;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="actions"]:empty,
+  div[data-stack-wrap="sm"] > table[data-stack="sm"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@container (max-width: 679.98px) {
+  div[data-stack-wrap="md"] {
+    overflow-x: hidden;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody,
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tfoot > tr,
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td,
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="header"],
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="full"],
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    order: 10;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="actions"]:empty,
+  div[data-stack-wrap="md"] > table[data-stack="md"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@container (max-width: 839.98px) {
+  div[data-stack-wrap="lg"] {
+    overflow-x: hidden;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody,
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tfoot > tr,
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td,
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="header"],
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="full"],
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    order: 10;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="actions"]:empty,
+  div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@container (max-width: 919.98px) {
+  div[data-stack-wrap="xl"] {
+    overflow-x: hidden;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody,
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 1rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr:has(> td[data-card="menu"]) {
+    padding-right: 3rem;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tfoot > tr,
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td,
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="header"],
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="wide"] {
+    grid-column: span 2 / span 2;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="full"] {
+    grid-column: 1 / -1;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    order: 10;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="actions"]:empty,
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@container (max-width: 559.98px) {
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.875rem;
+  }
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+}
+
+/* ============================================================================
+ * Compact Desktop Table Band (MacBook 13"–14", 920px–1240px container width)
+ * Keeps 8–12 column operational tables crisp and scannable with ZERO horizontal
+ * scroll when the 256px sidebar is open on MacBook viewports (1280px–1512px).
+ * ============================================================================ */
+@media (min-width: 1280px) {
+  @container (min-width: 920px) and (max-width: 1240px) {
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] {
+      font-size: 0.8125rem;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > thead > tr > th {
+      height: auto;
+      padding: 0.5rem 0.5rem;
+      white-space: normal !important;
+      line-height: 1.25;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > thead > tr > th:first-child {
+      padding-left: 0.75rem;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > thead > tr > th:last-child {
+      padding-right: 0.625rem;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > thead > tr > th > button:not([role="checkbox"]):not([role="switch"]) {
+      height: auto;
+      min-height: 1.75rem;
+      padding: 0.25rem 0.375rem;
+      white-space: normal;
+      text-align: left;
+      line-height: 1.25;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td,
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > tfoot > tr > td {
+      padding: 0.5rem 0.5rem;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td:first-child,
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > tfoot > tr > td:first-child {
+      padding-left: 0.75rem;
+    }
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > tbody > tr > td:last-child,
+    div[data-stack-wrap="xl"] > table[data-stack="xl"] > tfoot > tr > td:last-child {
+      padding-right: 0.625rem;
+    }
+  }
+}
+
+@media (min-width: 1024px) {
+  @container (min-width: 840px) and (max-width: 1120px) {
+    div[data-stack-wrap="lg"] > table[data-stack="lg"] {
+      font-size: 0.8125rem;
+    }
+    div[data-stack-wrap="lg"] > table[data-stack="lg"] > thead > tr > th {
+      height: auto;
+      padding: 0.5rem 0.5rem;
+      white-space: normal !important;
+      line-height: 1.25;
+    }
+    div[data-stack-wrap="lg"] > table[data-stack="lg"] > tbody > tr > td,
+    div[data-stack-wrap="lg"] > table[data-stack="lg"] > tfoot > tr > td {
+      padding: 0.5rem 0.5rem;
+    }
+  }
+}
+
+/* ============================================================================
+ * `stackBelow="2xl"` (11–12 column ultra-wide tables, e.g. Cancelled Trips &
+ * Referrals): stacks into 2/3/4-column cards whenever container < 1100px (such
+ * as 1280px MacBook with 256px sidebar open = 974px), and renders a compact
+ * desktop table at >= 1100px container (1280px sidebar collapsed = 1182px,
+ * 1440px MacBook = 1134px, 1512px MacBook Pro = 1206px+).
+ * ============================================================================ */
+@media not all and (min-width: 1280px) {
+  table[data-stack="2xl"] {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="2xl"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  table[data-stack="2xl"] > tbody,
+  table[data-stack="2xl"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  table[data-stack="2xl"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem 0.75rem;
+    padding: 0.875rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  table[data-stack="2xl"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  table[data-stack="2xl"] > tfoot > tr,
+  table[data-stack="2xl"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  table[data-stack="2xl"] > tbody > tr > td,
+  table[data-stack="2xl"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  table[data-stack="2xl"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  table[data-stack="2xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  table[data-stack="2xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  table[data-stack="2xl"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="header"],
+  table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  table[data-stack="2xl"] > tbody > tr > td[data-card="full"],
+  table[data-stack="2xl"] > tbody > tr > td[data-card="wide"] {
+    grid-column: 1 / -1;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  table[data-stack="2xl"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    order: 10;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="actions"]:empty,
+  table[data-stack="2xl"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1279.98px) {
+  table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 1rem;
+  }
+  table[data-stack="2xl"] > tbody > tr:has(> td[data-card="menu"]) {
+    padding-right: 3rem;
+  }
+  table[data-stack="2xl"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 0 !important;
+  }
+  table[data-stack="2xl"] > tbody > tr > td[data-card="header"],
+  table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  table[data-stack="2xl"] > tbody > tr > td[data-card="wide"] {
+    grid-column: span 2 / span 2;
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1279.98px) {
+  table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 1099.98px) {
+  div[data-stack-wrap="2xl"] {
+    overflow-x: hidden;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > thead {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: 0;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody,
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tfoot {
+    display: block;
+    width: 100%;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.625rem 1rem;
+    padding: 1rem;
+    position: relative;
+    align-items: start;
+    width: 100%;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:has(> td[data-card="checkbox"]) {
+    padding-left: 2.5rem;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:has(> td[data-card="menu"]) {
+    padding-right: 3rem;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tfoot > tr,
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr[data-card="summary"] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+    padding: 0.75rem 0.875rem;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td,
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tfoot > tr > td {
+    min-width: 0 !important;
+    max-width: none !important;
+    width: auto !important;
+    padding: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    text-align: left !important;
+    position: static !important;
+    background: transparent !important;
+    box-shadow: none !important;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td:not(.flex):not(.inline-flex) {
+    display: block;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .justify-end {
+    justify-content: flex-start;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td:not([data-card="actions"]):not([data-card="menu"]) .items-end {
+    align-items: flex-start;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: 0.125rem;
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[colspan]:only-child {
+    grid-column: 1 / -1 !important;
+    text-align: center !important;
+    padding: 2rem 1rem !important;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="header"],
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]),
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="wide"] {
+    grid-column: span 2 / span 2;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="full"] {
+    grid-column: 1 / -1;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="header"] {
+    order: -2;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="route"] {
+    grid-column: 1 / -1;
+    order: -1;
+    border-radius: calc(var(--radius) - 2px);
+    background: hsl(var(--muted) / 0.4) !important;
+    padding: 0.5rem !important;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="checkbox"] {
+    position: absolute !important;
+    left: 0.875rem;
+    top: 0.95rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="menu"] {
+    position: absolute !important;
+    top: 0.625rem;
+    right: 0.625rem;
+    z-index: 10;
+    width: auto !important;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="actions"] {
+    grid-column: 1 / -1;
+    order: 10;
+    display: flex !important;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    padding-top: 0.5rem !important;
+    margin-top: 0.125rem;
+    border-top: 1px dashed hsl(var(--border));
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="actions"]:empty,
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td[data-card="actions"]:not(:has(button, a, input, [role="switch"], [role="checkbox"])) {
+    display: none !important;
+  }
+}
+
+@container (max-width: 899.98px) {
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@container (max-width: 559.98px) {
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: 0.875rem;
+  }
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:has(> td[data-card="menu"]) > td[data-card="header"],
+  div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr:not([data-card="summary"]):has(> td[data-card="menu"]):not(:has(> td[data-card="header"])) > td:first-child:not([colspan]):not([data-card="checkbox"]) {
+    padding-right: 2.5rem !important;
+  }
+}
+
+/* Sync mobile/card sort bars strictly with `thead` visibility across both viewport and container breakpoints */
+@media (min-width: 1280px) {
+  @container (min-width: 920px) {
+    [data-stack-sortbar="xl"] {
+      display: none !important;
+    }
+  }
+  @container (min-width: 1100px) {
+    [data-stack-sortbar="2xl"] {
+      display: none !important;
+    }
+  }
+}
+
+@media (min-width: 1280px) {
+  @container (min-width: 1100px) and (max-width: 1360px) {
+    div[data-stack-wrap="2xl"] > table[data-stack="2xl"] {
+      font-size: 0.8125rem;
+    }
+    div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > thead > tr > th {
+      height: auto;
+      padding: 0.5rem 0.5rem;
+      white-space: normal !important;
+      line-height: 1.25;
+    }
+    div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > thead > tr > th > button:not([role="checkbox"]):not([role="switch"]) {
+      height: auto;
+      min-height: 1.75rem;
+      padding: 0.25rem 0.375rem;
+      white-space: normal;
+      text-align: left;
+      line-height: 1.25;
+    }
+    div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tbody > tr > td,
+    div[data-stack-wrap="2xl"] > table[data-stack="2xl"] > tfoot > tr > td {
+      padding: 0.5rem 0.5rem;
+    }
+  }
+}

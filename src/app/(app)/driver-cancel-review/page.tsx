@@ -192,7 +192,7 @@ export default function DriverCancelReviewPage() {
       </Card>
 
       <Card>
-        <Table>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               <TableHead className="whitespace-nowrap">Tài xế</TableHead>
@@ -224,17 +224,17 @@ export default function DriverCancelReviewPage() {
                 const status = driverStatus(s);
                 return (
                   <TableRow key={s.driverEntityId} className="cursor-pointer" onClick={() => setSelected(s)}>
-                    <TableCell className="whitespace-nowrap">
-                      {s.fullName || 'Không tên'}
+                    <TableCell data-card="header" className="whitespace-nowrap">
+                      <div className="font-medium">{s.fullName || 'Không tên'}</div>
                       <div className="text-xs text-muted-foreground">{s.phone}</div>
                     </TableCell>
-                    <TableCell>{s.assignedTrips}</TableCell>
-                    <TableCell>{s.customerCancels}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Chuyến giao">{s.assignedTrips}</TableCell>
+                    <TableCell data-label="Khách huỷ">{s.customerCancels}</TableCell>
+                    <TableCell data-label="Tỉ lệ huỷ">
                       <Badge className={rateBadgeClass(s.ratePct)}>{s.ratePct}%</Badge>
                     </TableCell>
-                    <TableCell>{s.cancelRuleAStrikes}</TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell data-label="Số lần vi phạm">{s.cancelRuleAStrikes}</TableCell>
+                    <TableCell data-label="Trạng thái" className="whitespace-nowrap">
                       <div className="flex flex-wrap items-center gap-1">
                         <Badge variant={status.variant}>{status.label}</Badge>
                         {s.depositForfeitFlagged && (
@@ -245,7 +245,7 @@ export default function DriverCancelReviewPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="whitespace-nowrap">
+                    <TableCell data-label="Kiểm tra" className="whitespace-nowrap">
                       {/* "Cần check lại" đè lên "Đã check": có khách-huỷ mới sau mốc check. */}
                       {s.hasNewCancelsSinceCheck ? (
                         <Badge variant="outline" className="border-amber-500 text-amber-600">Cần check lại</Badge>
@@ -258,7 +258,7 @@ export default function DriverCancelReviewPage() {
                       )}
                       {s.checkBy && <div className="text-xs text-muted-foreground">{s.checkBy}</div>}
                     </TableCell>
-                    <TableCell className="max-w-[16rem] text-sm">
+                    <TableCell data-label="Cảnh báo gần nhất" data-card="full" className="xl:max-w-[16rem] text-sm">
                       <span className="break-words">{s.lastAlertReason || '—'}</span>
                       <div className="text-xs text-muted-foreground">{formatVnDateTime(s.lastAlertAt)}</div>
                     </TableCell>

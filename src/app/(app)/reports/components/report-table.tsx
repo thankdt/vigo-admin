@@ -24,14 +24,14 @@ export function ReportTable({
   const measureCols = result.columns.filter((c) => c.type === 'measure');
 
   return (
-    <div className="rounded-md border">
+    <div className="overflow-hidden rounded-md border">
       {result.rows.length > 0 ? (
         <p className="border-b bg-muted/30 px-3 py-1.5 text-xs text-muted-foreground">
           Bấm một dòng để xem TOÀN BỘ chuyến của dòng đó — không lọc riêng theo từng cột số.
         </p>
       ) : null}
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
+      <div className={result.columns.length > 3 ? 'overflow-x-auto max-md:overflow-x-hidden' : 'overflow-x-auto'}>
+        <table data-stack={result.columns.length > 3 ? 'md' : undefined} className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
               {dimCols.map((c) => (
@@ -50,11 +50,18 @@ export function ReportTable({
                 onClick={() => onRowClick(row)}
                 title="Bấm để xem TOÀN BỘ chuyến của dòng này (không lọc theo từng cột số)"
               >
-                {dimCols.map((c) => (
-                  <td key={c.key} className="px-3 py-2">{row.dims[c.key]}</td>
+                {dimCols.map((c, idx) => (
+                  <td
+                    key={c.key}
+                    data-card={idx === 0 ? 'header' : undefined}
+                    data-label={idx > 0 ? c.label : undefined}
+                    className={idx === 0 ? 'px-3 py-2 max-md:font-medium' : 'px-3 py-2'}
+                  >
+                    {row.dims[c.key]}
+                  </td>
                 ))}
                 {measureCols.map((c) => (
-                  <td key={c.key} className="px-3 py-2 text-right tabular-nums">
+                  <td key={c.key} data-label={c.label} className="px-3 py-2 text-right tabular-nums">
                     {formatValue(row.measures[c.key], c.unit)}
                   </td>
                 ))}

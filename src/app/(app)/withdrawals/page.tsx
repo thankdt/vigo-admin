@@ -147,7 +147,7 @@ export default function WithdrawalsPage() {
       </div>
 
       <Card>
-        <Table>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               <TableHead>Người yêu cầu</TableHead>
@@ -170,13 +170,13 @@ export default function WithdrawalsPage() {
             ) : (
               rows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell>
+                  <TableCell data-card="header">
                     <div className="font-medium">{r.userName ?? '—'}</div>
                     <div className="text-xs text-muted-foreground">{r.userPhone}</div>
                   </TableCell>
-                  <TableCell className="text-right tabular-nums font-bold">{formatVND(r.amount)}</TableCell>
-                  <TableCell>{r.bankName}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Số tiền" className="text-right tabular-nums font-bold">{formatVND(r.amount)}</TableCell>
+                  <TableCell data-label="Ngân hàng">{r.bankName}</TableCell>
+                  <TableCell data-label="Số tài khoản">
                     <button
                       type="button"
                       onClick={() => copy(r.accountNumber, 'STK')}
@@ -186,13 +186,13 @@ export default function WithdrawalsPage() {
                       <Copy className="h-3.5 w-3.5 text-muted-foreground" />
                     </button>
                   </TableCell>
-                  <TableCell>{r.accountHolder}</TableCell>
-                  <TableCell>{statusBadge(r.status)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
+                  <TableCell data-label="Chủ tài khoản">{r.accountHolder}</TableCell>
+                  <TableCell data-label="Trạng thái">{statusBadge(r.status)}</TableCell>
+                  <TableCell data-label="Tạo lúc" className="text-sm text-muted-foreground whitespace-nowrap">
                     {new Date(r.createdAt).toLocaleString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                   </TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
-                    <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:justify-end">
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
                       {r.status === 'PENDING' && (
                         <>
                           <Button variant="ghost" size="sm" className="h-8 text-blue-700" onClick={() => setActionTarget({ row: r, action: 'approve' })}>

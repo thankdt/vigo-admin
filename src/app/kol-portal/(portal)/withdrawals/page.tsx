@@ -158,7 +158,7 @@ export default function KolWithdrawalsPage() {
       {/* History */}
       <Card>
         <div className="border-b px-4 py-3 text-sm font-medium">Lịch sử rút tiền</div>
-        <Table>
+        <Table stackBelow="sm">
           <TableHeader>
             <TableRow>
               <TableHead className="text-right">Số tiền</TableHead>
@@ -172,13 +172,13 @@ export default function KolWithdrawalsPage() {
               <TableRow><TableCell colSpan={4} className="h-20 text-center text-muted-foreground">Chưa có lệnh rút nào.</TableCell></TableRow>
             ) : list.map((w) => (
               <TableRow key={w.id}>
-                <TableCell className="text-right tabular-nums font-semibold">{formatVND(w.amount)}</TableCell>
-                <TableCell className="text-sm">
+                <TableCell data-card="header" className="text-right tabular-nums font-semibold">{formatVND(w.amount)}</TableCell>
+                <TableCell data-label="Tài khoản" className="text-sm">
                   <div>{w.bankName}</div>
                   <div className="text-xs text-muted-foreground">{w.accountNumber}</div>
                 </TableCell>
-                <TableCell><Badge variant="outline" className={STATUS[w.status].cls}>{STATUS[w.status].label}</Badge></TableCell>
-                <TableCell className="text-sm text-muted-foreground">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</TableCell>
+                <TableCell data-label="Trạng thái"><Badge variant="outline" className={STATUS[w.status].cls}>{STATUS[w.status].label}</Badge></TableCell>
+                <TableCell data-label="Ngày" className="text-sm text-muted-foreground">{new Date(w.createdAt).toLocaleDateString('vi-VN')}</TableCell>
               </TableRow>
             ))}
           </TableBody>

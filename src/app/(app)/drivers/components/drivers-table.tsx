@@ -894,8 +894,36 @@ export function DriversTable() {
             Đang hiển thị tài xế có thông tin chưa chuẩn. Tổng: {totalItems} tài xế.
           </div>
         )}
-        <Card>
-          <Table>
+        <Card className="[container-type:inline-size]">
+          <div data-stack-sortbar="xl" className="flex items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2 text-xs">
+            <span className="font-medium text-muted-foreground">
+              {totalItems.toLocaleString('vi-VN')} tài xế
+            </span>
+            <label className="flex items-center gap-1.5 text-muted-foreground">
+              <span>Sắp xếp:</span>
+              <select
+                aria-label="Sắp xếp tài xế"
+                className="h-8 rounded-md border bg-background px-2 text-xs text-foreground [@media(pointer:coarse)]:text-base"
+                value={sortConfig ? `${String(sortConfig.key)}:${sortConfig.direction}` : 'default'}
+                onChange={(e) => {
+                  if (e.target.value === 'default') {
+                    setSortConfig(null);
+                  } else {
+                    const [key, direction] = e.target.value.split(':') as [SortKey, 'ascending' | 'descending'];
+                    setSortConfig({ key, direction });
+                  }
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="default">Mặc định</option>
+                <option value="name:ascending">Tên tài xế (A → Z)</option>
+                <option value="name:descending">Tên tài xế (Z → A)</option>
+                <option value="csLastCallAt:descending">Ngày làm việc (gần nhất)</option>
+                <option value="csLastCallAt:ascending">Ngày làm việc (cũ nhất)</option>
+              </select>
+            </label>
+          </div>
+          <Table stackBelow="xl">
             <TableHeader>
               <TableRow>
                 <TableHead>
@@ -955,13 +983,13 @@ export function DriversTable() {
                     className="group/row cursor-pointer hover:bg-muted/50"
                     onClick={() => setViewDriver(driver)}
                   >
-                    <TableCell className="font-medium">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
+                    <TableCell data-card="header" className="font-medium">
+                      <div className="flex items-center gap-2 2xl:gap-3">
+                        <Avatar className="xl:max-2xl:h-8 xl:max-2xl:w-8">
                           <AvatarImage src={getImageUrl(driver.user?.avatarUrl || driver.user?.avatar)} alt={driverName} data-ai-hint="person portrait" />
                           <AvatarFallback>{driverName.charAt(0)}</AvatarFallback>
                         </Avatar>
-                        <div className="grid">
+                        <div className="grid min-w-0">
                           <span className="font-semibold">{driverName}</span>
                           <span className="text-sm text-muted-foreground">{driverPhone}</span>
                           <DriverIssueBadges issues={driver.issues} />
@@ -994,18 +1022,18 @@ export function DriversTable() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Phương tiện">
                       <div className="grid">
                         <span className="font-semibold">{driver.vehicle?.model || driver.vehicleRegistration?.model || 'N/A'}</span>
                         <span className="text-sm text-muted-foreground">{driver.vehicle?.plateNumber || driver.vehicleRegistration?.plateNumber || 'Chưa có'}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Đơn vị vận tải">
                       {driver.transportCompany ? (
                         <span className="text-sm font-medium">{driver.transportCompany.name}</span>
                       ) : driver.customTransportCompanyName ? (
                         <div className="flex flex-col gap-0.5">
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex flex-wrap items-center gap-1.5">
                             <span className="text-sm">{driver.customTransportCompanyName}</span>
                             <Badge variant="outline" className="text-xs text-amber-600 border-amber-300">Chưa xác nhận</Badge>
                           </div>
@@ -1019,13 +1047,13 @@ export function DriversTable() {
                         <span className="text-sm text-muted-foreground">Chưa cung cấp</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums whitespace-nowrap">
+                    <TableCell data-label="Số dư ví" className="text-right tabular-nums whitespace-nowrap">
                       <div className="text-sm">
                         <div className="font-medium">{new Intl.NumberFormat('vi-VN').format(driver.wallets?.deposit ?? 0)}<span className="text-muted-foreground"> đ</span></div>
                         <div className="text-xs text-muted-foreground">KM: {new Intl.NumberFormat('vi-VN').format(driver.wallets?.main ?? 0)} đ</div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Khu vực hoạt động" data-card="wide">
                       {/* Tỉnh hoạt động (34 tỉnh sáp nhập). Tuyến đã bỏ, không còn fallback. */}
                       {driver.provinces && driver.provinces.length > 0 ? (
                         <div
@@ -1055,15 +1083,15 @@ export function DriversTable() {
                       )}
                     </TableCell>
                     {showStatusCol && (
-                      <TableCell>
+                      <TableCell data-label={activeTab === 'all' ? 'Trạng thái' : 'Online'}>
                         {activeTab === 'all' ? getStatusBadge(driver) : getOnlineBadge(driver)}
                       </TableCell>
                     )}
                     {/* Ngày làm việc CSKH gần nhất (từ lịch sử làm việc) — CSKH quét nhanh ai lâu chưa xử lý. */}
-                    <TableCell>
+                    <TableCell data-label="Ngày làm việc">
                       {driver.csLastCallAt ? (
-                        <div className="text-sm">
-                          <div className="whitespace-nowrap">{formatVnDateTime(driver.csLastCallAt)}</div>
+                        <div className="text-xs 2xl:text-sm tabular-nums">
+                          <div className="2xl:whitespace-nowrap">{formatVnDateTime(driver.csLastCallAt)}</div>
                           {(() => {
                             const meta = driver.csLastCallType
                               ? CALL_TYPE_META[driver.csLastCallType as keyof typeof CALL_TYPE_META]
@@ -1076,8 +1104,8 @@ export function DriversTable() {
                       )}
                     </TableCell>
                     {/* CSKH: đã gọi điện (tick nhanh, kèm ai/lúc nào) — stopPropagation để không mở dialog chi tiết. */}
-                    <TableCell onClick={(e) => e.stopPropagation()} className="text-center">
-                      <div className="flex flex-col items-center gap-1">
+                    <TableCell data-label="Đã gọi điện" onClick={(e) => e.stopPropagation()} className="text-center">
+                      <div className="flex flex-col items-center max-xl:items-start gap-1">
                         {csBusyId === driver.id ? (
                           <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                         ) : (
@@ -1099,7 +1127,7 @@ export function DriversTable() {
                       </div>
                     </TableCell>
                     {/* CSKH: ghi chú nội bộ — chọn từ danh mục (quyền driver-note-presets mới thêm/sửa/xoá mục). */}
-                    <TableCell onClick={(e) => e.stopPropagation()} className="min-w-[240px] max-w-[320px] align-top">
+                    <TableCell data-label="Ghi chú nội bộ" data-card="full" onClick={(e) => e.stopPropagation()} className="xl:min-w-[130px] 2xl:min-w-[210px] xl:max-w-[300px] align-top">
                       <DriverNoteSelect
                         value={driver.csNote ?? null}
                         onChange={async (note) => {
@@ -1108,6 +1136,7 @@ export function DriversTable() {
                       />
                     </TableCell>
                     <TableCell
+                      data-card="menu"
                       className={STICKY_ACTION_CELL_CLASS}
                       onClick={(e) => e.stopPropagation()}
                     >

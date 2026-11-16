@@ -652,7 +652,7 @@ export function NotificationsManager() {
                         </Button>
                     </div>
 
-                    <Table>
+                    <Table stackBelow="lg">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Tiêu đề</TableHead>
@@ -684,24 +684,24 @@ export function NotificationsManager() {
                                         className="cursor-pointer"
                                         onClick={() => setDetailNotif(notif)}
                                     >
-                                        <TableCell className="font-medium">
+                                        <TableCell data-card="header" className="font-medium">
                                             <div className="flex flex-col">
                                                 <span>{notif.title}</span>
-                                                <span className="text-xs text-muted-foreground truncate max-w-[200px]">{notif.body}</span>
+                                                <span className="text-xs text-muted-foreground lg:truncate lg:max-w-[200px] line-clamp-2 lg:line-clamp-none">{notif.body}</span>
                                             </div>
                                         </TableCell>
-                                        <TableCell className="text-xs">{describeTarget(notif)}</TableCell>
-                                        <TableCell>{getKindLabel(notif)}</TableCell>
-                                        <TableCell>
+                                        <TableCell data-label="Đối tượng" className="text-xs">{describeTarget(notif)}</TableCell>
+                                        <TableCell data-label="Loại">{getKindLabel(notif)}</TableCell>
+                                        <TableCell data-label="Lịch / Cron">
                                             <code className="text-xs bg-muted p-1 rounded">
                                                 {notif.cronExpression || formatVn(notif.scheduleTime)}
                                             </code>
                                         </TableCell>
-                                        <TableCell>{getStatusBadge(notif.status)}</TableCell>
-                                        <TableCell className="text-xs text-muted-foreground">
+                                        <TableCell data-label="Trạng thái">{getStatusBadge(notif.status)}</TableCell>
+                                        <TableCell data-label="Ngày tạo" className="text-xs text-muted-foreground">
                                             {formatVn(notif.createdAt)}
                                         </TableCell>
-                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                                        <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

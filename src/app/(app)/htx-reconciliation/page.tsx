@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2, Building2, Search, Download } from 'lucide-react';
+import { Loader2, Building2, Search, Download, Table2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { getHtxReconciliation, type HtxReconRow, type HtxReconTotals } from '@/l
 import { downloadXlsxGrouped } from '@/lib/csv';
 import { FinanceFilter, PRESETS, type DateRange } from '../finance/components/finance-filter';
 import { expandHtxRow, HTX_LEAF_COLS, buildHtxExportHeader, HTX_PAYMENT_LABEL } from './htx-recon-shared';
-import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells } from './htx-recon-table';
+import { HtxHeadTailRow1, HtxHeadLowerRows, HtxLeafCells, HtxMobileFinancialBlock } from './htx-recon-table';
 
 // Leading (non-financial) columns before the shared 17 financial leaf columns.
 const LEADING = 3; // STT, TÊN HTX/ĐVCCX, Hình thức TT
@@ -26,6 +26,7 @@ export default function HtxReconciliationPage() {
   const [rows, setRows] = React.useState<HtxReconRow[]>([]);
   const [totals, setTotals] = React.useState<HtxReconTotals | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [showWideMatrix, setShowWideMatrix] = React.useState(false);
 
   const load = React.useCallback(async () => {
     setLoading(true);
@@ -72,9 +73,21 @@ export default function HtxReconciliationPage() {
             Doanh thu &amp; chia tiền theo từng HTX trong kỳ. Bấm 1 HTX để xem chi tiết từng chuyến.
           </p>
         </div>
-        <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
-          <Download className="mr-1.5 h-4 w-4" /> Xuất Excel
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            variant={showWideMatrix ? 'secondary' : 'outline'}
+            size="sm"
+            className="hidden xl:inline-flex"
+            onClick={() => setShowWideMatrix((v) => !v)}
+          >
+            <Table2 className="mr-1.5 h-4 w-4" />
+            {showWideMatrix ? 'Chế độ gọn' : 'Bảng đầy đủ'}
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleExport} disabled={loading || filtered.length === 0}>
+            <Download className="mr-1.5 h-4 w-4" /> Xuất Excel
+          </Button>
+        </div>
       </div>
 
       <Card className="p-4 space-y-3">
@@ -86,7 +99,53 @@ export default function HtxReconciliationPage() {
       </Card>
 
       <Card>
-        <div className="overflow-x-auto">
+        {/* Mặc định hiển thị thẻ đối soát gọn không cuộn ngang trên mọi màn hình (kể cả MacBook) */}
+        <div data-htx-compact="" className={showWideMatrix ? 'xl:hidden divide-y' : 'divide-y'}>
+          {loading ? (
+            <div className="flex h-24 items-center justify-center">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+              Không có HTX nào khớp.
+            </div>
+          ) : (
+            <>
+              {totals && (
+                <div className="bg-muted/40 p-3.5 sm:p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-semibold">TỔNG KỲ ({filtered.length} HTX)</span>
+                    <span className="text-xs text-muted-foreground">{HTX_PAYMENT_LABEL}</span>
+                  </div>
+                  <HtxMobileFinancialBlock row={expandHtxRow(totals)} />
+                </div>
+              )}
+              {filtered.map((r, i) => (
+                <div
+                  key={r.id}
+                  className="p-3.5 sm:p-4 space-y-2.5 cursor-pointer hover:bg-muted/40 transition-colors"
+                  onClick={() => router.push(`/htx-reconciliation/detail?id=${encodeURIComponent(r.id)}`)}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="font-semibold text-sm break-words">
+                        #{i + 1} · {r.name}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Hình thức TT: {HTX_PAYMENT_LABEL} · Bấm để xem từng chuyến
+                      </div>
+                    </div>
+                  </div>
+                  <HtxMobileFinancialBlock row={expandHtxRow(r)} />
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+
+        {/* Tuỳ chọn mở bảng ma trận 22 cột đầy đủ (khớp file Excel) trên màn hình lớn */}
+        {showWideMatrix && (
+        <div className="hidden xl:block">
           <Table>
             <TableHeader>
               <TableRow>
@@ -123,6 +182,7 @@ export default function HtxReconciliationPage() {
             )}
           </Table>
         </div>
+        )}
       </Card>
       <p className="text-xs text-muted-foreground">
         Đơn vị: đồng (đ). VAT = 8%. Tổng khách trả = (Cước vận tải HTX + VAT) + (Phí APP trước VAT + VAT), và luôn bằng (Tài xế thực nhận + HTX, ĐVCCX nhận + VIGO nhận).

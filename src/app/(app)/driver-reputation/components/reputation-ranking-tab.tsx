@@ -173,10 +173,10 @@ export function ReputationRankingTab({ onSelectDriver }: { onSelectDriver: Selec
       </Card>
 
       <Card>
-        <Table>
+        <Table stackBelow="lg">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12 whitespace-nowrap">#</TableHead>
+              <TableHead className="lg:w-12 whitespace-nowrap">#</TableHead>
               <TableHead className="whitespace-nowrap">Tài xế</TableHead>
               <TableHead className="whitespace-nowrap">Số lượt đánh giá</TableHead>
               <TableHead className="whitespace-nowrap">Sao</TableHead>
@@ -215,21 +215,21 @@ export function ReputationRankingTab({ onSelectDriver }: { onSelectDriver: Selec
                     })
                   }
                 >
-                  <TableCell className="tabular-nums text-sm text-muted-foreground">
+                  <TableCell data-label="Hạng" className="tabular-nums text-sm text-muted-foreground">
                     {page * PAGE_SIZE + i + 1}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap">
+                  <TableCell data-card="header" className="whitespace-nowrap max-lg:-order-1">
                     <div className="font-medium">{driverNameText(row.fullName)}</div>
                     <div className="text-xs text-muted-foreground">{driverPhoneText(row.phone)}</div>
                   </TableCell>
-                  <TableCell className="tabular-nums">{ratingCountText(row.ratingCount)}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Số lượt đánh giá" className="tabular-nums">{ratingCountText(row.ratingCount)}</TableCell>
+                  <TableCell data-label="Sao">
                     <StarsCell row={row} />
                   </TableCell>
-                  <TableCell className="tabular-nums text-sm text-muted-foreground">
+                  <TableCell data-label="Điểm xếp hạng" className="tabular-nums text-sm text-muted-foreground">
                     {bayesText(row.bayesStars)}
                   </TableCell>
-                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                  <TableCell data-label="Đánh giá gần nhất" className="whitespace-nowrap text-sm text-muted-foreground">
                     {lastRatingText(row.lastRatingAt)}
                   </TableCell>
                 </TableRow>

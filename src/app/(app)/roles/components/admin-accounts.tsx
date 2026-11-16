@@ -60,7 +60,7 @@ export function AdminAccounts() {
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-primary" /></div>
         ) : (
-          <Table>
+          <Table stackBelow="sm">
             <TableHeader>
               <TableRow>
                 <TableHead>Tên</TableHead>
@@ -72,14 +72,14 @@ export function AdminAccounts() {
             <TableBody>
               {users.map((u) => (
                 <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.fullName || '—'}</TableCell>
-                  <TableCell className="tabular-nums">{u.phone}</TableCell>
-                  <TableCell>
+                  <TableCell data-card="header" className="font-medium">{u.fullName || '—'}</TableCell>
+                  <TableCell data-label="Số điện thoại" className="tabular-nums">{u.phone}</TableCell>
+                  <TableCell data-label="Loại">
                     {u.isSuperAdmin
                       ? <Badge><ShieldCheck className="mr-1 h-3 w-3" />Super</Badge>
                       : <Badge variant="secondary">Admin</Badge>}
                   </TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap space-x-1')}>
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap space-x-1')}>
                     <Button size="icon" variant="ghost" className="h-8 w-8" aria-label="Sửa" onClick={() => setEditUser(u)}><Pencil className="h-4 w-4" /></Button>
                     <Button
                       size="icon"

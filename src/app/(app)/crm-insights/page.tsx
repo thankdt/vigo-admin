@@ -163,7 +163,7 @@ export default function CrmInsightsPage() {
           ) : retention.length === 0 ? (
             <p className="text-muted-foreground">Không có khách nào đi chuyến đầu trong kỳ này.</p>
           ) : (
-            <Table>
+            <Table stackBelow="md">
               <TableHeader>
                 <TableRow>
                   <TableHead>Tháng</TableHead>
@@ -176,7 +176,7 @@ export default function CrmInsightsPage() {
               <TableBody>
                 {retention.map((r) => (
                   <TableRow key={r.cohortMonth} data-testid="crm-retention-row">
-                    <TableCell>
+                    <TableCell data-card="header" className="max-md:font-semibold">
                       {r.cohortMonth}
                       {/*
                         🚨 Tháng đang chạy dở LUÔN bị cắt cụt: khách đi chuyến đầu ngày 17
@@ -186,19 +186,19 @@ export default function CrmInsightsPage() {
                       */}
                       {r.cohortMonth === currentMonthVn ? (
                         <span
-                          className="ml-2 text-xs text-muted-foreground"
+                          className="ml-2 text-xs font-normal text-muted-foreground"
                           data-testid="crm-cohort-immature"
                         >
                           (chưa đủ kỳ quan sát)
                         </span>
                       ) : null}
                     </TableCell>
-                    <TableCell>{r.customers}</TableCell>
-                    <TableCell>{r.returned}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Khách mới">{r.customers}</TableCell>
+                    <TableCell data-label="Quay lại (≥2)">{r.returned}</TableCell>
+                    <TableCell data-label="Tỉ lệ quay lại">
                       {r.customers > 0 ? `${Math.round((r.returned / r.customers) * 100)}%` : '—'}
                     </TableCell>
-                    <TableCell>{r.returned3Plus}</TableCell>
+                    <TableCell data-label="Đi ≥3 lần">{r.returned3Plus}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

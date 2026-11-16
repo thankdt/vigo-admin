@@ -467,7 +467,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
   const [duplicateFilter, setDuplicateFilter] = React.useState<DuplicateTripFilter | 'ALL'>('ALL');
   const [routes, setRoutes] = React.useState<Route[]>([]);
   const { options: provinceOptions, names: provinceNames } = useProvinceOptions();
-  const isCompactMenu = useIsMobile(640);
+  const isCompactMenu = useIsMobile(1024);
 
   // Pagination state
   const [currentPage, setCurrentPage] = React.useState(1);
@@ -905,7 +905,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               value={duplicateFilter}
               onValueChange={(val) => { setDuplicateFilter(val as DuplicateTripFilter | 'ALL'); setCurrentPage(1); }}
             >
-              <SelectTrigger className="w-full xl:w-[175px]">
+              <SelectTrigger className="w-full xl:w-[190px]">
                 <SelectValue placeholder="Chuyến trùng" />
               </SelectTrigger>
               <SelectContent>
@@ -962,7 +962,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                 placeholder="Tìm ID chuyến (8 ký tự đầu OK)"
                 value={bookingIdTerm}
                 onChange={(e) => handleBookingIdChange(e.target.value)}
-                className="w-full pl-8 xl:w-[220px]"
+                className="w-full pl-8 xl:w-[250px]"
               />
             </div>
             {/* Tìm theo địa chỉ ĐÓN hoặc TRẢ. BE bỏ dấu nên gõ không dấu vẫn ra; tách token
@@ -973,7 +973,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                 placeholder="Tìm địa chỉ đón/trả (không dấu OK)"
                 value={addressTerm}
                 onChange={(e) => handleAddressChange(e.target.value)}
-                className="w-full pl-8 xl:w-[230px]"
+                className="w-full pl-8 xl:w-[265px]"
               />
             </div>
             {/* Lọc khoảng ngày ĐẶT chuyến (createdAt, giờ VN). Đổi ngày → về trang 1. */}
@@ -1004,8 +1004,46 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
             </div>
           </div>
         </div>
-        <Card>
-          <Table>
+        <Card className="[container-type:inline-size]">
+          {/* Thanh sắp xếp nhanh cho điện thoại / iPad / tablet (hoặc bảng 11-12 cột ở màn hẹp) khi tiêu đề cột bảng ẩn ở chế độ thẻ */}
+          <div data-stack-sortbar={isCancelledTab ? "2xl" : "xl"} className="flex items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2 text-xs">
+            <span className="font-medium text-muted-foreground">
+              {totalItems.toLocaleString('vi-VN')} chuyến
+            </span>
+            <label className="flex items-center gap-1.5 text-muted-foreground">
+              <span>Sắp xếp:</span>
+              <select
+                aria-label="Sắp xếp chuyến đi"
+                className="h-8 rounded-md border bg-background px-2 text-xs text-foreground [@media(pointer:coarse)]:text-base"
+                value={`${String(sortConfig.key)}:${sortConfig.direction}`}
+                onChange={(e) => {
+                  const [key, direction] = e.target.value.split(':') as [SortKey, 'ascending' | 'descending'];
+                  setSortConfig({ key, direction });
+                  setCurrentPage(1);
+                }}
+              >
+                <option value="createdAt:descending">Ngày tạo (mới nhất)</option>
+                <option value="createdAt:ascending">Ngày tạo (cũ nhất)</option>
+                {showScheduledCol && (
+                  <>
+                    <option value="scheduledTime:ascending">Giờ hẹn đón (gần nhất)</option>
+                    <option value="scheduledTime:descending">Giờ hẹn đón (xa nhất)</option>
+                  </>
+                )}
+                {activeTab === 'COMPLETED' && (
+                  <>
+                    <option value="completedAt:descending">Hoàn thành (mới nhất)</option>
+                    <option value="completedAt:ascending">Hoàn thành (cũ nhất)</option>
+                  </>
+                )}
+                <option value="price:descending">Giá (cao → thấp)</option>
+                <option value="price:ascending">Giá (thấp → cao)</option>
+                <option value="status:ascending">Trạng thái (A → Z)</option>
+                <option value="status:descending">Trạng thái (Z → A)</option>
+              </select>
+            </label>
+          </div>
+          <Table stackBelow={isCancelledTab ? "2xl" : "xl"}>
             <TableHeader>
               <TableRow>
                 <TableHead>Khách hàng</TableHead>
@@ -1014,13 +1052,13 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('price')}>
                     Giá
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                    <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0" />
                   </Button>
                 </TableHead>
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('createdAt')}>
                     Ngày tạo
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                    <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0" />
                   </Button>
                 </TableHead>
                 {/* Tab Đặt lịch: cột "Giờ hẹn đón" (scheduledTime) + cho sắp xếp theo giờ đón. */}
@@ -1028,7 +1066,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                   <TableHead>
                     <Button variant="ghost" onClick={() => requestSort('scheduledTime')}>
                       Giờ hẹn đón
-                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                      <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0" />
                     </Button>
                   </TableHead>
                 )}
@@ -1038,14 +1076,14 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                   <TableHead>
                     <Button variant="ghost" onClick={() => requestSort('completedAt')}>
                       Ngày hoàn thành
-                      <ArrowUpDown className="ml-2 h-4 w-4" />
+                      <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0" />
                     </Button>
                   </TableHead>
                 )}
                 <TableHead>
                   <Button variant="ghost" onClick={() => requestSort('status')}>
                     Trạng thái
-                    <ArrowUpDown className="ml-2 h-4 w-4" />
+                    <ArrowUpDown className="ml-1 h-3.5 w-3.5 shrink-0" />
                   </Button>
                 </TableHead>
                 {/* Trạng thái CSKH đã gọi xác nhận khách TRƯỚC khi chuyến hoàn thành.
@@ -1095,7 +1133,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     className="group/row cursor-pointer hover:bg-muted/50"
                     onClick={() => openDetails(booking.id)}
                   >
-                    <TableCell className="font-medium">
+                    <TableCell data-card="header" className="font-medium max-xl:-order-2">
                       <div className="flex flex-col">
                         <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
                         {/* Badge đi cùng SĐT, KHÔNG cùng tên: SĐT rộng gần như cố định (10 số)
@@ -1103,7 +1141,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                             đứng cạnh tên thì tên dài đẩy badge chạy lung tung mỗi dòng.
                             Hàng NGANG bắt buộc: container ngoài là `flex flex-col`, thả Badge
                             thẳng vào đó thì align-items:stretch kéo badge rộng bằng cả ô. */}
-                        <div className="flex items-center gap-1">
+                        <div className="flex flex-wrap items-center gap-1">
                           <span className='text-sm text-muted-foreground'>{booking.senderInfo?.phone || booking.customer?.phone || 'N/A'}</span>
                           {booking.isFirstBooking === true && <FirstTripBadge />}
                         </div>
@@ -1115,7 +1153,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Tài xế">
                       {booking.driver ? (
                         <div className="flex flex-col">
                           <span className='font-semibold'>{booking.driver.user?.fullName ?? booking.driver.fullName ?? booking.driver.name ?? 'N/A'}</span>
@@ -1128,17 +1166,17 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         <span className='text-sm text-muted-foreground'>N/A</span>
                       )}
                     </TableCell>
-                    <TableCell className='max-w-xs'>
-                      <div className="flex flex-col">
+                    <TableCell data-card="route" className="xl:min-w-[140px] max-w-xs">
+                      <div className="flex flex-col gap-0.5">
                         {/* Cặp tỉnh đón → trả (thay tên tuyến đã bỏ). */}
-                        <ProvincePairLine booking={booking} names={provinceNames} className='truncate text-xs font-semibold text-muted-foreground' />
-                        <span className='truncate'><span className='font-medium'>Điểm đón:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span>
-                        <span className='truncate'><span className='font-medium'>Điểm trả:</span> {typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span>
+                        <ProvincePairLine booking={booking} names={provinceNames} className='line-clamp-1 break-words text-xs font-semibold text-muted-foreground' />
+                        <span className='line-clamp-2 xl:line-clamp-1 break-words text-xs sm:text-sm'><span className='font-medium'>Điểm đón:</span> {typeof booking.pickupAddress === 'object' ? booking.pickupAddress?.address : booking.pickupAddress ?? 'N/A'}</span>
+                        <span className='line-clamp-2 xl:line-clamp-1 break-words text-xs sm:text-sm'><span className='font-medium'>Điểm trả:</span> {typeof booking.dropoffAddress === 'object' ? booking.dropoffAddress?.address : booking.dropoffAddress ?? 'N/A'}</span>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Giá cước" className="tabular-nums">
                       <div className="flex flex-col gap-1 items-start">
-                        <span>{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</span>
+                        <span className="max-xl:font-semibold">{new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(booking.price)}</span>
                         {booking.priceBreakdown?.macroRuleId != null && (
                           <MacroRuleBadge
                             ruleId={Number(booking.priceBreakdown.macroRuleId)}
@@ -1150,12 +1188,12 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Ngày tạo" className="tabular-nums text-xs xl:text-sm">
                       {format(new Date(booking.createdAt), "dd/MM/yyyy HH:mm")}
                     </TableCell>
                     {/* Giờ hẹn đón — chỉ ở tab Đặt lịch. Chuyến thường không có scheduledTime. */}
                     {showScheduledCol && (
-                      <TableCell>
+                      <TableCell data-label="Giờ hẹn đón" className="tabular-nums text-xs xl:text-sm">
                         {booking.scheduledTime
                           ? format(new Date(booking.scheduledTime), "dd/MM/yyyy HH:mm")
                           : <span className="text-muted-foreground">—</span>}
@@ -1165,14 +1203,14 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                         completedAt). Không dùng updatedAt trực tiếp vì nó bị bump bởi ghi sau hoàn
                         thành (vd backfill distanceKm). Chỉ hiện ở tab Hoàn thành. */}
                     {activeTab === 'COMPLETED' && (
-                      <TableCell>
+                      <TableCell data-label="Ngày hoàn thành" className="tabular-nums text-xs xl:text-sm">
                         {(booking.completedAt ?? booking.updatedAt)
                           ? format(new Date(booking.completedAt ?? booking.updatedAt!), "dd/MM/yyyy HH:mm")
                           : <span className="text-muted-foreground">—</span>}
                       </TableCell>
                     )}
-                    <TableCell>
-                      <div className="flex flex-col gap-1 items-start">
+                    <TableCell data-label="Trạng thái">
+                      <div className="flex flex-col gap-1 items-start max-xl:flex-row max-xl:flex-wrap max-xl:items-center">
                         {getStatusBadge(booking)}
                         {/* Trip-shape badges live under the status badge so the
                             "Trạng thái" column tells admin at a glance how
@@ -1202,7 +1240,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     </TableCell>
                     {/* KHÔNG stopPropagation ở ô này (khác ô "Ghi chú" trước đây): đây là ô
                         chỉ-đọc, và bấm vào là mở dialog chi tiết — đúng chỗ ghi nhận cuộc gọi. */}
-                    <TableCell>
+                    <TableCell data-label="Gọi trước HT">
                       <div className="flex flex-col gap-0.5 items-start">
                         <CustomerCallBadge status={booking.callBeforeStatus} />
                         {/* formatVnShort chứ KHÔNG format(new Date(...)): mốc admin đọc phải là
@@ -1217,12 +1255,12 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                     </TableCell>
                     {isCancelledTab && (
                       <>
-                        <TableCell className="text-xs">
+                        <TableCell data-label="Thời gian huỷ" className="tabular-nums text-xs">
                           {booking.cancelledAt
                             ? format(new Date(booking.cancelledAt), 'dd/MM/yyyy HH:mm')
                             : <span className="text-muted-foreground">—</span>}
                         </TableCell>
-                        <TableCell className="text-xs">
+                        <TableCell data-label="Người huỷ" className="max-w-[140px] 2xl:max-w-[180px] break-words text-xs">
                           {booking.cancelledByRole ? (
                             <div className="flex flex-col">
                               <span className="font-medium">
@@ -1239,7 +1277,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                             <span className="text-muted-foreground">—</span>
                           )}
                         </TableCell>
-                        <TableCell className="max-w-[220px] text-xs">
+                        <TableCell data-label="Lý do huỷ" data-card="wide" className="xl:min-w-[95px] max-w-[150px] 2xl:max-w-[220px] break-words text-xs">
                           {booking.cancelReason
                             ? <span className="line-clamp-2">{booking.cancelReason}</span>
                             : <span className="text-muted-foreground">—</span>}
@@ -1247,6 +1285,7 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                       </>
                     )}
                     <TableCell
+                      data-card="menu"
                       className={STICKY_ACTION_CELL_CLASS}
                       onClick={(e) => e.stopPropagation()}
                     >

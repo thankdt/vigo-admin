@@ -304,7 +304,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
           ) : rows.length === 0 ? (
             <div className="py-8 text-center text-sm text-muted-foreground">Chưa có mã nào.</div>
           ) : (
-            <Table>
+            <Table stackBelow="md">
               <TableHeader>
                 <TableRow>
                   <TableHead>Mã</TableHead>
@@ -320,14 +320,14 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                 {rows.map((r) => (
                   <React.Fragment key={r.id}>
                     <TableRow className={editingId === r.id ? 'bg-muted/50' : undefined}>
-                      <TableCell className="font-mono font-medium">{r.code}</TableCell>
-                      <TableCell className="text-right">{fmt(r.refereeRewardPoints)}</TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-card="header" className="font-mono font-medium">{r.code}</TableCell>
+                      <TableCell data-label="Điểm thưởng" className="text-right">{fmt(r.refereeRewardPoints)}</TableCell>
+                      <TableCell data-label="Đã dùng" className="text-right">
                         {fmt(r.usedCount)}/{fmt(r.usageLimit)}
                       </TableCell>
-                      <TableCell className="text-right">{r.dailyLimit ? fmt(r.dailyLimit) : '∞'}</TableCell>
-                      <TableCell className="text-muted-foreground">{r.campaignName || '—'}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="Giới hạn/ngày" className="text-right">{r.dailyLimit ? fmt(r.dailyLimit) : '∞'}</TableCell>
+                      <TableCell data-label="Chiến dịch" className="text-muted-foreground">{r.campaignName || '—'}</TableCell>
+                      <TableCell data-label="Kích hoạt">
                         <Switch
                           checked={r.isActive}
                           disabled={togglingId === r.id}
@@ -335,7 +335,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                           aria-label={r.isActive ? 'Tắt mã' : 'Bật mã'}
                         />
                       </TableCell>
-                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'bg-background text-right whitespace-nowrap')}>
+                      <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'bg-background text-right whitespace-nowrap')}>
                         <div className="inline-flex items-center justify-end gap-0.5">
                           <Button
                             size="icon"
@@ -372,7 +372,7 @@ export function KolCodesDialog({ open, onOpenChange, userId, userLabel }: Props)
                       </TableCell>
                     </TableRow>
                     {reports[r.id] && (
-                      <TableRow>
+                      <TableRow data-card="summary">
                         <TableCell colSpan={7} className="bg-muted/40 text-sm">
                           <span className="mr-4">Khách gắn mã: <b>{fmt(reports[r.id].totalReferees)}</b></span>
                           <span className="mr-4">Đã cộng điểm (chuyển đổi): <b>{fmt(reports[r.id].converted)}</b></span>

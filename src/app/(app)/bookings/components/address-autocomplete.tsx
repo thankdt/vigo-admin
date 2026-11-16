@@ -133,7 +133,12 @@ export function AddressAutocomplete({
   };
 
   return (
-    <div ref={containerRef} className={cn('relative', className)}>
+    <div
+      ref={containerRef}
+      data-address-autocomplete=""
+      data-floating-open={showDropdown ? '' : undefined}
+      className={cn('relative', className)}
+    >
       <div className="relative">
         <MapPin className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
         <Input

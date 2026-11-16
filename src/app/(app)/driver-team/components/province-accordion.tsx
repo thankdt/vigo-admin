@@ -179,7 +179,7 @@ export function ProvinceAccordion({
       type="multiple"
       value={open}
       onValueChange={onToggle}
-      className="rounded-md border bg-card"
+      className="overflow-hidden rounded-md border bg-card"
     >
       {rows.map((r) => {
         const key = provinceKeyOf(r);
@@ -223,7 +223,7 @@ export function ProvinceAccordion({
                   Không có tài xế nào chạy thành công ở tỉnh này trong khoảng ngày đang chọn.
                 </p>
               ) : (
-                <Table>
+                <Table stackBelow="xl">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10" />
@@ -242,7 +242,7 @@ export function ProvinceAccordion({
                       const warn = driverWarning(d);
                       return (
                         <TableRow key={d.driverId}>
-                          <TableCell>
+                          <TableCell data-card="checkbox">
                             {/* Chọn theo driverId, KHÔNG theo cặp (tài × tỉnh): trạng
                                 thái gắn theo tài, nên tick một người ở nhóm A tức là
                                 tick chính người đó ở mọi nhóm — tránh PATCH hai lần. */}
@@ -252,7 +252,7 @@ export function ProvinceAccordion({
                               aria-label={`Chọn ${d.fullName ?? d.driverId}`}
                             />
                           </TableCell>
-                          <TableCell>
+                          <TableCell data-card="header">
                             <div className="font-medium">{d.fullName ?? '—'}</div>
                             <div className="text-xs text-muted-foreground">
                               <a href={`tel:${d.phone ?? ''}`} className="hover:underline">
@@ -266,19 +266,19 @@ export function ProvinceAccordion({
                               </Badge>
                             ) : null}
                           </TableCell>
-                          <TableCell className="text-right">{d.tripsInProvince}</TableCell>
-                          <TableCell className="text-right">
+                          <TableCell data-label="Chuyến trong tỉnh" className="text-right">{d.tripsInProvince}</TableCell>
+                          <TableCell data-label="Tỉ trọng" className="text-right">
                             {formatShare(d.shareOfProvince)}
                           </TableCell>
-                          <TableCell className="text-right">{vnDay(d.lastCompletedAt)}</TableCell>
-                          <TableCell>
+                          <TableCell data-label="Chuyến gần nhất" className="text-right">{vnDay(d.lastCompletedAt)}</TableCell>
+                          <TableCell data-label="Trạng thái">
                             <Select
                               value={d.team?.stage ?? ''}
                               onValueChange={(v) =>
                                 void changeStage(d.driverId, v as DriverTeamStage)
                               }
                             >
-                              <SelectTrigger className="h-8 w-36">
+                              <SelectTrigger className="h-8 w-full max-w-[9rem]">
                                 <SelectValue placeholder={stageLabel(null)}>
                                   <span
                                     className={`rounded px-2 py-0.5 text-xs ${stageBadgeClass(
@@ -298,10 +298,10 @@ export function ProvinceAccordion({
                               </SelectContent>
                             </Select>
                           </TableCell>
-                          <TableCell className="text-sm">
+                          <TableCell data-label="Người phụ trách" className="text-sm">
                             {d.team?.ownerAdminName ?? '—'}
                           </TableCell>
-                          <TableCell className="text-sm">
+                          <TableCell data-label="Hẹn gọi lại" className="text-sm">
                             <span
                               className={
                                 isFollowUpOverdue(d.team?.nextFollowUpAt)
@@ -312,7 +312,7 @@ export function ProvinceAccordion({
                               {vnDay(d.team?.nextFollowUpAt)}
                             </span>
                           </TableCell>
-                          <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                          <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                             <Button
                               variant="ghost"
                               size="sm"

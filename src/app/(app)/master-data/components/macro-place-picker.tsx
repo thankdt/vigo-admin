@@ -273,6 +273,7 @@ export function MacroPlacePicker({
     <div
       className="relative"
       data-place-picker=""
+      data-floating-open={listOpen || showHints ? '' : undefined}
       {...focusHandlers}
       onKeyDown={(e) => {
         // Esc ở ô hoặc nút ×: xoá chữ đang gõ (giá trị đã chọn không đổi vì lúc này chưa có).

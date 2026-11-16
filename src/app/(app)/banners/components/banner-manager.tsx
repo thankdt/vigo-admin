@@ -123,7 +123,7 @@ export function BannerManager() {
                             </div>
                         )}
                     </div>
-                    <Table>
+                    <Table stackBelow="sm">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Hình ảnh</TableHead>
@@ -150,7 +150,7 @@ export function BannerManager() {
                                         className="cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleOpenForm(banner)}
                                     >
-                                        <TableCell>
+                                        <TableCell data-card="header">
                                             <div className="w-24 h-12 relative bg-muted rounded overflow-hidden">
                                                 <Image
                                                     src={banner.imageUrl}
@@ -161,13 +161,13 @@ export function BannerManager() {
                                                 />
                                             </div>
                                         </TableCell>
-                                        <TableCell>{banner.priority}</TableCell>
-                                        <TableCell>
+                                        <TableCell data-label="Ưu tiên">{banner.priority}</TableCell>
+                                        <TableCell data-label="Trạng thái">
                                             <Badge variant={banner.isActive ? "default" : "secondary"}>
                                                 {banner.isActive ? 'Hoạt động' : 'Không hoạt động'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                                        <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
                                             <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleOpenForm(banner)}>
                                                 <Edit className="h-4 w-4" />
                                             </Button>

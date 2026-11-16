@@ -169,13 +169,13 @@ export function ReferrerTripsTab({
         </div>
       ) : (
         <>
-          <div className="relative overflow-x-auto">
+          <div className="relative">
             {isLoading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60">
                 <Loader2 className="h-5 w-5 animate-spin text-primary" />
               </div>
             )}
-            <Table>
+            <Table stackBelow="md">
               <TableHeader>
                 <TableRow>
                   <TableHead>Nguồn</TableHead>
@@ -236,10 +236,10 @@ function TripRow({
       className={canOpen ? 'cursor-pointer hover:bg-muted/50' : 'cursor-default'}
       onClick={canOpen ? () => onOpenBooking(row.bookingId!) : undefined}
     >
-      <TableCell>
+      <TableCell data-label="Nguồn">
         <Badge className={SOURCE_CLASS[row.source]}>{SOURCE_LABEL[row.source]}</Badge>
       </TableCell>
-      <TableCell>
+      <TableCell data-card="header" className="max-md:-order-1">
         {row.orderKind === 'BOOKING' ? (
           <span className="font-mono text-xs">{row.orderId?.slice(0, 8)}…</span>
         ) : row.orderKind === 'MULTI_STOP' ? (
@@ -248,7 +248,7 @@ function TripRow({
           <Badge variant="outline">Không gắn chuyến</Badge>
         )}
         {b && (
-          <div className="text-xs text-muted-foreground mt-0.5 max-w-[280px] truncate">
+          <div className="text-xs text-muted-foreground mt-0.5 md:max-w-[280px] line-clamp-2 md:line-clamp-1 [overflow-wrap:anywhere]">
             {b.isTestTrip && <span className="text-amber-600 font-medium">Chuyến test · </span>}
             {formatVND(b.price)}
             {b.pickupAddress ? ` · ${b.pickupAddress}` : ''}
@@ -256,19 +256,19 @@ function TripRow({
           </div>
         )}
       </TableCell>
-      <TableCell>
+      <TableCell data-label="Đối tượng">
         <div className="text-sm">{row.counterparty?.fullName ?? '—'}</div>
         <div className="text-xs text-muted-foreground">
           {row.counterparty?.phone ?? COUNTERPARTY_HINT[row.source]}
         </div>
       </TableCell>
-      <TableCell className="text-xs text-muted-foreground">
+      <TableCell data-label="Ngày ghi có" className="text-xs text-muted-foreground">
         {formatVnDateTime(row.creditedAt)}
         {row.clawedBackAt && (
           <div className="text-destructive">Thu hồi {formatVnDateTime(row.clawedBackAt)}</div>
         )}
       </TableCell>
-      <TableCell className="text-right">
+      <TableCell data-label="Số tiền" className="text-right">
         <div className={`tabular-nums font-medium ${row.amount < 0 ? 'text-destructive' : ''}`}>
           {formatVND(row.amount)}
         </div>

@@ -444,7 +444,7 @@ export function TransportCompaniesTable() {
       </div>
 
       <Card>
-        <Table>
+        <Table stackBelow="lg">
           <TableHeader>
             <TableRow>
               <TableHead>
@@ -502,27 +502,27 @@ export function TransportCompaniesTable() {
                   className="cursor-pointer hover:bg-muted/50"
                   onClick={() => openViewDrivers(company)}
                 >
-                  <TableCell className="font-semibold">{company.name}</TableCell>
-                  <TableCell>{company.ownerName || <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>{company.ownerPhone || <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>
+                  <TableCell data-card="header" className="font-semibold">{company.name}</TableCell>
+                  <TableCell data-label="Chủ đơn vị">{company.ownerName || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell data-label="SĐT chủ">{company.ownerPhone || <span className="text-muted-foreground">—</span>}</TableCell>
+                  <TableCell data-label="Số tài xế">
                     <Badge variant="secondary">{company.driverCount ?? 0}</Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Trạng thái">
                     {company.isActive ? (
                       <Badge className="bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-400">Hoạt động</Badge>
                     ) : (
                       <Badge variant="destructive">Ngừng hoạt động</Badge>
                     )}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Ngày tạo">
                     <span className="text-sm text-muted-foreground">
                       {company.createdAt
                         ? new Date(company.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
                         : 'N/A'}
                     </span>
                   </TableCell>
-                  <TableCell className={STICKY_ACTION_CELL_CLASS} onClick={(e) => e.stopPropagation()}>
+                  <TableCell data-card="menu" className={STICKY_ACTION_CELL_CLASS} onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
@@ -867,7 +867,7 @@ export function TransportCompaniesTable() {
             ) : companyDrivers.length === 0 ? (
               <div className="py-12 text-center text-muted-foreground">Đơn vị này chưa có tài xế nào.</div>
             ) : (
-              <Table>
+              <Table stackBelow="sm">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Tên tài xế</TableHead>
@@ -892,10 +892,10 @@ export function TransportCompaniesTable() {
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => setViewDriver(d)}
                       >
-                        <TableCell className="font-medium">{name}</TableCell>
-                        <TableCell>{phone}</TableCell>
-                        <TableCell className="font-mono text-sm">{plate}</TableCell>
-                        <TableCell>{approvalBadge}</TableCell>
+                        <TableCell data-card="header" className="font-medium">{name}</TableCell>
+                        <TableCell data-label="SĐT">{phone}</TableCell>
+                        <TableCell data-label="Biển số" className="font-mono text-sm">{plate}</TableCell>
+                        <TableCell data-label="Trạng thái duyệt">{approvalBadge}</TableCell>
                       </TableRow>
                     );
                   })}

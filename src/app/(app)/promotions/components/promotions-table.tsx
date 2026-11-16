@@ -545,7 +545,7 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
           <CardTitle>Danh sách Voucher</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          <Table stackBelow="lg">
             <TableHeader>
               <TableRow>
                 <TableHead>Mã</TableHead>
@@ -577,18 +577,18 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => setEditing(promo)}
                   >
-                    <TableCell>
+                    <TableCell data-card="header">
                       <Badge variant="destructive">{promo.code}</Badge>
                     </TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell data-label="Mô tả" data-card="wide" className="font-medium">
                       {promo.description ?? <span className="text-muted-foreground">—</span>}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Giảm giá">
                       {promo.discountType === 'PERCENTAGE'
                         ? `${promo.discountValue}%`
                         : new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(promo.discountValue)}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Hiển thị">
                       {/* Voucher tạo trước đợt này không có cột → PUBLIC, đúng hành vi cũ. */}
                       {(promo.visibility ?? 'PUBLIC') === 'PUBLIC' ? (
                         <span className="text-muted-foreground">Công khai</span>
@@ -598,13 +598,14 @@ export function PromotionsTable({ isFormOpen, setIsFormOpen }: { isFormOpen: boo
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Hiệu lực">
                       {format(new Date(promo.startDate), 'dd/MM/yy')} - {format(new Date(promo.endDate), 'dd/MM/yy')}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Đã dùng">
                       {promo.usageCount} / {promo.usageLimit}
                     </TableCell>
                     <TableCell
+                      data-card="actions"
                       className={cn(STICKY_ACTION_CELL_CLASS, 'whitespace-nowrap')}
                       // Stop row-click from opening the edit dialog when the
                       // admin is targeting the inline switch — they want to

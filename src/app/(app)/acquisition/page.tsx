@@ -197,7 +197,7 @@ export default function AcquisitionPage() {
                         <Bar name="Đăng ký (sign_up)" dataKey="signups" fill="#16a34a" radius={[3, 3, 0, 0]} />
                       </BarChart>
                     </ResponsiveContainer>
-                    <div className="mt-3 overflow-x-auto">
+                    <div className="mt-3">
                       <Table>
                         <TableHeader>
                           <TableRow>
@@ -209,7 +209,7 @@ export default function AcquisitionPage() {
                         <TableBody>
                           {data.ga4.byChannel.map((c) => (
                             <TableRow key={c.channel}>
-                              <TableCell className="font-medium">{c.channel}</TableCell>
+                              <TableCell className="font-medium break-words">{c.channel}</TableCell>
                               <TableCell className="text-right">{fmt(c.newUsers)}</TableCell>
                               <TableCell className="text-right">{fmt(c.signups)}</TableCell>
                             </TableRow>
@@ -261,7 +261,7 @@ export default function AcquisitionPage() {
                       </div>
                     </div>
                     {data.meta.campaigns.length > 0 && (
-                      <div className="mt-3 overflow-x-auto">
+                      <div className="mt-3">
                         <Table>
                           <TableHeader>
                             <TableRow>
@@ -273,7 +273,7 @@ export default function AcquisitionPage() {
                           <TableBody>
                             {data.meta.campaigns.map((c, i) => (
                               <TableRow key={`${c.name}-${i}`}>
-                                <TableCell className="max-w-[220px] truncate font-medium" title={c.name}>
+                                <TableCell className="line-clamp-2 [overflow-wrap:anywhere] font-medium" title={c.name}>
                                   {c.name}
                                 </TableCell>
                                 <TableCell className="text-right">{fmt(c.registrations)}</TableCell>

@@ -363,7 +363,7 @@ export default function KolPage() {
       )}
 
       <Card>
-        <Table>
+        <Table stackBelow="lg">
           <TableHeader>
             <TableRow>
               <TableHead>Người dùng</TableHead>
@@ -382,7 +382,7 @@ export default function KolPage() {
             ) : (
               rows.map((r) => (
                 <TableRow key={r.userId}>
-                  <TableCell>
+                  <TableCell data-card="header">
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
                         <AvatarFallback>{(r.userFullName ?? r.userPhone ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
@@ -393,24 +393,24 @@ export default function KolPage() {
                       </div>
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Loại">
                     <Badge variant={r.kind === 'LEADER' ? 'default' : 'secondary'}>{KIND_LABEL[r.kind]}</Badge>
                   </TableCell>
-                  <TableCell><StatusBadge status={r.status} /></TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell data-label="Trạng thái"><StatusBadge status={r.status} /></TableCell>
+                  <TableCell data-label="Hoa hồng" className="text-right tabular-nums">
                     {r.kind === 'LEADER'
                       ? <span className="text-muted-foreground">—</span>
                       : r.commissionPercent != null
                         ? `${r.commissionPercent}%`
                         : <span className="text-muted-foreground">nhóm</span>}
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell data-label="Thủ lĩnh" className="text-sm">
                     {r.kind === 'STANDARD' && r.leaderId
                       ? (r.leaderName ?? leaderName.get(r.leaderId) ?? r.leaderId.slice(0, 8))
                       : <span className="text-muted-foreground">—</span>}
                   </TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
-                    <div className="flex flex-col items-end gap-1 sm:flex-row sm:justify-end">
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                    <div className="flex flex-wrap items-center justify-end gap-1.5">
                       {r.status === 'PENDING' && (
                         <>
                           <Button size="sm" className="h-8" onClick={() => openPromote(r.userId, r.userFullName || r.userPhone || r.userId.slice(0, 8), r)}>

@@ -8,11 +8,15 @@ import {
   SidebarHeader,
   SidebarContent,
   SidebarFooter,
+  SidebarGroup,
+  SidebarGroupContent,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarInset,
+  SidebarRail,
   SidebarTrigger,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { LayoutDashboard, LogOut, Car, Route } from 'lucide-react';
 import React from 'react';
@@ -53,10 +57,11 @@ export default function HtxPortalLayout({ children }: { children: React.ReactNod
   };
 
   return (
-    <SidebarProvider>
-      <Sidebar>
-        <SidebarHeader className="p-4">
-          <Link href="/htx/dashboard" className="flex items-center gap-2">
+    <SidebarProvider mobileBreakpoint={1024}>
+      <PortalDrawerAutoClose pathname={pathname} />
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="p-4 group-data-[collapsible=icon]:p-2">
+          <Link href="/htx/dashboard" className="flex items-center gap-2 group-data-[collapsible=icon]:justify-center">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src="/vigo-wordmark.png" alt="ViiGO" className="h-7 w-auto group-data-[collapsible=icon]:hidden" />
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,36 +70,41 @@ export default function HtxPortalLayout({ children }: { children: React.ReactNod
           </Link>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarMenu>
-            {navItems.map((item) => {
-              const Icon = item.icon;
-              const active = pathname.startsWith(item.href);
-              return (
-                <SidebarMenuItem key={item.href}>
-                  <SidebarMenuButton asChild isActive={active}>
-                    <Link href={item.href}>
-                      <Icon className="h-4 w-4" />
-                      <span>{item.label}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              );
-            })}
-          </SidebarMenu>
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const active = pathname.startsWith(item.href);
+                  return (
+                    <SidebarMenuItem key={item.href}>
+                      <SidebarMenuButton asChild isActive={active} tooltip={item.label}>
+                        <Link href={item.href}>
+                          <Icon className="h-4 w-4" />
+                          <span>{item.label}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
         </SidebarContent>
         <SidebarFooter className="p-2">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={handleLogout}>
+              <SidebarMenuButton onClick={handleLogout} tooltip="Đăng xuất">
                 <LogOut className="h-4 w-4" />
                 <span>Đăng xuất</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
+        <SidebarRail />
       </Sidebar>
       <SidebarInset>
-        <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/95 px-3 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+        <header className="sticky top-0 z-10 flex items-center gap-2 border-b bg-background/95 px-3 py-2.5 backdrop-blur supports-[backdrop-filter]:bg-background/80 lg:hidden">
           <SidebarTrigger aria-label="Mở menu điều hướng HTX" />
           <Link href="/htx/dashboard" className="flex items-center gap-1.5 font-semibold text-foreground">
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -106,4 +116,12 @@ export default function HtxPortalLayout({ children }: { children: React.ReactNod
       </SidebarInset>
     </SidebarProvider>
   );
+}
+
+function PortalDrawerAutoClose({ pathname }: { pathname: string }) {
+  const { setOpenMobile } = useSidebar();
+  React.useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+  return null;
 }

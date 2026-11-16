@@ -356,11 +356,11 @@ export default function CskhActivityPage() {
                 Sắp theo số cuộc gọi thật. Nhân viên không gọi cuộc nào trong kỳ vẫn hiện ở cuối bảng.
               </CardDescription>
             </CardHeader>
-            <CardContent className="overflow-x-auto">
-              <Table>
+            <CardContent>
+              <Table stackBelow="xl">
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="w-10">#</TableHead>
+                    <TableHead className="xl:w-10">#</TableHead>
                     <TableHead>Nhân viên</TableHead>
                     <TableHead className="text-right">Cuộc gọi thật</TableHead>
                     <TableHead className="text-right">Gọi được</TableHead>
@@ -382,20 +382,20 @@ export default function CskhActivityPage() {
                   ) : (
                     summary.byStaff.map((s, i) => (
                       <TableRow key={s.adminUserId ?? `unknown-${i}`} className={s.contactCalls === 0 ? 'opacity-60' : ''}>
-                        <TableCell className="text-muted-foreground">{i + 1}</TableCell>
-                        <TableCell className="font-medium">
+                        <TableCell data-label="Hạng" className="text-muted-foreground">{i + 1}</TableCell>
+                        <TableCell data-card="header" className="font-medium max-xl:-order-1">
                           {s.adminName || (s.adminUserId ? s.adminUserId.slice(0, 8) : 'Không xác định')}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">{fmt(s.contactCalls)}</TableCell>
-                        <TableCell className="text-right">{fmt(s.called)}</TableCell>
-                        <TableCell className="text-right">{fmt(s.unreached)}</TableCell>
-                        <TableCell className="text-right">{fmt(s.callback)}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">{fmt(s.claimed)}</TableCell>
-                        <TableCell className="text-right">{fmt(s.distinctTargets)}</TableCell>
-                        <TableCell className="text-right text-muted-foreground">
+                        <TableCell data-label="Cuộc gọi thật" className="text-right font-semibold">{fmt(s.contactCalls)}</TableCell>
+                        <TableCell data-label="Gọi được" className="text-right">{fmt(s.called)}</TableCell>
+                        <TableCell data-label="Không nghe" className="text-right">{fmt(s.unreached)}</TableCell>
+                        <TableCell data-label="Hẹn gọi lại" className="text-right">{fmt(s.callback)}</TableCell>
+                        <TableCell data-label="Nhận gọi" className="text-right text-muted-foreground">{fmt(s.claimed)}</TableCell>
+                        <TableCell data-label="Người khác nhau" className="text-right">{fmt(s.distinctTargets)}</TableCell>
+                        <TableCell data-label="Khách / Tài xế" className="text-right text-muted-foreground">
                           {fmt(s.bookingEvents)} / {fmt(s.driverEvents)}
                         </TableCell>
-                        <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                        <TableCell data-label="Mốc đầu → cuối" data-card="wide" className="2xl:whitespace-nowrap text-xs text-muted-foreground">
                           {s.firstAt ? `${formatVnDateTime(s.firstAt)} → ${formatVnDateTime(s.lastAt)}` : '—'}
                         </TableCell>
                       </TableRow>
@@ -534,11 +534,11 @@ export default function CskhActivityPage() {
           </div>
           {loadingFeed ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : null}
         </CardHeader>
-        <CardContent className="overflow-x-auto">
-          <Table>
+        <CardContent>
+          <Table stackBelow="lg">
             <TableHeader>
               <TableRow>
-                <TableHead className="w-32">Lúc</TableHead>
+                <TableHead className="lg:w-32">Lúc</TableHead>
                 <TableHead>Nhân viên</TableHead>
                 <TableHead>Gọi cho</TableHead>
                 <TableHead>Kết quả</TableHead>
@@ -556,14 +556,14 @@ export default function CskhActivityPage() {
               ) : (
                 feed.map((row) => (
                   <TableRow key={row.id}>
-                    <TableCell className="whitespace-nowrap text-sm">
+                    <TableCell data-label="Thời gian" className="whitespace-nowrap text-sm">
                       <div className="font-medium">{VN_TIME.format(new Date(row.createdAt))}</div>
                       <div className="text-xs text-muted-foreground">{VN_DATE.format(new Date(row.createdAt))}</div>
                     </TableCell>
-                    <TableCell className="font-medium">
+                    <TableCell data-label="Nhân viên" className="font-medium">
                       {row.byAdminName || (row.byAdminUserId ? row.byAdminUserId.slice(0, 8) : 'Không xác định')}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-card="header" className="max-lg:-order-1">
                       <div className="flex items-start gap-2">
                         <Badge variant="outline" className="mt-0.5 shrink-0">
                           {KIND_LABEL[row.kind]}
@@ -571,7 +571,7 @@ export default function CskhActivityPage() {
                         <TargetCell row={row} />
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Kết quả">
                       <Badge variant="secondary" className={outcomeBadgeClass(row.outcome)}>
                         {outcomeLabel(row.kind, row.outcome)}
                       </Badge>
@@ -579,8 +579,8 @@ export default function CskhActivityPage() {
                         <div className="mt-1 text-xs text-muted-foreground">sau khi hoàn thành</div>
                       ) : null}
                     </TableCell>
-                    <TableCell className="max-w-[180px] text-sm">{row.reason || '—'}</TableCell>
-                    <TableCell className="max-w-[320px] whitespace-pre-wrap text-sm text-muted-foreground">
+                    <TableCell data-label="Lý do" className="lg:max-w-[180px] text-sm">{row.reason || '—'}</TableCell>
+                    <TableCell data-label="Ghi chú" data-card="full" className="lg:max-w-[320px] whitespace-pre-wrap text-sm text-muted-foreground">
                       {row.note || '—'}
                     </TableCell>
                   </TableRow>

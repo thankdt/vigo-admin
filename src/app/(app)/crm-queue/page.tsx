@@ -399,7 +399,7 @@ export default function CrmQueuePage() {
             </div>
           )
         ) : (
-          <Table>
+          <Table stackBelow="xl">
             <TableHeader>
               <TableRow>
                 <TableHead>Khách</TableHead>
@@ -434,19 +434,19 @@ export default function CrmQueuePage() {
                   const busy = busyId === b.id;
                   return (
                     <TableRow key={b.id}>
-                      <TableCell>
+                      <TableCell data-card="header">
                         <p className="font-medium">{b.customer?.fullName || '—'}</p>
                         <p className="text-xs text-muted-foreground">{b.customer?.phone || '—'}</p>
                       </TableCell>
                       {/* Cặp tỉnh đón → trả (chuyến mới không còn tuyến); chuyến LỊCH SỬ chưa có
                           mã tỉnh mới rơi về tên tuyến cũ. */}
-                      <TableCell className="text-sm">
+                      <TableCell data-label="Hành trình" data-card="wide" className="text-sm">
                         {provincePairLabel(b.pickupProvinceCode, b.dropoffProvinceCode, provinceNames) || b.route?.name || '—'}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell data-label="Giờ đón / hoàn thành" className="whitespace-nowrap text-sm">
                         {formatVnDateTime(isBefore ? b.scheduledTime : b.completedAt)}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap text-sm">
+                      <TableCell data-label="Đã chờ" className="whitespace-nowrap text-sm">
                         {(() => {
                           const since = waitedSince(b);
                           const tone = waitTone(since, nowMs);
@@ -464,7 +464,7 @@ export default function CrmQueuePage() {
                         })()}
                       </TableCell>
                       {showOwnerCol && (
-                        <TableCell className="whitespace-nowrap text-sm">
+                        <TableCell data-label="Người giữ việc" className="whitespace-nowrap text-sm">
                           {owner?.fullName ? (
                             <Badge variant="secondary">{owner.fullName}</Badge>
                           ) : (
@@ -472,8 +472,8 @@ export default function CrmQueuePage() {
                           )}
                         </TableCell>
                       )}
-                      <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
-                        <div className="flex flex-col items-end gap-1.5 md:flex-row md:items-center md:justify-end">
+                      <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                        <div className="flex flex-wrap items-center justify-end gap-1.5">
                           {!claimed && (
                             <Button size="sm" disabled={busy} onClick={() => record(b, 'CLAIMED')}>
                               {busy ? (

@@ -215,7 +215,7 @@ export default function HtxDriversPage() {
       </div>
 
       <Card>
-        <Table>
+        <Table stackBelow="xl">
           <TableHeader>
             <TableRow>
               <TableHead>Tài xế</TableHead>
@@ -248,32 +248,34 @@ export default function HtxDriversPage() {
             ) : (
               drivers.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell className="flex items-center gap-3">
-                    <Avatar className="h-8 w-8">
-                      {d.avatar ? <AvatarImage src={getImageUrl(d.avatar)} /> : null}
-                      <AvatarFallback>{(d.fullName ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <div className="font-medium">{d.fullName ?? '—'}</div>
-                      {d.vehicleRegistration?.plateNumber && (
-                        <div className="text-xs text-muted-foreground">
-                          {d.vehicleRegistration.plateNumber}
-                          {d.vehicleRegistration.seats ? ` · ${d.vehicleRegistration.seats} chỗ` : ''}
-                        </div>
-                      )}
+                  <TableCell data-card="header">
+                    <div className="flex items-center gap-3">
+                      <Avatar className="h-8 w-8">
+                        {d.avatar ? <AvatarImage src={getImageUrl(d.avatar)} /> : null}
+                        <AvatarFallback>{(d.fullName ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <div className="font-medium">{d.fullName ?? '—'}</div>
+                        {d.vehicleRegistration?.plateNumber && (
+                          <div className="text-xs text-muted-foreground">
+                            {d.vehicleRegistration.plateNumber}
+                            {d.vehicleRegistration.seats ? ` · ${d.vehicleRegistration.seats} chỗ` : ''}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell>{d.phone ?? '—'}</TableCell>
-                  <TableCell className="text-right tabular-nums">{d.tripCount}</TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">{formatCurrency(d.lifetimeIncome ?? 0)}</TableCell>
-                  <TableCell className="text-right tabular-nums text-amber-700 dark:text-amber-400">{formatCurrency(d.lifetimeTax ?? 0)}</TableCell>
-                  <TableCell>{statusBadge(d.status, d.presence)}</TableCell>
-                  <TableCell>
+                  <TableCell data-label="Số điện thoại">{d.phone ?? '—'}</TableCell>
+                  <TableCell data-label="Số chuyến" className="text-right tabular-nums">{d.tripCount}</TableCell>
+                  <TableCell data-label="Thu nhập" className="text-right tabular-nums font-medium">{formatCurrency(d.lifetimeIncome ?? 0)}</TableCell>
+                  <TableCell data-label="Thuế TNCN" className="text-right tabular-nums text-amber-700 dark:text-amber-400">{formatCurrency(d.lifetimeTax ?? 0)}</TableCell>
+                  <TableCell data-label="Trạng thái">{statusBadge(d.status, d.presence)}</TableCell>
+                  <TableCell data-label="Ngày tạo">
                     <span className="text-sm text-muted-foreground">
                       {new Date(d.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell data-label="Hợp đồng HTX" className="text-center">
                     {d.htxApprovalStatus === 'PENDING_HTX' ? (
                       <Button
                         size="sm"
@@ -307,9 +309,9 @@ export default function HtxDriversPage() {
                       <span className="text-xs text-muted-foreground">Chưa nộp</span>
                     )}
                   </TableCell>
-                  <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
                     <div className="flex items-center justify-end gap-2">
-                      <span className={`hidden text-xs sm:inline ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
+                      <span className={`text-xs ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
                         {d.isActive ? 'Đang hoạt động' : 'Tạm dừng'}
                       </span>
                       <Switch

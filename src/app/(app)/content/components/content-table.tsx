@@ -81,7 +81,7 @@ export function ContentTable() {
         />
       </div>
       <Card>
-        <Table>
+        <Table stackBelow="md">
           <TableHeader>
             <TableRow>
               <TableHead>
@@ -116,23 +116,23 @@ export function ContentTable() {
           <TableBody>
             {filteredArticles.map((article) => (
               <TableRow key={article.id}>
-                <TableCell className="font-medium">
+                <TableCell data-card="header" className="font-medium">
                   <div className="flex items-center gap-4">
                     <Image
                       src={article.imageUrl}
                       alt={article.title}
                       width={80}
                       height={50}
-                      className="rounded-md object-cover"
+                      className="rounded-md object-cover shrink-0"
                       data-ai-hint="article image"
                     />
                     <span>{article.title}</span>
                   </div>
                 </TableCell>
-                <TableCell>{article.author}</TableCell>
-                <TableCell>{getStatusBadge(article.status)}</TableCell>
-                <TableCell>{article.createdAt}</TableCell>
-                <TableCell className={STICKY_ACTION_CELL_CLASS}>
+                <TableCell data-label="Tác giả">{article.author}</TableCell>
+                <TableCell data-label="Trạng thái">{getStatusBadge(article.status)}</TableCell>
+                <TableCell data-label="Ngày tạo">{article.createdAt}</TableCell>
+                <TableCell data-card="menu" className={STICKY_ACTION_CELL_CLASS}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8 p-0">

@@ -146,7 +146,7 @@ export default function KolDashboardPage() {
       {isLeader ? (
         <Card>
           <div className="border-b px-4 py-3 text-sm font-medium">Đội nhóm của bạn (tháng {leader?.yearMonthVn ?? ''})</div>
-          <Table>
+          <Table stackBelow="sm">
             <TableHeader>
               <TableRow>
                 <TableHead>Sub-KOL</TableHead>
@@ -159,9 +159,9 @@ export default function KolDashboardPage() {
                 <TableRow><TableCell colSpan={3} className="h-20 text-center text-muted-foreground">Chưa có sub-KOL nào phát sinh hoa hồng tháng này.</TableCell></TableRow>
               ) : leader!.subKols.map((s) => (
                 <TableRow key={s.subKolUserId}>
-                  <TableCell className="font-medium">{s.name || s.subKolUserId.slice(0, 8)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatVND(s.earnings)}</TableCell>
-                  <TableCell className="text-right tabular-nums font-semibold text-primary">{formatVND(s.myOverride)}</TableCell>
+                  <TableCell data-card="header" className="font-medium">{s.name || s.subKolUserId.slice(0, 8)}</TableCell>
+                  <TableCell data-label="Hoa hồng họ kiếm" className="text-right tabular-nums">{formatVND(s.earnings)}</TableCell>
+                  <TableCell data-label="Override bạn nhận" className="text-right tabular-nums font-semibold text-primary">{formatVND(s.myOverride)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -170,7 +170,7 @@ export default function KolDashboardPage() {
       ) : (
         <Card>
           <div className="border-b px-4 py-3 text-sm font-medium">Khách bạn đã giới thiệu</div>
-          <Table>
+          <Table stackBelow="sm">
             <TableHeader>
               <TableRow>
                 <TableHead>Khách</TableHead>
@@ -184,17 +184,17 @@ export default function KolDashboardPage() {
                 <TableRow><TableCell colSpan={4} className="h-20 text-center text-muted-foreground">Chưa có khách nào dùng mã của bạn.</TableCell></TableRow>
               ) : referees.map((r) => (
                 <TableRow key={r.refereeId}>
-                  <TableCell>
+                  <TableCell data-card="header">
                     <div className="font-medium">{r.refereeName || '—'}</div>
                     <div className="text-xs text-muted-foreground">{r.refereePhone || '—'}</div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Chuyến đầu">
                     {r.firstTripDone
                       ? <Badge className="bg-green-100 text-green-800 hover:bg-green-100">Đã đi</Badge>
                       : <Badge variant="secondary">Chưa</Badge>}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums font-medium">{formatVND(r.commissionEarned)}</TableCell>
-                  <TableCell className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</TableCell>
+                  <TableCell data-label="Hoa hồng" className="text-right tabular-nums font-medium">{formatVND(r.commissionEarned)}</TableCell>
+                  <TableCell data-label="Ngày" className="text-sm text-muted-foreground">{new Date(r.createdAt).toLocaleDateString('vi-VN')}</TableCell>
                 </TableRow>
               ))}
             </TableBody>

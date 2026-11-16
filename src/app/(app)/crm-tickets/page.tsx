@@ -183,7 +183,7 @@ export default function CrmTicketsPage() {
             // Rỗng ≠ lỗi: hai chữ khác nhau, nếu không admin không biết nên chờ hay nên báo.
             <p className="text-sm text-muted-foreground">Chưa có ticket nào.</p>
           ) : (
-            <Table>
+            <Table stackBelow="xl">
               <TableHeader>
                 <TableRow>
                   <TableHead>Mã</TableHead>
@@ -209,26 +209,26 @@ export default function CrmTicketsPage() {
                       className="cursor-pointer"
                       onClick={() => setOpenId(t.id)}
                     >
-                      <TableCell className="font-mono text-xs">{t.code}</TableCell>
-                      <TableCell className="max-w-[280px] truncate">{t.title}</TableCell>
-                      <TableCell className="text-sm">{labelOf(t.category)}</TableCell>
-                      <TableCell>
+                      <TableCell data-label="Mã ticket" className="font-mono text-xs">{t.code}</TableCell>
+                      <TableCell data-card="header" className="xl:max-w-[280px] xl:truncate max-xl:-order-1 max-xl:font-medium">{t.title}</TableCell>
+                      <TableCell data-label="Loại" className="text-sm">{labelOf(t.category)}</TableCell>
+                      <TableCell data-label="Trạng thái">
                         <Badge variant="secondary">{TICKET_STATUS_LABEL[t.status]}</Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="SLA phản hồi">
                         <Badge className={TONE_CLASS[slaRespond.tone]} data-testid="sla-respond">
                           {slaRespond.text}
                         </Badge>
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="SLA đóng">
                         <Badge className={TONE_CLASS[sla.tone]} data-testid="sla-resolve">{sla.text}</Badge>
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell data-label="Đền bù" className="text-sm">
                         {Number(t.compensationAmount) > 0
                           ? `${Number(t.compensationAmount).toLocaleString('vi-VN')}đ`
                           : '—'}
                       </TableCell>
-                      <TableCell className="text-xs">{formatVnDateTime(t.createdAt)}</TableCell>
+                      <TableCell data-label="Tạo lúc" className="text-xs">{formatVnDateTime(t.createdAt)}</TableCell>
                     </TableRow>
                   );
                 })}

@@ -428,10 +428,10 @@ const CUSTOMER_CALL_TOAST: Record<CustomerCallStatus, string> = {
 // Badge 4 trạng thái: null = Chưa gọi (đỏ), CLAIMED = xanh dương, CALLED = xanh lá,
 // UNREACHED = hổ phách. Style thống nhất 2 nơi render.
 export function CustomerCallBadge({ status }: { status?: CustomerCallStatus | null }) {
-  if (status === 'CALLED') return <Badge className="bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Đã gọi</Badge>;
-  if (status === 'UNREACHED') return <Badge className="bg-amber-500 text-white hover:bg-amber-500 text-[10px] px-1.5 py-0">Không gọi được</Badge>;
-  if (status === 'CLAIMED') return <Badge className="bg-blue-600 text-white hover:bg-blue-600 text-[10px] px-1.5 py-0">Đã nhận gọi</Badge>;
-  return <Badge variant="destructive" className="text-[10px] px-1.5 py-0">Chưa gọi</Badge>;
+  if (status === 'CALLED') return <Badge className="whitespace-nowrap bg-green-600 text-white hover:bg-green-600 text-[10px] px-1.5 py-0">Đã gọi</Badge>;
+  if (status === 'UNREACHED') return <Badge className="whitespace-nowrap bg-amber-500 text-white hover:bg-amber-500 text-[10px] px-1.5 py-0">Không gọi được</Badge>;
+  if (status === 'CLAIMED') return <Badge className="whitespace-nowrap bg-blue-600 text-white hover:bg-blue-600 text-[10px] px-1.5 py-0">Đã nhận gọi</Badge>;
+  return <Badge variant="destructive" className="whitespace-nowrap text-[10px] px-1.5 py-0">Chưa gọi</Badge>;
 }
 
 // Exported (only the keyword — no behavior/signature change) so it can be

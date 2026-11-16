@@ -171,7 +171,7 @@ export function AppPopupManager() {
                             Làm mới
                         </Button>
                     </div>
-                    <Table>
+                    <Table stackBelow="xl">
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Hình ảnh</TableHead>
@@ -204,7 +204,7 @@ export function AppPopupManager() {
                                         className="cursor-pointer hover:bg-muted/50"
                                         onClick={() => handleOpenForm(p)}
                                     >
-                                        <TableCell>
+                                        <TableCell data-card="header">
                                             <div className="w-24 h-12 relative bg-muted rounded overflow-hidden">
                                                 <Image
                                                     src={p.imageUrl}
@@ -215,13 +215,13 @@ export function AppPopupManager() {
                                                 />
                                             </div>
                                         </TableCell>
-                                        <TableCell className="max-w-[220px] truncate">
+                                        <TableCell data-label="Liên kết" data-card="wide" className="xl:max-w-[220px] xl:truncate">
                                             {p.linkUrl ? (
                                                 <a
                                                     href={p.linkUrl}
                                                     target="_blank"
                                                     rel="noreferrer"
-                                                    className="text-primary hover:underline"
+                                                    className="text-primary hover:underline break-all"
                                                 >
                                                     {p.linkUrl}
                                                 </a>
@@ -229,10 +229,10 @@ export function AppPopupManager() {
                                                 <span className="text-muted-foreground">—</span>
                                             )}
                                         </TableCell>
-                                        <TableCell>{DISPLAY_MODE_LABEL[p.displayMode]}</TableCell>
-                                        <TableCell>{AUDIENCE_LABEL[p.audience ?? 'CUSTOMER']}</TableCell>
-                                        <TableCell>{p.priority}</TableCell>
-                                        <TableCell className="text-xs">
+                                        <TableCell data-label="Chế độ">{DISPLAY_MODE_LABEL[p.displayMode]}</TableCell>
+                                        <TableCell data-label="Hiển thị cho">{AUDIENCE_LABEL[p.audience ?? 'CUSTOMER']}</TableCell>
+                                        <TableCell data-label="Ưu tiên">{p.priority}</TableCell>
+                                        <TableCell data-label="Lịch chạy" data-card="wide" className="text-xs">
                                             {p.startAt || p.endAt ? (
                                                 <span>
                                                     {p.startAt ? new Date(p.startAt).toLocaleString('vi-VN') : '∞'}
@@ -243,12 +243,12 @@ export function AppPopupManager() {
                                                 <span className="text-muted-foreground">Không giới hạn</span>
                                             )}
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell data-label="Trạng thái">
                                             <Badge variant={p.isActive ? 'default' : 'secondary'}>
                                                 {p.isActive ? 'Hoạt động' : 'Tắt'}
                                             </Badge>
                                         </TableCell>
-                                        <TableCell className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
+                                        <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')} onClick={(e) => e.stopPropagation()}>
                                             <Button
                                                 variant="ghost"
                                                 size="icon"

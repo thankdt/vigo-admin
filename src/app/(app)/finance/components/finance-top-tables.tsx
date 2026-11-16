@@ -11,7 +11,7 @@ const fmtVnd = (v: number) =>
 
 export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Top 10 HTX</CardTitle>
@@ -31,11 +31,11 @@ export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
               <TableBody>
                 {data.topHtx.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>
+                    <TableCell className="break-words">
                       <Link href={`/transport-companies/${r.id}`} className="text-primary hover:underline">{r.name}</Link>
                     </TableCell>
-                    <TableCell className="text-right">{r.bookingCount}</TableCell>
-                    <TableCell className="text-right font-medium">{fmtVnd(r.netIncome)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.bookingCount}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">{fmtVnd(r.netIncome)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -63,14 +63,14 @@ export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
               <TableBody>
                 {data.topDrivers.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>
+                    <TableCell className="break-words">
                       <Link href={`/drivers?driverId=${r.id}`} className="text-primary hover:underline">
                         {r.fullName || 'N/A'}
                       </Link>
                       <div className="text-xs text-muted-foreground">{r.phone}</div>
                     </TableCell>
-                    <TableCell className="text-right">{r.bookingCount}</TableCell>
-                    <TableCell className="text-right font-medium">{fmtVnd(r.netEarnings)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.bookingCount}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">{fmtVnd(r.netEarnings)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -79,7 +79,7 @@ export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="md:col-span-2 2xl:col-span-1">
         <CardHeader>
           <CardTitle className="text-base">Top 10 affiliate</CardTitle>
         </CardHeader>
@@ -98,14 +98,14 @@ export function FinanceTopTables({ data }: { data: FinanceDashboard }) {
               <TableBody>
                 {data.topAffiliates.map((r) => (
                   <TableRow key={r.id}>
-                    <TableCell>
+                    <TableCell className="break-words">
                       <Link href={`/referrals?referrerId=${r.id}`} className="text-primary hover:underline">
                         {r.fullName || 'N/A'}
                       </Link>
                       <div className="text-xs text-muted-foreground">{r.phone}</div>
                     </TableCell>
-                    <TableCell className="text-right">{r.tripCount}</TableCell>
-                    <TableCell className="text-right font-medium">{fmtVnd(r.totalCredited)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{r.tripCount}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums whitespace-nowrap">{fmtVnd(r.totalCredited)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
