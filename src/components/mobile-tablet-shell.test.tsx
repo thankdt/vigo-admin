@@ -385,6 +385,7 @@ describe('Mobile / iPad / Tablet responsive admin shell & filters', () => {
     const menuTriggerCls = screen.getByRole('button', { name: 'Mở menu' }).className;
     expect(menuTriggerCls).toContain('[@media(pointer:coarse)]:min-h-9');
     expect(menuTriggerCls).toContain('[@media(pointer:coarse)]:min-w-9');
+    expect(menuTriggerCls).toContain('[@media(hover:hover)]:hover:bg-accent');
   });
 
   it('bounds PopoverContent to available viewport height and keeps link buttons free of forced min-h-9', async () => {
