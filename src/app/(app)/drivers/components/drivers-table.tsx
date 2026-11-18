@@ -22,13 +22,13 @@ import {
 import { DriverNoteSelect } from './driver-note-select';
 import { subscribeDriverNotePresets } from './driver-note-presets-cache';
 import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen, Clock, PlayCircle } from 'lucide-react';
+import { MoreHorizontal, ArrowUpDown, Loader2, CheckCircle, CheckCircle2, XCircle, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Building2, AlertTriangle, Pencil, Check as CheckIcon, X as XIcon, RotateCcw, Ban, LockOpen, Clock, PlayCircle, EyeOff, Eye } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
-import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getSurvivingProvinces, updateDriverProvinces, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, updateDriverCsStatus } from '@/lib/api';
+import { getDrivers, approveDriver, rejectDriver, assignTransportCompany, getTransportCompanyList, updateDriverServices, updateDriverProfile, moveDriverBackToPending, getSurvivingProvinces, updateDriverProvinces, getPresignedUrl, uploadToS3, banDriver, unbanDriver, suspendDriver, unsuspendDriver, setDriverHiddenTripLock, updateDriverCsStatus } from '@/lib/api';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { DriverIssueBadges } from './driver-issue-badges';
 import { DriversFilterBar, EMPTY_FILTERS, hasAnyFilter, type DriverFilters } from './drivers-filter-bar';
@@ -298,6 +298,50 @@ export function DriversTable() {
     }
   };
 
+  // Khoá ẩn nhận chuyến (admin-only, im lặng: không hiện / không báo cho tài xế).
+  const [hiddenLockTarget, setHiddenLockTarget] = React.useState<{
+    driver: Driver;
+    nextHidden: boolean;
+  } | null>(null);
+  const [hiddenLockNote, setHiddenLockNote] = React.useState('');
+  const [isUpdatingHiddenLock, setIsUpdatingHiddenLock] = React.useState(false);
+
+  const openHiddenTripLockDialog = (driver: Driver) => {
+    setHiddenLockNote('');
+    setHiddenLockTarget({
+      driver,
+      nextHidden: !driver.tripReceiveHidden,
+    });
+  };
+
+  const handleConfirmHiddenTripLock = async () => {
+    if (!hiddenLockTarget) return;
+    const { driver, nextHidden } = hiddenLockTarget;
+    const driverName = driver.name || driver.user?.fullName || 'Tài xế';
+    setIsUpdatingHiddenLock(true);
+    try {
+      await setDriverHiddenTripLock(driver.id, nextHidden, hiddenLockNote);
+      toast({
+        title: nextHidden ? 'Đã bật khoá ẩn nhận chuyến' : 'Đã tắt khoá ẩn nhận chuyến',
+        description: nextHidden
+          ? `${driverName} đã bị ẩn toàn bộ chuyến và chặn khỏi gán tay (tài xế không nhận thông báo).`
+          : `${driverName} đã có thể nhận chuyến và hiện lại trong gán tay.`,
+      });
+      if (viewDriver?.id === driver.id) setViewDriver(null);
+      setHiddenLockTarget(null);
+      setHiddenLockNote('');
+      fetchDrivers(activeTab, filters, currentPage, pageSize, sortConfig);
+    } catch (err: any) {
+      toast({
+        variant: 'destructive',
+        title: nextHidden ? 'Không thể khoá ẩn nhận chuyến' : 'Không thể mở khoá ẩn nhận chuyến',
+        description: err.message,
+      });
+    } finally {
+      setIsUpdatingHiddenLock(false);
+    }
+  };
+
   // Assign transport company state
   const [assignDriver, setAssignDriver] = React.useState<Driver | null>(null);
   const [transportCompanies, setTransportCompanies] = React.useState<TransportCompany[]>([]);
@@ -523,6 +567,7 @@ export function DriversTable() {
         csNeverWorked: f.csNeverWorked ? 'true' : undefined,
         csWorkedFrom: f.csWorkedFrom || undefined,
         csWorkedTo: f.csWorkedTo || undefined,
+        tripReceiveHidden: f.tripReceiveHidden || undefined,
         onlineState,
       };
       if (sort) {
@@ -1002,6 +1047,31 @@ export function DriversTable() {
                               <Clock className="h-3 w-3" /> Tạm khoá chuyến · {formatVnDateTime(driver.suspendedUntil)}
                             </Badge>
                           )}
+                          {driver.tripReceiveHidden && (
+                            <Badge className="w-fit gap-1 mt-0.5 bg-rose-100 text-rose-800 border-rose-300 hover:bg-rose-100 dark:bg-rose-900/40 dark:text-rose-300 dark:border-rose-800">
+                              <EyeOff className="h-3 w-3" /> Đang khoá ẩn chuyến
+                            </Badge>
+                          )}
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className={
+                              driver.tripReceiveHidden
+                                ? 'mt-1 h-7 w-fit gap-1 px-2 text-xs text-emerald-700 border-emerald-300 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-300'
+                                : 'mt-1 h-7 w-fit gap-1 px-2 text-xs text-rose-700 border-rose-300 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-300'
+                            }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openHiddenTripLockDialog(driver);
+                            }}
+                          >
+                            {driver.tripReceiveHidden ? (
+                              <><Eye className="h-3 w-3" /> Mở khoá ẩn chuyến</>
+                            ) : (
+                              <><EyeOff className="h-3 w-3" /> Khoá ẩn nhận chuyến</>
+                            )}
+                          </Button>
                           {/* Trạng thái CSKH cuối cùng (loại mốc gần nhất) — để CSKH nắm nhanh khỏi mở chi tiết. */}
                           {(() => {
                             const meta = driver.csLastCallType
@@ -1179,6 +1249,13 @@ export function DriversTable() {
                               </DropdownMenuItem>
                             )
                           )}
+                          <DropdownMenuItem onSelect={() => setTimeout(() => openHiddenTripLockDialog(driver), 0)}>
+                            {driver.tripReceiveHidden ? (
+                              <><Eye className="mr-2 h-4 w-4" /> Mở khoá ẩn chuyến</>
+                            ) : (
+                              <><EyeOff className="mr-2 h-4 w-4" /> Khoá ẩn nhận chuyến</>
+                            )}
+                          </DropdownMenuItem>
                           {(() => {
                             const ds = getDriverApprovalStatus(driver);
                             // Approved drivers also need a way back to pending
@@ -1461,6 +1538,26 @@ export function DriversTable() {
                     onClick={() => { const d = viewDriver; setViewDriver(null); setUnsuspendNote(''); setUnsuspendTarget(d); }}
                   >
                     <PlayCircle className="mr-1.5 h-3.5 w-3.5" /> Gỡ khoá
+                  </Button>
+                </div>
+              )}
+
+              {viewDriver.tripReceiveHidden && (
+                <div className="rounded-md border border-rose-300 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/40 p-3 flex items-start gap-2">
+                  <EyeOff className="h-4 w-4 text-rose-600 mt-0.5 shrink-0" />
+                  <div className="flex-1 text-sm">
+                    <div className="font-semibold text-rose-700 dark:text-rose-400">
+                      Đang khoá ẩn nhận chuyến{viewDriver.tripReceiveHiddenAt ? ` · ${formatVnDateTime(viewDriver.tripReceiveHiddenAt)}` : ''}
+                    </div>
+                    <p className="mt-1 text-xs text-rose-700/80 dark:text-rose-300/80">Tài xế vẫn mở app bình thường nhưng bị ẩn toàn bộ chuyến và bị chặn khỏi danh sách gán tay (không nhận thông báo khoá).</p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="shrink-0 border-rose-300 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:text-rose-300"
+                    onClick={() => { const d = viewDriver; setViewDriver(null); openHiddenTripLockDialog(d); }}
+                  >
+                    <Eye className="mr-1.5 h-3.5 w-3.5" /> Mở khoá ẩn
                   </Button>
                 </div>
               )}
@@ -2063,6 +2160,27 @@ export function DriversTable() {
                       )}
                     </div>
                   )}
+                  {viewDriver && (
+                    <Button
+                      variant="outline"
+                      className={
+                        viewDriver.tripReceiveHidden
+                          ? 'text-emerald-700 hover:text-emerald-800 border-emerald-300 dark:border-emerald-800 dark:text-emerald-300'
+                          : 'text-rose-700 hover:text-rose-800 border-rose-300 dark:border-rose-800 dark:text-rose-300'
+                      }
+                      onClick={() => {
+                        const d = viewDriver;
+                        setViewDriver(null);
+                        openHiddenTripLockDialog(d);
+                      }}
+                    >
+                      {viewDriver.tripReceiveHidden ? (
+                        <><Eye className="mr-2 h-4 w-4" /> Mở khoá ẩn chuyến</>
+                      ) : (
+                        <><EyeOff className="mr-2 h-4 w-4" /> Khoá ẩn nhận chuyến</>
+                      )}
+                    </Button>
+                  )}
                   {status !== 'pending' && (
                     <Button
                       onClick={() => {
@@ -2359,6 +2477,78 @@ export function DriversTable() {
             <AlertDialogAction disabled={isUnsuspending} onClick={(e) => { e.preventDefault(); handleConfirmUnsuspend(); }}>
               {isUnsuspending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Xác nhận gỡ khoá
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Hidden trip lock confirm */}
+      <AlertDialog
+        open={!!hiddenLockTarget}
+        onOpenChange={(open) => {
+          if (!open && !isUpdatingHiddenLock) {
+            setHiddenLockTarget(null);
+            setHiddenLockNote('');
+          }
+        }}
+      >
+        <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              {hiddenLockTarget?.nextHidden ? (
+                <><EyeOff className="h-5 w-5 text-rose-600" /> Khoá ẩn nhận chuyến</>
+              ) : (
+                <><Eye className="h-5 w-5 text-emerald-600" /> Mở khoá ẩn nhận chuyến</>
+              )}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {hiddenLockTarget?.nextHidden ? (
+                <>
+                  Bạn có chắc muốn <span className="font-semibold text-foreground">khoá ẩn nhận chuyến</span> của tài xế{' '}
+                  <span className="font-semibold text-foreground">
+                    {hiddenLockTarget?.driver.name || hiddenLockTarget?.driver.user?.fullName || 'N/A'}
+                  </span>
+                  ? Tài xế vẫn dùng app bình thường (không có thông báo khoá), nhưng toàn bộ chuyến sẽ bị ẩn và không thể nhận hay gán tay.
+                </>
+              ) : (
+                <>
+                  Bạn có chắc muốn <span className="font-semibold text-foreground">mở khoá ẩn nhận chuyến</span> cho tài xế{' '}
+                  <span className="font-semibold text-foreground">
+                    {hiddenLockTarget?.driver.name || hiddenLockTarget?.driver.user?.fullName || 'N/A'}
+                  </span>
+                  ? Tài xế sẽ thấy/nhận chuyến và xuất hiện lại trong danh sách gán tay.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-muted-foreground">
+              Ghi chú nội bộ (tuỳ chọn — không hiện cho tài xế)
+            </label>
+            <Textarea
+              value={hiddenLockNote}
+              onChange={(e) => setHiddenLockNote(e.target.value)}
+              placeholder="Ghi chú nội bộ cho admin…"
+              rows={2}
+              disabled={isUpdatingHiddenLock}
+            />
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdatingHiddenLock}>Huỷ</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isUpdatingHiddenLock}
+              onClick={(e) => {
+                e.preventDefault();
+                handleConfirmHiddenTripLock();
+              }}
+              className={
+                hiddenLockTarget?.nextHidden
+                  ? 'bg-rose-600 text-white hover:bg-rose-700'
+                  : 'bg-emerald-600 text-white hover:bg-emerald-700'
+              }
+            >
+              {isUpdatingHiddenLock && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {hiddenLockTarget?.nextHidden ? 'Xác nhận khoá ẩn' : 'Xác nhận mở khoá ẩn'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
