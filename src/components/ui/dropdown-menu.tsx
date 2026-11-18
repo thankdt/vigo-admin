@@ -6,9 +6,164 @@ import { Check, ChevronRight, Circle } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
-const DropdownMenu = DropdownMenuPrimitive.Root
+type DropdownMenuGuardContextValue = {
+  open: boolean
+  toggle: () => void
+}
 
-const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger
+const DropdownMenuGuardContext =
+  React.createContext<DropdownMenuGuardContextValue | null>(null)
+
+const isNonMousePointer = (pointerType?: string) =>
+  pointerType === "touch" || pointerType === "pen"
+
+function preventNonMousePointerUp<E extends React.PointerEvent>(
+  userHandler?: (event: E) => void
+) {
+  return (event: E) => {
+    userHandler?.(event)
+    if (!event.defaultPrevented && isNonMousePointer(event.pointerType)) {
+      event.preventDefault()
+    }
+  }
+}
+
+const DropdownMenu = ({
+  open: openProp,
+  defaultOpen = false,
+  onOpenChange,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Root>) => {
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(defaultOpen)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? Boolean(openProp) : uncontrolledOpen
+  const openRef = React.useRef(open)
+  openRef.current = open
+
+  const handleOpenChange = React.useCallback(
+    (nextOpen: boolean) => {
+      if (!isControlled) {
+        setUncontrolledOpen(nextOpen)
+      }
+      onOpenChange?.(nextOpen)
+    },
+    [isControlled, onOpenChange]
+  )
+
+  const toggle = React.useCallback(() => {
+    handleOpenChange(!openRef.current)
+  }, [handleOpenChange])
+
+  const guardValue = React.useMemo(
+    () => ({ open, toggle }),
+    [open, toggle]
+  )
+
+  return (
+    <DropdownMenuGuardContext.Provider value={guardValue}>
+      <DropdownMenuPrimitive.Root
+        open={open}
+        onOpenChange={handleOpenChange}
+        {...props}
+      />
+    </DropdownMenuGuardContext.Provider>
+  )
+}
+
+const DropdownMenuTrigger = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Trigger>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Trigger>
+>(
+  (
+    {
+      onPointerDown,
+      onPointerMove,
+      onPointerCancel,
+      onClick,
+      onKeyDown,
+      onBlur,
+      disabled,
+      ...props
+    },
+    ref
+  ) => {
+    const guard = React.useContext(DropdownMenuGuardContext)
+    const pendingTouchClickRef = React.useRef(false)
+    const touchStartPosRef = React.useRef<{ x: number; y: number } | null>(null)
+
+    const clearPendingTouch = () => {
+      pendingTouchClickRef.current = false
+      touchStartPosRef.current = null
+    }
+
+    return (
+      <DropdownMenuPrimitive.Trigger
+        ref={ref}
+        disabled={disabled}
+        onPointerDown={(event) => {
+          onPointerDown?.(event)
+          if (event.defaultPrevented || disabled) {
+            clearPendingTouch()
+            return
+          }
+          // Radix opens on pointerdown even for touch pointers, which pops the
+          // menu mid-swipe when scrolling over "..." buttons on mobile. Defer
+          // touch/pen activation to onClick so scroll gestures never open it.
+          if (
+            isNonMousePointer(event.pointerType) &&
+            event.button === 0 &&
+            !event.ctrlKey
+          ) {
+            pendingTouchClickRef.current = !guard?.open
+            touchStartPosRef.current = { x: event.clientX, y: event.clientY }
+            event.preventDefault()
+          } else {
+            clearPendingTouch()
+          }
+        }}
+        onPointerMove={(event) => {
+          onPointerMove?.(event)
+          if (
+            pendingTouchClickRef.current &&
+            touchStartPosRef.current &&
+            isNonMousePointer(event.pointerType)
+          ) {
+            const dx = event.clientX - touchStartPosRef.current.x
+            const dy = event.clientY - touchStartPosRef.current.y
+            if (Math.hypot(dx, dy) > 10) {
+              clearPendingTouch()
+            }
+          }
+        }}
+        onPointerCancel={(event) => {
+          clearPendingTouch()
+          onPointerCancel?.(event)
+        }}
+        onKeyDown={(event) => {
+          clearPendingTouch()
+          onKeyDown?.(event)
+        }}
+        onBlur={(event) => {
+          clearPendingTouch()
+          onBlur?.(event)
+        }}
+        onClick={(event) => {
+          onClick?.(event)
+          if (event.defaultPrevented || disabled) {
+            clearPendingTouch()
+            return
+          }
+          if (pendingTouchClickRef.current) {
+            clearPendingTouch()
+            guard?.toggle()
+          }
+        }}
+        {...props}
+      />
+    )
+  }
+)
+DropdownMenuTrigger.displayName = DropdownMenuPrimitive.Trigger.displayName
 
 const DropdownMenuGroup = DropdownMenuPrimitive.Group
 
@@ -83,9 +238,10 @@ const DropdownMenuItem = React.forwardRef<
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     inset?: boolean
   }
->(({ className, inset, ...props }, ref) => (
+>(({ className, inset, onPointerUp, ...props }, ref) => (
   <DropdownMenuPrimitive.Item
     ref={ref}
+    onPointerUp={preventNonMousePointerUp(onPointerUp)}
     className={cn(
       "relative flex cursor-default select-none items-center gap-2 rounded-sm px-2 py-2 text-sm outline-none transition-colors md:py-1.5 focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
       inset && "pl-8",
@@ -99,9 +255,10 @@ DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
 const DropdownMenuCheckboxItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.CheckboxItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.CheckboxItem>
->(({ className, children, checked, ...props }, ref) => (
+>(({ className, children, checked, onPointerUp, ...props }, ref) => (
   <DropdownMenuPrimitive.CheckboxItem
     ref={ref}
+    onPointerUp={preventNonMousePointerUp(onPointerUp)}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className
@@ -123,9 +280,10 @@ DropdownMenuCheckboxItem.displayName =
 const DropdownMenuRadioItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
->(({ className, children, ...props }, ref) => (
+>(({ className, children, onPointerUp, ...props }, ref) => (
   <DropdownMenuPrimitive.RadioItem
     ref={ref}
+    onPointerUp={preventNonMousePointerUp(onPointerUp)}
     className={cn(
       "relative flex cursor-default select-none items-center rounded-sm py-1.5 pl-8 pr-2 text-sm outline-none transition-colors focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       className

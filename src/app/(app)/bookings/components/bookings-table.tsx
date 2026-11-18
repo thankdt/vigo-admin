@@ -34,8 +34,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Button } from '@/components/ui/button';
-import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy, Send, SlidersHorizontal } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { MoreHorizontal, ArrowUpDown, Loader2, Search, Car, User, Phone, CopyPlus, Store, MapPin, Copy, Send, SlidersHorizontal, AlertTriangle, XCircle } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
 // Dùng cho công tắc "Hiện cả tài xế đang bận" trong ReassignDialog. Import này từng bị
@@ -781,7 +781,42 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
     setCurrentPage(1); // Sắp xếp lại từ trang đầu để đúng thứ tự toàn cục.
   };
 
-  const statusChangeOptions: BookingStatus[] = ['ACCEPTED', 'PICKED_UP', 'COMPLETED', 'CANCELLED'];
+  const nonDestructiveStatusOptions: BookingStatus[] = ['ACCEPTED', 'PICKED_UP', 'COMPLETED'];
+  const renderStatusMenuItems = (booking: Booking, indented: boolean) => {
+    const isTerminal = booking.status === 'COMPLETED' || booking.status === 'CANCELLED';
+    return (
+      <>
+        {nonDestructiveStatusOptions.map((status) => (
+          <DropdownMenuItem
+            key={status}
+            className={indented ? 'pl-4' : undefined}
+            disabled={booking.status === status || isTerminal}
+            onSelect={() => openConfirmationDialog(booking, status)}
+          >
+            {statusLabelMap[status] ?? status}
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuSeparator />
+        {/* Tách riêng & tô đỏ "Đã hủy" để tránh bấm nhầm cùng nhóm chuyển trạng thái thường trên mobile. */}
+        <DropdownMenuItem
+          className={cn(
+            indented && 'pl-4',
+            'text-destructive focus:bg-destructive/10 focus:text-destructive',
+          )}
+          disabled={isTerminal}
+          onSelect={() => openConfirmationDialog(booking, 'CANCELLED')}
+        >
+          <XCircle className="mr-2 h-4 w-4" />
+          {statusLabelMap.CANCELLED ?? 'Đã hủy'}
+        </DropdownMenuItem>
+      </>
+    );
+  };
+  const isCancelConfirmation = dialogState.newStatus === 'CANCELLED';
+  const confirmingCustomerName =
+    dialogState.booking?.senderInfo?.name || dialogState.booking?.customer?.fullName;
+  const confirmingCustomerPhone =
+    dialogState.booking?.senderInfo?.phone || dialogState.booking?.customer?.phone;
   const [mobileFiltersOpen, setMobileFiltersOpen] = React.useState(false);
   const activeAdvancedFilterCount =
     (tripKind !== 'all' ? 1 : 0) +
@@ -1337,30 +1372,13 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                               <DropdownMenuLabel className="px-2 py-1 text-xs font-medium text-muted-foreground">
                                 Cập nhật trạng thái
                               </DropdownMenuLabel>
-                              {statusChangeOptions.map(status => (
-                                <DropdownMenuItem
-                                  key={status}
-                                  className="pl-4"
-                                  disabled={booking.status === status || booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
-                                  onSelect={() => openConfirmationDialog(booking, status)}
-                                >
-                                  {statusLabelMap[status] ?? status}
-                                </DropdownMenuItem>
-                              ))}
+                              {renderStatusMenuItems(booking, true)}
                             </>
                           ) : (
                             <DropdownMenuSub>
                               <DropdownMenuSubTrigger>Cập nhật trạng thái</DropdownMenuSubTrigger>
                               <DropdownMenuSubContent>
-                                {statusChangeOptions.map(status => (
-                                  <DropdownMenuItem
-                                    key={status}
-                                    disabled={booking.status === status || booking.status === 'COMPLETED' || booking.status === 'CANCELLED'}
-                                    onSelect={() => openConfirmationDialog(booking, status)}
-                                  >
-                                    {statusLabelMap[status] ?? status}
-                                  </DropdownMenuItem>
-                                ))}
+                                {renderStatusMenuItems(booking, false)}
                               </DropdownMenuSubContent>
                             </DropdownMenuSub>
                           )}
@@ -1467,12 +1485,38 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
         initial={duplicateDraft}
         onSuccess={() => { setDuplicateDraft(null); reload(); }}
       />
-      <AlertDialog open={dialogState.open} onOpenChange={(open) => setDialogState(prev => ({ ...prev, open }))}>
+      <AlertDialog
+        open={dialogState.open}
+        onOpenChange={(open) => {
+          if (!open && !isUpdating) {
+            setDialogState({ open: false, booking: null, newStatus: null });
+            setStatusNote('');
+          }
+        }}
+      >
         <AlertDialogContent onCloseAutoFocus={(e) => { e.preventDefault(); document.body.style.pointerEvents = ''; }}>
           <AlertDialogHeader>
-            <AlertDialogTitle>Xác nhận thay đổi trạng thái</AlertDialogTitle>
+            <AlertDialogTitle className={cn(isCancelConfirmation && 'flex items-center gap-2 text-destructive')}>
+              {isCancelConfirmation && <AlertTriangle className="h-5 w-5 shrink-0" />}
+              {isCancelConfirmation ? 'Xác nhận huỷ chuyến' : 'Xác nhận thay đổi trạng thái'}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              Bạn có chắc muốn chuyển trạng thái chuyến #{dialogState.booking?.id} sang "{statusLabelMap[dialogState.newStatus ?? ''] ?? dialogState.newStatus}"?
+              {isCancelConfirmation ? (
+                <>
+                  Bạn có chắc muốn <span className="font-semibold text-destructive">huỷ chuyến</span>{' '}
+                  {confirmingCustomerName ? (
+                    <>
+                      của khách <span className="font-semibold text-foreground">{confirmingCustomerName}</span>
+                      {confirmingCustomerPhone ? ` (${confirmingCustomerPhone})` : ''}{' '}
+                    </>
+                  ) : null}
+                  #{dialogState.booking?.id?.slice(0, 8)}?
+                </>
+              ) : (
+                <>
+                  Bạn có chắc muốn chuyển trạng thái chuyến #{dialogState.booking?.id} sang &quot;{statusLabelMap[dialogState.newStatus ?? ''] ?? dialogState.newStatus}&quot;?
+                </>
+              )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="space-y-2 py-2">
@@ -1485,11 +1529,20 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
               rows={2}
             />
           </div>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => { setDialogState({ open: false, booking: null, newStatus: null }); setStatusNote(''); }} disabled={isUpdating}>Hủy</AlertDialogCancel>
-            <AlertDialogAction onClick={handleStatusUpdate} disabled={isUpdating}>
+          <AlertDialogFooter className={cn(isCancelConfirmation && 'flex-col sm:flex-row')}>
+            <AlertDialogCancel
+              onClick={() => { setDialogState({ open: false, booking: null, newStatus: null }); setStatusNote(''); }}
+              disabled={isUpdating}
+            >
+              {isCancelConfirmation ? 'Quay lại' : 'Hủy'}
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleStatusUpdate}
+              disabled={isUpdating}
+              className={cn(isCancelConfirmation && buttonVariants({ variant: 'destructive' }))}
+            >
               {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Xác nhận
+              {isCancelConfirmation ? 'Xác nhận huỷ chuyến' : 'Xác nhận'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
