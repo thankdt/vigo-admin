@@ -226,6 +226,9 @@ export type Driver = {
   // Tạm khoá nhận chuyến có hẹn giờ (chỉ chặn dispatch). Đang khoá khi suspendedUntil > now.
   suspendedUntil?: string | null;
   suspendedReason?: string | null;
+  // Khoá ẩn nhận chuyến (admin-only, im lặng: không hiện / không báo cho tài xế).
+  tripReceiveHidden?: boolean;
+  tripReceiveHiddenAt?: string | null;
   // CSKH theo dõi đã gọi điện tài xế + ghi chú nội bộ. Backend chỉ trả ở danh sách admin
   // (select:false ở nơi khác). Additive → có thể undefined nếu backend chưa deploy.
   csCalled?: boolean;

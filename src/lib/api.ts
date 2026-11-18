@@ -404,6 +404,7 @@ export async function getDrivers(params: {
   csNeverWorked?: 'true';
   csWorkedFrom?: string;
   csWorkedTo?: string;
+  tripReceiveHidden?: 'true' | 'false';
   // Trạng thái online như badge (`driverOnlineState`). Server echo `meta.onlineState` khi
   // đã áp dụng — BE cũ bỏ qua param im lặng, xem `onlineFilterWarning`.
   onlineState?: DriverOnlineState;
@@ -429,6 +430,7 @@ export async function getDrivers(params: {
   if (params.csNeverWorked) query.set('csNeverWorked', params.csNeverWorked);
   if (params.csWorkedFrom) query.set('csWorkedFrom', params.csWorkedFrom);
   if (params.csWorkedTo) query.set('csWorkedTo', params.csWorkedTo);
+  if (params.tripReceiveHidden) query.set('tripReceiveHidden', params.tripReceiveHidden);
   if (params.onlineState) query.set('onlineState', params.onlineState);
   if (params.sort) query.set('sort', params.sort);
   if (params.order) query.set('order', params.order);
@@ -558,6 +560,22 @@ export async function unsuspendDriver(id: string, note?: string): Promise<Driver
   return data.data || data;
 }
 
+// Bật/tắt khoá ẩn nhận chuyến (admin-only, im lặng: không push/socket tới tài xế).
+export async function setDriverHiddenTripLock(
+  id: string,
+  hidden: boolean,
+  note?: string,
+): Promise<Driver> {
+  const body: { hidden: boolean; note?: string } = { hidden };
+  if (note?.trim()) body.note = note.trim();
+  const response = await fetchWithAuth(`/drivers/admin/${id}/hidden-trip-lock`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  });
+  const data = await response.json();
+  return data.data || data;
+}
+
 export type DriverApprovalAction =
   | 'APPROVED'
   | 'REJECTED'
@@ -566,7 +584,9 @@ export type DriverApprovalAction =
   | 'BANNED'
   | 'UNBANNED'
   | 'SUSPENDED'
-  | 'UNSUSPENDED';
+  | 'UNSUSPENDED'
+  | 'HIDDEN_TRIP_LOCKED'
+  | 'HIDDEN_TRIP_UNLOCKED';
 
 export type DriverApprovalEvent = {
   id: string;

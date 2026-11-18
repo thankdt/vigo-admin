@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 import { format } from 'date-fns';
-import { AlertTriangle, CheckCircle2, Send, Undo2, XCircle, Ban, LockOpen, Clock, PlayCircle, PhoneCall, PhoneOff, PhoneForwarded, Bell, StickyNote, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Send, Undo2, XCircle, Ban, LockOpen, Clock, PlayCircle, PhoneCall, PhoneOff, PhoneForwarded, Bell, StickyNote, Loader2, EyeOff, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -75,6 +75,8 @@ const APPROVAL_ACTION_META: Record<
   UNBANNED: { label: 'Mở khoá', icon: LockOpen, tone: 'text-emerald-600' },
   SUSPENDED: { label: 'Tạm khoá nhận chuyến', icon: Clock, tone: 'text-amber-600' },
   UNSUSPENDED: { label: 'Gỡ khoá nhận chuyến', icon: PlayCircle, tone: 'text-emerald-600' },
+  HIDDEN_TRIP_LOCKED: { label: 'Khoá ẩn nhận chuyến', icon: EyeOff, tone: 'text-rose-600' },
+  HIDDEN_TRIP_UNLOCKED: { label: 'Mở khoá ẩn nhận chuyến', icon: Eye, tone: 'text-emerald-600' },
 };
 
 // Format một mốc ISO theo GIỜ VN (+7), độc lập TZ trình duyệt (CLAUDE.md).

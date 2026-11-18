@@ -36,6 +36,8 @@ export type DriverFilters = {
   // CSKH: khoảng NGÀY LÀM VIỆC gần nhất (VN YYYY-MM-DD; '' = không lọc).
   csWorkedFrom: string;
   csWorkedTo: string;
+  // Khoá ẩn nhận chuyến: '' = tất cả, 'true' = đang khoá ẩn, 'false' = không khoá ẩn.
+  tripReceiveHidden: '' | 'true' | 'false';
   // Trạng thái online như badge ('' = tất cả). Chỉ áp dụng ở tab Đã duyệt / Tất cả.
   onlineState: '' | DriverOnlineState;
 };
@@ -52,6 +54,7 @@ export const EMPTY_FILTERS: DriverFilters = {
   csNeverWorked: false,
   csWorkedFrom: '',
   csWorkedTo: '',
+  tripReceiveHidden: '',
   onlineState: '',
 };
 
@@ -59,13 +62,14 @@ export function hasAnyFilter(f: DriverFilters): boolean {
   return Boolean(
     f.name || f.phone || f.plate || f.provinceCode || f.transportCompanyName ||
     f.unconfirmedTransportCompany || f.csCalled || f.csLastCallType || f.csNeverWorked ||
-    f.csWorkedFrom || f.csWorkedTo || f.onlineState,
+    f.csWorkedFrom || f.csWorkedTo || f.tripReceiveHidden || f.onlineState,
   );
 }
 
 const ALL_PROVINCES_VALUE = '__all__';
 const ALL_CS_VALUE = '__all_cs__';
 const ALL_CS_TYPE_VALUE = '__all_cs_type__';
+const ALL_HIDDEN_LOCK_VALUE = '__all_hidden_lock__';
 const ALL_ONLINE_VALUE = '__all_online__';
 // Thứ tự theo mức "cần xử lý" của vận hành; nhãn lấy từ nguồn chung để khớp badge.
 const ONLINE_STATE_ORDER: DriverOnlineState[] = ['online', 'busy', 'idle', 'stale', 'unknown', 'offline'];
@@ -115,7 +119,8 @@ export function DriversFilterBar({
     (value.csCalled ? 1 : 0) +
     (value.csLastCallType ? 1 : 0) +
     (value.csNeverWorked ? 1 : 0) +
-    (value.csWorkedFrom || value.csWorkedTo ? 1 : 0);
+    (value.csWorkedFrom || value.csWorkedTo ? 1 : 0) +
+    (value.tripReceiveHidden ? 1 : 0);
 
   React.useEffect(() => {
     getSurvivingProvinces()
@@ -309,6 +314,25 @@ export function DriversFilterBar({
               Chưa làm việc bao giờ
             </Label>
           </div>
+        </div>
+        <div className="grid grid-cols-1 items-center gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
+          <Combobox
+            options={[
+              { value: ALL_HIDDEN_LOCK_VALUE, label: 'Khoá ẩn chuyến: tất cả' },
+              { value: 'true', label: 'Đang khoá ẩn chuyến' },
+              { value: 'false', label: 'Không khoá ẩn' },
+            ]}
+            selectedValue={value.tripReceiveHidden || ALL_HIDDEN_LOCK_VALUE}
+            onSelect={(v) =>
+              setField(
+                'tripReceiveHidden',
+                !v || v === ALL_HIDDEN_LOCK_VALUE ? '' : (v as 'true' | 'false'),
+              )
+            }
+            placeholder="Khoá ẩn chuyến: tất cả"
+            searchPlaceholder="Lọc trạng thái..."
+            noResultsText="Không có."
+          />
         </div>
       </div>
     </div>

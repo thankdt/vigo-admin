@@ -42,6 +42,8 @@ const ACTION_LABEL: Record<DriverApprovalAction, string> = {
   UNBANNED: 'Mở khoá',
   SUSPENDED: 'Tạm khoá nhận chuyến',
   UNSUSPENDED: 'Gỡ tạm khoá',
+  HIDDEN_TRIP_LOCKED: 'Khoá ẩn nhận chuyến',
+  HIDDEN_TRIP_UNLOCKED: 'Mở khoá ẩn chuyến',
 };
 
 const CHECK_LABEL: Record<DriverCancelCheckStatus, string> = {
