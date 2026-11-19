@@ -2060,6 +2060,8 @@ export type HtxDriverRow = {
   presence?: DriverPresence;
   isActive: boolean;
   isApproved: boolean;
+  isSubmittedForApproval?: boolean;
+  rejectionReason?: string | null;
   createdAt: string;
   vehicleRegistration: { plateNumber?: string; brand?: string; model?: string; seats?: number } | null;
   tripCount: number;
@@ -2071,6 +2073,39 @@ export type HtxDriverRow = {
   htxApprovalStatus?: 'NONE' | 'PENDING_HTX' | 'HTX_APPROVED' | 'HTX_REJECTED' | string | null;
   htxApprovedAt?: string | null;
   htxSignatureInfo?: any;
+};
+
+export type HtxDriverDetail = {
+  id: string;
+  userId: string;
+  fullName: string | null;
+  phone: string | null;
+  avatar: string | null;
+  status: 'ONLINE' | 'BUSY' | 'OFFLINE' | string;
+  isActive: boolean;
+  isApproved: boolean;
+  isSubmittedForApproval: boolean;
+  rejectionReason: string | null;
+  enabledServices: string[] | null;
+  licenseImages: string[] | string | null;
+  cccdImages: string[] | string | null;
+  vehicleRegistration: {
+    plateNumber?: string;
+    brand?: string;
+    model?: string;
+    color?: string;
+    seats?: number;
+    registrationImages?: string[] | string;
+    inspectionImages?: string[] | string;
+    insuranceImages?: string[] | string;
+    images?: string[] | string;
+  } | null;
+  htxConfirmationImage: string | null;
+  createdAt: string;
+};
+
+export type HtxApproveDriverResponse = HtxDriverDetail & {
+  warnings?: string[];
 };
 
 export async function htxSignContract(driverId: string, icaData?: any): Promise<any> {
@@ -2164,6 +2199,41 @@ export async function htxToggleDriverActive(driverId: string): Promise<{ id: str
     method: 'POST',
   });
   return unwrap<{ id: string; isActive: boolean }>(response);
+}
+
+export async function htxGetDriverDetail(driverId: string): Promise<HtxDriverDetail> {
+  const response = await fetchWithAuth(`/htx/drivers/${driverId}`);
+  return unwrap<HtxDriverDetail>(response);
+}
+
+export async function htxApproveDriver(
+  driverId: string,
+  enabledServices?: string[],
+  note?: string,
+): Promise<HtxApproveDriverResponse> {
+  const response = await fetchWithAuth(`/htx/drivers/${driverId}/approve`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(enabledServices ? { enabledServices } : {}),
+      ...(note?.trim() ? { note: note.trim() } : {}),
+    }),
+  });
+  return unwrap<HtxApproveDriverResponse>(response);
+}
+
+export async function htxRejectDriver(
+  driverId: string,
+  reason?: string,
+  note?: string,
+): Promise<HtxDriverDetail> {
+  const response = await fetchWithAuth(`/htx/drivers/${driverId}/reject`, {
+    method: 'POST',
+    body: JSON.stringify({
+      ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      ...(note?.trim() ? { note: note.trim() } : {}),
+    }),
+  });
+  return unwrap<HtxDriverDetail>(response);
 }
 
 export type HtxDashboardRange =

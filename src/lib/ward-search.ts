@@ -1,4 +1,5 @@
 import { foldVietnamese } from '@/components/ui/combobox-filter';
+import { getProvinceSearchTerms } from '@/lib/province-merges';
 import { zoneEndpoint, type MacroEndpoint } from './macro-bulk';
 import type { ProvinceOption, SpecialZone, WardOption } from './types';
 
@@ -43,6 +44,8 @@ type Form = {
   accents: { base: string; tone: string }[];
   /** Bí danh/viết tắt ("hcm", "tphcm"): chỉ được khớp NGUYÊN câu, không khớp đầu từ ("tp" không được ra Hồ Chí Minh). */
   exactOnly: boolean;
+  /** Bí danh tỉnh CŨ bị gộp vào tỉnh mới (chỉ là một phần): xếp sau tên hiện tại và không tự chọn khi bấm Enter. */
+  subset?: boolean;
 };
 
 export type SearchTarget = {
@@ -135,7 +138,7 @@ function tokenize(s: string): Tok[] {
 const JOINED_WORD = /[\p{L}\p{N}][-'’‘ʼ.][\p{L}\p{N}]/u;
 
 /** Dựng một cách viết tên. `drop` bỏ bớt n từ đầu (dùng cho bí danh «Sân bay X» → «X», «Xã X» → «X»). */
-function makeForm(name: string, opts: { drop?: number; exactOnly?: boolean } = {}): Form | null {
+function makeForm(name: string, opts: { drop?: number; exactOnly?: boolean; subset?: boolean } = {}): Form | null {
   const toks = tokenize(name).slice(opts.drop ?? 0);
   if (toks.length === 0) return null;
   const words = toks.map((t) => t.fold);
@@ -159,6 +162,7 @@ function makeForm(name: string, opts: { drop?: number; exactOnly?: boolean } = {
     typed: toks.map((t) => t.spelled).join(' '),
     accents: toks.map((t) => ({ base: t.base, tone: t.tone })),
     exactOnly: opts.exactOnly ?? false,
+    subset: opts.subset,
   };
 }
 
@@ -245,11 +249,26 @@ function provinceInfo(name: string): ProvinceInfo | null {
   if (stripped) names.push(stripped);
   const key = (stripped ?? primary).norm;
   const aliases: Form[] = [];
-  for (const alias of PROVINCE_ALIASES[key] ?? []) {
-    const f = makeForm(alias, { exactOnly: true });
+  const seenAlias = new Set<string>();
+  const { exactAliases, subsetOldNames } = getProvinceSearchTerms(undefined, key);
+  for (const alias of [...(PROVINCE_ALIASES[key] ?? []), ...exactAliases]) {
+    if (seenAlias.has(alias)) continue;
+    seenAlias.add(alias);
+    const shortOrExact = /^[a-z0-9.-]+$/i.test(alias) || alias === 'Sài Gòn';
+    const f = makeForm(alias, shortOrExact ? { exactOnly: true } : undefined);
+    if (f) {
+      if (shortOrExact) aliases.push(f);
+      else names.push(f);
+    }
+  }
+  for (const oldName of subsetOldNames) {
+    if (seenAlias.has(oldName)) continue;
+    seenAlias.add(oldName);
+    const f = makeForm(oldName, { exactOnly: true, subset: true });
     if (f) aliases.push(f);
   }
-  return { names, aliases, accents: primary.accents, city: CENTRAL_CITIES.has(key) };
+  const accents = [...names, ...aliases].flatMap((f) => f.accents);
+  return { names, aliases, accents, city: CENTRAL_CITIES.has(key) };
 }
 
 /** Bí danh của điểm đặc biệt: bỏ phần trong ngoặc («(T2)») và loại hình ở đầu («Sân bay quốc tế»). */
@@ -481,7 +500,7 @@ function accentMisses(t: SearchTarget, qr: Query, matched: FormMatch): number {
 /** Hoà thì cái HẸP hơn lên trước (↓ đầu tiên không rơi vào «Cả tỉnh»): điểm đặc biệt, xã/phường, rồi cả tỉnh. */
 const KIND_ORDER: Record<SearchTargetKind, number> = { zone: 0, ward: 1, province: 2 };
 
-type Ranked = { t: SearchTarget; tier: number; how: How; full: boolean; miss: number; spell: number };
+type Ranked = { t: SearchTarget; tier: number; subset: number; how: How; full: boolean; miss: number; spell: number };
 
 function rank(index: SearchTarget[], qr: Query, only: SearchTargetKind[] | null): Ranked[] {
   const hits: Ranked[] = [];
@@ -495,11 +514,13 @@ function rank(index: SearchTarget[], qr: Query, only: SearchTargetKind[] | null)
     if (best === null) continue;
     // Chỉ để XẾP THỨ TỰ khi hoà (không ảnh hưởng `confident`): chính tả đúng như đã gõ lên trước.
     const spell = t.forms.some((f) => f.typed === qr.spelled) ? 0 : t.forms.some((f) => f.typed.startsWith(qr.spelled)) ? 1 : 2;
-    hits.push({ t, tier: best.tier, how: best.how, full: best.full, miss: accentMisses(t, qr, best), spell });
+    const subset = best.form.subset ? 1 : 0;
+    hits.push({ t, tier: best.tier, subset, how: best.how, full: best.full, miss: accentMisses(t, qr, best), spell });
   }
   hits.sort(
     (a, b) =>
       a.tier - b.tier ||
+      a.subset - b.subset ||
       a.miss - b.miss ||
       a.spell - b.spell ||
       KIND_ORDER[a.t.kind] - KIND_ORDER[b.t.kind] ||
@@ -531,38 +552,96 @@ export function searchTargets(
   rawQuery: string,
   max: number = WARD_SEARCH_MAX_RESULTS,
 ): SearchOutcome {
-  const toks = tokenize(rawQuery);
-  const prefix = detectPrefix(toks.map((t) => t.fold));
-  // Dấu chỉ tính ở phần TÊN (sau tiền tố): «phường ba dinh» / «xã ba dinh» gõ «phường/xã» có dấu theo thói quen nhưng
-  // tên không dấu vẫn là gõ không dấu — kẻo ép chọn «Ba Dinh» (Quảng Ngãi) thay vì «Ba Đình» (Hà Nội).
-  const nameMarked = toks.slice(prefix?.rest ?? 0).some((t) => t.marked);
-  const literal = makeQuery(toks, nameMarked);
-  if (literal.compact.length < WARD_SEARCH_MIN_CHARS) {
+  const runTokens = (toks: Tok[]): { hits: Ranked[]; filtered: boolean; prefix: ReturnType<typeof detectPrefix> } => {
+    const prefix = detectPrefix(toks.map((t) => t.fold));
+    // Dấu chỉ tính ở phần TÊN (sau tiền tố): «phường ba dinh» / «xã ba dinh» gõ «phường/xã» có dấu theo thói quen nhưng
+    // tên không dấu vẫn là gõ không dấu — kẻo ép chọn «Ba Dinh» (Quảng Ngãi) thay vì «Ba Đình» (Hà Nội).
+    const nameMarked = toks.slice(prefix?.rest ?? 0).some((t) => t.marked);
+    const literal = makeQuery(toks, nameMarked);
+    if (literal.compact.length < WARD_SEARCH_MIN_CHARS) {
+      return { hits: [], filtered: false, prefix };
+    }
+
+    let hits = rank(index, literal, null);
+    let filtered = false;
+    if (prefix && !(hits.length > 0 && hits[0].how === 'name' && isStrong(hits[0]) && hits[0].subset === 0)) {
+      const stripped = makeQuery(toks.slice(prefix.rest), nameMarked);
+      if (stripped.compact.length >= WARD_SEARCH_MIN_CHARS) {
+        const byType = rank(index, stripped, prefix.only);
+        if (byType.length > 0) {
+          hits = byType;
+          filtered = true;
+        }
+      }
+    }
+    return { hits, filtered, prefix };
+  };
+
+  const rawToks = tokenize(rawQuery);
+  const compactTotal = rawToks.reduce((sum, t) => sum + t.fold.length, 0);
+  if (compactTotal < WARD_SEARCH_MIN_CHARS) {
     return { ...EMPTY, tooShort: rawQuery.trim() !== '' };
   }
 
-  let hits = rank(index, literal, null);
-  let filtered = false;
-  if (prefix && !(hits.length > 0 && hits[0].how === 'name' && isStrong(hits[0]))) {
-    const stripped = makeQuery(toks.slice(prefix.rest), nameMarked);
-    if (stripped.compact.length >= WARD_SEARCH_MIN_CHARS) {
-      const byType = rank(index, stripped, prefix.only);
-      if (byType.length > 0) {
-        hits = byType;
-        filtered = true;
-      }
+  const lastTok = rawToks[rawToks.length - 1];
+  const explicitLegacySuffix = rawToks.length >= 2 && lastTok.spelled === 'cũ';
+  let legacySuffix = explicitLegacySuffix;
+  let { hits, filtered, prefix } = runTokens(explicitLegacySuffix ? rawToks.slice(0, -1) : rawToks);
+
+  // Fallback khi gõ không dấu "... cu" (vd "ha nam cu", "binh duong cu"):
+  // trên dữ liệu 3.321 xã thật, tỉnh nào cũng có xã chứa chữ bắt đầu bằng "cư/cú/củ" ("Cúc Phương", "Củ Chi", "Hội Cư"...)
+  // nên lượt literal ra hit yếu (split / tier >= 2). Chỉ bỏ "cu" khi KHÔNG có khớp tên trực tiếp mạnh (`tier <= 1 && how !== 'split'`),
+  // nhờ vậy "lung cu" / "tra cu" / "hoi cu" / "an cu" vẫn giữ nguyên còn "ha nam cu" / "tien giang cu" ra đúng tỉnh cũ.
+  if (
+    !explicitLegacySuffix &&
+    rawToks.length >= 2 &&
+    lastTok.spelled === 'cu' &&
+    (hits.length === 0 || hits[0].how === 'split' || hits[0].tier >= 2)
+  ) {
+    const fallback = runTokens(rawToks.slice(0, -1));
+    if (fallback.hits.length > 0 && fallback.hits[0].tier <= 1) {
+      hits = fallback.hits;
+      filtered = fallback.filtered;
+      prefix = fallback.prefix;
+      legacySuffix = true;
     }
   }
   if (hits.length === 0) return EMPTY;
 
+  // Nếu không có tiền tố xã/phường mà nguyên câu khớp NGUYÊN tên tỉnh/tỉnh cũ (vd "Bà Rịa - Vũng Tàu" = tỉnh cũ, đồng thời
+  // tình cờ tách được thành xã "Bà Rịa" + "Vũng Tàu"), đưa Cả tỉnh lên trước và không cho tự chọn xã đơn lẻ.
+  let wholeProvinceAmbiguous = false;
+  if (!filtered && hits[0].how === 'split') {
+    const wholeProvIdx = hits.findIndex((h) => h.t.kind === 'province' && h.tier === 0 && h.how === 'name');
+    if (wholeProvIdx > 0) {
+      const [provHit] = hits.splice(wholeProvIdx, 1);
+      hits.unshift(provHit);
+      wholeProvinceAmbiguous = true;
+    }
+  }
+
   const first = hits[0];
   let tied = 1;
-  while (tied < hits.length && hits[tied].tier === first.tier && hits[tied].miss === first.miss) tied += 1;
+  while (
+    tied < hits.length &&
+    hits[tied].tier === first.tier &&
+    hits[tied].subset === first.subset &&
+    hits[tied].miss === first.miss
+  ) {
+    tied += 1;
+  }
   const tiedSameName = tied > 1 && hits.slice(0, tied).every((h) => h.t.sortName === first.t.sortName);
 
   // Tự chọn chỉ khi dòng đầu thắng RÕ, khớp MẠNH và dấu đã gõ khớp hoàn toàn. Một kết quả duy nhất nhưng yếu hay lệch
   // dấu («quan 1» ra «Móng Cái 1» chỉ vì "quan" là đầu từ của «Quảng Ninh») thì vẫn phải do người dùng chọn.
-  let confident = tied === 1 && isStrong(first) && first.miss === 0;
+  let confident =
+    !wholeProvinceAmbiguous &&
+    tied === 1 &&
+    isStrong(first) &&
+    first.miss === 0 &&
+    first.subset === 0;
+  // Gõ "... cũ" mà không tách "<xã> <tỉnh>" (vd "Hải Dương cũ" trùng xã "Hải Dương") thì cũng KHÔNG tự chọn bừa.
+  if (legacySuffix && (first.t.kind === 'province' || first.how !== 'split')) confident = false;
   if (filtered && prefix) {
     // Qua bộ lọc tiền tố chỉ tự chọn khi khớp NGUYÊN tên («tp Vinh» KHÔNG được ra «Cả tỉnh Vĩnh Long» chỉ vì
     // "vinh" là đầu tên); «tp/thành phố X» của tỉnh không trực thuộc trung ương là thành phố CŨ, không phải cả tỉnh.

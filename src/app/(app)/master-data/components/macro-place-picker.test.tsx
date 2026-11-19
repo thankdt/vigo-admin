@@ -687,4 +687,38 @@ describe('MacroPlacePicker + useMacroPlaceIndex thật', () => {
     expect(highlighted()).toEqual(['Đại Từ, Thái Nguyên']);
     expect(screen.queryByTestId('place-picker-wards-error-Điểm đón')).not.toBeInTheDocument();
   });
+
+  it('gõ tên tỉnh cũ («Hà Nam», «ha nam cu», «binh duong cu») gợi ý Cả tỉnh mới (không tự tô Enter) lẫn «Tìm theo chữ» (gồm tên huyện/tỉnh cũ)', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <Harness
+        provinces={[...PROVINCES, { code: '37', name: 'Ninh Bình' }, { code: '79', name: 'Hồ Chí Minh' }]}
+        wards={[...WARDS, { code: '13285', name: 'Phường Phủ Lý', provinceCode: '37' }]}
+        onChange={onChange}
+      />,
+    );
+    await user.type(input(), 'Hà Nam');
+    expect(optionNames()).toEqual(['Cả tỉnh Ninh Bình', textRow('Hà Nam')]);
+    expect(highlighted()).toEqual([]);
+
+    await user.clear(input());
+    await user.type(input(), 'ha nam cu');
+    expect(optionNames()).toEqual(['Cả tỉnh Ninh Bình', textRow('ha nam cu')]);
+    expect(highlighted()).toEqual([]);
+
+    await user.clear(input());
+    await user.type(input(), 'binh duong cu');
+    expect(optionNames()).toEqual(['Cả tỉnh Hồ Chí Minh', textRow('binh duong cu')]);
+    expect(highlighted()).toEqual([]);
+
+    await user.clear(input());
+    await user.type(input(), 'Phủ Lý Hà Nam');
+    expect(highlighted()).toEqual(['Phường Phủ Lý, Ninh Bình']);
+    await user.keyboard('{Enter}');
+    expect(onChange).toHaveBeenCalledWith({
+      kind: 'place',
+      endpoint: { provinceCode: '37', wardCode: '13285', label: 'Phường Phủ Lý (Ninh Bình)' },
+    });
+  });
 });

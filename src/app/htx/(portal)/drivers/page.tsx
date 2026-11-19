@@ -30,11 +30,13 @@ import {
   ChevronsRight,
   FileText,
   CheckCircle2,
+  Eye,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { htxListDrivers, htxToggleDriverActive, type HtxDriverRow } from '@/lib/api';
 import { getImageUrl } from '@/lib/utils';
 import { HtxContractDialog } from './components/htx-contract-dialog';
+import { HtxApprovalBadge, HtxDriverDetailDialog } from './components/htx-driver-detail-dialog';
 import {
   DRIVER_ONLINE_HINT,
   driverOnlineState,
@@ -100,6 +102,8 @@ export default function HtxDriversPage() {
 
   const [selectedContractDriver, setSelectedContractDriver] = React.useState<HtxDriverRow | null>(null);
   const [isContractOpen, setIsContractOpen] = React.useState(false);
+  const [selectedDetailDriver, setSelectedDetailDriver] = React.useState<HtxDriverRow | null>(null);
+  const [isDetailOpen, setIsDetailOpen] = React.useState(false);
 
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(20);
@@ -165,7 +169,7 @@ export default function HtxDriversPage() {
       <div>
         <h1 className="text-2xl font-bold">Tài xế của HTX</h1>
         <p className="text-sm text-muted-foreground">
-          Lọc theo trạng thái duyệt, trạng thái hoạt động và tạm dừng / kích hoạt từng tài xế.
+          Xem hồ sơ chi tiết, duyệt / từ chối tài xế, ký hợp đồng và tạm dừng / kích hoạt từng tài xế.
         </p>
       </div>
 
@@ -220,6 +224,7 @@ export default function HtxDriversPage() {
             <TableRow>
               <TableHead>Tài xế</TableHead>
               <TableHead>Số điện thoại</TableHead>
+              <TableHead>Hồ sơ duyệt</TableHead>
               <TableHead className="text-right">Số chuyến</TableHead>
               <TableHead className="text-right">Thu nhập</TableHead>
               <TableHead className="text-right">Thuế TNCN</TableHead>
@@ -232,13 +237,13 @@ export default function HtxDriversPage() {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center">
+                <TableCell colSpan={10} className="h-24 text-center">
                   <Loader2 className="mx-auto h-8 w-8 animate-spin text-primary" />
                 </TableCell>
               </TableRow>
             ) : drivers.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={9} className="h-24 text-center">
+                <TableCell colSpan={10} className="h-24 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Car className="h-8 w-8 text-muted-foreground" />
                     <span className="text-muted-foreground">Không tìm thấy tài xế nào.</span>
@@ -246,16 +251,32 @@ export default function HtxDriversPage() {
                 </TableCell>
               </TableRow>
             ) : (
-              drivers.map((d) => (
-                <TableRow key={d.id}>
+              drivers.map((d) => {
+                const openProfile = () => {
+                  setSelectedDetailDriver(d);
+                  setIsDetailOpen(true);
+                };
+                return (
+                <TableRow
+                  key={d.id}
+                  className="cursor-pointer hover:bg-muted/40"
+                  onClick={openProfile}
+                >
                   <TableCell data-card="header">
-                    <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openProfile();
+                      }}
+                      className="flex items-center gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-md"
+                    >
                       <Avatar className="h-8 w-8">
                         {d.avatar ? <AvatarImage src={getImageUrl(d.avatar)} /> : null}
                         <AvatarFallback>{(d.fullName ?? '?').slice(0, 1).toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div>
-                        <div className="font-medium">{d.fullName ?? '—'}</div>
+                        <div className="font-medium text-primary hover:underline">{d.fullName ?? '—'}</div>
                         {d.vehicleRegistration?.plateNumber && (
                           <div className="text-xs text-muted-foreground">
                             {d.vehicleRegistration.plateNumber}
@@ -263,9 +284,27 @@ export default function HtxDriversPage() {
                           </div>
                         )}
                       </div>
-                    </div>
+                    </button>
                   </TableCell>
                   <TableCell data-label="Số điện thoại">{d.phone ?? '—'}</TableCell>
+                  <TableCell
+                    data-label="Hồ sơ duyệt"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center gap-2">
+                      <HtxApprovalBadge driver={d} />
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs gap-1"
+                        onClick={openProfile}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        Xem hồ sơ
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell data-label="Số chuyến" className="text-right tabular-nums">{d.tripCount}</TableCell>
                   <TableCell data-label="Thu nhập" className="text-right tabular-nums font-medium">{formatCurrency(d.lifetimeIncome ?? 0)}</TableCell>
                   <TableCell data-label="Thuế TNCN" className="text-right tabular-nums text-amber-700 dark:text-amber-400">{formatCurrency(d.lifetimeTax ?? 0)}</TableCell>
@@ -275,7 +314,11 @@ export default function HtxDriversPage() {
                       {new Date(d.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
                     </span>
                   </TableCell>
-                  <TableCell data-label="Hợp đồng HTX" className="text-center">
+                  <TableCell
+                    data-label="Hợp đồng HTX"
+                    className="text-center"
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     {d.htxApprovalStatus === 'PENDING_HTX' ? (
                       <Button
                         size="sm"
@@ -309,7 +352,11 @@ export default function HtxDriversPage() {
                       <span className="text-xs text-muted-foreground">Chưa nộp</span>
                     )}
                   </TableCell>
-                  <TableCell data-card="actions" className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}>
+                  <TableCell
+                    data-card="actions"
+                    className={cn(STICKY_ACTION_CELL_CLASS, 'text-right whitespace-nowrap')}
+                    onClick={(e) => e.stopPropagation()}
+                  >
                     <div className="flex items-center justify-end gap-2">
                       <span className={`text-xs ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
                         {d.isActive ? 'Đang hoạt động' : 'Tạm dừng'}
@@ -323,7 +370,8 @@ export default function HtxDriversPage() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -366,6 +414,13 @@ export default function HtxDriversPage() {
         driver={selectedContractDriver}
         open={isContractOpen}
         onOpenChange={setIsContractOpen}
+        onSuccess={load}
+      />
+
+      <HtxDriverDetailDialog
+        driver={selectedDetailDriver}
+        open={isDetailOpen}
+        onOpenChange={setIsDetailOpen}
         onSuccess={load}
       />
     </div>

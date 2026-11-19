@@ -24,6 +24,7 @@ import { vietnameseInsensitiveFilter } from '@/components/ui/combobox-filter';
 type ComboboxOption = {
   value: string;
   label: string;
+  keywords?: string[];
 };
 
 type ComboboxGroupedOption = {
@@ -74,9 +75,9 @@ export function MultiSelectComboBox({
     return flatOptions;
   }, [options]);
 
-  const selectedLabels = selectedValues
-    .map((value) => allOptions.find((opt) => opt.value === value)?.label)
-    .filter(Boolean) as string[];
+  const selectedOptions = selectedValues
+    .map((value) => allOptions.find((opt) => opt.value === value))
+    .filter((opt): opt is ComboboxOption => Boolean(opt));
 
   return (
     <Popover open={open} onOpenChange={setOpen} modal={true}>
@@ -89,14 +90,14 @@ export function MultiSelectComboBox({
             disabled={disabled}
         >
             <div className="flex min-w-0 flex-1 flex-wrap gap-1 text-left">
-                {selectedLabels.length > 0 ? (
-                    selectedLabels.map((label) => (
+                {selectedOptions.length > 0 ? (
+                    selectedOptions.map((opt) => (
                     <Badge
-                        key={label}
+                        key={opt.value}
                         variant="secondary"
                         className="mr-1"
                     >
-                        {label}
+                        {opt.label}
                     </Badge>
                     ))
                 ) : (
@@ -126,6 +127,7 @@ export function MultiSelectComboBox({
                       <CommandItem
                         key={subOption.value}
                         value={`${subOption.label}__${subOption.value}`}
+                        keywords={subOption.keywords}
                         onSelect={() => handleSelect(subOption.value)}
                       >
                         <Check
@@ -146,6 +148,7 @@ export function MultiSelectComboBox({
                 <CommandItem
                   key={option.value}
                   value={`${option.label}__${option.value}`}
+                  keywords={option.keywords}
                   onSelect={() => handleSelect(option.value)}
                 >
                   <Check

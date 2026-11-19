@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Combobox } from '@/components/ui/combobox';
+import { provinceComboboxKeywords, provinceOldNamesHint } from '@/lib/province-merges';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import {
   Table,
@@ -360,7 +361,15 @@ function WardGroupDialog({
 
   const provinceNames = React.useMemo(() => new Map(provinces.map((p) => [p.code, p.name])), [provinces]);
   const provinceOptions = React.useMemo(
-    () => [{ value: '', label: '— Chọn tỉnh —' }, ...provinces.map((p) => ({ value: p.code, label: p.name }))],
+    () => [
+      { value: '', label: '— Chọn tỉnh —' },
+      ...provinces.map((p) => ({
+        value: p.code,
+        label: p.name,
+        keywords: provinceComboboxKeywords(p.code, p.name),
+        hint: provinceOldNamesHint(p.code, p.name),
+      })),
+    ],
     [provinces],
   );
 

@@ -712,3 +712,125 @@ describe('pendingQuickSearch — gõ dở mà chưa chọn', () => {
     expect(pendingQuickSearch('  dai tu ')).toBe(a);
   });
 });
+
+describe('searchTargets — tìm theo tên tỉnh CŨ trước sáp nhập 07/2025', () => {
+  const MERGED_PROVINCES: ProvinceOption[] = [
+    { code: '01', name: 'Hà Nội' },
+    { code: '08', name: 'Tuyên Quang' },
+    { code: '19', name: 'Thái Nguyên' },
+    { code: '24', name: 'Bắc Ninh' },
+    { code: '25', name: 'Phú Thọ' },
+    { code: '31', name: 'Hải Phòng' },
+    { code: '33', name: 'Hưng Yên' },
+    { code: '37', name: 'Ninh Bình' },
+    { code: '46', name: 'Huế' },
+    { code: '48', name: 'Đà Nẵng' },
+    { code: '79', name: 'Hồ Chí Minh' },
+    { code: '82', name: 'Đồng Tháp' },
+    { code: '86', name: 'Vĩnh Long' },
+    { code: '91', name: 'An Giang' },
+  ];
+  const MERGED_WARDS: WardOption[] = [
+    { code: '13285', name: 'Phường Phủ Lý', provinceCode: '37' },
+    { code: '10999', name: 'Xã Tứ Kỳ', provinceCode: '31' },
+    { code: '25900', name: 'Phường Dĩ An', provinceCode: '79' },
+    { code: '26560', name: 'Phường Bà Rịa', provinceCode: '79' },
+    { code: '26701', name: 'Phường Vũng Tàu', provinceCode: '79' },
+    { code: '19005', name: 'Phường Phủ Lý', provinceCode: '19' },
+    { code: '13290', name: 'Xã Cúc Phương', provinceCode: '37' },
+    { code: '27600', name: 'Xã Củ Chi', provinceCode: '79' },
+    { code: '10500', name: 'Phường Hải Dương', provinceCode: '31' },
+    { code: '02900', name: 'Xã Lũng Cú', provinceCode: '08' },
+    { code: '29500', name: 'Xã Trà Cú', provinceCode: '86' },
+    { code: '28300', name: 'Xã Hội Cư', provinceCode: '82' },
+    { code: '30900', name: 'Xã An Cư', provinceCode: '91' },
+  ];
+  const mergedIdx = buildSearchIndex({ provinces: MERGED_PROVINCES, wards: MERGED_WARDS, zones: [] });
+
+  it.each([
+    ['Hà Nam', 'Cả tỉnh Ninh Bình'],
+    ['Nam Định', 'Cả tỉnh Ninh Bình'],
+    ['tỉnh Hà Nam', 'Cả tỉnh Ninh Bình'],
+    ['Hà Nam cũ', 'Cả tỉnh Ninh Bình'],
+    ['ha nam cu', 'Cả tỉnh Ninh Bình'],
+    ['Bắc Giang', 'Cả tỉnh Bắc Ninh'],
+    ['tỉnh Hải Dương', 'Cả tỉnh Hải Phòng'],
+    ['Thái Bình', 'Cả tỉnh Hưng Yên'],
+    ['Bắc Kạn', 'Cả tỉnh Thái Nguyên'],
+    ['Bắc Cạn', 'Cả tỉnh Thái Nguyên'],
+    ['Bình Dương', 'Cả tỉnh Hồ Chí Minh'],
+    ['Bà Rịa - Vũng Tàu', 'Cả tỉnh Hồ Chí Minh'],
+    ['bà rịa vũng tàu', 'Cả tỉnh Hồ Chí Minh'],
+    ['brvt', 'Cả tỉnh Hồ Chí Minh'],
+    ['binh duong cu', 'Cả tỉnh Hồ Chí Minh'],
+    ['tien giang cu', 'Cả tỉnh Đồng Tháp'],
+    ['tra vinh cu', 'Cả tỉnh Vĩnh Long'],
+    ['Hải Dương cũ', 'Phường Hải Dương'],
+    ['Quảng Nam', 'Cả tỉnh Đà Nẵng'],
+  ])('«%s» gợi ý «%s» nhưng KHÔNG tự chọn Enter vì chỉ là một phần/tên cũ', (q, wantTitle) => {
+    const r = searchTargets(mergedIdx, q);
+    expect(r.results[0]?.title).toBe(wantTitle);
+    expect(r.confident).toBe(false);
+  });
+
+  it('«Bà Rịa - Vũng Tàu» không tự chọn nhầm xã «Phường Bà Rịa»; «Phường Bà Rịa, Vũng Tàu» thì chọn đúng xã', () => {
+    const prov = searchTargets(mergedIdx, 'Bà Rịa - Vũng Tàu');
+    expect(prov.results[0]?.title).toBe('Cả tỉnh Hồ Chí Minh');
+    expect(prov.confident).toBe(false);
+
+    const ward = searchTargets(mergedIdx, 'Phường Bà Rịa, Vũng Tàu');
+    expect(ward.results[0]?.endpoint.wardCode).toBe('26560');
+    expect(ward.confident).toBe(true);
+  });
+
+  it('«vũng tàu» / «Hải Dương» vừa khớp xã cùng tên (ưu tiên đầu, confident=true) vừa hiện tỉnh mới bên dưới', () => {
+    const r = searchTargets(mergedIdx, 'vũng tàu');
+    expect(r.results.map((x) => x.title)).toEqual(['Phường Vũng Tàu', 'Cả tỉnh Hồ Chí Minh']);
+    expect(r.confident).toBe(true);
+    expect(searchTargets(mergedIdx, 'tỉnh Vũng Tàu').results.map((x) => x.title)).toEqual(['Cả tỉnh Hồ Chí Minh']);
+    expect(searchTargets(mergedIdx, 'tỉnh Vũng Tàu').confident).toBe(false);
+
+    const hd = searchTargets(mergedIdx, 'Hải Dương');
+    expect(hd.results.map((x) => x.title)).toEqual(['Phường Hải Dương', 'Cả tỉnh Hải Phòng']);
+    expect(hd.confident).toBe(true);
+  });
+
+  it('ghép tên xã + tên tỉnh CŨ («phủ lý hà nam», «tứ kỳ hải dương», «dĩ an bình dương», «phủ lý hà nam cũ») thu hẹp đúng xã và tự chọn được', () => {
+    const pl = searchTargets(mergedIdx, 'phủ lý hà nam');
+    expect(pl.results.map((x) => `${x.title} · ${x.subtitle}`)).toEqual(['Phường Phủ Lý · Ninh Bình']);
+    expect(pl.confident).toBe(true);
+
+    expect(searchTargets(mergedIdx, 'phủ lý hà nam cũ').results.map((x) => x.endpoint.wardCode)).toEqual(['13285']);
+    expect(searchTargets(mergedIdx, 'tứ kỳ hải dương').confident).toBe(true);
+    expect(searchTargets(mergedIdx, 'dĩ an bình dương').results[0]?.endpoint.wardCode).toBe('25900');
+    expect(searchTargets(mergedIdx, 'dĩ an bình dương').confident).toBe(true);
+  });
+
+  it('đổi tên 1-1 / nhãn giao diện («Thừa Thiên - Huế», «Thừa Thiên Huế», «Nội đô Hà Nội») tìm đúng và tự chọn được', () => {
+    for (const q of ['Thừa Thiên Huế', 'Thừa Thiên - Huế', 'tỉnh Thừa Thiên Huế']) {
+      const r = searchTargets(mergedIdx, q);
+      expect(r.results.map((x) => x.title), q).toEqual(['Cả tỉnh Huế']);
+      expect(r.confident, q).toBe(true);
+    }
+    const hn = searchTargets(mergedIdx, 'Nội đô Hà Nội');
+    expect(hn.results.map((x) => x.title)).toEqual(['Cả tỉnh Hà Nội']);
+    expect(hn.confident).toBe(true);
+  });
+
+  it('xã kết thúc bằng chữ Cú/Cư («Lũng Cú», «Trà Cú», «Hội Cư», «An Cư») cả có dấu lẫn không dấu KHÔNG bị cắt mất chữ cuối', () => {
+    for (const [q, code] of [
+      ['Lũng Cú', '02900'],
+      ['lung cu', '02900'],
+      ['Trà Cú', '29500'],
+      ['tra cu', '29500'],
+      ['Hội Cư', '28300'],
+      ['hoi cu', '28300'],
+      ['An Cư', '30900'],
+      ['an cu', '30900'],
+    ] as const) {
+      const r = searchTargets(mergedIdx, q);
+      expect(r.results[0]?.endpoint.wardCode, q).toBe(code);
+      expect(r.confident, q).toBe(true);
+    }
+  });
+});

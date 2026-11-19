@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
+import { provinceComboboxKeywords, provinceOldNamesHint } from '@/lib/province-merges';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -980,13 +981,23 @@ export function PricingMacroManager() {
   const bulkEditMixesUnits = bulkEditType !== 'PERCENTAGE' && bulkEditPerSeatCount > 0 && bulkEditWholeCarCount > 0;
   const bulkEditLegacyCount = bulkEditRules.filter((r) => r.rule && isLegacyAdjustmentType(r.rule.adjustmentType)).length;
 
-  // Ô chọn tỉnh / xã có ô tìm (gõ không dấu vẫn khớp): xã mỗi tỉnh có thể hơn 100 mục.
+  // Ô chọn tỉnh / xã có ô tìm (gõ không dấu vẫn khớp, tìm được theo cả tên tỉnh cũ): xã mỗi tỉnh có thể hơn 100 mục.
   const originProvinceOptions = React.useMemo(
-    () => withAllOption('Toàn quốc (Bất kỳ)', provinces, formData.originProvinceCode),
+    () =>
+      withAllOption('Toàn quốc (Bất kỳ)', provinces, formData.originProvinceCode).map((o) =>
+        o.value === ALL_CODE
+          ? o
+          : { ...o, keywords: provinceComboboxKeywords(o.value, o.label), hint: provinceOldNamesHint(o.value, o.label) },
+      ),
     [provinces, formData.originProvinceCode],
   );
   const destProvinceOptions = React.useMemo(
-    () => withAllOption('Toàn quốc (Bất kỳ)', provinces, formData.destProvinceCode),
+    () =>
+      withAllOption('Toàn quốc (Bất kỳ)', provinces, formData.destProvinceCode).map((o) =>
+        o.value === ALL_CODE
+          ? o
+          : { ...o, keywords: provinceComboboxKeywords(o.value, o.label), hint: provinceOldNamesHint(o.value, o.label) },
+      ),
     [provinces, formData.destProvinceCode],
   );
   const originWardOptions = React.useMemo(
