@@ -1,5 +1,6 @@
 import { foldVietnamese } from '@/components/ui/combobox-filter';
 import { getProvinceSearchTerms } from '@/lib/province-merges';
+import { LEGACY_DISTRICTS, getWardLegacyInfo } from '@/lib/ward-legacy-lookup';
 import { zoneEndpoint, type MacroEndpoint } from './macro-bulk';
 import type { ProvinceOption, SpecialZone, WardOption } from './types';
 
@@ -28,7 +29,7 @@ export const WARD_SEARCH_MAX_RESULTS = 30;
 /** Cụm tên tỉnh dùng để thu hẹp phải dài ít nhất ngần này ký tự ("ha" của "ha noi" đủ, "a" thì không). */
 const PROVINCE_HINT_MIN_CHARS = 2;
 
-export type SearchTargetKind = 'ward' | 'province' | 'zone';
+export type SearchTargetKind = 'ward' | 'province' | 'zone' | 'legacy_district';
 
 /** Một từ đã tách: bản bỏ dấu (so khớp) + bản giữ dấu tách riêng dấu thanh (so độ chính xác dấu). */
 type Tok = { fold: string; base: string; tone: string; marked: boolean; spelled: string };
@@ -46,6 +47,8 @@ type Form = {
   exactOnly: boolean;
   /** Bí danh tỉnh CŨ bị gộp vào tỉnh mới (chỉ là một phần): xếp sau tên hiện tại và không tự chọn khi bấm Enter. */
   subset?: boolean;
+  /** Ghi chú hiển thị khi khớp theo tên cũ (vd "Cũ: Quận Bắc Từ Liêm" hay "Cũ: Phường Cổ Nhuế 1 (Quận Bắc Từ Liêm)"). */
+  legacyNote?: string;
 };
 
 export type SearchTarget = {
@@ -54,6 +57,8 @@ export type SearchTarget = {
   kind: SearchTargetKind;
   /** Điểm đón/trả được thêm khi chọn dòng này — cùng dạng với ô chọn theo tỉnh/xã. */
   endpoint: MacroEndpoint;
+  /** Chuỗi tìm gửi về máy chủ khi chọn một quận/huyện cũ (`kind === 'legacy_district'`). */
+  legacySearchText?: string;
   /** Dòng chính: tên xã, «Cả tỉnh X» hoặc tên điểm đặc biệt. */
   title: string;
   /** Dòng phụ: tên tỉnh (và «điểm đặc biệt» với vùng đặc biệt). */
@@ -73,6 +78,8 @@ export type SearchTarget = {
 
 export type SearchOutcome = {
   results: SearchTarget[];
+  /** Ghi chú nguồn tên cũ theo `target.key` khi kết quả khớp qua tên cũ (huyện/phường trước sáp nhập). */
+  matchNotes?: Record<string, string>;
   /** Tổng số mục khớp (trước khi cắt còn `max`). */
   total: number;
   /** Đã gõ gì đó nhưng chưa đủ `WARD_SEARCH_MIN_CHARS` ký tự để tìm. */
@@ -271,6 +278,60 @@ function provinceInfo(name: string): ProvinceInfo | null {
   return { names, aliases, accents, city: CENTRAL_CITIES.has(key) };
 }
 
+function districtPrefixInfo(name: string): { drop: number; shortPrefix: string } | null {
+  const folds = tokenize(name).map((t) => t.fold);
+  if (folds.length >= 2 && folds[0] === 'quan') return { drop: 1, shortPrefix: 'q.' };
+  if (folds.length >= 2 && folds[0] === 'huyen') return { drop: 1, shortPrefix: 'h.' };
+  if (folds.length >= 3 && folds[0] === 'thi' && folds[1] === 'xa') return { drop: 2, shortPrefix: 'tx' };
+  if (folds.length >= 3 && folds[0] === 'thanh' && folds[1] === 'pho') return { drop: 2, shortPrefix: 'tp' };
+  return null;
+}
+
+function buildDistrictForms(
+  distName: string,
+  opts: { subset?: boolean; bareSubset?: boolean; legacyNote?: string } = {},
+): { forms: Form[]; sortName: string } {
+  const forms: Form[] = [];
+  const seen = new Set<string>();
+  const pushForm = (raw: string, formOpts: { drop?: number; exactOnly?: boolean; subset?: boolean } = {}) => {
+    const f = makeForm(raw, { subset: opts.subset, ...formOpts });
+    if (!f || seen.has(f.norm)) return null;
+    seen.add(f.norm);
+    if (opts.legacyNote) f.legacyNote = opts.legacyNote;
+    forms.push(f);
+    return f;
+  };
+
+  const primary = pushForm(distName);
+  const pInfo = districtPrefixInfo(distName);
+  let bare: Form | null = null;
+  if (pInfo) {
+    const bareSub = opts.bareSubset ?? opts.subset;
+    const bareCandidate = makeForm(distName, { drop: pInfo.drop, subset: bareSub });
+    if (bareCandidate) {
+      if (/^\d+$/.test(bareCandidate.norm)) {
+        // Quận số ("Quận 1".."Quận 12"): KHÔNG thêm tên trần "1", thêm viết tắt q1/q.1 exactOnly.
+        if (pInfo.shortPrefix === 'q.') {
+          pushForm(`q${bareCandidate.norm}`, { exactOnly: true });
+          pushForm(`q.${bareCandidate.norm}`, { exactOnly: true });
+        }
+      } else {
+        if (!seen.has(bareCandidate.norm)) {
+          seen.add(bareCandidate.norm);
+          if (opts.legacyNote) bareCandidate.legacyNote = opts.legacyNote;
+          forms.push(bareCandidate);
+        }
+        bare = bareCandidate;
+        pushForm(`${pInfo.shortPrefix} ${bareCandidate.typed}`);
+      }
+    }
+  }
+  return {
+    forms,
+    sortName: (bare ?? primary)?.norm ?? '',
+  };
+}
+
 /** Bí danh của điểm đặc biệt: bỏ phần trong ngoặc («(T2)») và loại hình ở đầu («Sân bay quốc tế»). */
 function zoneAlias(name: string): Form | null {
   const cleaned = name.replace(/\([^)]*\)/g, ' ');
@@ -344,8 +405,10 @@ export function buildSearchIndex(args: {
     });
   }
 
+  const presentWards = new Set<string>();
   for (const w of args.wards) {
     if (!isText(w?.code) || !isText(w?.name) || !isText(w?.provinceCode)) continue;
+    presentWards.add(`${w.provinceCode}|${w.code}`);
     const pName = provinceName.get(w.provinceCode) ?? w.provinceCode;
     const primary = makeForm(w.name);
     if (!primary) continue;
@@ -353,6 +416,52 @@ export function buildSearchIndex(args: {
     // khớp đầu từ và thua «Cả tỉnh Lạng Sơn»).
     const cut = wardPrefixLength(w.name);
     const bare = cut > 0 ? makeForm(w.name, { drop: cut }) : null;
+    const forms: Form[] = bare ? [primary, bare] : [primary];
+    const seenNorm = new Set(forms.map((f) => f.norm));
+
+    const legacy = getWardLegacyInfo(w.provinceCode, w.code);
+    if (legacy) {
+      for (const distName of legacy.districtNames) {
+        const note = `Cũ: ${distName}`;
+        const built = buildDistrictForms(distName, { subset: true, legacyNote: note });
+        for (const df of built.forms) {
+          if (seenNorm.has(df.norm)) continue;
+          seenNorm.add(df.norm);
+          forms.push(df);
+        }
+      }
+      const distSuffix = legacy.districtNames.length > 0 ? ` (${legacy.districtNames.join(', ')})` : '';
+      for (const oldWard of legacy.oldWardNames) {
+        const note = `Cũ: ${oldWard}${distSuffix}`;
+        const addOldForm = (raw: string, formOpts: { drop?: number; exactOnly?: boolean } = {}) => {
+          const f = makeForm(raw, { ...formOpts, subset: true });
+          if (!f || seenNorm.has(f.norm)) return null;
+          seenNorm.add(f.norm);
+          f.legacyNote = note;
+          forms.push(f);
+          return f;
+        };
+        addOldForm(oldWard);
+        const oldCut = wardPrefixLength(oldWard);
+        if (oldCut > 0) {
+          const bareOld = makeForm(oldWard, { drop: oldCut, subset: true });
+          if (bareOld) {
+            if (/^\d+$/.test(bareOld.norm)) {
+              const firstTok = tokenize(oldWard)[0]?.fold;
+              if (firstTok === 'phuong') {
+                addOldForm(`p${bareOld.norm}`, { exactOnly: true });
+                addOldForm(`p.${bareOld.norm}`, { exactOnly: true });
+              }
+            } else if (!seenNorm.has(bareOld.norm)) {
+              seenNorm.add(bareOld.norm);
+              bareOld.legacyNote = note;
+              forms.push(bareOld);
+            }
+          }
+        }
+      }
+    }
+
     const info = infoFor(w.provinceCode, pName);
     out.push({
       key: `ward|${w.provinceCode}|${w.code}`,
@@ -360,13 +469,53 @@ export function buildSearchIndex(args: {
       endpoint: { provinceCode: w.provinceCode, wardCode: w.code, label: `${w.name} (${pName})` },
       title: w.name,
       subtitle: pName,
-      forms: bare ? [primary, bare] : [primary],
+      forms,
       provinceWords: info?.names.map((f) => f.words) ?? [],
       provinceAliases: info?.aliases.map((f) => f.words) ?? [],
       provinceAccents: info?.accents ?? [],
       isCity: false,
       sortName: (bare ?? primary).norm,
       sortProvince: info?.names[0].norm ?? '',
+    });
+  }
+
+  for (const dist of LEGACY_DISTRICTS) {
+    const presentCount = dist.wardCodes.reduce(
+      (n, wc) => n + (presentWards.has(`${dist.newProvinceCode}|${wc}`) ? 1 : 0),
+      0,
+    );
+    if (presentCount === 0) continue;
+    const pName = provinceName.get(dist.newProvinceCode) ?? dist.newProvinceName;
+    const newProvInfo = infoFor(dist.newProvinceCode, pName);
+    const oldProvForm = dist.oldProvinceName ? makeForm(dist.oldProvinceName) : null;
+    const { forms, sortName } = buildDistrictForms(dist.name, { bareSubset: true });
+    if (forms.length === 0) continue;
+    const subtitle = dist.oldProvinceName
+      ? `${pName} (${dist.oldProvinceName} cũ) · huyện cũ, ${presentCount} phường/xã`
+      : `${pName} · huyện cũ, ${presentCount} phường/xã`;
+    const legacySearchText = dist.isDuplicateName
+      ? `${dist.name}, ${dist.oldProvinceName || pName}`
+      : dist.name;
+    out.push({
+      key: `legacy_district|${dist.index}`,
+      kind: 'legacy_district',
+      endpoint: { provinceCode: dist.newProvinceCode, label: dist.name },
+      legacySearchText,
+      title: dist.name,
+      subtitle,
+      forms,
+      provinceWords: newProvInfo?.names.map((f) => f.words) ?? [],
+      provinceAliases: [
+        ...(newProvInfo?.aliases.filter((f) => f.exactOnly).map((f) => f.words) ?? []),
+        ...(oldProvForm ? [oldProvForm.words] : []),
+      ],
+      provinceAccents: [
+        ...(newProvInfo?.names.flatMap((f) => f.accents) ?? []),
+        ...(oldProvForm ? oldProvForm.accents : []),
+      ],
+      isCity: false,
+      sortName,
+      sortProvince: newProvInfo?.names[0].norm ?? '',
     });
   }
 
@@ -428,6 +577,7 @@ const HOW_RANK: Record<How, number> = { name: 0, compact: 1, split: 2, words: 3 
 
 function isBetter(a: FormMatch, b: FormMatch | null): boolean {
   if (b === null || a.tier !== b.tier) return b === null || a.tier < b.tier;
+  if (Boolean(a.form.subset) !== Boolean(b.form.subset)) return !a.form.subset;
   if (a.how !== b.how) return HOW_RANK[a.how] < HOW_RANK[b.how];
   return a.full && !b.full;
 }
@@ -497,14 +647,29 @@ function accentMisses(t: SearchTarget, qr: Query, matched: FormMatch): number {
   return miss;
 }
 
-/** Hoà thì cái HẸP hơn lên trước (↓ đầu tiên không rơi vào «Cả tỉnh»): điểm đặc biệt, xã/phường, rồi cả tỉnh. */
-const KIND_ORDER: Record<SearchTargetKind, number> = { zone: 0, ward: 1, province: 2 };
+/** Hoà thì cái HẸP hơn lên trước (↓ đầu tiên không rơi vào «Cả tỉnh»): điểm đặc biệt, quận/huyện cũ, xã/phường, rồi cả tỉnh. */
+const KIND_ORDER: Record<SearchTargetKind, number> = { zone: 0, legacy_district: 1, ward: 2, province: 3 };
 
-type Ranked = { t: SearchTarget; tier: number; subset: number; how: How; full: boolean; miss: number; spell: number };
+type Ranked = {
+  t: SearchTarget;
+  tier: number;
+  subset: number;
+  how: How;
+  full: boolean;
+  miss: number;
+  spell: number;
+  note?: string;
+};
 
-function rank(index: SearchTarget[], qr: Query, only: SearchTargetKind[] | null): Ranked[] {
+function rank(
+  index: SearchTarget[],
+  qr: Query,
+  only: SearchTargetKind[] | null,
+  includeLegacyDistricts: boolean,
+): Ranked[] {
   const hits: Ranked[] = [];
   for (const t of index) {
+    if (!includeLegacyDistricts && t.kind === 'legacy_district') continue;
     if (only && !only.includes(t.kind)) continue;
     let best = null as FormMatch | null;
     for (const f of t.forms) {
@@ -515,7 +680,16 @@ function rank(index: SearchTarget[], qr: Query, only: SearchTargetKind[] | null)
     // Chỉ để XẾP THỨ TỰ khi hoà (không ảnh hưởng `confident`): chính tả đúng như đã gõ lên trước.
     const spell = t.forms.some((f) => f.typed === qr.spelled) ? 0 : t.forms.some((f) => f.typed.startsWith(qr.spelled)) ? 1 : 2;
     const subset = best.form.subset ? 1 : 0;
-    hits.push({ t, tier: best.tier, subset, how: best.how, full: best.full, miss: accentMisses(t, qr, best), spell });
+    hits.push({
+      t,
+      tier: best.tier,
+      subset,
+      how: best.how,
+      full: best.full,
+      miss: accentMisses(t, qr, best),
+      spell,
+      note: best.form.legacyNote,
+    });
   }
   hits.sort(
     (a, b) =>
@@ -550,8 +724,10 @@ function isStrong(h: Ranked): boolean {
 export function searchTargets(
   index: SearchTarget[],
   rawQuery: string,
-  max: number = WARD_SEARCH_MAX_RESULTS,
+  maxOrOpts: number | { max?: number; includeLegacyDistricts?: boolean } = WARD_SEARCH_MAX_RESULTS,
 ): SearchOutcome {
+  const max = typeof maxOrOpts === 'number' ? maxOrOpts : (maxOrOpts?.max ?? WARD_SEARCH_MAX_RESULTS);
+  const includeLegacyDistricts = typeof maxOrOpts === 'object' && Boolean(maxOrOpts?.includeLegacyDistricts);
   const runTokens = (toks: Tok[]): { hits: Ranked[]; filtered: boolean; prefix: ReturnType<typeof detectPrefix> } => {
     const prefix = detectPrefix(toks.map((t) => t.fold));
     // Dấu chỉ tính ở phần TÊN (sau tiền tố): «phường ba dinh» / «xã ba dinh» gõ «phường/xã» có dấu theo thói quen nhưng
@@ -562,12 +738,12 @@ export function searchTargets(
       return { hits: [], filtered: false, prefix };
     }
 
-    let hits = rank(index, literal, null);
+    let hits = rank(index, literal, null, includeLegacyDistricts);
     let filtered = false;
     if (prefix && !(hits.length > 0 && hits[0].how === 'name' && isStrong(hits[0]) && hits[0].subset === 0)) {
       const stripped = makeQuery(toks.slice(prefix.rest), nameMarked);
       if (stripped.compact.length >= WARD_SEARCH_MIN_CHARS) {
-        const byType = rank(index, stripped, prefix.only);
+        const byType = rank(index, stripped, prefix.only, includeLegacyDistricts);
         if (byType.length > 0) {
           hits = byType;
           filtered = true;
@@ -648,8 +824,16 @@ export function searchTargets(
     if (first.tier !== 0) confident = false;
     if (prefix.city && first.t.kind === 'province' && !first.t.isCity) confident = false;
   }
+  const topHits = hits.slice(0, max);
+  const matchNotes: Record<string, string> = {};
+  for (const h of topHits) {
+    if (h.note && h.subset === 1) {
+      matchNotes[h.t.key] = h.note;
+    }
+  }
   return {
-    results: hits.slice(0, max).map((h) => h.t),
+    results: topHits.map((h) => h.t),
+    ...(Object.keys(matchNotes).length > 0 ? { matchNotes } : {}),
     total: hits.length,
     tooShort: false,
     confident,
