@@ -83,6 +83,7 @@ export function WardQuickAdd({
 
   const outcome = React.useMemo(() => searchTargets(index, query), [index, query]);
   const results = outcome.results;
+  const matchNotes = outcome.matchNotes;
   const addedKeys = React.useMemo(() => new Set(items.map(endpointKey)), [items]);
 
   // Chỉ mục thiếu xã hoặc điểm đặc biệt thì "thắng rõ" chưa đáng tin (xem ghi chú đầu hàm): không tự chọn.
@@ -238,6 +239,11 @@ export function WardQuickAdd({
                   <span className="font-medium">{t.title}</span>
                   {t.subtitle && (
                     <span className={cn('ml-1.5', isActive ? 'text-indigo-100' : 'text-slate-500')}>{t.subtitle}</span>
+                  )}
+                  {matchNotes?.[t.key] && (
+                    <span className={cn('ml-1.5 text-[11px]', isActive ? 'text-indigo-100' : 'text-amber-700')}>
+                      · {matchNotes[t.key]}
+                    </span>
                   )}
                 </span>
                 {added ? (

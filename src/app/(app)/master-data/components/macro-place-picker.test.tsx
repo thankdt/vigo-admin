@@ -721,4 +721,27 @@ describe('MacroPlacePicker + useMacroPlaceIndex thật', () => {
       endpoint: { provinceCode: '37', wardCode: '13285', label: 'Phường Phủ Lý (Ninh Bình)' },
     });
   });
+
+  it('gõ "bắc từ liêm" / "cổ nhuế 1" hiện Quận Bắc Từ Liêm cũ + phường thuộc quận, KHÔNG gắn input title tooltip che gợi ý', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(
+      <Harness
+        provinces={[{ code: '01', name: 'Hà Nội' }]}
+        wards={[
+          { code: '00091', name: 'Phú Thượng', provinceCode: '01' },
+          { code: '00611', name: 'Xuân Đỉnh', provinceCode: '01' },
+        ]}
+        onChange={onChange}
+      />,
+    );
+
+    expect(input()).not.toHaveAttribute('title');
+    await user.type(input(), 'bắc từ liêm');
+    expect(screen.getByRole('option', { name: /^Quận Bắc Từ Liêm,/ })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /Xuân Đỉnh/ })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('option', { name: /^Quận Bắc Từ Liêm,/ }));
+    expect(onChange).toHaveBeenCalledWith({ kind: 'text', text: 'Quận Bắc Từ Liêm' });
+  });
 });

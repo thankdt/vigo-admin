@@ -16,6 +16,7 @@ import {
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
 import { provinceComboboxKeywords, provinceOldNamesHint } from '@/lib/province-merges';
+import { wardComboboxHint, wardComboboxKeywords } from '@/lib/ward-legacy-lookup';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { WardSourcePanel } from './ward-source-panel';
 import { WardQuickAdd, isQuickAddEscape, type WardsStatus, type ZonesStatus } from './ward-quick-add';
@@ -238,7 +239,12 @@ function EndpointBuilder({
         <div className="space-y-1">
           <Label className="text-[11px] text-slate-500">Phường / Xã (bỏ trống = cả tỉnh)</Label>
           <MultiSelectComboBox
-            options={wards.map((w) => ({ value: w.code, label: w.name }))}
+            options={wards.map((w) => ({
+              value: w.code,
+              label: w.name,
+              keywords: wardComboboxKeywords(provinceCode, w.code),
+              hint: wardComboboxHint(provinceCode, w.code),
+            }))}
             selectedValues={wardCodes}
             onSelectedValuesChange={setWardCodes}
             placeholder={loadingWards ? 'Đang tải danh sách...' : provinceCode ? 'Chọn phường/xã' : 'Chọn tỉnh trước'}

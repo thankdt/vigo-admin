@@ -701,4 +701,27 @@ describe('WardQuickAdd trong Dialog (nơi Combobox kiểu Popover từng mất f
     await user.click(screen.getByRole('option', { name: /Đại Từ/ }));
     expect(onAdd).toHaveBeenCalledWith(DAI_TU);
   });
+
+  it('gõ "trúc bạch" / "bắc từ liêm" hiện các phường mới kèm ghi chú tên cũ', async () => {
+    const user = userEvent.setup();
+    const onAdd = vi.fn();
+    render(
+      <Harness
+        wards={[
+          { code: '00004', name: 'Ba Đình', provinceCode: '01' },
+          { code: '00611', name: 'Xuân Đỉnh', provinceCode: '01' },
+        ]}
+        onAdd={onAdd}
+      />,
+    );
+
+    await user.type(input(), 'trúc bạch');
+    const badinh = screen.getByRole('option', { name: /Ba Đình/ });
+    expect(badinh).toHaveTextContent('Cũ: Phường Trúc Bạch');
+    await user.click(badinh);
+    expect(onAdd).toHaveBeenCalledWith({ provinceCode: '01', wardCode: '00004', label: 'Ba Đình (Hà Nội)' });
+
+    await user.type(input(), 'bắc từ liêm');
+    expect(screen.getByRole('option', { name: /Xuân Đỉnh/ })).toHaveTextContent('Cũ: Quận Bắc Từ Liêm');
+  });
 });

@@ -11,6 +11,8 @@ vi.mock('@/lib/api', () => ({
   htxGetDriverDetail: vi.fn(),
   htxApproveDriver: vi.fn(),
   htxRejectDriver: vi.fn(),
+  htxBanDriver: vi.fn(),
+  htxUnbanDriver: vi.fn(),
 }));
 
 vi.mock('@/hooks/use-toast', () => {
@@ -22,10 +24,12 @@ import { useToast } from '@/hooks/use-toast';
 
 import {
   htxApproveDriver,
+  htxBanDriver,
   htxGetDriverDetail,
   htxListDrivers,
   htxRejectDriver,
   htxToggleDriverActive,
+  htxUnbanDriver,
 } from '@/lib/api';
 
 const pendingRow: HtxDriverRow = {
@@ -249,5 +253,100 @@ describe('HtxDriversPage — xem hồ sơ và duyệt / từ chối tài xế', 
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('Chưa có thông tin đăng ký xe.')).toBeInTheDocument();
     expect(within(dialog).queryByText('29A-99999')).not.toBeInTheDocument();
+  });
+
+  it('hiển thị đúng trạng thái Đã khoá / Tạm dừng / Mất kết nối và cảnh báo khi Redis presence lỗi', async () => {
+    vi.mocked(htxListDrivers).mockResolvedValueOnce({
+      data: [
+        { ...pendingRow, id: 'd-ban', fullName: 'Tài Khoá', isBanned: true, status: 'ONLINE', isActive: true },
+        { ...pendingRow, id: 'd-pause', fullName: 'Tài Tạm Dừng', isBanned: false, isActive: false, status: 'ONLINE' },
+        {
+          ...pendingRow,
+          id: 'd-stale',
+          fullName: 'Tài Mất Kết Nối',
+          isBanned: false,
+          isActive: true,
+          status: 'ONLINE',
+          presence: { hasSocket: false, hasAlive: false, hasModernFlag: true, quality: 'high', silentMinutes: 45 },
+        },
+      ],
+      meta: { page: 1, limit: 20, total: 3, totalPages: 1, presenceUnavailable: true },
+    });
+
+    render(<HtxDriversPage />);
+    await screen.findByText('Tài Khoá');
+    expect(screen.getByText('Đã khoá')).toBeInTheDocument();
+    expect(screen.getByText('Mất kết nối')).toBeInTheDocument();
+    expect(screen.getByText(/Không kiểm tra được tín hiệu kết nối thời gian thực/)).toBeInTheDocument();
+  });
+
+  it('khoá tài khoản từ bảng phải qua hộp thoại xác nhận nhập lý do bắt buộc', async () => {
+    const user = userEvent.setup();
+    vi.mocked(htxBanDriver).mockResolvedValueOnce({ ...pendingDetail, isBanned: true, canUnban: true });
+    render(<HtxDriversPage />);
+
+    await screen.findByText('Nguyễn Văn Chờ');
+    await user.click(screen.getByRole('button', { name: /^Khoá$/ }));
+    const confirmDialog = await screen.findByRole('alertdialog');
+    const confirmBtn = within(confirmDialog).getByRole('button', { name: 'Xác nhận khoá' });
+    expect(confirmBtn).toBeDisabled();
+
+    await user.type(within(confirmDialog).getByLabelText(/Lý do khoá/), 'Vi phạm nội quy');
+    expect(confirmBtn).toBeEnabled();
+    await user.click(confirmBtn);
+
+    await waitFor(() => expect(htxBanDriver).toHaveBeenCalledWith('drv-pending', 'Vi phạm nội quy', ''));
+    await waitFor(() => expect(htxListDrivers).toHaveBeenCalledTimes(2));
+  });
+
+  it('mở khoá tài khoản khi canUnban=true; tài khoản do admin khoá (canUnban=false) chỉ hiện Khoá bởi hệ thống & ẩn Mở khoá/Duyệt', async () => {
+    const user = userEvent.setup();
+    vi.mocked(htxUnbanDriver).mockResolvedValueOnce({ ...pendingDetail, isBanned: false, canUnban: false });
+    vi.mocked(htxListDrivers).mockResolvedValueOnce({
+      data: [
+        { ...pendingRow, id: 'd-htx-ban', fullName: 'Bị HTX Khoá', isBanned: true, canUnban: true },
+        { ...pendingRow, id: 'd-admin-ban', fullName: 'Bị Admin Khoá', isBanned: true, canUnban: false },
+      ],
+      meta: { page: 1, limit: 20, total: 2, totalPages: 1 },
+    });
+    vi.mocked(htxGetDriverDetail).mockResolvedValueOnce({
+      ...pendingDetail,
+      id: 'd-admin-ban',
+      fullName: 'Bị Admin Khoá',
+      isBanned: true,
+      canUnban: false,
+    });
+
+    render(<HtxDriversPage />);
+    await screen.findByText('Bị HTX Khoá');
+    expect(screen.getByText('Khoá bởi hệ thống')).toBeInTheDocument();
+
+    const unlockBtn = screen.getByRole('button', { name: /Mở khoá/ });
+    await user.click(unlockBtn);
+    const alert = await screen.findByRole('alertdialog');
+    await user.click(within(alert).getByRole('button', { name: 'Xác nhận mở khoá' }));
+    await waitFor(() => expect(htxUnbanDriver).toHaveBeenCalledWith('d-htx-ban', ''));
+  });
+
+  it('hộp thoại hồ sơ tài xế bị admin khoá ẩn nút Duyệt và nút Mở khoá, hiển thị cảnh báo đỏ', async () => {
+    const user = userEvent.setup();
+    vi.mocked(htxListDrivers).mockResolvedValueOnce({
+      data: [{ ...pendingRow, id: 'd-adm', fullName: 'Bị Admin Khoá', isBanned: true, canUnban: false }],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    });
+    vi.mocked(htxGetDriverDetail).mockResolvedValueOnce({
+      ...pendingDetail,
+      id: 'd-adm',
+      fullName: 'Bị Admin Khoá',
+      isBanned: true,
+      canUnban: false,
+    });
+
+    render(<HtxDriversPage />);
+    await user.click(await screen.findByRole('button', { name: /Xem hồ sơ/i }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/quản trị viên hoặc hệ thống khoá/)).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Duyệt tài xế' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /Mở khoá/ })).not.toBeInTheDocument();
   });
 });

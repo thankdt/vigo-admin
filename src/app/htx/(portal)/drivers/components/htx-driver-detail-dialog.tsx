@@ -13,19 +13,22 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { HtxBanConfirmDialog, HtxUnbanConfirmDialog } from './htx-ban-dialogs';
 import { ImageThumbList } from '@/components/ui/image-thumb-list';
 import { RejectReasonPicker } from '@/components/reject-reason-picker';
 import { combineRejectReason } from '@/lib/reject-reasons';
 import { useToast } from '@/hooks/use-toast';
 import {
   htxApproveDriver,
+  htxBanDriver,
   htxGetDriverDetail,
   htxRejectDriver,
+  htxUnbanDriver,
   type HtxDriverDetail,
   type HtxDriverRow,
 } from '@/lib/api';
 import { getImageUrl } from '@/lib/utils';
-import { AlertTriangle, CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { AlertTriangle, Ban, CheckCircle2, Loader2, LockOpen, XCircle } from 'lucide-react';
 
 const SERVICE_OPTIONS = [
   { value: 'RIDE', label: 'Chở khách (Taxi)' },
@@ -142,6 +145,13 @@ export function HtxDriverDetailDialog({
   const [internalNote, setInternalNote] = React.useState('');
   const [submitting, setSubmitting] = React.useState(false);
 
+  const [banConfirmOpen, setBanConfirmOpen] = React.useState(false);
+  const [banReason, setBanReason] = React.useState('');
+  const [banNote, setBanNote] = React.useState('');
+  const [unbanConfirmOpen, setUnbanConfirmOpen] = React.useState(false);
+  const [unbanNote, setUnbanNote] = React.useState('');
+  const [banSubmitting, setBanSubmitting] = React.useState(false);
+
   const resetActionState = React.useCallback((enabledServices?: string[] | null) => {
     setAction(null);
     setServices(
@@ -161,6 +171,11 @@ export function HtxDriverDetailDialog({
       setDetail(null);
       setError(null);
       setAction(null);
+      setBanConfirmOpen(false);
+      setBanReason('');
+      setBanNote('');
+      setUnbanConfirmOpen(false);
+      setUnbanNote('');
       return;
     }
 
@@ -204,6 +219,57 @@ export function HtxDriverDetailDialog({
   const htxConfirmImages = safeImageArray(detail?.htxConfirmationImage);
 
   const approvalState = resolveHtxDriverApprovalState(detail ?? driver);
+  const effective = detail ?? driver;
+  const isBanned = Boolean(effective.isBanned);
+  const canUnban = Boolean(effective.canUnban);
+
+  const handleConfirmBan = async () => {
+    if (!banReason.trim()) return;
+    setBanSubmitting(true);
+    try {
+      await htxBanDriver(driver.id, banReason, banNote);
+      toast({
+        title: 'Đã khoá tài khoản tài xế',
+        description: `${displayName} đã bị đăng xuất và ngừng nhận chuyến.`,
+      });
+      setBanConfirmOpen(false);
+      setBanReason('');
+      setBanNote('');
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: unknown) {
+      toast({
+        variant: 'destructive',
+        title: 'Không thể khoá tài khoản',
+        description: err instanceof Error ? err.message : 'Vui lòng thử lại.',
+      });
+    } finally {
+      setBanSubmitting(false);
+    }
+  };
+
+  const handleConfirmUnban = async () => {
+    setBanSubmitting(true);
+    try {
+      await htxUnbanDriver(driver.id, unbanNote);
+      toast({
+        title: 'Đã mở khoá tài khoản',
+        description: `${displayName} đã có thể đăng nhập lại.`,
+      });
+      setUnbanConfirmOpen(false);
+      setUnbanNote('');
+      onSuccess();
+      onOpenChange(false);
+    } catch (err: unknown) {
+      toast({
+        variant: 'destructive',
+        title: 'Không thể mở khoá tài khoản',
+        description: err instanceof Error ? err.message : 'Vui lòng thử lại.',
+      });
+    } finally {
+      setBanSubmitting(false);
+    }
+  };
 
   const handleSubmitAction = async () => {
     if (!action) return;
@@ -259,7 +325,8 @@ export function HtxDriverDetailDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!submitting) onOpenChange(next); }}>
+    <>
+    <Dialog open={open} onOpenChange={(next) => { if (!submitting && !banSubmitting) onOpenChange(next); }}>
       <DialogContent
         className="w-[95vw] max-w-2xl max-h-[90dvh] overflow-y-auto p-4 sm:p-6"
         aria-describedby={undefined}
@@ -280,7 +347,16 @@ export function HtxDriverDetailDialog({
                 <h3 className="text-lg font-bold truncate">{displayName}</h3>
                 <p className="text-sm text-muted-foreground">{displayPhone}</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <HtxApprovalBadge driver={detail ?? driver} />
+                  <HtxApprovalBadge driver={effective} />
+                  {isBanned && (
+                    <Badge variant="destructive" className="gap-1">
+                      <Ban className="h-3 w-3" />
+                      Đã khoá
+                    </Badge>
+                  )}
+                  {!isBanned && !effective.isActive && (
+                    <Badge variant="outline">Tạm dừng</Badge>
+                  )}
                 </div>
               </div>
             </div>
@@ -300,6 +376,17 @@ export function HtxDriverDetailDialog({
             </div>
           ) : detail ? (
             <>
+              {isBanned && (
+                <div className="rounded-md border border-red-300 bg-red-50 dark:border-red-900/60 dark:bg-red-950/30 p-3 flex items-start gap-2 text-sm text-red-900 dark:text-red-200">
+                  <Ban className="h-4 w-4 text-red-600 mt-0.5 shrink-0" />
+                  <span>
+                    {canUnban
+                      ? 'Tài khoản này đang bị khoá bởi HTX (đã đăng xuất và ngừng nhận chuyến).'
+                      : 'Tài khoản này đang bị quản trị viên hoặc hệ thống khoá — chỉ quản trị viên mới mở khoá được.'}
+                  </span>
+                </div>
+              )}
+
               {approvalState === 'unsubmitted' && (
                 <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 flex items-start gap-2 text-sm text-amber-900 dark:text-amber-200">
                   <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
@@ -420,29 +507,51 @@ export function HtxDriverDetailDialog({
                 </div>
               </div>
 
-              {/* Hành động duyệt / từ chối */}
+              {/* Hành động duyệt / từ chối / khoá tài khoản */}
               <div className="border-t pt-4">
                 {action === null && (
-                  <div className="flex flex-wrap justify-end gap-2">
-                    {approvalState !== 'rejected' && (
-                      <Button
-                        variant="outline"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => setAction('reject')}
-                      >
-                        <XCircle className="mr-2 h-4 w-4" />
-                        Từ chối
-                      </Button>
-                    )}
-                    {approvalState !== 'approved' && (
-                      <Button
-                        className="bg-green-600 hover:bg-green-700 text-white"
-                        onClick={() => setAction('approve')}
-                      >
-                        <CheckCircle2 className="mr-2 h-4 w-4" />
-                        Duyệt tài xế
-                      </Button>
-                    )}
+                  <div className="flex flex-wrap justify-between gap-2">
+                    <div className="flex flex-wrap gap-2">
+                      {!isBanned ? (
+                        <Button
+                          variant="outline"
+                          className="border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setBanConfirmOpen(true)}
+                        >
+                          <Ban className="mr-2 h-4 w-4" />
+                          Khoá tài khoản
+                        </Button>
+                      ) : canUnban ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => setUnbanConfirmOpen(true)}
+                        >
+                          <LockOpen className="mr-2 h-4 w-4" />
+                          Mở khoá
+                        </Button>
+                      ) : null}
+                    </div>
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {approvalState !== 'rejected' && !isBanned && (
+                        <Button
+                          variant="outline"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() => setAction('reject')}
+                        >
+                          <XCircle className="mr-2 h-4 w-4" />
+                          Từ chối
+                        </Button>
+                      )}
+                      {approvalState !== 'approved' && !isBanned && (
+                        <Button
+                          className="bg-green-600 hover:bg-green-700 text-white"
+                          onClick={() => setAction('approve')}
+                        >
+                          <CheckCircle2 className="mr-2 h-4 w-4" />
+                          Duyệt tài xế
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
 
@@ -561,5 +670,37 @@ export function HtxDriverDetailDialog({
         </div>
       </DialogContent>
     </Dialog>
+
+    <HtxBanConfirmDialog
+      open={banConfirmOpen}
+      driverName={displayName}
+      reason={banReason}
+      onReasonChange={setBanReason}
+      note={banNote}
+      onNoteChange={setBanNote}
+      submitting={banSubmitting}
+      idPrefix="htx-detail"
+      onCancel={() => {
+        setBanConfirmOpen(false);
+        setBanReason('');
+        setBanNote('');
+      }}
+      onConfirm={() => void handleConfirmBan()}
+    />
+
+    <HtxUnbanConfirmDialog
+      open={unbanConfirmOpen}
+      driverName={displayName}
+      note={unbanNote}
+      onNoteChange={setUnbanNote}
+      submitting={banSubmitting}
+      idPrefix="htx-detail"
+      onCancel={() => {
+        setUnbanConfirmOpen(false);
+        setUnbanNote('');
+      }}
+      onConfirm={() => void handleConfirmUnban()}
+    />
+    </>
   );
 }
