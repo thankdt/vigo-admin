@@ -25,6 +25,7 @@ type ComboboxOption = {
   value: string;
   label: string;
   keywords?: string[];
+  hint?: string;
 };
 
 type ComboboxGroupedOption = {
@@ -138,7 +139,12 @@ export function MultiSelectComboBox({
                               : 'opacity-0'
                           )}
                         />
-                        {subOption.label}
+                        <span>
+                          {subOption.label}
+                          {subOption.hint && (
+                            <span className="ml-1.5 text-xs text-muted-foreground">{` (${subOption.hint})`}</span>
+                          )}
+                        </span>
                       </CommandItem>
                     ))}
                   </CommandGroup>
@@ -159,7 +165,12 @@ export function MultiSelectComboBox({
                         : 'opacity-0'
                     )}
                   />
-                  {option.label}
+                  <span>
+                    {option.label}
+                    {option.hint && (
+                      <span className="ml-1.5 text-xs text-muted-foreground">{` (${option.hint})`}</span>
+                    )}
+                  </span>
                 </CommandItem>
               );
             })}

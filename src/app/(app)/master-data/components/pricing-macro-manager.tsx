@@ -11,6 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Combobox } from '@/components/ui/combobox';
 import { provinceComboboxKeywords, provinceOldNamesHint } from '@/lib/province-merges';
+import { wardComboboxHint, wardComboboxKeywords } from '@/lib/ward-legacy-lookup';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   AlertDialog,
@@ -179,10 +180,18 @@ function parseMacroSortChoice(
  */
 function withAllOption(
   allLabel: string,
-  items: { code: string; name: string }[],
+  items: { code: string; name: string; keywords?: string[]; hint?: string }[],
   selectedCode: string,
-): { value: string; label: string }[] {
-  const options = [{ value: ALL_CODE, label: allLabel }, ...items.map((i) => ({ value: i.code, label: i.name }))];
+): { value: string; label: string; keywords?: string[]; hint?: string }[] {
+  const options: { value: string; label: string; keywords?: string[]; hint?: string }[] = [
+    { value: ALL_CODE, label: allLabel },
+    ...items.map((i) => ({
+      value: i.code,
+      label: i.name,
+      ...(i.keywords ? { keywords: i.keywords } : {}),
+      ...(i.hint ? { hint: i.hint } : {}),
+    })),
+  ];
   if (selectedCode && !items.some((i) => i.code === selectedCode)) {
     options.push({ value: selectedCode, label: selectedCode });
   }
@@ -563,7 +572,12 @@ export function PricingMacroManager() {
     ...zones
       .filter((z) => z.provinceCode === provinceCode)
       .map((z) => ({ code: `${MACRO_ZONE_PREFIX}${z.code}`, name: `${z.name} (điểm đặc biệt)` })),
-    ...wards,
+    ...wards.map((w) => ({
+      code: w.code,
+      name: w.name,
+      keywords: wardComboboxKeywords(provinceCode, w.code),
+      hint: wardComboboxHint(provinceCode, w.code),
+    })),
   ];
 
   // Load wards when province changes in dialog

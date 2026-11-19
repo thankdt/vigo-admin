@@ -85,8 +85,12 @@ export function MacroPlacePicker({
     onPendingChange?.(pending);
   }, [pending, onPendingChange]);
 
-  const outcome = React.useMemo(() => searchTargets(index, query), [index, query]);
+  const outcome = React.useMemo(
+    () => searchTargets(index, query, { includeLegacyDistricts: true }),
+    [index, query],
+  );
   const results = outcome.results;
+  const matchNotes = outcome.matchNotes;
   const showTextRow = trimmed.length >= WARD_SEARCH_MIN_CHARS && !outcome.tooShort;
   const rows = React.useMemo<Row[]>(() => {
     const list: Row[] = results.map((t) => ({ kind: 'place', key: t.key, target: t }));
@@ -124,7 +128,13 @@ export function MacroPlacePicker({
     focusAfterChange.current = 'chip';
     setQuery('');
     setNav(null);
-    onChange(row.kind === 'place' ? { kind: 'place', endpoint: row.target.endpoint } : { kind: 'text', text: row.text });
+    if (row.kind === 'text') {
+      onChange({ kind: 'text', text: row.text });
+    } else if (row.target.kind === 'legacy_district') {
+      onChange({ kind: 'text', text: row.target.legacySearchText ?? row.target.title });
+    } else {
+      onChange({ kind: 'place', endpoint: row.target.endpoint });
+    }
   };
 
   const clearValue = () => {
@@ -206,7 +216,12 @@ export function MacroPlacePicker({
   let summary: string | null = null;
   if (trimmed !== '') {
     if (outcome.tooShort) summary = `Gõ ít nhất ${WARD_SEARCH_MIN_CHARS} ký tự để tìm.`;
-    else if (active?.kind === 'place') summary = `Enter để chọn «${active.target.endpoint.label}».`;
+    else if (active?.kind === 'place') {
+      summary =
+        active.target.kind === 'legacy_district'
+          ? `Enter để lọc toàn bộ ${active.target.title} (${active.target.subtitle}).`
+          : `Enter để chọn «${active.target.endpoint.label}».`;
+    }
     else if (active?.kind === 'text') summary = `Enter để tìm theo chữ «${active.text}» (gồm tên huyện/tỉnh cũ).`;
     else if (results.length > 0) {
       if (!indexComplete) {
@@ -306,8 +321,7 @@ export function MacroPlacePicker({
             if (wardsStatus === 'idle' || wardsStatus === 'error') onNeedWards();
           }}
           onKeyDown={onInputKeyDown}
-          placeholder={`${label}: gõ tên xã, phường, tỉnh…`}
-          title="Gõ không dấu cũng được, ví dụ: dai tu. Tên huyện/tỉnh cũ: chọn dòng «Tìm theo chữ»."
+          placeholder={`${label}: gõ tên xã, phường, huyện cũ, tỉnh…`}
           // 16px trên máy cảm ứng: dưới mức đó iOS Safari tự phóng to trang mỗi lần focus.
           className="h-9 w-full rounded-md border border-input bg-white pl-8 pr-8 text-base placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring sm:text-xs [@media(pointer:coarse)]:text-base"
         />
@@ -359,13 +373,14 @@ export function MacroPlacePicker({
                 );
               }
               const t = row.target;
+              const note = matchNotes?.[t.key];
               return (
                 <li
                   key={row.key}
                   id={optionId(i)}
                   role="option"
                   aria-selected={isActive}
-                  aria-label={`${t.title}${t.subtitle ? `, ${t.subtitle}` : ''}`}
+                  aria-label={`${t.title}${t.subtitle ? `, ${t.subtitle}` : ''}${note ? `, ${note}` : ''}`}
                   onClick={() => pick(row)}
                   className={cn(
                     'flex cursor-pointer select-none items-center gap-2 rounded px-2 py-1.5 text-xs',
@@ -374,10 +389,18 @@ export function MacroPlacePicker({
                   )}
                 >
                   <MapPin aria-hidden className={cn('h-3.5 w-3.5 shrink-0', isActive ? 'text-indigo-100' : 'text-slate-400')} />
-                  <span className="min-w-0 flex-1 truncate" title={`${t.title}${t.subtitle ? ` — ${t.subtitle}` : ''}`}>
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    title={`${t.title}${t.subtitle ? ` — ${t.subtitle}` : ''}${note ? ` (${note})` : ''}`}
+                  >
                     <span className="font-medium">{t.title}</span>
                     {t.subtitle && (
                       <span className={cn('ml-1.5', isActive ? 'text-indigo-100' : 'text-slate-500')}>{t.subtitle}</span>
+                    )}
+                    {note && (
+                      <span className={cn('ml-1.5 text-[11px]', isActive ? 'text-indigo-100' : 'text-amber-700')}>
+                        · {note}
+                      </span>
                     )}
                   </span>
                 </li>

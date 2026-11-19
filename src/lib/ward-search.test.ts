@@ -834,3 +834,75 @@ describe('searchTargets — tìm theo tên tỉnh CŨ trước sáp nhập 07/20
     }
   });
 });
+
+describe('searchTargets — tìm theo tên QUẬN/HUYỆN CŨ & PHƯỜNG/XÃ CŨ từ ward-legacy-data', () => {
+  const REAL_PROVS: ProvinceOption[] = [
+    { code: '01', name: 'Hà Nội' },
+    { code: '79', name: 'Hồ Chí Minh' },
+  ];
+  const REAL_WARDS: WardOption[] = [
+    { code: '00004', name: 'Ba Đình', provinceCode: '01' },
+    { code: '00008', name: 'Ngọc Hà', provinceCode: '01' },
+    { code: '00091', name: 'Phú Thượng', provinceCode: '01' },
+    { code: '00160', name: 'Nghĩa Đô', provinceCode: '01' },
+    { code: '00611', name: 'Xuân Đỉnh', provinceCode: '01' },
+    { code: '26737', name: 'Tân Định', provinceCode: '79' },
+    { code: '26740', name: 'Sài Gòn', provinceCode: '79' },
+    { code: '26743', name: 'Bến Thành', provinceCode: '79' },
+    { code: '26758', name: 'Cầu Ông Lãnh', provinceCode: '79' },
+  ];
+  const realIdx = buildSearchIndex({ provinces: REAL_PROVS, wards: REAL_WARDS, zones: [] });
+
+  it('bắc từ liêm / quận bắc từ liêm: trả Quận Bắc Từ Liêm (huyện cũ) kèm các phường thuộc quận khi bật includeLegacyDistricts', () => {
+    const bare = searchTargets(realIdx, 'bắc từ liêm', { includeLegacyDistricts: true });
+    expect(bare.results[0]?.kind).toBe('legacy_district');
+    expect(bare.results[0]?.title).toBe('Quận Bắc Từ Liêm');
+    expect(bare.results[0]?.legacySearchText).toBe('Quận Bắc Từ Liêm');
+    expect(bare.results.map((r) => r.endpoint.wardCode)).toEqual(
+      expect.arrayContaining(['00091', '00160', '00611']),
+    );
+    expect(bare.matchNotes?.['ward|01|00611']).toContain('Bắc Từ Liêm');
+
+    const withPrefix = searchTargets(realIdx, 'quận bắc từ liêm', { includeLegacyDistricts: true });
+    expect(withPrefix.results[0]?.kind).toBe('legacy_district');
+    expect(withPrefix.results[0]?.title).toBe('Quận Bắc Từ Liêm');
+    expect(withPrefix.confident).toBe(true);
+  });
+
+  it('chế độ mặc định (WardQuickAdd, includeLegacyDistricts=false): gõ "bắc từ liêm" / "cổ nhuế 1" / "trúc bạch" vẫn tìm ra các phường mới kèm matchNotes', () => {
+    const btl = searchTargets(realIdx, 'bắc từ liêm');
+    expect(btl.results.some((r) => r.kind === 'legacy_district')).toBe(false);
+    expect(btl.results.map((r) => r.endpoint.wardCode)).toEqual(
+      expect.arrayContaining(['00091', '00160', '00611']),
+    );
+
+    const cn1 = searchTargets(realIdx, 'cổ nhuế 1');
+    expect(cn1.results.map((r) => r.endpoint.wardCode)).toContain('00611');
+    expect(cn1.matchNotes?.['ward|01|00611']).toContain('Phường Cổ Nhuế 1');
+    expect(cn1.confident).toBe(false);
+
+    const tb = searchTargets(realIdx, 'trúc bạch');
+    expect(tb.results.map((r) => r.endpoint.wardCode)).toContain('00004');
+    expect(tb.matchNotes?.['ward|01|00004']).toContain('Phường Trúc Bạch');
+    expect(tb.confident).toBe(false);
+  });
+
+  it('tìm "Ba Đình" (tên phường hiện tại): tên chính (!subset) vẫn ưu tiên trên tên quận cũ và KHÔNG bị gắn matchNotes "Cũ:"', () => {
+    const cur = searchTargets(realIdx, 'Ba Đình');
+    expect(cur.results[0]?.endpoint.wardCode).toBe('00004');
+    expect(cur.confident).toBe(true);
+    expect(cur.matchNotes?.['ward|01|00004']).toBeUndefined();
+  });
+
+  it('hỗ trợ viết tắt quận số "q1" / "quận 1" chính xác (không khớp 10..12)', () => {
+    const q1 = searchTargets(realIdx, 'q1', { includeLegacyDistricts: true });
+    expect(q1.results[0]?.kind).toBe('legacy_district');
+    expect(q1.results[0]?.title).toBe('Quận 1');
+    expect(q1.confident).toBe(true);
+
+    const quan1 = searchTargets(realIdx, 'quận 1', { includeLegacyDistricts: true });
+    expect(quan1.results[0]?.kind).toBe('legacy_district');
+    expect(quan1.results[0]?.title).toBe('Quận 1');
+    expect(quan1.confident).toBe(true);
+  });
+});

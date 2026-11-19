@@ -2062,6 +2062,9 @@ export type HtxDriverRow = {
   isApproved: boolean;
   isSubmittedForApproval?: boolean;
   rejectionReason?: string | null;
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  canUnban?: boolean;
   createdAt: string;
   vehicleRegistration: { plateNumber?: string; brand?: string; model?: string; seats?: number } | null;
   tripCount: number;
@@ -2086,6 +2089,9 @@ export type HtxDriverDetail = {
   isApproved: boolean;
   isSubmittedForApproval: boolean;
   rejectionReason: string | null;
+  isBanned?: boolean;
+  bannedAt?: string | null;
+  canUnban?: boolean;
   enabledServices: string[] | null;
   licenseImages: string[] | string | null;
   cccdImages: string[] | string | null;
@@ -2135,6 +2141,7 @@ export type HtxDashboard = {
   date: string;
   range: { start: string; end: string };
   vehicleCount: number;
+  liveOnlineCount?: number;
   onlineVehicleCount: number;
   ticketCount: number;
   cancelledTripCount: number;
@@ -2171,7 +2178,14 @@ export async function htxGetMe(): Promise<TransportCompany> {
 
 export type HtxDriverListResponse = {
   data: HtxDriverRow[];
-  meta: { page: number; limit: number; total: number; totalPages: number };
+  meta: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    onlineState?: DriverOnlineState;
+    presenceUnavailable?: boolean;
+  };
 };
 
 export async function htxListDrivers(params: {
@@ -2180,7 +2194,9 @@ export async function htxListDrivers(params: {
   search?: string;
   isApproved?: 'true' | 'false' | 'pending' | 'unsubmitted';
   status?: 'ONLINE' | 'OFFLINE' | 'BUSY';
+  onlineState?: DriverOnlineState;
   isActive?: 'true' | 'false';
+  isBanned?: 'true' | 'false';
 } = {}): Promise<HtxDriverListResponse> {
   const q = new URLSearchParams({
     page: String(params.page ?? 1),
@@ -2189,7 +2205,9 @@ export async function htxListDrivers(params: {
   if (params.search) q.set('search', params.search);
   if (params.isApproved) q.set('isApproved', params.isApproved);
   if (params.status) q.set('status', params.status);
+  if (params.onlineState) q.set('onlineState', params.onlineState);
   if (params.isActive) q.set('isActive', params.isActive);
+  if (params.isBanned) q.set('isBanned', params.isBanned);
   const response = await fetchWithAuth(`/htx/drivers?${q.toString()}`);
   return unwrap<HtxDriverListResponse>(response);
 }
@@ -2230,6 +2248,34 @@ export async function htxRejectDriver(
     method: 'POST',
     body: JSON.stringify({
       ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      ...(note?.trim() ? { note: note.trim() } : {}),
+    }),
+  });
+  return unwrap<HtxDriverDetail>(response);
+}
+
+export async function htxBanDriver(
+  driverId: string,
+  reason: string,
+  note?: string,
+): Promise<HtxDriverDetail> {
+  const response = await fetchWithAuth(`/htx/drivers/${driverId}/ban`, {
+    method: 'POST',
+    body: JSON.stringify({
+      reason: reason.trim(),
+      ...(note?.trim() ? { note: note.trim() } : {}),
+    }),
+  });
+  return unwrap<HtxDriverDetail>(response);
+}
+
+export async function htxUnbanDriver(
+  driverId: string,
+  note?: string,
+): Promise<HtxDriverDetail> {
+  const response = await fetchWithAuth(`/htx/drivers/${driverId}/unban`, {
+    method: 'POST',
+    body: JSON.stringify({
       ...(note?.trim() ? { note: note.trim() } : {}),
     }),
   });

@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { HtxBanConfirmDialog, HtxUnbanConfirmDialog } from './components/htx-ban-dialogs';
 import {
   Loader2,
   Car,
@@ -31,30 +32,50 @@ import {
   FileText,
   CheckCircle2,
   Eye,
+  Ban,
+  LockOpen,
+  AlertTriangle,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { htxListDrivers, htxToggleDriverActive, type HtxDriverRow } from '@/lib/api';
+import {
+  htxBanDriver,
+  htxListDrivers,
+  htxToggleDriverActive,
+  htxUnbanDriver,
+  type HtxDriverRow,
+} from '@/lib/api';
 import { getImageUrl } from '@/lib/utils';
 import { HtxContractDialog } from './components/htx-contract-dialog';
 import { HtxApprovalBadge, HtxDriverDetailDialog } from './components/htx-driver-detail-dialog';
 import {
   DRIVER_ONLINE_HINT,
   driverOnlineState,
-  type DriverPresence,
+  type DriverOnlineState,
 } from '@/lib/driver-presence';
 
 type ApprovalTab = 'all' | 'unsubmitted' | 'pending' | 'true' | 'false';
-type StatusFilter = '' | 'ONLINE' | 'OFFLINE' | 'BUSY';
+type OnlineStateFilter = '' | DriverOnlineState;
 type ActiveFilter = '' | 'true' | 'false';
+type BanFilter = '' | 'true' | 'false';
 
 const formatCurrency = (n: number) =>
   new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND', maximumFractionDigits: 0 }).format(n);
 
-// `status` chỉ là trạng thái KHAI BÁO — tài bỏ app vẫn ONLINE mãi. Kết hợp tín
-// hiệu Redis (`presence`) qua `driverOnlineState` để chủ HTX không nhìn nhầm một
-// tài đã biến mất thành "sẵn sàng". Chữ ở portal khác danh sách admin có chủ đích.
-const statusBadge = (status: string, presence?: DriverPresence) => {
-  const state = driverOnlineState(status, presence);
+// `status` chỉ là trạng thái KHAI BÁO — tài bỏ app vẫn ONLINE mãi. Ưu tiên kiểm tra
+// khoá cứng / tạm dừng trước, rồi mới kết hợp tín hiệu Redis (`presence`) qua `driverOnlineState`.
+const statusBadge = (driver: Pick<HtxDriverRow, 'status' | 'presence' | 'isActive' | 'isBanned'>) => {
+  if (driver.isBanned) {
+    return (
+      <Badge variant="destructive" className="gap-1">
+        <Ban className="h-3 w-3" />
+        Đã khoá
+      </Badge>
+    );
+  }
+  if (!driver.isActive) {
+    return <Badge variant="secondary">Tạm dừng</Badge>;
+  }
+  const state = driverOnlineState(driver.status, driver.presence);
   switch (state) {
     case 'online':
       return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-400">Sẵn sàng</Badge>;
@@ -94,16 +115,27 @@ export default function HtxDriversPage() {
   const [drivers, setDrivers] = React.useState<HtxDriverRow[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [pendingId, setPendingId] = React.useState<string | null>(null);
+  const [presenceUnavailable, setPresenceUnavailable] = React.useState(false);
 
   const [tab, setTab] = React.useState<ApprovalTab>('all');
   const [search, setSearch] = React.useState('');
-  const [statusFilter, setStatusFilter] = React.useState<StatusFilter>('');
+  const [onlineStateFilter, setOnlineStateFilter] = React.useState<OnlineStateFilter>('');
   const [activeFilter, setActiveFilter] = React.useState<ActiveFilter>('');
+  const [banFilter, setBanFilter] = React.useState<BanFilter>('');
 
   const [selectedContractDriver, setSelectedContractDriver] = React.useState<HtxDriverRow | null>(null);
   const [isContractOpen, setIsContractOpen] = React.useState(false);
   const [selectedDetailDriver, setSelectedDetailDriver] = React.useState<HtxDriverRow | null>(null);
   const [isDetailOpen, setIsDetailOpen] = React.useState(false);
+
+  const [banTarget, setBanTarget] = React.useState<HtxDriverRow | null>(null);
+  const [banReason, setBanReason] = React.useState('');
+  const [banNote, setBanNote] = React.useState('');
+  const [isBanning, setIsBanning] = React.useState(false);
+
+  const [unbanTarget, setUnbanTarget] = React.useState<HtxDriverRow | null>(null);
+  const [unbanNote, setUnbanNote] = React.useState('');
+  const [isUnbanning, setIsUnbanning] = React.useState(false);
 
   const [page, setPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(20);
@@ -118,18 +150,20 @@ export default function HtxDriversPage() {
         limit: pageSize,
         search: search || undefined,
         isApproved: tab === 'all' ? undefined : tab,
-        status: statusFilter || undefined,
+        onlineState: onlineStateFilter || undefined,
         isActive: activeFilter || undefined,
+        isBanned: banFilter || undefined,
       });
       setDrivers(result.data);
       setTotal(result.meta.total);
       setTotalPages(Math.max(1, result.meta.totalPages));
+      setPresenceUnavailable(Boolean(result.meta.presenceUnavailable));
     } catch (err: any) {
       toast({ variant: 'destructive', title: 'Không tải được danh sách tài xế', description: err.message });
     } finally {
       setIsLoading(false);
     }
-  }, [page, pageSize, search, tab, statusFilter, activeFilter, toast]);
+  }, [page, pageSize, search, tab, onlineStateFilter, activeFilter, banFilter, toast]);
 
   React.useEffect(() => {
     const timer = setTimeout(load, 400);
@@ -154,6 +188,45 @@ export default function HtxDriversPage() {
     }
   };
 
+  const handleConfirmBan = async () => {
+    if (!banTarget || !banReason.trim()) return;
+    setIsBanning(true);
+    try {
+      await htxBanDriver(banTarget.id, banReason, banNote);
+      toast({
+        title: 'Đã khoá tài khoản tài xế',
+        description: `${banTarget.fullName ?? banTarget.phone ?? 'Tài xế'} đã bị đăng xuất và ngừng nhận chuyến.`,
+      });
+      setBanTarget(null);
+      setBanReason('');
+      setBanNote('');
+      await load();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể khoá tài khoản', description: err.message });
+    } finally {
+      setIsBanning(false);
+    }
+  };
+
+  const handleConfirmUnban = async () => {
+    if (!unbanTarget) return;
+    setIsUnbanning(true);
+    try {
+      await htxUnbanDriver(unbanTarget.id, unbanNote);
+      toast({
+        title: 'Đã mở khoá tài khoản',
+        description: `${unbanTarget.fullName ?? unbanTarget.phone ?? 'Tài xế'} đã có thể đăng nhập lại.`,
+      });
+      setUnbanTarget(null);
+      setUnbanNote('');
+      await load();
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Không thể mở khoá tài khoản', description: err.message });
+    } finally {
+      setIsUnbanning(false);
+    }
+  };
+
   const onTabChange = (v: string) => {
     setTab(v as ApprovalTab);
     setPage(1);
@@ -169,7 +242,7 @@ export default function HtxDriversPage() {
       <div>
         <h1 className="text-2xl font-bold">Tài xế của HTX</h1>
         <p className="text-sm text-muted-foreground">
-          Xem hồ sơ chi tiết, duyệt / từ chối tài xế, ký hợp đồng và tạm dừng / kích hoạt từng tài xế.
+          Xem hồ sơ chi tiết, duyệt / từ chối tài xế, ký hợp đồng, tạm dừng hoặc khoá tài khoản từng tài xế.
         </p>
       </div>
 
@@ -183,8 +256,8 @@ export default function HtxDriversPage() {
         </TabsList>
       </Tabs>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <div className="relative sm:col-span-1">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="relative">
           <User className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-9"
@@ -194,15 +267,17 @@ export default function HtxDriversPage() {
           />
         </div>
         <Select
-          value={statusFilter || 'ALL'}
-          onValueChange={(v) => onFilterChange(setStatusFilter, (v === 'ALL' ? '' : v) as StatusFilter)}
+          value={onlineStateFilter || 'ALL'}
+          onValueChange={(v) => onFilterChange(setOnlineStateFilter, (v === 'ALL' ? '' : v) as OnlineStateFilter)}
         >
-          <SelectTrigger><SelectValue placeholder="Trạng thái hoạt động" /></SelectTrigger>
+          <SelectTrigger><SelectValue placeholder="Trạng thái trực tuyến" /></SelectTrigger>
           <SelectContent>
             <SelectItem value="ALL">Tất cả trạng thái</SelectItem>
-            <SelectItem value="ONLINE">Sẵn sàng</SelectItem>
-            <SelectItem value="BUSY">Đang chở khách</SelectItem>
-            <SelectItem value="OFFLINE">Ngoại tuyến</SelectItem>
+            <SelectItem value="online">Sẵn sàng (đang kết nối)</SelectItem>
+            <SelectItem value="busy">Đang chở khách</SelectItem>
+            <SelectItem value="idle">Chờ tín hiệu</SelectItem>
+            <SelectItem value="stale">Mất kết nối</SelectItem>
+            <SelectItem value="offline">Ngoại tuyến</SelectItem>
           </SelectContent>
         </Select>
         <Select
@@ -216,7 +291,25 @@ export default function HtxDriversPage() {
             <SelectItem value="false">Tạm dừng</SelectItem>
           </SelectContent>
         </Select>
+        <Select
+          value={banFilter || 'ALL'}
+          onValueChange={(v) => onFilterChange(setBanFilter, (v === 'ALL' ? '' : v) as BanFilter)}
+        >
+          <SelectTrigger><SelectValue placeholder="Tài khoản" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ALL">Mọi tài khoản</SelectItem>
+            <SelectItem value="false">Chưa khoá</SelectItem>
+            <SelectItem value="true">Đang bị khoá</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
+
+      {presenceUnavailable && (
+        <div className="rounded-md border border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/30 p-3 flex items-center gap-2 text-xs text-amber-900 dark:text-amber-200">
+          <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+          <span>Không kiểm tra được tín hiệu kết nối thời gian thực (tạm hiển thị theo trạng thái tự khai của tài xế).</span>
+        </div>
+      )}
 
       <Card>
         <Table stackBelow="xl">
@@ -308,7 +401,7 @@ export default function HtxDriversPage() {
                   <TableCell data-label="Số chuyến" className="text-right tabular-nums">{d.tripCount}</TableCell>
                   <TableCell data-label="Thu nhập" className="text-right tabular-nums font-medium">{formatCurrency(d.lifetimeIncome ?? 0)}</TableCell>
                   <TableCell data-label="Thuế TNCN" className="text-right tabular-nums text-amber-700 dark:text-amber-400">{formatCurrency(d.lifetimeTax ?? 0)}</TableCell>
-                  <TableCell data-label="Trạng thái">{statusBadge(d.status, d.presence)}</TableCell>
+                  <TableCell data-label="Trạng thái">{statusBadge(d)}</TableCell>
                   <TableCell data-label="Ngày tạo">
                     <span className="text-sm text-muted-foreground">
                       {new Date(d.createdAt).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -358,15 +451,47 @@ export default function HtxDriversPage() {
                     onClick={(e) => e.stopPropagation()}
                   >
                     <div className="flex items-center justify-end gap-2">
-                      <span className={`text-xs ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
-                        {d.isActive ? 'Đang hoạt động' : 'Tạm dừng'}
-                      </span>
-                      <Switch
-                        checked={d.isActive}
-                        disabled={pendingId === d.id}
-                        onCheckedChange={() => handleToggle(d)}
-                        aria-label={d.isActive ? `Tạm dừng ${d.fullName ?? 'tài xế'}` : `Kích hoạt ${d.fullName ?? 'tài xế'}`}
-                      />
+                      {!d.isBanned ? (
+                        <>
+                          <span className={`text-xs ${d.isActive ? 'text-green-600' : 'text-muted-foreground'}`}>
+                            {d.isActive ? 'Đang hoạt động' : 'Tạm dừng'}
+                          </span>
+                          <Switch
+                            checked={d.isActive}
+                            disabled={pendingId === d.id}
+                            onCheckedChange={() => handleToggle(d)}
+                            aria-label={d.isActive ? `Tạm dừng ${d.fullName ?? 'tài xế'}` : `Kích hoạt ${d.fullName ?? 'tài xế'}`}
+                          />
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 px-2 text-xs text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setBanTarget(d)}
+                            title="Khoá tài khoản"
+                          >
+                            <Ban className="mr-1 h-3.5 w-3.5" />
+                            Khoá
+                          </Button>
+                        </>
+                      ) : d.canUnban ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-xs"
+                          onClick={() => setUnbanTarget(d)}
+                          title="Mở khoá tài khoản"
+                        >
+                          <LockOpen className="mr-1 h-3.5 w-3.5" />
+                          Mở khoá
+                        </Button>
+                      ) : (
+                        <span
+                          className="text-xs text-muted-foreground"
+                          title="Tài khoản do quản trị viên hoặc hệ thống khoá"
+                        >
+                          Khoá bởi hệ thống
+                        </span>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -422,6 +547,37 @@ export default function HtxDriversPage() {
         open={isDetailOpen}
         onOpenChange={setIsDetailOpen}
         onSuccess={load}
+      />
+
+      <HtxBanConfirmDialog
+        open={!!banTarget}
+        driverName={banTarget?.fullName ?? banTarget?.phone ?? 'Tài xế'}
+        reason={banReason}
+        onReasonChange={setBanReason}
+        note={banNote}
+        onNoteChange={setBanNote}
+        submitting={isBanning}
+        idPrefix="htx-row"
+        onCancel={() => {
+          setBanTarget(null);
+          setBanReason('');
+          setBanNote('');
+        }}
+        onConfirm={() => void handleConfirmBan()}
+      />
+
+      <HtxUnbanConfirmDialog
+        open={!!unbanTarget}
+        driverName={unbanTarget?.fullName ?? unbanTarget?.phone ?? 'Tài xế'}
+        note={unbanNote}
+        onNoteChange={setUnbanNote}
+        submitting={isUnbanning}
+        idPrefix="htx-row"
+        onCancel={() => {
+          setUnbanTarget(null);
+          setUnbanNote('');
+        }}
+        onConfirm={() => void handleConfirmUnban()}
       />
     </div>
   );

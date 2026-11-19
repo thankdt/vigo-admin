@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
+import { wardComboboxHint, wardComboboxKeywords } from '@/lib/ward-legacy-lookup';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
@@ -524,9 +525,14 @@ function ZoneCard({ zone, refreshTick }: { zone: SpecialZone; refreshTick: numbe
       ...(defaultRow ? [] : [{ value: DEFAULT_TARGET, label: `Cả ${provinceLabel} (mặc định)` }]),
       ...(wards ?? [])
         .filter((w) => !rows.some((r) => r.wardCode === w.code))
-        .map((w) => ({ value: w.code, label: `${w.name} (${w.code})` })),
+        .map((w) => ({
+          value: w.code,
+          label: `${w.name} (${w.code})`,
+          keywords: wardComboboxKeywords(zone.provinceCode, w.code),
+          hint: wardComboboxHint(zone.provinceCode, w.code),
+        })),
     ],
-    [wards, provinceLabel, rows, defaultRow],
+    [wards, provinceLabel, rows, defaultRow, zone.provinceCode],
   );
   const takenWardCount = (wards ?? []).filter((w) => rows.some((r) => r.wardCode === w.code)).length;
   const errs = showErrors ? validation?.errors : undefined;
