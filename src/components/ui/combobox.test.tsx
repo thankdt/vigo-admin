@@ -122,4 +122,36 @@ describe('Combobox — tìm không dấu trong danh sách tỉnh / xã', () => {
     await user.click(trigger);
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
+
+  it('keywords và hint hoạt động cho cả nhóm và mục thường để tìm theo tên cũ (vd "ha nam" → Ninh Bình)', async () => {
+    const user = userEvent.setup();
+    const withKeywords = [
+      { value: '37', label: 'Ninh Bình', keywords: ['Hà Nam', 'Nam Định'], hint: 'gồm Hà Nam, Nam Định cũ' },
+      {
+        label: 'Miền Bắc',
+        options: [{ value: '31', label: 'Hải Phòng', keywords: ['Hải Dương'] }],
+      },
+    ];
+    const onSelect = vi.fn();
+    render(
+      <Combobox
+        ariaLabel="Chọn thử"
+        options={withKeywords}
+        onSelect={onSelect}
+        placeholder="Chọn..."
+        searchPlaceholder="Tìm..."
+        noResultsText="Không tìm thấy"
+      />,
+    );
+
+    await user.click(screen.getByRole('combobox', { name: 'Chọn thử' }));
+    await user.type(screen.getByPlaceholderText('Tìm...'), 'ha nam');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'Ninh Bình (gồm Hà Nam, Nam Định cũ)',
+    ]);
+
+    await user.clear(screen.getByPlaceholderText('Tìm...'));
+    await user.type(screen.getByPlaceholderText('Tìm...'), 'hai duong');
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual(['Hải Phòng']);
+  });
 });

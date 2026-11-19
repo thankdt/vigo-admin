@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Combobox } from '@/components/ui/combobox';
+import { provinceComboboxKeywords, provinceOldNamesHint } from '@/lib/province-merges';
 import { MultiSelectComboBox } from '@/components/ui/multi-select-combobox';
 import { WardSourcePanel } from './ward-source-panel';
 import { WardQuickAdd, isQuickAddEscape, type WardsStatus, type ZonesStatus } from './ward-quick-add';
@@ -136,7 +137,15 @@ function EndpointBuilder({
   const provinceName = provinces.find((p) => p.code === provinceCode)?.name ?? provinceCode;
   // Mục đầu "— Chọn tỉnh —" (mã rỗng) = bỏ chọn, như ô chọn cũ: bỏ chọn tỉnh đã nhập mà chưa "Thêm" là cách gỡ chặn tạo.
   const provinceOptions = React.useMemo(
-    () => [{ value: '', label: '— Chọn tỉnh —' }, ...provinces.map((p) => ({ value: p.code, label: p.name }))],
+    () => [
+      { value: '', label: '— Chọn tỉnh —' },
+      ...provinces.map((p) => ({
+        value: p.code,
+        label: p.name,
+        keywords: provinceComboboxKeywords(p.code, p.name),
+        hint: provinceOldNamesHint(p.code, p.name),
+      })),
+    ],
     [provinces],
   );
   const addLabel = wardCodes.length ? `Thêm ${wardCodes.length} phường/xã` : provinceCode ? 'Thêm cả tỉnh' : 'Thêm';

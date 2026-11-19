@@ -24,6 +24,8 @@ import { vietnameseInsensitiveFilter } from "@/components/ui/combobox-filter"
 type ComboboxOption = {
     value: string;
     label: string;
+    keywords?: string[];
+    hint?: string;
 }
 
 type ComboboxGroupedOption = {
@@ -104,6 +106,7 @@ export function Combobox({
                                 <CommandItem
                                     key={subOption.value}
                                     value={`${subOption.label}__${subOption.value}`}
+                                    keywords={subOption.keywords}
                                     onSelect={() => {
                                         onSelect(subOption.value === selectedValue ? undefined : subOption.value)
                                         setOpen(false)
@@ -115,7 +118,12 @@ export function Combobox({
                                             selectedValue === subOption.value ? "opacity-100" : "opacity-0"
                                         )}
                                     />
-                                    {subOption.label}
+                                    <span>
+                                        {subOption.label}
+                                        {subOption.hint && (
+                                            <span className="ml-1.5 text-xs text-muted-foreground">{` (${subOption.hint})`}</span>
+                                        )}
+                                    </span>
                                 </CommandItem>
                             ))}
                         </CommandGroup>
@@ -125,6 +133,7 @@ export function Combobox({
                     <CommandItem
                         key={option.value}
                         value={`${option.label}__${option.value}`}
+                        keywords={option.keywords}
                         onSelect={() => {
                             onSelect(option.value === selectedValue ? undefined : option.value)
                             setOpen(false)
@@ -136,7 +145,12 @@ export function Combobox({
                                 selectedValue === option.value ? "opacity-100" : "opacity-0"
                             )}
                         />
-                        {option.label}
+                        <span>
+                            {option.label}
+                            {option.hint && (
+                                <span className="ml-1.5 text-xs text-muted-foreground">{` (${option.hint})`}</span>
+                            )}
+                        </span>
                     </CommandItem>
                 )
             })}
