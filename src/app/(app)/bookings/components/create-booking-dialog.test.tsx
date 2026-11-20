@@ -1,8 +1,8 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { CreateBookingDialog, isValidVatTaxCode, isValidVatEmailOrEmpty } from './create-booking-dialog';
-import { createAgentBooking } from '@/lib/api';
+import { CreateBookingDialog, formatTripDistanceKm, isValidVatTaxCode, isValidVatEmailOrEmpty } from './create-booking-dialog';
+import { createAgentBooking, estimateTripPrice } from '@/lib/api';
 
 vi.mock('@/lib/api', () => ({
   createAdminBooking: vi.fn(),
@@ -26,6 +26,10 @@ beforeAll(() => {
   if (!window.PointerEvent) {
     window.PointerEvent = MouseEvent as any;
   }
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
 });
 
 async function openDialog() {
@@ -246,6 +250,126 @@ describe('CreateBookingDialog — Xuất hoá đơn VAT cho khách trên cổng 
           invoiceEmail: 'ketoan@vigo.vn',
         },
       }),
+    );
+  });
+});
+
+describe('CreateBookingDialog — hiển thị km điểm đầu đến điểm cuối cho admin', () => {
+  const sampleInitial = {
+    sourceBookingId: 'src-km-1',
+    customerPhone: '0909123456',
+    customerName: 'Nguyễn Văn A',
+    pickup: { address: 'Sân bay Nội Bài', lat: 21.2187, long: 105.8047 },
+    dropoff: { address: '1 Trần Phú, Hà Nội', lat: 21.0278, long: 105.8342 },
+    missingCoords: [] as Array<'pickup' | 'dropoff'>,
+    serviceType: 'CARPOOL' as const,
+    vehicleType: 'CAR_4' as const,
+    coPassengers: [] as string[],
+    companionPhone: '',
+    note: '',
+    isScheduled: false,
+    scheduledFrom: '',
+    scheduledTo: '',
+    promotionId: null,
+    vatInfo: null,
+  };
+
+  it('formatTripDistanceKm định dạng 1 chữ số thập phân và loại bỏ giá trị không hợp lệ', () => {
+    expect(formatTripDistanceKm(28.44)).toBe('28.4 km');
+    expect(formatTripDistanceKm(100)).toBe('100.0 km');
+    expect(formatTripDistanceKm(0)).toBeNull();
+    expect(formatTripDistanceKm(-5)).toBeNull();
+    expect(formatTripDistanceKm(Number.NaN)).toBeNull();
+    expect(formatTripDistanceKm(null)).toBeNull();
+    expect(formatTripDistanceKm(undefined)).toBeNull();
+  });
+
+  it('hiển thị quãng đường km trong khối Địa chỉ và giữ nguyên khi bật Tự cấu hình giá cước', async () => {
+    const user = userEvent.setup();
+    vi.mocked(estimateTripPrice).mockResolvedValue({
+      price: 250000,
+      finalPrice: 270000,
+      distanceKm: 28.44,
+    });
+
+    render(
+      <CreateBookingDialog
+        onSuccess={() => {}}
+        mode="admin"
+        open={true}
+        initial={sampleInitial}
+      />,
+    );
+
+    const summary = await screen.findByTestId('cb-distance-summary');
+    expect(summary).toHaveTextContent('Quãng đường (điểm đầu → điểm cuối)');
+    await waitFor(
+      () => {
+        expect(summary).toHaveTextContent('28.4 km');
+      },
+      { timeout: 2000 },
+    );
+    expect(screen.getByText('Quãng đường: 28.4 km')).toBeInTheDocument();
+
+    await user.click(screen.getByLabelText(/Tự cấu hình giá cước/i));
+    expect(summary).toHaveTextContent('28.4 km');
+    expect(screen.getByText('Quãng đường: 28.4 km')).toBeInTheDocument();
+  });
+
+  it('ẩn khối quãng đường khi thiếu toạ độ và cập nhật lại khi đảo chiều đón/trả', async () => {
+    const user = userEvent.setup();
+    vi.mocked(estimateTripPrice)
+      .mockResolvedValueOnce({ price: 250000, finalPrice: 270000, distanceKm: 28.4 })
+      .mockResolvedValueOnce({ price: 250000, finalPrice: 270000, distanceKm: 31.2 });
+
+    const { rerender } = render(
+      <CreateBookingDialog
+        onSuccess={() => {}}
+        mode="admin"
+        open={true}
+        initial={{ ...sampleInitial, dropoff: null, missingCoords: ['dropoff'] }}
+      />,
+    );
+
+    expect(screen.queryByTestId('cb-distance-summary')).not.toBeInTheDocument();
+
+    rerender(
+      <CreateBookingDialog
+        onSuccess={() => {}}
+        mode="admin"
+        open={true}
+        initial={{
+          ...sampleInitial,
+          sourceBookingId: 'src-km-2',
+        }}
+      />,
+    );
+
+    const summary = await screen.findByTestId('cb-distance-summary');
+    await waitFor(() => expect(summary).toHaveTextContent('28.4 km'), { timeout: 2000 });
+
+    await user.click(screen.getByRole('button', { name: /Đảo chiều điểm đón và điểm trả/i }));
+    await waitFor(() => expect(summary).toHaveTextContent('31.2 km'), { timeout: 2000 });
+  });
+
+  it('hiển thị "Không tính được" khi API ước tính lỗi hoặc không trả distanceKm', async () => {
+    vi.mocked(estimateTripPrice).mockRejectedValueOnce(new Error('Goong timeout'));
+
+    render(
+      <CreateBookingDialog
+        onSuccess={() => {}}
+        mode="admin"
+        open={true}
+        initial={sampleInitial}
+      />,
+    );
+
+    const summary = await screen.findByTestId('cb-distance-summary');
+    await waitFor(
+      () => {
+        expect(summary).toHaveTextContent('Không tính được');
+      },
+      { timeout: 2000 },
     );
   });
 });

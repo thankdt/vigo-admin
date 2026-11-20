@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Loader2, Plus, Phone, User, Users, MapPin, Car, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket, ArrowUpDown, Receipt } from 'lucide-react';
+import { Loader2, Plus, Phone, User, Users, MapPin, Car, Clock, Calculator, CheckCircle2, UserPlus, Search, X, Ticket, ArrowUpDown, Receipt, Route } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,14 @@ export function isValidVatEmailOrEmpty(raw: string): boolean {
   const cleaned = raw.trim();
   if (!cleaned) return true;
   return SINGLE_INVOICE_EMAIL_RE.test(cleaned);
+}
+
+/** Định dạng quãng đường ước tính (km) thống nhất giữa các khối hiển thị trên form. */
+export function formatTripDistanceKm(distanceKm: number | null | undefined): string | null {
+  if (typeof distanceKm !== 'number' || !Number.isFinite(distanceKm) || distanceKm <= 0) {
+    return null;
+  }
+  return `${distanceKm.toFixed(1)} km`;
 }
 
 export function CreateBookingDialog({
@@ -146,7 +154,10 @@ export function CreateBookingDialog({
   // is the VAT-inclusive price before any discount (for the strikethrough).
   const [priceEstimate, setPriceEstimate] = React.useState<number | null>(null);
   const [estimateOriginal, setEstimateOriginal] = React.useState<number | null>(null);
+  const [distanceKm, setDistanceKm] = React.useState<number | null>(null);
+  const [estimateFailed, setEstimateFailed] = React.useState(false);
   const [estimating, setEstimating] = React.useState(false);
+  const formattedDistanceKm = formatTripDistanceKm(distanceKm);
   const estimateSavings = priceEstimate != null && estimateOriginal != null
     ? Math.max(0, estimateOriginal - priceEstimate)
     : 0;
@@ -189,7 +200,12 @@ export function CreateBookingDialog({
   // Wrap the predicate — passing it straight to filter would feed the array
   // index in as the `now` argument and break the date-window check.
   const selectableVouchers = React.useMemo(() => vouchers.filter((v) => isVoucherSelectable(v)), [vouchers]);
-  const clearEstimate = () => { setPriceEstimate(null); setEstimateOriginal(null); };
+  const clearEstimate = (opts?: { keepDistance?: boolean }) => {
+    setPriceEstimate(null);
+    setEstimateOriginal(null);
+    setEstimateFailed(false);
+    if (!opts?.keepDistance) setDistanceKm(null);
+  };
 
   // `phoneOverride` cho luồng nhân bản: state SĐT vừa set trong cùng tick nên
   // closure chưa thấy giá trị mới → truyền thẳng vào.
@@ -224,14 +240,15 @@ export function CreateBookingDialog({
   };
 
   const handleEstimate = async (silent = false) => {
-    if (!pickup || !dropoff) {
+    if (!hasCoords(pickup) || !hasCoords(dropoff) || !pickup || !dropoff) {
       if (!silent) toast({ variant: 'destructive', title: 'Lỗi', description: 'Chọn điểm đón và điểm trả trước khi tính giá.' });
       return;
     }
     // Debounce chỉ huỷ timer, không huỷ request đang bay → response chậm của cấu
-    // hình cũ có thể resolve sau và hiển thị giá sai để admin báo khách.
+    // hình cũ có thể resolve sau và hiển thị giá/km sai để admin báo khách.
     const seq = ++estimateSeqRef.current;
     setEstimating(true);
+    setEstimateFailed(false);
     try {
       const res = await estimateTripPrice({
         pickup: { address: pickup.address, lat: pickup.lat, long: pickup.long },
@@ -248,9 +265,16 @@ export function CreateBookingDialog({
       const final = res.finalPrice ?? res.price;
       setPriceEstimate(final);
       setEstimateOriginal(res.priceBeforeDiscount ?? final);
+      const km =
+        typeof res.distanceKm === 'number' && Number.isFinite(res.distanceKm) && res.distanceKm > 0
+          ? res.distanceKm
+          : null;
+      setDistanceKm(km);
+      setEstimateFailed(km === null);
     } catch (err: any) {
       if (seq !== estimateSeqRef.current) return;
       clearEstimate();
+      setEstimateFailed(true);
       if (!silent) toast({ variant: 'destructive', title: 'Tính giá thất bại', description: err.message });
     } finally {
       // Chỉ lần tính mới nhất được tắt spinner — lần cũ resolve sau không được
@@ -266,11 +290,11 @@ export function CreateBookingDialog({
   const [scheduledFrom, setScheduledFrom] = React.useState('');
   const [scheduledTo, setScheduledTo] = React.useState('');
 
-  // Auto tính giá: mỗi khi input ảnh hưởng giá đổi (đã chọn đón/trả), tự tính lại sau 600ms
-  // (debounce để khỏi spam BE). Thay cho việc bấm nút "Tính giá" thủ công.
+  // Auto tính giá & quãng đường: mỗi khi input đổi (đã chọn đón/trả có toạ độ hợp lệ),
+  // tự tính lại sau 600ms (debounce để khỏi spam BE).
   React.useEffect(() => {
     if (!open) return;
-    if (!pickup || !dropoff) { clearEstimate(); return; }
+    if (!hasCoords(pickup) || !hasCoords(dropoff)) { clearEstimate(); return; }
     const t = setTimeout(() => { handleEstimate(true); }, 600);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -391,6 +415,7 @@ export function CreateBookingDialog({
     setVehicleType('CAR_4');
     setCoPassengers([]);
     setCompanionPhone('');
+    estimateSeqRef.current += 1;
     clearEstimate();
     setSelectedPromotionId(null);
     setNote('');
@@ -935,13 +960,38 @@ export function CreateBookingDialog({
                 </div>
               )}
             </div>
+            {hasCoords(pickup) && hasCoords(dropoff) && (
+              <div
+                data-testid="cb-distance-summary"
+                className="flex items-center justify-between rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-xs dark:border-sky-900 dark:bg-sky-950/30"
+              >
+                <span className="flex items-center gap-1.5 font-medium text-sky-900 dark:text-sky-200">
+                  <Route className="h-3.5 w-3.5 text-sky-600 dark:text-sky-400" />
+                  Quãng đường (điểm đầu → điểm cuối)
+                </span>
+                <span className="font-semibold tabular-nums text-sky-950 dark:text-sky-100">
+                  {formattedDistanceKm ? (
+                    <span className="inline-flex items-center gap-1.5">
+                      {formattedDistanceKm}
+                      {estimating && <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />}
+                    </span>
+                  ) : estimateFailed ? (
+                    <span className="font-normal text-muted-foreground">Không tính được</span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 font-normal text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" /> Đang tính...
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Service & Vehicle */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Loại dịch vụ</Label>
-              <Select value={serviceType} onValueChange={(v) => { setServiceType(v as any); clearEstimate(); }}>
+              <Select value={serviceType} onValueChange={(v) => { setServiceType(v as any); clearEstimate({ keepDistance: true }); }}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -957,7 +1007,7 @@ export function CreateBookingDialog({
                 <Label>
                   Loại xe {serviceType === 'RIDE' && <span className="text-destructive">*</span>}
                 </Label>
-                <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v as any); clearEstimate(); }}>
+                <Select value={vehicleType} onValueChange={(v) => { setVehicleType(v as any); clearEstimate({ keepDistance: true }); }}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -1016,9 +1066,9 @@ export function CreateBookingDialog({
                   <Input
                     placeholder={`Tên khách ${i + 2} (đi cùng)`}
                     value={name}
-                    onChange={(e) => { updatePassenger(i, e.target.value); clearEstimate(); }}
+                    onChange={(e) => { updatePassenger(i, e.target.value); clearEstimate({ keepDistance: true }); }}
                   />
-                  <Button type="button" variant="ghost" size="icon" onClick={() => { removePassenger(i); clearEstimate(); }} aria-label="Xoá khách">
+                  <Button type="button" variant="ghost" size="icon" onClick={() => { removePassenger(i); clearEstimate({ keepDistance: true }); }} aria-label="Xoá khách">
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
@@ -1029,7 +1079,7 @@ export function CreateBookingDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => { addPassenger(); clearEstimate(); }}
+                  onClick={() => { addPassenger(); clearEstimate({ keepDistance: true }); }}
                   disabled={coPassengers.length >= maxExtras}
                 >
                   <Plus className="mr-1.5 h-3.5 w-3.5" /> Thêm khách đi cùng
@@ -1077,7 +1127,7 @@ export function CreateBookingDialog({
             </Label>
             <Select
               value={selectedPromotionId != null ? String(selectedPromotionId) : 'none'}
-              onValueChange={(v) => { setSelectedPromotionId(v === 'none' ? null : Number(v)); clearEstimate(); }}
+              onValueChange={(v) => { setSelectedPromotionId(v === 'none' ? null : Number(v)); clearEstimate({ keepDistance: true }); }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Không dùng khuyến mãi" />
@@ -1109,9 +1159,16 @@ export function CreateBookingDialog({
 
           {/* Price estimate / Custom price display */}
           <div className="rounded-lg border p-3">
-            <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
-              <Calculator className="h-4 w-4" /> {isCustomPrice ? 'Giá áp dụng' : 'Giá dự kiến'}
-              {!isCustomPrice && estimating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                <Calculator className="h-4 w-4" /> {isCustomPrice ? 'Giá áp dụng' : 'Giá dự kiến'}
+                {!isCustomPrice && estimating && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              </div>
+              {formattedDistanceKm && (
+                <Badge variant="secondary" className="text-xs font-semibold tabular-nums">
+                  Quãng đường: {formattedDistanceKm}
+                </Badge>
+              )}
             </div>
             {isCustomPrice ? (
               <div className="mt-1">
@@ -1349,7 +1406,7 @@ export function CreateBookingDialog({
                   id="cb-scheduled-toggle"
                   checked={isScheduled}
                   // Đổi đi-ngay ↔ đặt-lịch làm đổi ngày cơ sở tính phụ phí → xoá giá cũ.
-                  onCheckedChange={(v) => { setIsScheduled(v); clearEstimate(); }}
+                  onCheckedChange={(v) => { setIsScheduled(v); clearEstimate({ keepDistance: true }); }}
                 />
               )}
             </div>
@@ -1360,10 +1417,10 @@ export function CreateBookingDialog({
                 minScheduledAt={minScheduledAt}
                 onChangeFrom={(v) => {
                   setScheduledFrom(v);
-                  clearEstimate();
+                  clearEstimate({ keepDistance: true });
                 }}
                 onChangeTo={(v) => setScheduledTo(v)}
-                onClearEstimate={clearEstimate}
+                onClearEstimate={() => clearEstimate({ keepDistance: true })}
               />
             )}
           </div>
