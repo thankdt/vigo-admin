@@ -49,6 +49,8 @@ type Form = {
   subset?: boolean;
   /** Ghi chú hiển thị khi khớp theo tên cũ (vd "Cũ: Quận Bắc Từ Liêm" hay "Cũ: Phường Cổ Nhuế 1 (Quận Bắc Từ Liêm)"). */
   legacyNote?: string;
+  /** Số quận/huyện cũ khác nhau góp phần vào xã này khi khớp theo `Cũ: <quận/huyện>`: ít hơn = xã lõi của quận hơn (ưu tiên trên xã giáp ranh ghép một phần). */
+  legacySpread?: number;
 };
 
 export type SearchTarget = {
@@ -261,7 +263,7 @@ function provinceInfo(name: string): ProvinceInfo | null {
   for (const alias of [...(PROVINCE_ALIASES[key] ?? []), ...exactAliases]) {
     if (seenAlias.has(alias)) continue;
     seenAlias.add(alias);
-    const shortOrExact = /^[a-z0-9.-]+$/i.test(alias) || alias === 'Sài Gòn';
+    const shortOrExact = /^[a-z0-9.-]+$/i.test(alias) || alias === 'Sài Gòn' || alias === 'Nội đô Hà Nội';
     const f = makeForm(alias, shortOrExact ? { exactOnly: true } : undefined);
     if (f) {
       if (shortOrExact) aliases.push(f);
@@ -281,7 +283,7 @@ function provinceInfo(name: string): ProvinceInfo | null {
 function districtPrefixInfo(name: string): { drop: number; shortPrefix: string } | null {
   const folds = tokenize(name).map((t) => t.fold);
   if (folds.length >= 2 && folds[0] === 'quan') return { drop: 1, shortPrefix: 'q.' };
-  if (folds.length >= 2 && folds[0] === 'huyen') return { drop: 1, shortPrefix: 'h.' };
+  if (folds.length >= 2 && (folds[0] === 'huien' || folds[0] === 'huyen')) return { drop: 1, shortPrefix: 'h.' };
   if (folds.length >= 3 && folds[0] === 'thi' && folds[1] === 'xa') return { drop: 2, shortPrefix: 'tx' };
   if (folds.length >= 3 && folds[0] === 'thanh' && folds[1] === 'pho') return { drop: 2, shortPrefix: 'tp' };
   return null;
@@ -421,12 +423,14 @@ export function buildSearchIndex(args: {
 
     const legacy = getWardLegacyInfo(w.provinceCode, w.code);
     if (legacy) {
+      const spread = legacy.districtNames.length;
       for (const distName of legacy.districtNames) {
         const note = `Cũ: ${distName}`;
         const built = buildDistrictForms(distName, { subset: true, legacyNote: note });
         for (const df of built.forms) {
           if (seenNorm.has(df.norm)) continue;
           seenNorm.add(df.norm);
+          df.legacySpread = spread;
           forms.push(df);
         }
       }
@@ -547,9 +551,6 @@ function makeQuery(toks: Tok[], marked: boolean): Query {
   return { toks, folds, q: folds.join(' '), compact, spelled: toks.map((t) => t.spelled).join(' '), marked, compactOk };
 }
 
-/** Từ nào của tên bắt đầu bằng `tok` (khớp đầu từ). */
-const hasWordStarting = (words: string[], tok: string): boolean => words.some((w) => w.startsWith(tok));
-
 /**
  * Các từ gõ có phải CỤM tên tỉnh? 0 = không; 1 = đang gõ dở (bắt đầu từ chữ đầu của tên tỉnh: "ha noi", "thai ngu");
  * 2 = đã gõ ĐỦ tên tỉnh (hoặc đúng một viết tắt).
@@ -583,11 +584,96 @@ function isBetter(a: FormMatch, b: FormMatch | null): boolean {
 }
 
 /**
+ * Kiểm tra dấu thanh của toàn bộ từ gõ có khớp với một từ tương ứng trong `f.accents` (dùng để chặn tên CŨ / đảo từ
+ * khác dấu thanh như "tĩnh gia" ≠ "Tịnh Giang", "Quảng Nam" ≠ "Nam Quang", "quan sơn" ≠ "Quận Sơn Trà").
+ */
+function formAccentsMatch(f: Form, toks: Tok[]): boolean {
+  return toks.every((tok) =>
+    f.accents.some((w) => w.base.startsWith(tok.base) && w.tone === tok.tone),
+  );
+}
+
+/** Khớp theo thứ tự từ (cho phép từ đệm ở giữa cho điểm đặc biệt như "san bay noi bai" → "Sân bay quốc tế Nội Bài"). */
+function hasInOrderWords(words: string[], folds: string[]): boolean {
+  if (folds.length === 0 || words.length < folds.length) return false;
+  let pos = 0;
+  for (let i = 0; i < folds.length; i++) {
+    const tok = folds[i];
+    const isLast = i === folds.length - 1;
+    let found = -1;
+    for (let j = pos; j < words.length; j++) {
+      if (isLast ? words[j].startsWith(tok) : words[j] === tok) {
+        found = j;
+        break;
+      }
+    }
+    if (found === -1) return false;
+    pos = found + 1;
+  }
+  return true;
+}
+
+/** Kiểm tra dấu thanh của cụm tên tỉnh gõ dở không mâu thuẫn với tên tỉnh (vd "quận 2" ≠ "Quảng Ninh"). */
+function provincePrefixAccentsOk(t: SearchTarget, provToks: Tok[]): boolean {
+  const nameAccents = t.provinceAccents;
+  if (nameAccents.length === 0) return true;
+  return provToks.every((tok) => {
+    if (!tok.marked) return true;
+    return nameAccents.some((a) => a.base.startsWith(tok.base) && a.tone === tok.tone);
+  });
+}
+
+/** Khớp liên tiếp theo ĐÚNG thứ tự từ trong tên (cho phép gõ dở từ cuối: "da l" → "Đà Lạt" trong "Cam Ly - Đà Lạt"). */
+function hasConsecutiveWordsPrefix(words: string[], folds: string[]): boolean {
+  if (folds.length === 0 || words.length < folds.length) return false;
+  for (let start = 0; start <= words.length - folds.length; start++) {
+    let ok = true;
+    for (let j = 0; j < folds.length; j++) {
+      const target = words[start + j];
+      const tok = folds[j];
+      if (j < folds.length - 1 ? target !== tok : !target.startsWith(tok)) {
+        ok = false;
+        break;
+      }
+    }
+    if (ok) return true;
+  }
+  return false;
+}
+
+/**
+ * Đảo thứ tự từ: CHỈ chấp nhận trên tên hiện tại (`!f.subset`) khi mọi từ gõ khớp TRỌN VẸN các từ của tên (không
+ * bỏ sót chữ chen giữa như "Phường Hoàng Liệt" cho "phương liệt", và không cắt đầu từ kiểu "gia" → "giang").
+ */
+function hasExactUnorderedWords(f: Form, folds: string[]): boolean {
+  if (f.subset || folds.length < 2) return false;
+  const formWords = f.norm.split(' ');
+  if (formWords.length === folds.length) {
+    const remaining = [...formWords];
+    return folds.every((tok) => {
+      const idx = remaining.indexOf(tok);
+      if (idx === -1) return false;
+      remaining.splice(idx, 1);
+      return true;
+    });
+  }
+  // Dạng có từ nối ("hleo ea" → "Ea H'leo", "mgar cu" → "Cư M'gar"): các từ nối nằm cuối `f.words`.
+  return (
+    f.accents.length - folds.length <= 1 &&
+    folds.every((tok) => f.words.includes(tok)) &&
+    folds.some((tok) => f.words.indexOf(tok) >= formWords.length)
+  );
+}
+
+/**
  * Hạng khớp của một cách viết tên (nhỏ = tốt), lấy cách khớp TỐT NHẤT: 0 nguyên tên (kèm ĐỦ tên tỉnh nếu có gõ), 1 bắt
- * đầu bằng câu gõ, 2 mọi từ gõ là đầu từ của tên (hoặc gõ liền giữa tên), 3 «tên + tỉnh gõ dở».
+ * đầu bằng câu gõ, 2 mọi từ gõ khớp liên tiếp trong tên (hoặc đảo đúng trọn bộ từ của tên), 3 «tên + tỉnh gõ dở».
  */
 function formMatch(f: Form, qr: Query, t: SearchTarget): FormMatch | null {
   const { q, compact, folds, compactOk } = qr;
+  // Khi người dùng gõ có dấu, tên CŨ (`subset`) bị lệch dấu thanh (vd "quan sơn" ≠ "Cũ: Quận Sơn Trà", "tĩnh gia" ≠ "Cũ: Xã Tịnh Giang") bị loại ngay.
+  if (f.subset && qr.marked && !formAccentsMatch(f, qr.toks)) return null;
+
   let best = null as FormMatch | null;
   const take = (m: Omit<FormMatch, 'form'>) => {
     if (isBetter({ ...m, form: f }, best)) best = { ...m, form: f };
@@ -598,13 +684,35 @@ function formMatch(f: Form, qr: Query, t: SearchTarget): FormMatch | null {
   if (f.exactOnly) return best;
 
   if (f.norm.startsWith(q)) {
-    // Chỉ là "gõ dở để tự hoàn thành" (mạnh) khi chữ CUỐI mới gõ dở một từ của tên («dai t» → «Đại Từ»). Gõ đủ các từ rồi
-    // mà tên còn dài hơn («Phước Mỹ» → «Phước Mỹ Trung») có thể là tên CŨ/đã đổi của nơi khác: vẫn hiện nhưng không tự chọn.
-    const nameWord = f.norm.split(' ')[folds.length - 1] ?? '';
-    take({ tier: 1, how: nameWord.length > folds[folds.length - 1].length ? 'name' : 'words', full: true });
+    // Khi gõ nhiều từ CÓ dấu, chặn tiền tố hành chính lệch dấu ở đầu ("quan sơn" không ăn nhầm đầu "Quận Sơn Trà").
+    const adminHead =
+      folds.length >= 2 &&
+      folds.length < f.accents.length &&
+      ['quan', 'huien', 'phuong', 'xa', 'tinh', 'thanh', 'thi'].includes(folds[0]);
+    if (!adminHead || !qr.marked || f.accents[0]?.tone === qr.toks[0]?.tone) {
+      // Chỉ là "gõ dở để tự hoàn thành" (mạnh) khi chữ CUỐI mới gõ dở một từ của tên («dai t» → «Đại Từ»). Gõ đủ các từ rồi
+      // mà tên còn dài hơn («Phước Mỹ» → «Phước Mỹ Trung») có thể là tên CŨ/đã đổi của nơi khác: vẫn hiện nhưng không tự chọn.
+      const nameWord = f.norm.split(' ')[folds.length - 1] ?? '';
+      take({ tier: 1, how: nameWord.length > folds[folds.length - 1].length ? 'name' : 'words', full: true });
+    }
   }
   if (compactOk && f.compact.startsWith(compact)) take({ tier: 1, how: 'compact', full: true });
-  if (folds.every((tok) => hasWordStarting(f.words, tok))) take({ tier: 2, how: 'words', full: true });
+  const consecutiveOk = hasConsecutiveWordsPrefix(f.words, folds);
+  const zoneInOrderOk = t.kind === 'zone' && hasInOrderWords(f.words, folds);
+  if (
+    (consecutiveOk || zoneInOrderOk) &&
+    (!qr.marked ||
+      !f.words.length ||
+      !(
+        folds.length >= 2 &&
+        ['quan', 'huien', 'phuong', 'xa', 'tinh', 'thanh', 'thi'].includes(folds[0]) &&
+        f.accents[0]?.tone !== qr.toks[0]?.tone
+      ))
+  ) {
+    take({ tier: 2, how: 'words', full: true });
+  } else if (hasExactUnorderedWords(f, folds) && (!qr.marked || formAccentsMatch(f, qr.toks))) {
+    take({ tier: 2, how: 'words', full: true });
+  }
   if (compactOk && folds.length === 1 && compact.length >= 4 && f.starts.some((s) => s > 0 && f.compact.startsWith(compact, s))) {
     take({ tier: 2, how: 'compact', full: true });
   }
@@ -613,13 +721,31 @@ function formMatch(f: Form, qr: Query, t: SearchTarget): FormMatch | null {
     for (let k = 1; k < folds.length; k++) {
       const left = folds.slice(0, k);
       const right = folds.slice(k);
+      const leftToks = qr.toks.slice(0, k);
+      const rightToks = qr.toks.slice(k);
       // «<xã> <tỉnh>» hoặc «<tỉnh> <xã>»
-      for (const [nameToks, provToks] of [[left, right], [right, left]]) {
-        if (!nameToks.every((tok) => hasWordStarting(f.words, tok))) continue;
+      for (const [nameToks, provToks, provRawToks] of [
+        [left, right, rightToks],
+        [right, left, leftToks],
+      ] as const) {
         const level = provinceLevel(t.provinceWords, t.provinceAliases, provToks);
         if (level === 0) continue;
         const full = level === 2;
         const nameStr = nameToks.join(' ');
+        if (!full) {
+          if (f.subset || !provincePrefixAccentsOk(t, provRawToks)) continue;
+          const partialMatch =
+            f.norm === nameStr ||
+            (nameToks.length === 1 && /^\d+$/.test(nameStr) && hasConsecutiveWordsPrefix(f.words, nameToks));
+          if (!partialMatch) continue;
+        } else {
+          const wordsOk =
+            f.norm === nameStr ||
+            (!f.subset && f.norm.startsWith(nameStr)) ||
+            hasConsecutiveWordsPrefix(f.words, nameToks) ||
+            hasExactUnorderedWords(f, nameToks);
+          if (!wordsOk) continue;
+        }
         // Tên tỉnh chưa gõ ĐỦ chỉ để thu hẹp (hạng 3), không bao giờ mạnh.
         take({ tier: !full ? 3 : f.norm === nameStr ? 0 : f.norm.startsWith(nameStr) ? 1 : 3, how: 'split', full });
       }
@@ -658,6 +784,7 @@ type Ranked = {
   full: boolean;
   miss: number;
   spell: number;
+  legacySpread: number;
   note?: string;
 };
 
@@ -688,6 +815,7 @@ function rank(
       full: best.full,
       miss: accentMisses(t, qr, best),
       spell,
+      legacySpread: best.form.legacySpread ?? 0,
       note: best.form.legacyNote,
     });
   }
@@ -698,9 +826,15 @@ function rank(
       a.miss - b.miss ||
       a.spell - b.spell ||
       KIND_ORDER[a.t.kind] - KIND_ORDER[b.t.kind] ||
+      a.legacySpread - b.legacySpread ||
       (a.t.sortName < b.t.sortName ? -1 : a.t.sortName > b.t.sortName ? 1 : 0) ||
       (a.t.sortProvince < b.t.sortProvince ? -1 : a.t.sortProvince > b.t.sortProvince ? 1 : 0),
   );
+  // Nếu nguyên câu khớp ĐÚNG tên một tỉnh/tỉnh cũ (vd "hà nam", "quảng nam", "hà nội"), loại bỏ các gợi ý tách chữ kiểu
+  // "<xã ngắn> + <đầu tên tỉnh>" (`split` chưa gõ đủ tên tỉnh) để tránh kéo hàng chục xã không liên quan.
+  if (hits.some((h) => h.t.kind === 'province' && h.tier === 0 && (h.how === 'name' || h.how === 'compact'))) {
+    return hits.filter((h) => !(h.how === 'split' && !h.full));
+  }
   return hits;
 }
 
@@ -816,6 +950,23 @@ export function searchTargets(
     isStrong(first) &&
     first.miss === 0 &&
     first.subset === 0;
+  // Khi bộ chọn có cả quận/huyện cũ (`MacroPlacePicker`), một xã trùng tên ("Phường Cầu Giấy", "Phường Hải Dương", "Phường Vĩnh Phúc")
+  // KHÔNG được tự chọn đè lên quận/tỉnh cũ khớp nguyên tên ở ngay bên dưới — để người dùng tự bấm chọn đúng cấp.
+  if (
+    confident &&
+    includeLegacyDistricts &&
+    !filtered &&
+    first.t.kind === 'ward' &&
+    hits.some(
+      (h, idx) =>
+        idx > 0 &&
+        h.tier === 0 &&
+        h.miss === 0 &&
+        (h.t.kind === 'legacy_district' || h.t.kind === 'province'),
+    )
+  ) {
+    confident = false;
+  }
   // Gõ "... cũ" mà không tách "<xã> <tỉnh>" (vd "Hải Dương cũ" trùng xã "Hải Dương") thì cũng KHÔNG tự chọn bừa.
   if (legacySuffix && (first.t.kind === 'province' || first.how !== 'split')) confident = false;
   if (filtered && prefix) {

@@ -905,4 +905,102 @@ describe('searchTargets — tìm theo tên QUẬN/HUYỆN CŨ & PHƯỜNG/XÃ C�
     expect(quan1.results[0]?.title).toBe('Quận 1');
     expect(quan1.confident).toBe(true);
   });
+
+  it('Huyện cũ (huien): "sóc sơn" / "huyện sóc sơn" / "h. sóc sơn" ra đúng Huyện Sóc Sơn trước Xã Mỹ Thuận (An Giang)', () => {
+    const provs: ProvinceOption[] = [
+      { code: '01', name: 'Thành phố Hà Nội' },
+      { code: '91', name: 'An Giang' },
+    ];
+    const wards: WardOption[] = [
+      { code: '00376', name: 'Xã Sóc Sơn', provinceCode: '01' },
+      { code: '00430', name: 'Xã Đa Phúc', provinceCode: '01' },
+      { code: '30838', name: 'Xã Mỹ Thuận', provinceCode: '91' },
+    ];
+    const idx = buildSearchIndex({ provinces: provs, wards, zones: [] });
+
+    const bare = searchTargets(idx, 'sóc sơn', { includeLegacyDistricts: true });
+    const titles = bare.results.map((x) => `${x.kind}:${x.title}`);
+    expect(titles.indexOf('legacy_district:Huyện Sóc Sơn')).toBeLessThan(
+      titles.indexOf('ward:Xã Mỹ Thuận'),
+    );
+    expect(bare.confident).toBe(false);
+
+    const prefixed = searchTargets(idx, 'huyện sóc sơn', { includeLegacyDistricts: true });
+    expect(prefixed.results[0]?.kind).toBe('legacy_district');
+    expect(prefixed.results[0]?.title).toBe('Huyện Sóc Sơn');
+    expect(prefixed.confident).toBe(true);
+
+    const abbr = searchTargets(idx, 'h. sóc sơn', { includeLegacyDistricts: true });
+    expect(abbr.results[0]?.title).toBe('Huyện Sóc Sơn');
+    expect(abbr.confident).toBe(true);
+  });
+
+  it('siết đảo từ, tách tỉnh dở & dấu thanh: không trả kết quả lạc sang tỉnh/xã khác', () => {
+    const provs: ProvinceOption[] = [
+      { code: '01', name: 'Thành phố Hà Nội' },
+      { code: '04', name: 'Cao Bằng' },
+      { code: '15', name: 'Lào Cai' },
+      { code: '22', name: 'Quảng Ninh' },
+      { code: '37', name: 'Ninh Bình' },
+      { code: '44', name: 'Quảng Trị' },
+      { code: '48', name: 'Thành phố Đà Nẵng' },
+    ];
+    const wards: WardOption[] = [
+      { code: '00166', name: 'Phường Cầu Giấy', provinceCode: '01' },
+      { code: '00337', name: 'Phường Hoàng Liệt', provinceCode: '01' },
+      { code: '00352', name: 'Phường Phương Liệt', provinceCode: '01' },
+      { code: '00565', name: 'Xã Gia Lâm', provinceCode: '01' },
+      { code: '01297', name: 'Xã Nam Quang', provinceCode: '04' },
+      { code: '04381', name: 'Xã Lâm Giang', provinceCode: '15' },
+      { code: '06709', name: 'Phường Móng Cái 2', provinceCode: '22' },
+      { code: '14389', name: 'Xã Gia Lâm', provinceCode: '37' },
+      { code: '19075', name: 'Xã Nam Ba Đồn', provinceCode: '44' },
+    ];
+    const zones: SpecialZone[] = [
+      { code: 'NOIBAI', name: 'Sân bay Nội Bài', provinceCode: '01', provinceName: 'Hà Nội', kind: 'AIRPORT', active: true },
+    ];
+    const idx = buildSearchIndex({ provinces: provs, wards, zones });
+
+    // "quảng nam" khớp Cả tỉnh Đà Nẵng — không kéo Xã Nam Quang (Cao Bằng) hay Xã Nam Ba Đồn (Quảng Trị)
+    expect(searchTargets(idx, 'quảng nam', { includeLegacyDistricts: true }).results.map((x) => x.key)).toEqual([
+      'province|48',
+    ]);
+    // "hà nội" khớp Cả tỉnh Hà Nội — không kéo Sân bay Nội Bài ("Nội đô Hà Nội" + "nội")
+    expect(searchTargets(idx, 'hà nội', { includeLegacyDistricts: true }).results.map((x) => x.key)).toEqual([
+      'province|01',
+    ]);
+    // "gia lâm" không cắt "gia" thành "giang" để dính Xã Lâm Giang
+    expect(searchTargets(idx, 'gia lâm', { includeLegacyDistricts: true }).results.map((x) => x.title)).not.toContain(
+      'Xã Lâm Giang',
+    );
+    // "phương liệt" không ghép chữ "Phường" + "Liệt" để ra Phường Hoàng Liệt
+    expect(searchTargets(idx, 'phương liệt', { includeLegacyDistricts: true }).results.map((x) => x.title)).toEqual([
+      'Phường Phương Liệt',
+    ]);
+    // "quận 2" (có dấu nặng ở "quận") không ăn sang Quảng Ninh → Móng Cái 2
+    expect(searchTargets(idx, 'quận 2', { includeLegacyDistricts: true }).results).toEqual([]);
+    // "cầu giấy" với includeLegacyDistricts: phường trùng tên không được tự chọn đè lên Quận Cầu Giấy
+    const cg = searchTargets(idx, 'cầu giấy', { includeLegacyDistricts: true });
+    expect(cg.results.slice(0, 2).map((x) => x.title)).toEqual(['Phường Cầu Giấy', 'Quận Cầu Giấy']);
+    expect(cg.confident).toBe(false);
+  });
+
+  it('xếp hạng legacySpread: xã lõi một huyện ("Phường Đông Ngạc") đứng trên xã giáp ranh đa huyện ("Xã Hoài Đức", "Phường Nghĩa Đô")', () => {
+    const idx = buildSearchIndex({
+      provinces: [{ code: '01', name: 'Thành phố Hà Nội' }],
+      wards: [
+        { code: '00160', name: 'Phường Nghĩa Đô', provinceCode: '01' },
+        { code: '00602', name: 'Phường Đông Ngạc', provinceCode: '01' },
+        { code: '09832', name: 'Xã Hoài Đức', provinceCode: '01' },
+      ],
+      zones: [],
+    });
+    const r = searchTargets(idx, 'bắc từ liêm', { includeLegacyDistricts: true });
+    expect(r.results.map((x) => x.endpoint.wardCode ?? x.title)).toEqual([
+      'Quận Bắc Từ Liêm',
+      '00602',
+      '09832',
+      '00160',
+    ]);
+  });
 });
