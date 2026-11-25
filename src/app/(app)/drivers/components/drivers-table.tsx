@@ -1154,7 +1154,15 @@ export function DriversTable() {
                     </TableCell>
                     {showStatusCol && (
                       <TableCell data-label={activeTab === 'all' ? 'Trạng thái' : 'Online'}>
-                        {activeTab === 'all' ? getStatusBadge(driver) : getOnlineBadge(driver)}
+                        {activeTab === 'all' ? (
+                          <div className="flex flex-wrap items-center gap-1">
+                            {getStatusBadge(driver)}
+                            {(getDriverApprovalStatus(driver) === 'approved' || Boolean(filters.onlineState)) &&
+                              getOnlineBadge(driver)}
+                          </div>
+                        ) : (
+                          getOnlineBadge(driver)
+                        )}
                       </TableCell>
                     )}
                     {/* Ngày làm việc CSKH gần nhất (từ lịch sử làm việc) — CSKH quét nhanh ai lâu chưa xử lý. */}

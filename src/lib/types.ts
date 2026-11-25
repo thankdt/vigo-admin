@@ -770,6 +770,13 @@ export type DriverFeedback = {
   driverId: string;
   category: FeedbackCategory;
   content: string;
+  adminNote?: string | null;
+  adminNoteUpdatedAt?: string | null;
+  adminNoteUpdatedBy?: string | null;
+  adminNoteUpdatedByUser?: {
+    id: string;
+    fullName: string | null;
+  } | null;
   createdAt: string;
   driver?: {
     id: string;
