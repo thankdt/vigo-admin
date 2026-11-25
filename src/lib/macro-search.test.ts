@@ -36,8 +36,8 @@ const f = (patch: Partial<MacroSearchFilters>): MacroSearchFilters => ({ ...EMPT
 const PAGING = { page: 3, limit: 20 };
 
 describe('EMPTY_FILTERS / hasActiveFilters', () => {
-  it('bộ lọc rỗng: không điểm, mọi ô "tất cả", ghi chú trống, «gồm cấp tỉnh/mọi nơi» BẬT sẵn; không sửa nhầm được', () => {
-    expect(EMPTY_FILTERS).toEqual({ origin: null, dest: null, serviceType: '', vehicleType: '', isActive: '', q: '', cover: true });
+  it('bộ lọc rỗng: không điểm, mọi ô "tất cả", ghi chú trống, «gồm cấp tỉnh/mọi nơi» TẮT mặc định; không sửa nhầm được', () => {
+    expect(EMPTY_FILTERS).toEqual({ origin: null, dest: null, serviceType: '', vehicleType: '', isActive: '', q: '', cover: false });
     expect(Object.isFrozen(EMPTY_FILTERS)).toBe(true);
     expect(hasActiveFilters(EMPTY_FILTERS)).toBe(false);
   });
@@ -65,8 +65,14 @@ describe('toSearchParams — mỗi đầu gửi MÃ hoặc CHỮ, không bao gi�
     expect(toSearchParams(EMPTY_FILTERS, PAGING)).toStrictEqual({ page: 3, limit: 20 });
   });
 
-  it('điểm đón là xã: gửi mã tỉnh + mã xã, KHÔNG gửi chữ; có điểm cụ thể ⇒ gửi cover', () => {
+  it('điểm đón là xã: gửi mã tỉnh + mã xã, mặc định KHÔNG gửi cover; bật cover ⇒ gửi cover: true', () => {
     expect(toSearchParams(f({ origin: place(DAI_TU) }), PAGING)).toStrictEqual({
+      page: 3,
+      limit: 20,
+      originProvinceCode: '19',
+      originWardCode: '19001',
+    });
+    expect(toSearchParams(f({ origin: place(DAI_TU), cover: true }), PAGING)).toStrictEqual({
       page: 3,
       limit: 20,
       originProvinceCode: '19',
@@ -98,8 +104,8 @@ describe('toSearchParams — mỗi đầu gửi MÃ hoặc CHỮ, không bao gi�
     });
   });
 
-  it('trộn: đón theo chữ + đến theo mã ⇒ mỗi đầu đúng một cách; cover gửi vì có một điểm cụ thể', () => {
-    const p = toSearchParams(f({ origin: text('Đông Anh'), dest: place(CAU_GIAY) }), PAGING);
+  it('trộn: đón theo chữ + đến theo mã ⇒ mỗi đầu đúng một cách; bật cover gửi vì có một điểm cụ thể', () => {
+    const p = toSearchParams(f({ origin: text('Đông Anh'), dest: place(CAU_GIAY), cover: true }), PAGING);
     expect(p).toStrictEqual({
       page: 3,
       limit: 20,
@@ -114,10 +120,10 @@ describe('toSearchParams — mỗi đầu gửi MÃ hoặc CHỮ, không bao gi�
     const sides: (MacroPlaceFilter | null)[] = [null, place(DAI_TU), place(HA_NOI), place(NOI_BAI), text('Đông Anh')];
     for (const origin of sides) {
       for (const dest of sides) {
-        const p = toSearchParams(f({ origin, dest }), PAGING);
+        const p = toSearchParams(f({ origin, dest, cover: true }), PAGING);
         expect(Boolean(p.originSearch) && Boolean(p.originProvinceCode || p.originWardCode)).toBe(false);
         expect(Boolean(p.destSearch) && Boolean(p.destProvinceCode || p.destWardCode)).toBe(false);
-        // cover chỉ khi có ít nhất một đầu theo MÃ
+        // cover chỉ khi bật VÀ có ít nhất một đầu theo MÃ
         const exact = origin?.kind === 'place' || dest?.kind === 'place';
         expect(p.cover === true).toBe(exact);
       }
