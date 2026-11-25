@@ -120,6 +120,33 @@ export function DuplicateTripBadge() {
 }
 
 /**
+ * Nhận diện chuyến do Admin tạo từ cổng quản trị (khác chuyến khách tự đặt và đại lý đặt hộ).
+ * Ưu tiên cờ `isAdminCreated` từ backend; fallback cho chuyến lịch sử có tiền tố `[Admin]`
+ * trong `note` khi không phải đơn đại lý đặt hộ.
+ */
+export function isBookingAdminCreated(
+  booking: Partial<Pick<Booking, 'isAdminCreated' | 'agentUserId' | 'agentPhone' | 'note'>>,
+): boolean {
+  if (typeof booking.isAdminCreated === 'boolean') return booking.isAdminCreated;
+  if (booking.agentUserId || booking.agentPhone) return false;
+  return typeof booking.note === 'string' && booking.note.trimStart().startsWith('[Admin]');
+}
+
+/**
+ * Tag `(Admin đặt)` gắn đầu chuyến trên danh sách và chi tiết chuyến của Admin.
+ */
+export function AdminCreatedBadge() {
+  return (
+    <Badge
+      variant="outline"
+      className="whitespace-nowrap border-sky-300 bg-sky-100 text-sky-800 hover:bg-sky-100 dark:border-sky-700 dark:bg-sky-900/50 dark:text-sky-200 text-[10px] font-semibold px-1.5 py-0"
+    >
+      (Admin đặt)
+    </Badge>
+  );
+}
+
+/**
  * Nhãn "khách lần đầu" — chuyến này là chuyến ĐẦU TIÊN tài khoản khách đó từng đặt
  * (backend tính bằng cờ `isFirstBooking`, đếm mọi chuyến kể cả huỷ).
  *

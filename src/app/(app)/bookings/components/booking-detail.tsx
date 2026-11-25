@@ -21,7 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 // [DISABLED 2026-07-09] adminAcceptBooking bỏ khỏi import — "admin ôm chuyến về operator" đã tắt (vỡ dòng tiền).
 import { getBookingDetails, /* adminAcceptBooking, */ recordBookingCustomerCall, getBookingCustomerCallHistory, getCustomerCallReasons, setBookingTestFlag, setBookingDuplicateFlag, sendBookingPassToZalo } from '@/lib/api';
-import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, getStatusBadge, ProvincePairLine, TestTripBadge } from './booking-shared';
+import { AdminCreatedBadge, CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, getStatusBadge, isBookingAdminCreated, ProvincePairLine, TestTripBadge } from './booking-shared';
 import { useProvinceOptions } from '@/hooks/use-province-options';
 import { provincePairLabel } from '@/lib/province-labels';
 import { buildDiscountRows, grossTransportPrice, subtractableDiscountTotal } from './price-breakdown-utils';
@@ -82,6 +82,7 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
   // khi "Khách trả" là 0 — cột tự mâu thuẫn.
   const priceAfterDiscountUi = Math.max(0, Number(booking.price ?? 0) - totalDiscount);
   const finalPrice = Number(booking.finalPrice ?? booking.price ?? 0);
+  const tipAmount = Math.max(0, Number(booking.tipAmount ?? 0));
 
   // Driver / HTX / Vigo allocation rebuild. Restored after f93e369 cut the
   // entire section as a "duplicate" — the pricing-chain repeat was the
@@ -399,6 +400,25 @@ export function PriceBreakdownCard({ booking }: { booking: Booking }) {
         <span className="font-semibold">Khách trả</span>
         <span className="font-semibold text-green-600">{fmtVnd(finalPrice)}</span>
       </div>
+      {tipAmount > 0 && (
+        <div className="space-y-1 rounded-md border border-amber-200 bg-amber-50/70 px-2.5 py-2 text-sm">
+          <div className="flex justify-between gap-2 text-amber-800">
+            <span>Tiền típ thêm (tài xế thu)</span>
+            <span className="shrink-0 font-semibold">+{fmtVnd(tipAmount)}</span>
+          </div>
+          {booking.paymentMethod !== 'WALLET' ? (
+            <div className="flex justify-between gap-2 border-t border-amber-200/80 pt-1 font-semibold text-amber-950">
+              <span>Tổng tài xế thu</span>
+              <span className="shrink-0">{fmtVnd(finalPrice + tipAmount)}</span>
+            </div>
+          ) : (
+            <div className="flex justify-between gap-2 border-t border-amber-200/80 pt-1 font-semibold text-amber-950">
+              <span>Tài xế thu tiền mặt (tiền típ)</span>
+              <span className="shrink-0">+{fmtVnd(tipAmount)}</span>
+            </div>
+          )}
+        </div>
+      )}
       {booking.paymentMethod && (
         <div className="text-xs text-muted-foreground -mt-1">
           Phương thức: {paymentMethodMap[booking.paymentMethod] ?? booking.paymentMethod}
@@ -778,6 +798,7 @@ export function BookingDetail({ bookingId, onClose, onDuplicate, onCallRecorded,
                   row now — status, service, trip shape, payment — so admin
                   scans a single line for the booking's at-a-glance summary. */}
               <div className="flex items-center gap-2 flex-wrap">
+                {isBookingAdminCreated(booking) && <AdminCreatedBadge />}
                 {getStatusBadge(booking)}
                 {booking.isTestTrip && <TestTripBadge />}
                 {booking.isDuplicateTrip && <DuplicateTripBadge />}

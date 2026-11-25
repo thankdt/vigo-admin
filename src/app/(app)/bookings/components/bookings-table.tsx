@@ -49,7 +49,7 @@ import { getBookings, updateBookingStatus, getAvailableDrivers, reassignBooking,
 import { BookingDetail, CustomerCallBadge } from './booking-detail';
 import { MacroRuleBadge, MacroRuleQuickEditDialog } from './macro-rule-quick-edit-dialog';
 import { buildTripPassText } from './booking-pass-utils';
-import { CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, ProvincePairLine, statusLabelMap, TestTripBadge } from './booking-shared';
+import { AdminCreatedBadge, CANCELLED_BY_ROLE_LABEL, CurrentAccountLine, DriverAlertBadges, DuplicateTripBadge, FirstTripBadge, formatVnShort, getStatusBadge, isBookingAdminCreated, ProvincePairLine, statusLabelMap, TestTripBadge } from './booking-shared';
 import { VoidBookingDialog } from './void-booking-dialog';
 import type { Route } from '@/lib/types';
 import {
@@ -1170,7 +1170,10 @@ export function BookingsTable({ agentOnly }: { agentOnly?: boolean } = {}) {
                   >
                     <TableCell data-card="header" className="font-medium max-xl:-order-2">
                       <div className="flex flex-col">
-                        <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {isBookingAdminCreated(booking) && <AdminCreatedBadge />}
+                          <span className='font-semibold'>{booking.senderInfo?.name || booking.customer?.fullName || 'N/A'}</span>
+                        </div>
                         {/* Badge đi cùng SĐT, KHÔNG cùng tên: SĐT rộng gần như cố định (10 số)
                             nên badge nằm ở một vị trí ổn định, mắt quét dọc bảng thấy ngay —
                             đứng cạnh tên thì tên dài đẩy badge chạy lung tung mỗi dòng.

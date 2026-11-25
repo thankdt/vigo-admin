@@ -1276,7 +1276,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     expect(searchRules).toHaveBeenLastCalledWith({ isActive: true, q: '#3', page: 1, limit: 50 });
     await waitForResult({ shown: [3], gone: [2] });
     await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
-    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, isActive: true, q: '#3', cover: true, page: 1, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, isActive: true, q: '#3', page: 1, limit: 50 });
     expect(getRules).toHaveBeenCalledTimes(2); // lần đầu + «#3» một mình
   });
 
@@ -1350,10 +1350,10 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     expect(screen.queryByTestId('macro-match-panel')).not.toBeInTheDocument();
   });
 
-  it('chọn điểm đón cụ thể bằng ô chọn điểm THẬT ⇒ gửi mã tỉnh + mã xã (+ cover); khung nhắc chọn đủ hai đầu, chưa tra', async () => {
+  it('chọn điểm đón cụ thể bằng ô chọn điểm THẬT ⇒ gửi mã tỉnh + mã xã (mặc định không cover); khung nhắc chọn đủ hai đầu, chưa tra', async () => {
     const u = await renderManager();
     await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
-    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, cover: true, page: 1, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, page: 1, limit: 50 });
     expect(panel()).toHaveTextContent('Chọn cả điểm đón và điểm đến để xem quy tắc đang áp dụng.');
     expect(matchRules).not.toHaveBeenCalled();
     expect(getWards).toHaveBeenCalledTimes(1);
@@ -1365,7 +1365,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     const u = await renderManager();
     await pickPlace(u, 'Điểm đón', 'dai tu', 'Đại Từ, Thái Nguyên');
     await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
-    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, ...CAU_GIAY, page: 1, limit: 50 });
     expect(matchRules).toHaveBeenCalledTimes(1);
     expect(matchRules).toHaveBeenCalledWith({ ...DAI_TU, ...CAU_GIAY });
 
@@ -1623,7 +1623,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     const u = await renderManager();
     await pickPlace(u, 'Điểm đón', 'Dong Anh', 'Tìm theo chữ «Dong Anh» (gồm tên huyện/tỉnh cũ)');
     await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
-    expect(searchRules).toHaveBeenLastCalledWith({ originSearch: 'Dong Anh', ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ originSearch: 'Dong Anh', ...CAU_GIAY, page: 1, limit: 50 });
     expect(panel()).toHaveTextContent('Đã chọn theo chữ nên chưa biết chính xác xã nào');
     await sleep(50);
     expect(matchRules).not.toHaveBeenCalled();
@@ -1652,7 +1652,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     const u = await renderManager();
     await pickPlace(u, 'Điểm đón', 'thai nguyen', 'Cả tỉnh Thái Nguyên');
     await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
-    expect(searchRules).toHaveBeenLastCalledWith({ originProvinceCode: '19', ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ originProvinceCode: '19', ...CAU_GIAY, page: 1, limit: 50 });
     expect(matchRules).toHaveBeenCalledWith({ originProvinceCode: '19', ...CAU_GIAY });
     expect(panel()).toHaveTextContent('Bạn chọn cả tỉnh nên quy tắc cấp xã không được xét');
     await waitFor(() => expect(comboButton('Ghép xe · Xe 4 chỗ')).toHaveAttribute('aria-pressed', 'true'));
@@ -1884,7 +1884,6 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
       ...DAI_TU,
       ...CAU_GIAY,
       serviceType: 'RIDE',
-      cover: true,
       page: 1,
       limit: 50,
     });
@@ -1958,7 +1957,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
       );
       expect(placeHint('Điểm đón')).not.toHaveTextContent(/điểm đặc biệt \(sân bay/);
       await u.keyboard('{Enter}');
-      expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, cover: true, page: 1, limit: 50 });
+      expect(searchRules).toHaveBeenLastCalledWith({ ...DAI_TU, page: 1, limit: 50 });
 
       await u.type(placeBox('Điểm đến'), 'san bay noi bai');
       await waitFor(() =>
@@ -1972,7 +1971,6 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
         ...DAI_TU,
         destProvinceCode: '01',
         destWardCode: 'ZONE:NOIBAI',
-        cover: true,
         page: 1,
         limit: 50,
       });
@@ -1999,7 +1997,7 @@ describe('PricingMacroManager — thanh «Tìm quy tắc» (thay ô AI)', () => 
     await u.keyboard('{Enter}');
     await pickPlace(u, 'Điểm đến', 'cau giay', 'Cầu Giấy, Hà Nội');
     await waitFor(() => expect(winnerBadgeOf(13)).toBeInTheDocument());
-    expect(searchRules).toHaveBeenLastCalledWith({ q: '#12', ...DAI_TU, ...CAU_GIAY, cover: true, page: 1, limit: 50 });
+    expect(searchRules).toHaveBeenLastCalledWith({ q: '#12', ...DAI_TU, ...CAU_GIAY, page: 1, limit: 50 });
   });
 
   describe('sắp xếp quy tắc (ô chọn + tiêu đề cột)', () => {

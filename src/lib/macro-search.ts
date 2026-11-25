@@ -49,7 +49,7 @@ export const EMPTY_FILTERS: MacroSearchFilters = Object.freeze({
   vehicleType: '',
   isActive: '',
   q: '',
-  cover: true,
+  cover: false,
 });
 
 const isExactPlace = (p: MacroPlaceFilter | null): p is { kind: 'place'; endpoint: MacroEndpoint } => p?.kind === 'place';

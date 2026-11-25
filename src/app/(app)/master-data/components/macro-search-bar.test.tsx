@@ -74,7 +74,7 @@ describe('MacroSearchBar — đủ ô lọc, bộ lọc rỗng', () => {
     expect(select('Trạng thái')).toHaveTextContent('Tất cả trạng thái');
     expect(qInput()).toHaveAttribute('placeholder', 'Ghi chú hoặc mã quy tắc (vd #123)');
     expect(qInput()).toHaveValue('');
-    expect(cover()).toBeChecked();
+    expect(cover()).not.toBeChecked();
     expect(cover()).toBeDisabled();
     expect(clearAll()).not.toBeInTheDocument();
   });
@@ -202,20 +202,20 @@ describe('MacroSearchBar — mỗi ô phát đúng giá trị mới, giữ nguy�
     onChange.mockClear();
     await user.click(cover());
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(last(onChange).cover).toBe(false);
-    expect(cover()).not.toBeChecked();
-    await user.click(cover());
     expect(last(onChange).cover).toBe(true);
+    expect(cover()).toBeChecked();
+    await user.click(cover());
+    expect(last(onChange).cover).toBe(false);
   });
 });
 
 describe('MacroSearchBar — «Xoá lọc»', () => {
-  it('chỉ hiện khi đang lọc; bấm ⇒ về bộ lọc rỗng (cover bật lại) và xoá cả chữ gõ dở trong ô điểm', async () => {
+  it('chỉ hiện khi đang lọc; bấm ⇒ về bộ lọc rỗng (cover tắt mặc định) và xoá cả chữ gõ dở trong ô điểm', async () => {
     const user = setup();
     const onChange = vi.fn();
     render(
       <Harness
-        initial={{ ...EMPTY_FILTERS, origin: { kind: 'place', endpoint: DAI_TU }, isActive: 'true', q: '#9', cover: false }}
+        initial={{ ...EMPTY_FILTERS, origin: { kind: 'place', endpoint: DAI_TU }, isActive: 'true', q: '#9', cover: true }}
         onChange={onChange}
       />,
     );
@@ -228,7 +228,7 @@ describe('MacroSearchBar — «Xoá lọc»', () => {
     expect(destInput()).toHaveValue('');
     expect(originInput()).toHaveValue('');
     expect(qInput()).toHaveValue('');
-    expect(cover()).toBeChecked();
+    expect(cover()).not.toBeChecked();
   });
 
   it('chỉ có khoảng trắng ở ô ghi chú thì chưa tính là đang lọc', () => {
