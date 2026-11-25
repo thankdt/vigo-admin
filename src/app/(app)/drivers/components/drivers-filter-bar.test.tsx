@@ -47,8 +47,30 @@ describe('DriversFilterBar — lọc theo tỉnh thay cho tuyến', () => {
     expect(onChange).toHaveBeenCalledWith({ ...EMPTY_FILTERS, provinceCode: '31' });
   });
 
-  it('hasAnyFilter tính provinceCode', () => {
+  it('hasAnyFilter tính provinceCode và onlineState', () => {
     expect(hasAnyFilter(EMPTY_FILTERS)).toBe(false);
     expect(hasAnyFilter({ ...EMPTY_FILTERS, provinceCode: '31' })).toBe(true);
+    expect(hasAnyFilter({ ...EMPTY_FILTERS, onlineState: 'stale' })).toBe(true);
+  });
+
+  it('hiện thanh lọc nhanh Online / Offline / Mất kết nối / Chờ tín hiệu khi showOnlineState=true', async () => {
+    const user = userEvent.setup();
+    const onChange = vi.fn();
+    render(<DriversFilterBar value={EMPTY_FILTERS} onChange={onChange} showOnlineState />);
+
+    for (const label of ['Online', 'Offline', 'Mất kết nối', 'Chờ tín hiệu']) {
+      expect(screen.getByRole('button', { name: label })).toBeInTheDocument();
+    }
+
+    await user.click(screen.getByRole('button', { name: 'Mất kết nối' }));
+    expect(onChange).toHaveBeenCalledWith({ ...EMPTY_FILTERS, onlineState: 'stale' });
+
+    await user.click(screen.getByRole('button', { name: 'Chờ tín hiệu' }));
+    expect(onChange).toHaveBeenCalledWith({ ...EMPTY_FILTERS, onlineState: 'idle' });
+  });
+
+  it('ẩn thanh lọc kết nối khi showOnlineState=false', () => {
+    render(<DriversFilterBar value={EMPTY_FILTERS} onChange={() => {}} showOnlineState={false} />);
+    expect(screen.queryByRole('group', { name: 'Lọc trạng thái kết nối tài xế' })).not.toBeInTheDocument();
   });
 });

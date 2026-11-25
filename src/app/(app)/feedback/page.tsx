@@ -1,18 +1,23 @@
 'use client';
 import * as React from 'react';
-import { format } from 'date-fns';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
+import {
+  Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2 } from 'lucide-react';
-import { getFeedback } from '@/lib/api';
+import {
+  Search, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, Loader2, Pencil, StickyNote,
+} from 'lucide-react';
+import { getFeedback, updateFeedbackNote } from '@/lib/api';
 import type { DriverFeedback, FeedbackCategory } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
 
@@ -34,6 +39,25 @@ const CATEGORY_COLORS: Record<FeedbackCategory, string> = {
   OTHER: 'bg-gray-100 text-gray-700',
 };
 
+const MAX_NOTE_LENGTH = 2000;
+
+function formatVnDateTime(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}`;
+}
+
 export default function FeedbackPage() {
   const { toast } = useToast();
   const [feedbacks, setFeedbacks] = React.useState<DriverFeedback[]>([]);
@@ -47,6 +71,10 @@ export default function FeedbackPage() {
   const [totalItems, setTotalItems] = React.useState(0);
   const [pageSize, setPageSize] = React.useState(20);
   const [expandedRow, setExpandedRow] = React.useState<string | null>(null);
+
+  const [editingFeedback, setEditingFeedback] = React.useState<DriverFeedback | null>(null);
+  const [noteDraft, setNoteDraft] = React.useState('');
+  const [isSavingNote, setIsSavingNote] = React.useState(false);
 
   const fetchFeedback = React.useCallback(async () => {
     setIsLoading(true);
@@ -77,6 +105,58 @@ export default function FeedbackPage() {
     const t = setTimeout(fetchFeedback, 400);
     return () => clearTimeout(t);
   }, [fetchFeedback]);
+
+  const openNoteDialog = (feedback: DriverFeedback) => {
+    setEditingFeedback(feedback);
+    setNoteDraft(feedback.adminNote ?? '');
+  };
+
+  const handleSaveNote = async (clear = false) => {
+    if (!editingFeedback) return;
+    const nextNote = clear ? null : (noteDraft.trim() || null);
+    setIsSavingNote(true);
+    try {
+      const updated = await updateFeedbackNote(editingFeedback.id, nextNote);
+      setFeedbacks((prev) =>
+        prev.map((item) =>
+          item.id === editingFeedback.id
+            ? {
+                ...item,
+                adminNote:
+                  updated && 'adminNote' in updated ? updated.adminNote : nextNote,
+                adminNoteUpdatedAt:
+                  updated && 'adminNoteUpdatedAt' in updated
+                    ? updated.adminNoteUpdatedAt
+                    : new Date().toISOString(),
+                adminNoteUpdatedBy:
+                  updated && 'adminNoteUpdatedBy' in updated
+                    ? updated.adminNoteUpdatedBy
+                    : item.adminNoteUpdatedBy,
+                adminNoteUpdatedByUser:
+                  updated && 'adminNoteUpdatedByUser' in updated
+                    ? updated.adminNoteUpdatedByUser
+                    : item.adminNoteUpdatedByUser,
+              }
+            : item,
+        ),
+      );
+      toast({
+        title: nextNote ? 'Đã lưu ghi chú' : 'Đã xoá ghi chú',
+      });
+      setEditingFeedback(null);
+    } catch (err: unknown) {
+      toast({
+        variant: 'destructive',
+        title: 'Không lưu được ghi chú',
+        description: err instanceof Error ? err.message : String(err),
+      });
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
+  const isNoteUnchanged =
+    (noteDraft.trim() || null) === (editingFeedback?.adminNote?.trim() || null);
 
   return (
     <div className="space-y-4">
@@ -143,56 +223,113 @@ export default function FeedbackPage() {
         <Table stackBelow="md">
           <TableHeader>
             <TableRow>
-              <TableHead className="md:w-[160px]">Thời gian</TableHead>
-              <TableHead className="md:w-[190px]">Tài xế</TableHead>
-              <TableHead className="md:w-[160px]">Loại</TableHead>
+              <TableHead className="md:w-[155px]">Thời gian</TableHead>
+              <TableHead className="md:w-[180px]">Tài xế</TableHead>
+              <TableHead className="md:w-[155px]">Loại</TableHead>
               <TableHead>Nội dung</TableHead>
+              <TableHead className="md:w-[240px]">Ghi chú</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8">
+                <TableCell colSpan={5} className="text-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin inline mr-2" />
                   Đang tải…
                 </TableCell>
               </TableRow>
             ) : feedbacks.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                   Không có góp ý nào.
                 </TableCell>
               </TableRow>
             ) : (
-              feedbacks.map((f) => (
-                <TableRow
-                  key={f.id}
-                  className="cursor-pointer"
-                  onClick={() => setExpandedRow(expandedRow === f.id ? null : f.id)}
-                >
-                  <TableCell data-label="Thời gian" className="font-mono text-xs">
-                    {format(new Date(f.createdAt), 'dd/MM/yyyy HH:mm')}
-                  </TableCell>
-                  <TableCell data-card="header" className="max-md:-order-1">
-                    <div className="font-medium">
-                      {f.driver?.user?.fullName || '(Không tên)'}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {f.driver?.user?.phone || ''}
-                    </div>
-                  </TableCell>
-                  <TableCell data-label="Phân loại">
-                    <Badge className={CATEGORY_COLORS[f.category]}>
-                      {CATEGORY_LABELS[f.category]}
-                    </Badge>
-                  </TableCell>
-                  <TableCell data-card="full" data-label="Nội dung">
-                    <div className={expandedRow === f.id ? 'whitespace-pre-wrap' : 'line-clamp-2'}>
-                      {f.content}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
+              feedbacks.map((f) => {
+                const hasNote = Boolean(f.adminNote && f.adminNote.trim());
+                return (
+                  <TableRow
+                    key={f.id}
+                    className="cursor-pointer"
+                    onClick={() => setExpandedRow(expandedRow === f.id ? null : f.id)}
+                  >
+                    <TableCell data-label="Thời gian" className="font-mono text-xs">
+                      {formatVnDateTime(f.createdAt)}
+                    </TableCell>
+                    <TableCell data-card="header" className="max-md:-order-1">
+                      <div className="font-medium">
+                        {f.driver?.user?.fullName || '(Không tên)'}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {f.driver?.user?.phone || ''}
+                      </div>
+                    </TableCell>
+                    <TableCell data-label="Phân loại">
+                      <Badge className={CATEGORY_COLORS[f.category]}>
+                        {CATEGORY_LABELS[f.category]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell data-card="full" data-label="Nội dung">
+                      <div className={expandedRow === f.id ? 'whitespace-pre-wrap break-words' : 'line-clamp-2 break-words'}>
+                        {f.content}
+                      </div>
+                    </TableCell>
+                    <TableCell
+                      data-card="full"
+                      data-label="Ghi chú"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <div className="flex items-start justify-between gap-2 min-w-0">
+                        <button
+                          type="button"
+                          onClick={() => openNoteDialog(f)}
+                          className="group flex-1 min-w-0 text-left rounded-md border border-transparent px-2 py-1 -mx-2 -my-1 hover:border-border hover:bg-muted/60 transition-colors"
+                          aria-label={hasNote ? 'Sửa ghi chú' : 'Thêm ghi chú'}
+                        >
+                          {hasNote ? (
+                            <div className="space-y-1 min-w-0">
+                              <div
+                                className={
+                                  expandedRow === f.id
+                                    ? 'text-sm whitespace-pre-wrap break-words text-foreground'
+                                    : 'text-sm line-clamp-2 break-words text-foreground'
+                                }
+                              >
+                                {f.adminNote}
+                              </div>
+                              {(f.adminNoteUpdatedByUser?.fullName || f.adminNoteUpdatedAt) && (
+                                <div className="text-[11px] text-muted-foreground">
+                                  {[
+                                    f.adminNoteUpdatedByUser?.fullName,
+                                    formatVnDateTime(f.adminNoteUpdatedAt),
+                                  ]
+                                    .filter(Boolean)
+                                    .join(' · ')}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-xs text-muted-foreground group-hover:text-foreground">
+                              <StickyNote className="h-3.5 w-3.5" />
+                              Thêm ghi chú...
+                            </span>
+                          )}
+                        </button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => openNoteDialog(f)}
+                          aria-label={`Ghi chú góp ý của ${f.driver?.user?.fullName || 'tài xế'}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
             )}
           </TableBody>
         </Table>
@@ -234,6 +371,75 @@ export default function FeedbackPage() {
           </Button>
         </div>
       </div>
+
+      <Dialog
+        open={editingFeedback !== null}
+        onOpenChange={(open) => {
+          if (!open && !isSavingNote) setEditingFeedback(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Ghi chú xử lý góp ý</DialogTitle>
+            <DialogDescription>
+              {editingFeedback?.driver?.user?.fullName || '(Không tên)'}
+              {editingFeedback?.driver?.user?.phone ? ` · ${editingFeedback.driver.user.phone}` : ''}
+            </DialogDescription>
+          </DialogHeader>
+          {editingFeedback && (
+            <div className="space-y-3">
+              <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground whitespace-pre-wrap break-words max-h-28 overflow-y-auto">
+                {editingFeedback.content}
+              </div>
+              <div className="space-y-1.5">
+                <Textarea
+                  value={noteDraft}
+                  onChange={(e) => setNoteDraft(e.target.value.slice(0, MAX_NOTE_LENGTH))}
+                  placeholder="Nhập ghi chú xử lý nội bộ cho góp ý này..."
+                  rows={4}
+                  disabled={isSavingNote}
+                />
+                <div className="text-right text-[11px] text-muted-foreground">
+                  {noteDraft.length}/{MAX_NOTE_LENGTH}
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2 sm:justify-between">
+            <div>
+              {editingFeedback?.adminNote && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive"
+                  disabled={isSavingNote}
+                  onClick={() => handleSaveNote(true)}
+                >
+                  Xoá ghi chú
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isSavingNote}
+                onClick={() => setEditingFeedback(null)}
+              >
+                Huỷ
+              </Button>
+              <Button
+                type="button"
+                disabled={isSavingNote || isNoteUnchanged}
+                onClick={() => handleSaveNote(false)}
+              >
+                {isSavingNote && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Lưu ghi chú
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
