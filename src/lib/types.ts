@@ -471,6 +471,12 @@ export type Booking = {
    * `!booking.isFirstBooking` để suy ra "khách cũ": field vắng mặt không có nghĩa gì cả.
    */
   isFirstBooking?: boolean;
+  /** UUID đại lý đặt hộ (nếu là đơn đại lý đặt hộ). */
+  agentUserId?: string | null;
+  /** Chuyến do Admin tạo từ cổng quản trị (POST /bookings/admin/create). */
+  isAdminCreated?: boolean;
+  /** Tiền típ khách gửi thêm cho tài xế (Đi ghép / Bao xe, 0% hoa hồng/thuế/VAT). */
+  tipAmount?: number;
   // Admin-claim state for the PROCESSING fallback queue. Both are NULL when
   // the booking is in any other status, or when it's PROCESSING but no admin
   // has clicked "Nhận xử lý" yet.
