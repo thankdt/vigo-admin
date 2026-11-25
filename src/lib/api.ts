@@ -3714,6 +3714,23 @@ export async function getFeedback(params: {
   };
 }
 
+export async function updateFeedbackNote(
+  id: string,
+  adminNote: string | null,
+): Promise<{
+  id: string;
+  adminNote: string | null;
+  adminNoteUpdatedAt: string | null;
+  adminNoteUpdatedBy: string | null;
+  adminNoteUpdatedByUser?: { id: string; fullName: string | null } | null;
+}> {
+  const response = await fetchWithAuth(`/feedback/admin/${id}/note`, {
+    method: 'PATCH',
+    body: JSON.stringify({ adminNote }),
+  });
+  return unwrap(response);
+}
+
 // --- Cancel-leakage detection (anti-fraud) ---
 
 /** Suspicious cancel-leakage traces for admin review. The backend filters/sorts

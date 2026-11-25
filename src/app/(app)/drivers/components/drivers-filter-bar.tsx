@@ -70,12 +70,19 @@ const ALL_PROVINCES_VALUE = '__all__';
 const ALL_CS_VALUE = '__all_cs__';
 const ALL_CS_TYPE_VALUE = '__all_cs_type__';
 const ALL_HIDDEN_LOCK_VALUE = '__all_hidden_lock__';
-const ALL_ONLINE_VALUE = '__all_online__';
-// Thứ tự theo mức "cần xử lý" của vận hành; nhãn lấy từ nguồn chung để khớp badge.
-const ONLINE_STATE_ORDER: DriverOnlineState[] = ['online', 'busy', 'idle', 'stale', 'unknown', 'offline'];
-const ONLINE_OPTIONS = [
-  { value: ALL_ONLINE_VALUE, label: 'Online: tất cả' },
-  ...ONLINE_STATE_ORDER.map((s) => ({ value: s, label: DRIVER_ONLINE_LABEL[s] })),
+// Nút lọc nhanh trạng thái kết nối: đặt nổi bật ngay đầu bảng trên cả desktop & mobile.
+const ONLINE_PILL_OPTIONS: Array<{
+  value: '' | DriverOnlineState;
+  label: string;
+  dotClass?: string;
+}> = [
+  { value: '', label: 'Tất cả' },
+  { value: 'online', label: DRIVER_ONLINE_LABEL.online, dotClass: 'bg-green-500' },
+  { value: 'offline', label: DRIVER_ONLINE_LABEL.offline, dotClass: 'bg-gray-400' },
+  { value: 'stale', label: DRIVER_ONLINE_LABEL.stale, dotClass: 'bg-orange-500' },
+  { value: 'idle', label: DRIVER_ONLINE_LABEL.idle, dotClass: 'bg-sky-500' },
+  { value: 'busy', label: DRIVER_ONLINE_LABEL.busy, dotClass: 'bg-amber-500' },
+  { value: 'unknown', label: DRIVER_ONLINE_LABEL.unknown, dotClass: 'bg-slate-400' },
 ];
 // Nhãn suy từ nguồn chung (src/lib/cskh-call-labels.ts) — trước đây chép tay ở đây và
 // ở driver-detail-dialog, sửa chữ một nơi là lệch nơi kia.
@@ -112,7 +119,6 @@ export function DriversFilterBar({
 
   const advancedFilterCount =
     (value.plate ? 1 : 0) +
-    (value.onlineState ? 1 : 0) +
     (value.provinceCode ? 1 : 0) +
     (value.transportCompanyName ? 1 : 0) +
     (value.unconfirmedTransportCompany ? 1 : 0) +
@@ -142,7 +148,45 @@ export function DriversFilterBar({
 
   return (
     <div className="space-y-3 pb-4">
-      <div className={`grid grid-cols-1 gap-2.5 sm:gap-3 ${showOnlineState ? 'sm:grid-cols-2 lg:grid-cols-4' : 'sm:grid-cols-3'}`}>
+      {showOnlineState && (
+        <div
+          role="group"
+          aria-label="Lọc trạng thái kết nối tài xế"
+          className="flex flex-wrap items-center gap-1.5"
+        >
+          <span className="mr-1 text-xs font-medium text-muted-foreground">
+            Trạng thái kết nối:
+          </span>
+          {ONLINE_PILL_OPTIONS.map((opt) => {
+            const active = value.onlineState === opt.value;
+            return (
+              <button
+                key={opt.value || 'all'}
+                type="button"
+                aria-pressed={active}
+                onClick={() => setField('onlineState', opt.value)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors',
+                  active
+                    ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                    : 'border-border bg-background text-foreground hover:bg-muted',
+                )}
+              >
+                {opt.dotClass && (
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full',
+                      active ? 'bg-primary-foreground' : opt.dotClass,
+                    )}
+                  />
+                )}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3 sm:gap-3">
         <IconInput
           icon={User}
           placeholder="Tên tài xế..."
@@ -187,20 +231,6 @@ export function DriversFilterBar({
             onChange={(e) => setField('plate', e.target.value)}
           />
         </div>
-        {showOnlineState && (
-          <div className={cn(!mobileExpanded && 'hidden md:block')}>
-            <Combobox
-              options={ONLINE_OPTIONS}
-              selectedValue={value.onlineState || ALL_ONLINE_VALUE}
-              onSelect={(v) =>
-                setField('onlineState', !v || v === ALL_ONLINE_VALUE ? '' : (v as DriverOnlineState))
-              }
-              placeholder="Online: tất cả"
-              searchPlaceholder="Lọc trạng thái..."
-              noResultsText="Không có."
-            />
-          </div>
-        )}
       </div>
       <div className={cn('space-y-3', !mobileExpanded && 'hidden md:block')}>
         <div className="grid grid-cols-1 items-center gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-4">
